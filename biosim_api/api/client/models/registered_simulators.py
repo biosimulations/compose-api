@@ -26,7 +26,7 @@ T = TypeVar("T", bound="RegisteredSimulators")
 
 @_attrs_define
 class RegisteredSimulators:
-    """ 
+    """
         Attributes:
             versions (list['SimulatorVersion']):
             timestamp (Union[None, Unset, datetime.datetime]):

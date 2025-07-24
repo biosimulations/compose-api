@@ -21,7 +21,7 @@ T = TypeVar("T", bound="RequestedObservables")
 
 @_attrs_define
 class RequestedObservables:
-    """ 
+    """
         Attributes:
             items (Union[Unset, list[str]]):
      """

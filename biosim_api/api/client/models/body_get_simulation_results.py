@@ -25,7 +25,7 @@ T = TypeVar("T", bound="BodyGetSimulationResults")
 
 @_attrs_define
 class BodyGetSimulationResults:
-    """ 
+    """
         Attributes:
             observable_names (RequestedObservables):
             settings (Union['Settings', None, Unset]):

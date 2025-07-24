@@ -22,7 +22,7 @@ T = TypeVar("T", bound="SimulationRequest")
 
 @_attrs_define
 class SimulationRequest:
-    """ 
+    """
         Attributes:
             simulator (SimulatorVersion):
             variant_config (SimulationRequestVariantConfig):

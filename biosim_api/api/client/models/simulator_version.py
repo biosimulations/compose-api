@@ -24,7 +24,7 @@ T = TypeVar("T", bound="SimulatorVersion")
 
 @_attrs_define
 class SimulatorVersion:
-    """ 
+    """
         Attributes:
             git_commit_hash (str):
             git_repo_url (str):

@@ -24,7 +24,7 @@ T = TypeVar("T", bound="Simulation")
 
 @_attrs_define
 class Simulation:
-    """ 
+    """
         Attributes:
             database_id (int):
             sim_request (SimulationRequest):

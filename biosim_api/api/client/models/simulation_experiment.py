@@ -24,7 +24,7 @@ T = TypeVar("T", bound="SimulationExperiment")
 
 @_attrs_define
 class SimulationExperiment:
-    """ 
+    """
         Attributes:
             experiment_id (str):
             simulation (Simulation):
