@@ -42,7 +42,7 @@ asyncio = "^3.4.3"
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"
 pytest-cov = "^4.0.0"
-deptry = "^0.16.2"
+deptry = "^0.23.0"
 mypy = "^1.5.1"
 pre-commit = "^3.4.0"
 tox = "^4.11.1"
