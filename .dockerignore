@@ -176,5 +176,5 @@ cython_debug/
 .dev_env
 datamount/
 test_history/
-biosim_api/api/_main.py
-/assets/dev/config/biosim_known_hosts
+compose_api/api/_main.py
+/assets/dev/config/compose_known_hosts

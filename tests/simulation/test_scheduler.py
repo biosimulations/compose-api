@@ -8,13 +8,13 @@ from pathlib import Path
 import pytest
 from nats.aio.client import Client as NATSClient
 
-from biosim_api.common.hpc.models import SlurmJob
-from biosim_api.common.hpc.slurm_service import SlurmService
-from biosim_api.config import get_settings
-from biosim_api.simulation.database_service import DatabaseServiceSQL
-from biosim_api.simulation.hpc_utils import get_correlation_id
-from biosim_api.simulation.job_scheduler import JobScheduler
-from biosim_api.simulation.models import (
+from compose_api.common.hpc.models import SlurmJob
+from compose_api.common.hpc.slurm_service import SlurmService
+from compose_api.config import get_settings
+from compose_api.simulation.database_service import DatabaseServiceSQL
+from compose_api.simulation.hpc_utils import get_correlation_id
+from compose_api.simulation.job_scheduler import JobScheduler
+from compose_api.simulation.models import (
     HpcRun,
     JobStatus,
     JobType,

@@ -1,0 +1,32 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: compose-api-local
+
+images:
+  - name: ghcr.io/biosimulations/compose-api
+    newTag: 0.2.5
+  - name: docker.io/library/mongo
+    newTag: 8.0.12
+
+replicas:
+  - count: 1
+    name: api
+  - count: 0
+    name: mongodb
+
+resources:
+  - ingress.yaml
+  - api-certificate.yaml
+  - selfsigned-issuer.yaml
+  - api-pvc.yaml
+  - nats-svc.yaml
+  - haproxy-ssh-svc.yaml
+  - crbmapi-home-pv.yaml
+  - crbmapi-home-pvc.yaml
+  - mongodb-pvc.yaml
+  - secret-ghcr.yaml
+  - secret-shared.yaml
+  - secret-ssh.yaml
+  - ../../config/compose-api-rke
+  - ../../base

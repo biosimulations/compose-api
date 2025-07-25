@@ -5,8 +5,8 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport
 
-from biosim_api.api.client import Client
-from biosim_api.api.main import app
+from compose_api.api.client import Client
+from compose_api.api.main import app
 
 
 @pytest_asyncio.fixture(scope="function")

@@ -122,19 +122,19 @@ echo "127.0.0.1 minikube.local" | sudo tee -a /etc/hosts
   Keep in mind that your etc/hosts file needs to map to 127.0.0.1, instead of the output
   of minikube ip or kubectl get ingress - this is an important gotcha."
 
-# deploying biosim-api services to minikube
+# deploying compose services to minikube
 
 ### verify the kustomization scripts
 
 ```bash
-kubectl create namespace biosim-api-local
-kubectl kustomize overlays/biosim-api-local | kubectl apply --dry-run=client --validate=true -f -
+kubectl create namespace compose-api-local
+kubectl kustomize overlays/compose-api-local | kubectl apply --dry-run=client --validate=true -f -
 ```
 
 ### apply the kustomization scripts
 
 ```bash
-kubectl kustomize overlays/biosim-api-local | kubectl apply -f -
+kubectl kustomize overlays/compose-api-local | kubectl apply -f -
 ```
 
 ### create sealed secrets (see [scripts/README.md](scripts/README.md))

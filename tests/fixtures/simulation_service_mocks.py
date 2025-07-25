@@ -1,9 +1,9 @@
 from typing import override
 
-from biosim_api.common.hpc.models import SlurmJob
-from biosim_api.simulation.database_service import DatabaseService
-from biosim_api.simulation.models import Simulation, SimulatorVersion
-from biosim_api.simulation.simulation_service import SimulationService
+from compose_api.common.hpc.models import SlurmJob
+from compose_api.simulation.database_service import DatabaseService
+from compose_api.simulation.models import Simulation, SimulatorVersion
+from compose_api.simulation.simulation_service import SimulationService
 
 
 class ConcreteSimulationService(SimulationService):

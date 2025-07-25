@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from biosim_api.common.hpc.models import SlurmJob
-from biosim_api.common.hpc.slurm_service import SlurmService
-from biosim_api.config import get_settings
+from compose_api.common.hpc.models import SlurmJob
+from compose_api.common.hpc.slurm_service import SlurmService
+from compose_api.config import get_settings
 
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")

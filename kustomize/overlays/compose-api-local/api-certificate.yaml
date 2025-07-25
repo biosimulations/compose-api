@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: selfsigned-cert
+  namespace: cert-manager-test
+spec:
+  dnsNames:
+    - api.compose-api-local
+  commonName: api.compose-api-local
+  secretName: selfsigned-cert-tls
+  issuerRef:
+    name: test-selfsigned
+    kind: ClusterIssuer

@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from biosim_api.common.ssh.ssh_service import SSHService
-from biosim_api.config import get_settings
+from compose_api.common.ssh.ssh_service import SSHService
+from compose_api.config import get_settings
 
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
