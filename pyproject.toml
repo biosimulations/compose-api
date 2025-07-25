@@ -37,7 +37,6 @@ vl-convert-python = "^1.8.0"
 tqdm = "^4.67.1"
 seaborn = "^0.13.2"
 python-dateutil = "^2.9.0.post0"
-asyncio = "^3.4.3"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"
