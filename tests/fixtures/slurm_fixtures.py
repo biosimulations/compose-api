@@ -5,9 +5,9 @@ from textwrap import dedent
 import pytest
 import pytest_asyncio
 
-from biosim_api.common.hpc.slurm_service import SlurmService
-from biosim_api.common.ssh.ssh_service import SSHService
-from biosim_api.config import get_settings
+from compose_api.common.hpc.slurm_service import SlurmService
+from compose_api.common.ssh.ssh_service import SSHService
+from compose_api.config import get_settings
 
 
 @pytest_asyncio.fixture(scope="session")

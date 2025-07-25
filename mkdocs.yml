@@ -1,10 +1,10 @@
-site_name: biosim-api
-repo_url: https://github.com/biosimulations/biosim-api
-site_url: https://biosimulations.github.io/biosim-api
+site_name: compose-api
+repo_url: https://github.com/biosimulations/compose-api
+site_url: https://biosimulations.github.io/compose-api
 site_description: An API server for reproducible biological workflows and cosimulations.
 site_author: Jim Schaff
 edit_uri: edit/main/docs/
-repo_name: biosimulations/biosim-api
+repo_name: biosimulations/compose-api
 copyright: Maintained by <a href="https://biosimulations.com">Florian</a>.
 
 nav:
@@ -43,9 +43,7 @@ theme:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/biosimulations/biosim-api
-    - icon: fontawesome/brands/python
-      link: https://pypi.org/project/biosim-api
+      link: https://github.com/biosimulations/compose-api
 
 markdown_extensions:
   - toc:

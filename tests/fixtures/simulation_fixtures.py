@@ -2,8 +2,8 @@ from collections.abc import AsyncGenerator
 
 import pytest_asyncio
 
-from biosim_api.dependencies import get_simulation_service, set_simulation_service
-from biosim_api.simulation.simulation_service import SimulationServiceHpc
+from compose_api.dependencies import get_simulation_service, set_simulation_service
+from compose_api.simulation.simulation_service import SimulationServiceHpc
 
 
 @pytest_asyncio.fixture(scope="function")

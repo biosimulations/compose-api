@@ -2,8 +2,8 @@ import random
 
 import pytest
 
-from biosim_api.simulation.database_service import DatabaseServiceSQL
-from biosim_api.simulation.models import (
+from compose_api.simulation.database_service import DatabaseServiceSQL
+from compose_api.simulation.models import (
     Simulation,
     SimulationRequest,
 )

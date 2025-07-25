@@ -5,11 +5,11 @@ import time
 
 import pytest
 
-from biosim_api.config import get_settings
-from biosim_api.simulation.database_service import DatabaseServiceSQL
-from biosim_api.simulation.hpc_utils import get_correlation_id
-from biosim_api.simulation.models import JobType, SimulationRequest, SimulatorVersion
-from biosim_api.simulation.simulation_service import SimulationServiceHpc
+from compose_api.config import get_settings
+from compose_api.simulation.database_service import DatabaseServiceSQL
+from compose_api.simulation.hpc_utils import get_correlation_id
+from compose_api.simulation.models import JobType, SimulationRequest, SimulatorVersion
+from compose_api.simulation.simulation_service import SimulationServiceHpc
 
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")

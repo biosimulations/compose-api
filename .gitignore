@@ -168,4 +168,4 @@ cython_debug/
 
 assets/dev/config/.dev_env
 
-assets/dev/config/biosim_known_hosts
+assets/dev/config/compose_known_hosts

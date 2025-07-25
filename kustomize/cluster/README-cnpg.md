@@ -46,7 +46,7 @@ validatingwebhookconfiguration.admissionregistration.k8s.io/cnpg-validating-webh
 ### output was the following in vxrails
 
 ```aiignore
-(biosim-api-py3.12) (base) jimschaff@LT-0919652 cnpg-operator % kubectl apply --server-side -f cnpg-1.26.0.yaml
+(compose-api-py3.12) (base) jimschaff@LT-0919652 cnpg-operator % kubectl apply --server-side -f cnpg-1.26.0.yaml
 namespace/cnpg-system serverside-applied
 customresourcedefinition.apiextensions.k8s.io/backups.postgresql.cnpg.io serverside-applied
 customresourcedefinition.apiextensions.k8s.io/clusterimagecatalogs.postgresql.cnpg.io serverside-applied
@@ -99,7 +99,7 @@ see https://cloudnative-pg.io/documentation/1.26/quickstart/
 
 ```bash
 kubectl create namespace postgres-cluster
-kubectl apply -f postgres-cluster/minikube/biosim_api-postgres-cluster.yaml
+kubectl apply -f postgres-cluster/minikube/compose-postgres-cluster.yaml
 kubectl get pods -n postgres-cluster
 ```
 
@@ -107,7 +107,7 @@ kubectl get pods -n postgres-cluster
 
 ```bash
 kubectl create namespace postgres-cluster
-kubectl apply -f postgres-cluster/vxrails/biosim_api-postgres-cluster.yaml
+kubectl apply -f postgres-cluster/vxrails/compose-postgres-cluster.yaml
 kubectl get pods -n postgres-cluster
 ```
 
