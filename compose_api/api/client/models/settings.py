@@ -23,7 +23,7 @@ T = TypeVar("T", bound="Settings")
 
 @_attrs_define
 class Settings:
-    """ 
+    """
         Attributes:
             storage_bucket (Union[Unset, str]):  Default: 'files.biosimulations.dev'.
             storage_endpoint_url (Union[Unset, str]):  Default: 'https://storage.googleapis.com'.
@@ -473,4 +473,3 @@ class Settings:
         )
 
         return settings
-

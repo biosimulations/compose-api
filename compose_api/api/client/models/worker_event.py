@@ -24,7 +24,7 @@ T = TypeVar("T", bound="WorkerEvent")
 
 @_attrs_define
 class WorkerEvent:
-    """ 
+    """
         Attributes:
             correlation_id (str):
             sequence_number (int):

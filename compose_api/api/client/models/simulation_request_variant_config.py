@@ -21,7 +21,7 @@ T = TypeVar("T", bound="SimulationRequestVariantConfig")
 
 @_attrs_define
 class SimulationRequestVariantConfig:
-    """ 
+    """
      """
 
     additional_properties: dict[str, 'SimulationRequestVariantConfigAdditionalProperty'] = _attrs_field(init=False, factory=dict)
@@ -32,7 +32,7 @@ class SimulationRequestVariantConfig:
 
     def to_dict(self) -> dict[str, Any]:
         from ..models.simulation_request_variant_config_additional_property import SimulationRequestVariantConfigAdditionalProperty
-        
+
         field_dict: dict[str, Any] = {}
         for prop_name, prop in self.additional_properties.items():
             field_dict[prop_name] = prop.to_dict()
