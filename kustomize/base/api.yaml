@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    app: api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      nodeSelector:
+        vlan: internal
+      #      securityContext:
+      #        runAsUser: 17163
+      #        runAsGroup: 10000
+      #        fsGroup: 10000
+      containers:
+        - name: api
+          image: ghcr.io/biosimulations/biosim-api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: api-config
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: shared-secrets
+                  key: postgres-user
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shared-secrets
+                  key: postgres-password
+            - name: POSTGRES_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: shared-secrets
+                  key: postgres-database
+            - name: POSTGRES_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: shared-secrets
+                  key: postgres-host
+            - name: POSTGRES_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: shared-secrets
+                  key: postgres-port
+            - name: SLURM_SUBMIT_KEY_PATH
+              value: "/run/secrets/slurm_submit_key_file/ssh-privatekey"
+          volumeMounts:
+            - name: api-cache-pvc
+              mountPath: /app/scratch
+            - name: crbmapi-home-pvc
+              mountPath: /home/FCAM/crbmapi
+              subPath: crbmapi
+            - name: slurm-submit-key-file
+              mountPath: /run/secrets/slurm_submit_key_file
+            - name: ssh-known-hosts
+              mountPath: /run/secrets/ssh-known-hosts
+              readOnly: true
+      volumes:
+        - name: api-cache-pvc
+          persistentVolumeClaim:
+            claimName: api-cache-pvc
+        - name: crbmapi-home-pvc
+          persistentVolumeClaim:
+            claimName: crbmapi-home-pvc
+        - name: slurm-submit-key-file
+          secret:
+            defaultMode: 256 # 0400
+            items:
+              - key: ssh-privatekey
+                path: ssh-privatekey
+            secretName: ssh-secret
+        - name: ssh-known-hosts
+          configMap:
+            name: ssh-known-hosts
+      imagePullSecrets:
+        - name: ghcr-secret
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: api
+  name: api
+spec:
+  ports:
+    - name: "8000"
+      port: 8000
+      targetPort: 8000
+  selector:
+    app: api
