@@ -2,7 +2,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   # corresponds to the NFS mount of cfs07:/ifs/vcell to /share/apps/vcell7 on swarm nodes
-  name: crbmapi-home-pvc
+  name: compose-api-home-pvc
 spec:
   accessModes:
     - ReadWriteMany
@@ -10,4 +10,4 @@ spec:
   resources:
     requests:
       storage: 1000Gi
-  volumeName: crbmapi-home-pv
+  volumeName: compose-api-home-pv
