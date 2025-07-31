@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: crbmapi-home-pv
+  name: compose-api-home-pv
 spec:
   capacity:
     storage: 1000Gi
@@ -10,7 +10,7 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   storageClassName: nfs-csi
   nfs:
-    path: /home/FCAM
+    path: /home/FCAM/crbmapi
     server: cfs09.cam.uchc.edu
   mountOptions:
     - nfsvers=3

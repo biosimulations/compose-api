@@ -12,8 +12,8 @@ spec:
     podAntiAffinityType: required # Default value
   bootstrap:
     initdb:
-      database: compose_api.
-      owner: compose_api.
+      database: compose_api
+      owner: compose_api
   storage:
     size: 30Gi
     storageClass: local-path

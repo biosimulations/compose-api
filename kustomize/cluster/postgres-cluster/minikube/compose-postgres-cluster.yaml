@@ -9,8 +9,8 @@ spec:
 
   bootstrap:
     initdb:
-      database: compose_api.
-      owner: compose_api.
+      database: compose_api
+      owner: compose_api
 
   storage:
     size: 1Gi
