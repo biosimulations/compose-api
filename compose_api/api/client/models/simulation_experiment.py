@@ -11,40 +11,33 @@ from typing import cast
 from typing import Union
 
 if TYPE_CHECKING:
-  from ..models.simulation import Simulation
-  from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
-
-
-
+    from ..models.simulation import Simulation
+    from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
 
 
 T = TypeVar("T", bound="SimulationExperiment")
 
 
-
 @_attrs_define
 class SimulationExperiment:
     """
-        Attributes:
-            experiment_id (str):
-            simulation (Simulation):
-            last_updated (Union[Unset, str]):
-            metadata (Union[Unset, SimulationExperimentMetadata]):
-     """
+    Attributes:
+        experiment_id (str):
+        simulation (Simulation):
+        last_updated (Union[Unset, str]):
+        metadata (Union[Unset, SimulationExperimentMetadata]):
+    """
 
     experiment_id: str
-    simulation: 'Simulation'
+    simulation: "Simulation"
     last_updated: Union[Unset, str] = UNSET
-    metadata: Union[Unset, 'SimulationExperimentMetadata'] = UNSET
+    metadata: Union[Unset, "SimulationExperimentMetadata"] = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
-
-
-
-
 
     def to_dict(self) -> dict[str, Any]:
         from ..models.simulation import Simulation
         from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
+
         experiment_id = self.experiment_id
 
         simulation = self.simulation.to_dict()
@@ -54,7 +47,6 @@ class SimulationExperiment:
         metadata: Union[Unset, dict[str, Any]] = UNSET
         if not isinstance(self.metadata, Unset):
             metadata = self.metadata.to_dict()
-
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
@@ -69,31 +61,24 @@ class SimulationExperiment:
 
         return field_dict
 
-
-
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.simulation import Simulation
         from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
+
         d = dict(src_dict)
         experiment_id = d.pop("experiment_id")
 
         simulation = Simulation.from_dict(d.pop("simulation"))
 
-
-
-
         last_updated = d.pop("last_updated", UNSET)
 
         _metadata = d.pop("metadata", UNSET)
         metadata: Union[Unset, SimulationExperimentMetadata]
-        if isinstance(_metadata,  Unset):
+        if isinstance(_metadata, Unset):
             metadata = UNSET
         else:
             metadata = SimulationExperimentMetadata.from_dict(_metadata)
-
-
-
 
         simulation_experiment = cls(
             experiment_id=experiment_id,
@@ -101,7 +86,6 @@ class SimulationExperiment:
             last_updated=last_updated,
             metadata=metadata,
         )
-
 
         simulation_experiment.additional_properties = d
         return simulation_experiment

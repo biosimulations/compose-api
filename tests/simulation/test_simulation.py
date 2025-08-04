@@ -26,7 +26,7 @@ async def test_simulate(simulation_service_slurm: SimulationServiceHpc, database
     )
     simulation = await database_service.insert_simulation(sim_request=simulation_request)
 
-    random_string = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311. doesn't need to be secure
+    random_string = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
     correlation_id = get_correlation_id(simulation=simulation, random_string=random_string)
     sim_slurmjobid = await simulation_service_slurm.submit_simulation_job(
         simulation=simulation,
