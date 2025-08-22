@@ -31,6 +31,7 @@ dependencies = [
     "tqdm>=4.67.1,<5",
     "seaborn>=0.13.2,<0.14",
     "python-dateutil>=2.9.0.post0,<3",
+    "bsander",
 ]
 
 [project.urls]
@@ -68,6 +69,9 @@ default-groups = [
     "dev",
     "docs",
 ]
+
+[tool.uv.sources]
+bsander = { git = "https://github.com/biosimulators/bsander.git" }
 
 [tool.hatch.build.targets.sdist]
 include = [

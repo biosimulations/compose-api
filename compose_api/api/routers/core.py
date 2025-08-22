@@ -80,6 +80,14 @@ async def submit_simulation(background_tasks: BackgroundTasks, sim_request: Simu
         logger.error("Database service is not initialized")
         raise HTTPException(status_code=500, detail="Database service is not initialized")
 
+    # TODO ################################################################################
+    # !!! Input validation for Omex file, preferably converting it to an internal type !!!#
+    #######################################################################################
+    logger.warning("NO VALIDATION YET")
+    # Tmp file for future implementation
+    # with tempfile.TemporaryDirectory() as tmp_dir:
+    #     pass
+
     try:
         return await run_simulation(
             simulator=sim_request.simulator,
@@ -87,6 +95,7 @@ async def submit_simulation(background_tasks: BackgroundTasks, sim_request: Simu
             simulation_service_slurm=sim_service,
             router_config=config,
             background_tasks=background_tasks,
+            omex_archive=Path(""),
         )
     except Exception as e:
         logger.exception("Error running simulation")

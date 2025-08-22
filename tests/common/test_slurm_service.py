@@ -49,7 +49,7 @@ async def test_slurm_job_submit(slurm_service: SlurmService, slurm_template_hell
             f.write(slurm_template_hello_1s)
 
         remote_sbatch_file = remote_path / local_sbatch_file.name
-        job_id: int = await slurm_service.submit_job(
+        job_id: int = await slurm_service._submit_canary_job(
             local_sbatch_file=local_sbatch_file, remote_sbatch_file=remote_sbatch_file
         )
 

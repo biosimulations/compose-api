@@ -5,6 +5,7 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel as _BaseModel
@@ -94,9 +95,20 @@ class SimulationRequest(BaseModel):
 
 
 class Simulation(BaseModel):
+    """
+    Everything required to execute the simulation and produce the same results.
+    Input file contains all the files required to run the simulation (process-bigraph.json, sbml, etc...).
+    Args:
+        database_id: SimulatorVersion
+        sim_request: SimulationRequest
+        slurmjob_id: int | None
+        omex_archive: Path | None
+    """
+
     database_id: int
     sim_request: SimulationRequest
     slurmjob_id: int | None = None
+    omex_archive: Path | None = None
 
 
 class SimulationExperiment(BaseModel):

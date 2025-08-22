@@ -1,6 +1,7 @@
 import logging
 import random
 import string
+from pathlib import Path
 
 from fastapi import BackgroundTasks, HTTPException
 
@@ -40,6 +41,7 @@ async def run_simulation(
     database_service: DatabaseService,
     simulation_service_slurm: SimulationService,
     router_config: RouterConfig,
+    omex_archive: Path,
     variant_config: dict[str, dict[str, int | float | str]] | None = None,
     background_tasks: BackgroundTasks | None = None,
 ) -> SimulationExperiment:
@@ -48,6 +50,7 @@ async def run_simulation(
         variant_config=variant_config or {"named_parameters": {"param1": 0.5, "param2": 0.5}},
     )
     simulation = await database_service.insert_simulation(sim_request=simulation_request)
+    simulation.omex_archive = omex_archive
 
     async def dispatch_job() -> None:
         random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure

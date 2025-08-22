@@ -55,9 +55,32 @@ class SlurmService:
             slurm_jobs.append(SlurmJob.from_sacct_formatted_output(line.strip()))
         return slurm_jobs
 
-    async def submit_job(self, local_sbatch_file: Path, remote_sbatch_file: Path) -> int:
+    async def _submit_canary_job(self, local_sbatch_file: Path, remote_sbatch_file: Path) -> int:
+        """
+        Focused on submitting a canary job that simply print's hello world.
+        Used to ensure SLURM submission is functioning correctly.
+        """
         await self.ssh_service.scp_upload(local_file=local_sbatch_file, remote_path=remote_sbatch_file)
-        command = f"sbatch --parsable {remote_sbatch_file}"
+        return await self._execute_sbatch_command(sbatch_file=remote_sbatch_file)
+
+    async def submit_job(
+        self,
+        local_sbatch_file: Path,
+        remote_sbatch_file: Path,
+        local_input_file: Path,
+        remote_input_file: Path,
+        local_singularity_file: Path | None,
+        remote_singularity_file: Path,
+    ) -> int:
+        if local_singularity_file is None or not local_singularity_file.exists():
+            raise Exception(f"local singularity file does not exist: {local_singularity_file}")
+        await self.ssh_service.scp_upload(local_file=local_sbatch_file, remote_path=remote_sbatch_file)
+        await self.ssh_service.scp_upload(local_file=local_input_file, remote_path=remote_input_file)
+        await self.ssh_service.scp_upload(local_file=local_singularity_file, remote_path=remote_singularity_file)
+        return await self._execute_sbatch_command(sbatch_file=remote_sbatch_file)
+
+    async def _execute_sbatch_command(self, sbatch_file: Path) -> int:
+        command = f"sbatch --parsable {sbatch_file}"
         return_code, stdout, stderr = await self.ssh_service.run_command(command=command)
         if return_code != 0:
             raise Exception(

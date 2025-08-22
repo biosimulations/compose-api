@@ -22,6 +22,18 @@ def get_slurm_submit_file(slurm_job_name: str) -> Path:
     return slurm_log_remote_path / f"{slurm_job_name}.sbatch"
 
 
+def get_slurm_singularity_file(slurm_job_name: str) -> Path:
+    settings = get_settings()
+    slurm_log_remote_path = Path(settings.slurm_log_base_path)
+    return slurm_log_remote_path / f"{slurm_job_name}.def"
+
+
+def get_slurm_sim_input_file(slurm_job_name: str) -> Path:
+    settings = get_settings()
+    slurm_log_remote_path = Path(settings.slurm_log_base_path)
+    return slurm_log_remote_path / f"{slurm_job_name}.input"
+
+
 def get_experiment_path(simulation: Simulation) -> Path:
     settings = get_settings()
     sim_id = simulation.database_id
