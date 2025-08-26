@@ -22,8 +22,9 @@ from compose_api.simulation.database_service import DatabaseService
 from compose_api.simulation.hpc_utils import (
     get_experiment_path,
     get_slurm_log_file,
+    get_slurm_sim_experiment_dir,
     get_slurm_sim_input_file,
-    get_slurm_singularity_file,
+    get_slurm_singularity_def_file,
     get_slurm_submit_file,
 )
 from compose_api.simulation.models import Simulation, SimulatorVersion
@@ -83,20 +84,19 @@ class SimulationServiceHpc(SimulationService):
 
         slurm_log_file = get_slurm_log_file(slurm_job_name=slurm_job_name)
         slurm_submit_file = get_slurm_submit_file(slurm_job_name=slurm_job_name)
-        slurm_singularity_file = get_slurm_singularity_file(slurm_job_name=slurm_job_name)
+        slurm_singularity_file = get_slurm_singularity_def_file(slurm_job_name=slurm_job_name)
         slurm_input_file = get_slurm_sim_input_file(slurm_job_name=slurm_job_name)
         experiment_path = get_experiment_path(simulation=simulation)
-        experiment_path_parent = experiment_path.parent
 
         # build the submit script
         with tempfile.TemporaryDirectory() as tmpdir:
-            local_singularity_file = tmpdir + "/Dockerfile"
+            local_singularity_file = tmpdir + "/singularity.def"
             execute_bsander(
                 ProgramArguments(
                     input_file_path=str(simulation.omex_archive),
                     output_dir=tmpdir,
                     containerization_type=ContainerizationTypes.SINGLE,
-                    containerization_engine=ContainerizationEngine.DOCKER,
+                    containerization_engine=ContainerizationEngine.APPTAINER,
                 )
             )
             local_submit_file = Path(tmpdir) / f"{slurm_job_name}.sbatch"
@@ -113,19 +113,18 @@ class SimulationServiceHpc(SimulationService):
                     #SBATCH --nodelist={settings.slurm_node_list}
 
                     set -e
-                    # env
-                    mkdir -p {experiment_path_parent!s}
 
-                    commit_hash="{simulator_version.git_commit_hash}"
-                    sim_id="{simulation.database_id}"
-                    echo "running simulation: commit=$commit_hash, simulation id=$sim_id on $(hostname) ..."
                     # singularity build sim-{slurm_job_name}.sif {slurm_singularity_file}
-                    singularity run test.sif
+                    echo "Simulation {slurm_job_name} running."
+                    singularity exec \
+                        --bind {get_slurm_sim_experiment_dir(slurm_job_name)}:/experiment \
+                        {settings.hpc_image_base_path}/test.sif \
+                         python3 /runtime/main.py /experiment/{slurm_job_name}.omex
                     echo "Simulation run completed. data saved to {experiment_path!s}."
                     """)
                 f.write(script_content)
 
-            print(f"SLURM Job Name: {slurm_job_name}")
+            await ssh_service.run_command(f"mkdir {get_slurm_sim_experiment_dir(slurm_job_name)}")
             # submit the build script to slurm
             slurm_jobid = await slurm_service.submit_job(
                 local_sbatch_file=local_submit_file,

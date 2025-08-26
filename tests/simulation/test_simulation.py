@@ -47,6 +47,7 @@ async def test_simulate(
     assert hpcrun.ref_id == simulation.database_id
 
     start_time = time.time()
+    sim_slurmjob = None
     while start_time + 60 > time.time():
         sim_slurmjob = await simulation_service_slurm.get_slurm_job_status(slurmjobid=sim_slurmjobid)
         if sim_slurmjob is not None and sim_slurmjob.is_done():
@@ -55,4 +56,5 @@ async def test_simulate(
 
     assert sim_slurmjob is not None
     assert sim_slurmjob.is_done()
+    assert not sim_slurmjob.is_failed()
     assert sim_slurmjob.job_id == sim_slurmjobid

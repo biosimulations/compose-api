@@ -18,20 +18,24 @@ def get_slurm_log_file(slurm_job_name: str) -> Path:
 
 def get_slurm_submit_file(slurm_job_name: str) -> Path:
     settings = get_settings()
-    slurm_log_remote_path = Path(settings.slurm_log_base_path)
+    slurm_log_remote_path = Path(settings.hpc_image_base_path)
     return slurm_log_remote_path / f"{slurm_job_name}.sbatch"
 
 
-def get_slurm_singularity_file(slurm_job_name: str) -> Path:
+def get_slurm_singularity_def_file(slurm_job_name: str) -> Path:
     settings = get_settings()
-    slurm_log_remote_path = Path(settings.slurm_log_base_path)
+    slurm_log_remote_path = Path(settings.hpc_image_base_path)
     return slurm_log_remote_path / f"{slurm_job_name}.def"
 
 
 def get_slurm_sim_input_file(slurm_job_name: str) -> Path:
+    return get_slurm_sim_experiment_dir(slurm_job_name) / f"{slurm_job_name}.omex"
+
+
+def get_slurm_sim_experiment_dir(slurm_job_name: str) -> Path:
     settings = get_settings()
-    slurm_log_remote_path = Path(settings.slurm_log_base_path)
-    return slurm_log_remote_path / f"{slurm_job_name}.input"
+    slurm_log_remote_path = Path(settings.hpc_image_base_path)
+    return slurm_log_remote_path / f"experiment-{slurm_job_name}"
 
 
 def get_experiment_path(simulation: Simulation) -> Path:
