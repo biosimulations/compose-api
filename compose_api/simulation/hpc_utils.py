@@ -38,14 +38,6 @@ def get_slurm_sim_experiment_dir(slurm_job_name: str) -> Path:
     return slurm_log_remote_path / f"experiment-{slurm_job_name}"
 
 
-def get_experiment_path(simulation: Simulation) -> Path:
-    settings = get_settings()
-    sim_id = simulation.database_id
-    git_commit_hash = simulation.sim_request.simulator.git_commit_hash
-    experiment_dirname = f"experiment_{git_commit_hash}_id_{sim_id}"
-    return Path(settings.hpc_sim_base_path) / experiment_dirname
-
-
 def get_correlation_id(simulation: Simulation, random_string: str) -> str:
     """
     Generate a correlation ID for the Simulation based on its database ID and git commit hash.

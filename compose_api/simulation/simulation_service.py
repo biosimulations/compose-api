@@ -20,7 +20,6 @@ from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.config import get_settings
 from compose_api.simulation.database_service import DatabaseService
 from compose_api.simulation.hpc_utils import (
-    get_experiment_path,
     get_slurm_log_file,
     get_slurm_sim_experiment_dir,
     get_slurm_sim_input_file,
@@ -86,7 +85,7 @@ class SimulationServiceHpc(SimulationService):
         slurm_submit_file = get_slurm_submit_file(slurm_job_name=slurm_job_name)
         slurm_singularity_file = get_slurm_singularity_def_file(slurm_job_name=slurm_job_name)
         slurm_input_file = get_slurm_sim_input_file(slurm_job_name=slurm_job_name)
-        experiment_path = get_experiment_path(simulation=simulation)
+        experiment_path = get_slurm_sim_experiment_dir(slurm_job_name=slurm_job_name)
 
         # build the submit script
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -100,6 +99,7 @@ class SimulationServiceHpc(SimulationService):
                 )
             )
             local_submit_file = Path(tmpdir) / f"{slurm_job_name}.sbatch"
+            # --compat forces isolation similar to docker, https://docs.sylabs.io/guides/latest/user-guide/cli/singularity_exec.html
             with open(local_submit_file, "w") as f:
                 script_content = dedent(f"""\
                     #!/bin/bash
@@ -110,21 +110,21 @@ class SimulationServiceHpc(SimulationService):
                     #SBATCH --partition={settings.slurm_partition}
                     #SBATCH --qos={settings.slurm_qos}
                     #SBATCH --output={slurm_log_file}
-                    #SBATCH --nodelist={settings.slurm_node_list}
 
                     set -e
 
                     # singularity build sim-{slurm_job_name}.sif {slurm_singularity_file}
                     echo "Simulation {slurm_job_name} running."
                     singularity exec \
-                        --bind {get_slurm_sim_experiment_dir(slurm_job_name)}:/experiment \
+                        --compat \
+                        --bind {experiment_path}:/experiment \
                         {settings.hpc_image_base_path}/test.sif \
                          python3 /runtime/main.py /experiment/{slurm_job_name}.omex
                     echo "Simulation run completed. data saved to {experiment_path!s}."
                     """)
                 f.write(script_content)
 
-            await ssh_service.run_command(f"mkdir {get_slurm_sim_experiment_dir(slurm_job_name)}")
+            await ssh_service.run_command(f"mkdir {experiment_path}")
             # submit the build script to slurm
             slurm_jobid = await slurm_service.submit_job(
                 local_sbatch_file=local_submit_file,
