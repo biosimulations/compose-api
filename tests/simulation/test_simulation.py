@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from compose_api.config import get_settings
-from compose_api.simulation.database_service import DatabaseServiceSQL
+from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation.hpc_utils import get_correlation_id
 from compose_api.simulation.models import JobType, SimulationRequest
 from compose_api.simulation.simulation_service import SimulationServiceHpc

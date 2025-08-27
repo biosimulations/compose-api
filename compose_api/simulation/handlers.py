@@ -6,8 +6,8 @@ from pathlib import Path
 from fastapi import BackgroundTasks, HTTPException
 
 from compose_api.common.gateway.models import RouterConfig
+from compose_api.db.database_service import DatabaseService
 from compose_api.dependencies import get_database_service
-from compose_api.simulation.database_service import DatabaseService
 from compose_api.simulation.hpc_utils import get_correlation_id, get_experiment_id
 from compose_api.simulation.models import (
     JobType,

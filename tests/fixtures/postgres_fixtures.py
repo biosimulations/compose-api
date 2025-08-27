@@ -5,14 +5,14 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from testcontainers.postgres import PostgresContainer  # type: ignore [import-untyped]
 
+from compose_api.db.database_service import DatabaseService, DatabaseServiceSQL
+from compose_api.db.tables_orm import create_db
 from compose_api.dependencies import (
     get_database_service,
     get_postgres_engine,
     set_database_service,
     set_postgres_engine,
 )
-from compose_api.simulation.database_service import DatabaseService, DatabaseServiceSQL
-from compose_api.simulation.tables_orm import create_db
 
 
 @pytest.fixture(scope="module")

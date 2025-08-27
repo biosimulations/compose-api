@@ -11,7 +11,7 @@ from nats.aio.client import Client as NATSClient
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.config import get_settings
-from compose_api.simulation.database_service import DatabaseServiceSQL
+from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation.hpc_utils import get_correlation_id
 from compose_api.simulation.job_scheduler import JobScheduler
 from compose_api.simulation.models import (

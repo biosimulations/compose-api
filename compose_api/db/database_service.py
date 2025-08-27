@@ -8,6 +8,14 @@ from sqlalchemy.orm import InstrumentedAttribute
 from typing_extensions import override
 
 from compose_api.common.hpc.models import SlurmJob
+from compose_api.db.tables_orm import (
+    JobStatusDB,
+    JobTypeDB,
+    ORMHpcRun,
+    ORMSimulation,
+    ORMSimulator,
+    ORMWorkerEvent,
+)
 from compose_api.simulation.models import (
     HpcRun,
     JobType,
@@ -15,14 +23,6 @@ from compose_api.simulation.models import (
     SimulationRequest,
     SimulatorVersion,
     WorkerEvent,
-)
-from compose_api.simulation.tables_orm import (
-    JobStatusDB,
-    JobTypeDB,
-    ORMHpcRun,
-    ORMSimulation,
-    ORMSimulator,
-    ORMWorkerEvent,
 )
 
 logger = logging.getLogger(__name__)

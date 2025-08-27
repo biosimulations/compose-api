@@ -1,7 +1,7 @@
 from typing import override
 
 from compose_api.common.hpc.models import SlurmJob
-from compose_api.simulation.database_service import DatabaseService
+from compose_api.db.database_service import DatabaseService
 from compose_api.simulation.models import Simulation, SimulatorVersion
 from compose_api.simulation.simulation_service import SimulationService
 

@@ -9,7 +9,7 @@ from nats.aio.msg import Msg
 
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.config import get_settings
-from compose_api.simulation.database_service import DatabaseService
+from compose_api.db.database_service import DatabaseService
 from compose_api.simulation.models import JobStatus, WorkerEvent, WorkerEventMessagePayload
 
 logger = logging.getLogger(__name__)

@@ -9,12 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.config import get_settings
+from compose_api.db.database_service import DatabaseService, DatabaseServiceSQL
+from compose_api.db.tables_orm import create_db
 from compose_api.log_config import setup_logging
 from compose_api.simulation.data_service import DataService, DataServiceHpc
-from compose_api.simulation.database_service import DatabaseService, DatabaseServiceSQL
 from compose_api.simulation.job_scheduler import JobScheduler
 from compose_api.simulation.simulation_service import SimulationService, SimulationServiceHpc
-from compose_api.simulation.tables_orm import create_db
 
 logger = logging.getLogger(__name__)
 setup_logging(logger)

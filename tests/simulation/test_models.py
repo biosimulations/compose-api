@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-from compose_api.simulation.database_service import DatabaseServiceSQL
+from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation.models import (
     Simulation,
     SimulationRequest,

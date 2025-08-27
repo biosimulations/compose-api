@@ -9,7 +9,7 @@ import pytest_asyncio
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.config import get_settings
-from compose_api.simulation.database_service import DatabaseServiceSQL
+from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation.models import SimulationRequest, SimulatorVersion
 
 
