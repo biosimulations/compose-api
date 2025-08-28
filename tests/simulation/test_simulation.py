@@ -25,7 +25,7 @@ async def test_simulate(
 
     correlation_id = get_correlation_id(simulation=simulation, pb_cache_hash=random_string)
     sim_slurmjobid = await simulation_service_slurm.submit_simulation_job(
-        white_list=PBWhiteList(white_list=[""]),
+        white_list=PBWhiteList(white_list=["pypi:bspil-basico"]),
         simulation=simulation,
         database_service=database_service,
         correlation_id=correlation_id,
@@ -55,3 +55,24 @@ async def test_simulate(
     assert sim_slurmjob.is_done()
     assert not sim_slurmjob.is_failed()
     assert sim_slurmjob.job_id == sim_slurmjobid
+
+
+@pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
+@pytest.mark.asyncio
+async def test_simulator_not_in_whitelist(
+    simulation_service_slurm: SimulationServiceHpc,
+    database_service: DatabaseServiceSQL,
+    simulation_request: SimulationRequest,
+) -> None:
+    # insert the latest commit into the database
+    random_string = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
+    simulation = await database_service.insert_simulation(sim_request=simulation_request, pb_cache_hash=random_string)
+
+    correlation_id = get_correlation_id(simulation=simulation, pb_cache_hash=random_string)
+    with pytest.raises(ValueError):
+        await simulation_service_slurm.submit_simulation_job(
+            white_list=PBWhiteList(white_list=["pypi:bspil"]),
+            simulation=simulation,
+            database_service=database_service,
+            correlation_id=correlation_id,
+        )

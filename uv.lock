@@ -153,7 +153,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/28/b5/c1f34c1eb1a63e143
 [[package]]
 name = "bsander"
 version = "0.1.0"
-source = { git = "https://github.com/biosimulators/bsander.git#d64521d7b0517efda0aa4c71410fcdbc9f082f7e" }
+source = { git = "https://github.com/biosimulators/bsander.git#719aad87619826279214302c42a294886b19941f" }
 dependencies = [
     { name = "pip" },
     { name = "process-bigraph" },

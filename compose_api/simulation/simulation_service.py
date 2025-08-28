@@ -1,4 +1,5 @@
 import logging
+import os
 import tempfile
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -70,6 +71,8 @@ class SimulationServiceHpc(SimulationService):
         )
         if database_service is None:
             raise RuntimeError("DatabaseService is not available. Cannot submit Simulation job.")
+        if simulation.sim_request.omex_archive is None:
+            raise RuntimeError("Simulation.sim_request.omex_archive is not available. Cannot submit Simulation job.")
 
         slurm_service = SlurmService(ssh_service=ssh_service)
 
@@ -84,6 +87,7 @@ class SimulationServiceHpc(SimulationService):
         # build the submit script
         with tempfile.TemporaryDirectory() as tmpdir:
             local_singularity_file = tmpdir + "/singularity.def"
+            processed_omex = Path(tmpdir + f"/{os.path.basename(simulation.sim_request.omex_archive.name)}")
             execute_bsander(
                 ProgramArguments(
                     input_file_path=str(simulation.sim_request.omex_archive),
@@ -124,7 +128,7 @@ class SimulationServiceHpc(SimulationService):
             slurm_jobid = await slurm_service.submit_job(
                 local_sbatch_file=local_submit_file,
                 remote_sbatch_file=slurm_submit_file,
-                local_input_file=simulation.sim_request.omex_archive or Path(""),
+                local_input_file=processed_omex,
                 remote_input_file=slurm_input_file,
                 local_singularity_file=Path(local_singularity_file),
                 remote_singularity_file=slurm_singularity_file,
