@@ -14,9 +14,6 @@ from typing_extensions import override
 from compose_api.common.gateway.models import Namespace
 from compose_api.common.ssh.ssh_service import SSHService, get_ssh_service
 from compose_api.config import Settings, get_settings
-from compose_api.simulation.hpc_utils import (
-    get_remote_chunks_dirpath,
-)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -68,11 +65,7 @@ class DataServiceHpc(DataService):
     def get_remote_chunk_path(
         self, db_id: int, commit_hash: str, chunk_id: int, namespace: Namespace | None = None
     ) -> Path:
-        results_fname = f"{chunk_id}.pq"
-
-        # get remote dirpath
-        remote_dirpath = get_remote_chunks_dirpath(db_id, commit_hash, namespace or Namespace.TEST)
-        return remote_dirpath / results_fname
+        raise NotImplementedError()
 
     async def download_chunk(self, remote_chunk_path: Path, local_dirpath: Path | None = None) -> Path:
         # make local mirror for temp

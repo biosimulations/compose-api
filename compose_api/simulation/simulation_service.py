@@ -1,6 +1,4 @@
 import logging
-import random
-import string
 import tempfile
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -26,7 +24,7 @@ from compose_api.simulation.hpc_utils import (
     get_slurm_singularity_def_file,
     get_slurm_submit_file,
 )
-from compose_api.simulation.models import Simulation, SimulatorVersion
+from compose_api.simulation.models import PBWhiteList, Simulation
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -36,8 +34,8 @@ class SimulationService(ABC):
     @abstractmethod
     async def submit_simulation_job(
         self,
+        white_list: PBWhiteList,
         simulation: Simulation,
-        simulator_version: SimulatorVersion,
         database_service: DatabaseService,
         correlation_id: str,
     ) -> int:
@@ -58,8 +56,8 @@ class SimulationServiceHpc(SimulationService):
     @override
     async def submit_simulation_job(
         self,
+        white_list: PBWhiteList,
         simulation: Simulation,
-        simulator_version: SimulatorVersion,
         database_service: DatabaseService,
         correlation_id: str,
     ) -> int:
@@ -73,13 +71,9 @@ class SimulationServiceHpc(SimulationService):
         if database_service is None:
             raise RuntimeError("DatabaseService is not available. Cannot submit Simulation job.")
 
-        if simulation.sim_request is None:
-            raise ValueError("Simulation must have a sim_request set to submit a job.")
-
         slurm_service = SlurmService(ssh_service=ssh_service)
 
-        random_suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=6))  # noqa: S311
-        slurm_job_name = f"sim-{simulation.database_id}-{random_suffix}"
+        slurm_job_name = f"sim-{correlation_id}"
 
         slurm_log_file = get_slurm_log_file(slurm_job_name=slurm_job_name)
         slurm_submit_file = get_slurm_submit_file(slurm_job_name=slurm_job_name)
@@ -92,10 +86,11 @@ class SimulationServiceHpc(SimulationService):
             local_singularity_file = tmpdir + "/singularity.def"
             execute_bsander(
                 ProgramArguments(
-                    input_file_path=str(simulation.omex_archive),
+                    input_file_path=str(simulation.sim_request.omex_archive),
                     output_dir=tmpdir,
                     containerization_type=ContainerizationTypes.SINGLE,
                     containerization_engine=ContainerizationEngine.APPTAINER,
+                    whitelist_entries=white_list.white_list,
                 )
             )
             local_submit_file = Path(tmpdir) / f"{slurm_job_name}.sbatch"
@@ -129,7 +124,7 @@ class SimulationServiceHpc(SimulationService):
             slurm_jobid = await slurm_service.submit_job(
                 local_sbatch_file=local_submit_file,
                 remote_sbatch_file=slurm_submit_file,
-                local_input_file=simulation.omex_archive or Path(""),
+                local_input_file=simulation.sim_request.omex_archive or Path(""),
                 remote_input_file=slurm_input_file,
                 local_singularity_file=Path(local_singularity_file),
                 remote_singularity_file=slurm_singularity_file,

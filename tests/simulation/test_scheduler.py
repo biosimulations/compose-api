@@ -25,19 +25,10 @@ from compose_api.simulation.models import (
 
 
 async def insert_job(database_service: DatabaseServiceSQL, slurmjobid: int) -> tuple[Simulation, SlurmJob, HpcRun]:
-    latest_commit_hash = str(uuid.uuid4())
-    repo_url = "https://github.com/some/repo"
-    main_branch = "main"
+    random_string = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
 
-    simulator = await database_service.insert_simulator(
-        git_commit_hash=latest_commit_hash, git_repo_url=repo_url, git_branch=main_branch
-    )
-
-    simulation_request = SimulationRequest(
-        simulator=simulator,
-        variant_config={"named_parameters": {"param1": 0.5, "param2": 0.5}},
-    )
-    simulation = await database_service.insert_simulation(sim_request=simulation_request)
+    simulation_request = SimulationRequest(omex_archive=Path(""))
+    simulation = await database_service.insert_simulation(sim_request=simulation_request, pb_cache_hash=random_string)
     slurm_job = SlurmJob(
         job_id=slurmjobid,
         name="name",
@@ -46,8 +37,7 @@ async def insert_job(database_service: DatabaseServiceSQL, slurmjobid: int) -> t
         job_state="RUNNING",
     )
 
-    random_string = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
-    correlation_id = get_correlation_id(simulation=simulation, random_string=random_string)
+    correlation_id = get_correlation_id(simulation=simulation, pb_cache_hash=random_string)
     hpcrun = await database_service.insert_hpcrun(
         slurmjobid=slurm_job.job_id,
         job_type=JobType.SIMULATION,

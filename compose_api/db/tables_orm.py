@@ -95,10 +95,7 @@ class ORMSimulation(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
-
-    simulator_id: Mapped[int] = mapped_column(ForeignKey("simulator.id"), nullable=False, index=True)
-    variant_config: Mapped[dict[str, dict[str, int | float | str]]] = mapped_column(JSONB, nullable=False)
-    variant_config_hash: Mapped[str] = mapped_column(nullable=False)
+    pb_cache_hash: Mapped[str] = mapped_column(nullable=False)
 
 
 class ORMWorkerEvent(Base):

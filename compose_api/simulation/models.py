@@ -1,6 +1,5 @@
 import datetime
 import enum
-import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -83,32 +82,29 @@ class RegisteredSimulators(BaseModel):
 
 
 class SimulationRequest(BaseModel):
-    simulator: SimulatorVersion
-    variant_config: dict[str, dict[str, int | float | str]]
-
-    @property
-    def variant_config_hash(self) -> str:
-        """Generate a deep hash of the variant config hash for caching purposes."""
-        json = self.model_dump_json(exclude_unset=True, exclude_none=True)
-        # Use a consistent hashing function to ensure reproducibility
-        return hashlib.md5(json.encode()).hexdigest()  # noqa: S324 insecure hash `md5` is okay for caching
+    omex_archive: Path | None = None
 
 
 class Simulation(BaseModel):
     """
     Everything required to execute the simulation and produce the same results.
     Input file contains all the files required to run the simulation (process-bigraph.json, sbml, etc...).
+    pb_cache_hash is the hash affiliated with the specific process bi-graph and it's dependencies.
     Args:
         database_id: SimulatorVersion
         sim_request: SimulationRequest
         slurmjob_id: int | None
-        omex_archive: Path | None
+        pb_cache_hash: str | None = None
     """
 
     database_id: int
     sim_request: SimulationRequest
     slurmjob_id: int | None = None
-    omex_archive: Path | None = None
+    pb_cache_hash: str | None = None
+
+
+class PBWhiteList(BaseModel):
+    white_list: list[str]
 
 
 class SimulationExperiment(BaseModel):

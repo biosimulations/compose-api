@@ -10,7 +10,7 @@ from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
-from compose_api.simulation.models import SimulationRequest, SimulatorVersion
+from compose_api.simulation.models import SimulationRequest
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -79,10 +79,8 @@ def slurm_template_hello_1s(slurm_template_hello_TEMPLATE: str) -> str:
 
 @pytest_asyncio.fixture
 async def simulation_request(database_service: DatabaseServiceSQL) -> SimulationRequest:
-    simulator: SimulatorVersion = await database_service.insert_simulator(
-        git_commit_hash="abc", git_repo_url="abc", git_branch="abc"
-    )
-    return SimulationRequest(simulator=simulator, variant_config={"named_parameters": {"param1": 0.5, "param2": 0.5}})
+    omex_path = Path(os.path.join(os.path.dirname(__file__), "interesting-test.omex"))
+    return SimulationRequest(omex_archive=omex_path)
 
 
 @pytest.fixture(scope="session")

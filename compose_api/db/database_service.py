@@ -16,6 +16,7 @@ from compose_api.db.tables_orm import (
     ORMSimulator,
     ORMWorkerEvent,
 )
+from compose_api.simulation.hpc_utils import get_correlation_id, get_slurm_sim_experiment_dir
 from compose_api.simulation.models import (
     HpcRun,
     JobType,
@@ -88,7 +89,7 @@ class DatabaseService(ABC):
         pass
 
     @abstractmethod
-    async def insert_simulation(self, sim_request: SimulationRequest) -> Simulation:
+    async def insert_simulation(self, sim_request: SimulationRequest, pb_cache_hash: str) -> Simulation:
         pass
 
     @abstractmethod
@@ -320,32 +321,12 @@ class DatabaseServiceSQL(DatabaseService):
             return worker_events
 
     @override
-    async def insert_simulation(self, sim_request: SimulationRequest) -> Simulation:
+    async def insert_simulation(self, sim_request: SimulationRequest, pb_cache_hash: str) -> Simulation:
         async with self.async_sessionmaker() as session, session.begin():
-            orm_simulator: ORMSimulator | None = await self._get_orm_simulator(
-                session, simulator_id=sim_request.simulator.database_id
-            )
-            if orm_simulator is None:
-                raise Exception(f"Simulator with id {sim_request.simulator.database_id} not found in the database")
-
-            orm_simulation = ORMSimulation(
-                simulator_id=orm_simulator.id,
-                variant_config=sim_request.variant_config,
-                variant_config_hash=sim_request.variant_config_hash,
-            )
+            orm_simulation = ORMSimulation(pb_cache_hash=pb_cache_hash)
             session.add(orm_simulation)
             await session.flush()  # Ensure the ORM object is inserted and has an ID
 
-            simulator_version = SimulatorVersion(
-                database_id=orm_simulator.id,
-                git_commit_hash=orm_simulator.git_commit_hash,
-                git_repo_url=orm_simulator.git_repo_url,
-                git_branch=orm_simulator.git_branch,
-            )
-            sim_request = SimulationRequest(
-                simulator=simulator_version,
-                variant_config=orm_simulation.variant_config,
-            )
             simulation = Simulation(database_id=orm_simulation.id, sim_request=sim_request)
             return simulation
 
@@ -356,21 +337,10 @@ class DatabaseServiceSQL(DatabaseService):
             if orm_simulation is None:
                 return None
 
-            orm_simulator: ORMSimulator | None = await self._get_orm_simulator(
-                session, simulator_id=orm_simulation.simulator_id
-            )
-            if orm_simulator is None:
-                raise Exception(f"Simulator with id {orm_simulation.simulator_id} not found in the database")
-
-            simulator_version = SimulatorVersion(
-                database_id=orm_simulation.simulator_id,
-                git_commit_hash=orm_simulator.git_commit_hash,
-                git_repo_url=orm_simulator.git_repo_url,
-                git_branch=orm_simulator.git_branch,
-            )
             sim_request = SimulationRequest(
-                simulator=simulator_version,
-                variant_config=orm_simulation.variant_config,
+                omex_archive=get_slurm_sim_experiment_dir(
+                    get_correlation_id(orm_simulation, orm_simulation.pb_cache_hash)
+                )
             )
             simulation = Simulation(database_id=orm_simulation.id, sim_request=sim_request)
             return simulation
@@ -392,21 +362,10 @@ class DatabaseServiceSQL(DatabaseService):
 
             simulations: list[Simulation] = []
             for orm_simulation in orm_simulations:
-                orm_simulator: ORMSimulator | None = await self._get_orm_simulator(
-                    session, simulator_id=orm_simulation.simulator_id
-                )
-                if orm_simulator is None:
-                    raise Exception(f"Simulator with id {orm_simulation.simulator_id} not found in the database")
-
-                simulator_version = SimulatorVersion(
-                    database_id=orm_simulator.id,
-                    git_commit_hash=orm_simulator.git_commit_hash,
-                    git_repo_url=orm_simulator.git_repo_url,
-                    git_branch=orm_simulator.git_branch,
-                )
                 sim_request = SimulationRequest(
-                    simulator=simulator_version,
-                    variant_config=orm_simulation.variant_config,
+                    omex_archive=get_slurm_sim_experiment_dir(
+                        get_correlation_id(orm_simulation, orm_simulation.pb_cache_hash)
+                    )
                 )
                 simulation = Simulation(database_id=orm_simulation.id, sim_request=sim_request)
                 simulations.append(simulation)

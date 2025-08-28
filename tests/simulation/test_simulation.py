@@ -2,14 +2,13 @@ import asyncio
 import random
 import string
 import time
-from pathlib import Path
 
 import pytest
 
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation.hpc_utils import get_correlation_id
-from compose_api.simulation.models import JobType, SimulationRequest
+from compose_api.simulation.models import JobType, PBWhiteList, SimulationRequest
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 
 
@@ -19,17 +18,15 @@ async def test_simulate(
     simulation_service_slurm: SimulationServiceHpc,
     database_service: DatabaseServiceSQL,
     simulation_request: SimulationRequest,
-    omex_file: Path,
 ) -> None:
     # insert the latest commit into the database
-    simulation = await database_service.insert_simulation(sim_request=simulation_request)
-    simulation.omex_archive = omex_file
-
     random_string = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
-    correlation_id = get_correlation_id(simulation=simulation, random_string=random_string)
+    simulation = await database_service.insert_simulation(sim_request=simulation_request, pb_cache_hash=random_string)
+
+    correlation_id = get_correlation_id(simulation=simulation, pb_cache_hash=random_string)
     sim_slurmjobid = await simulation_service_slurm.submit_simulation_job(
+        white_list=PBWhiteList(white_list=[""]),
         simulation=simulation,
-        simulator_version=simulation_request.simulator,
         database_service=database_service,
         correlation_id=correlation_id,
     )

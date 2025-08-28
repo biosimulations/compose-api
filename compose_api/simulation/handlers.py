@@ -1,7 +1,6 @@
 import logging
 import random
 import string
-from pathlib import Path
 
 from fastapi import BackgroundTasks, HTTPException
 
@@ -11,10 +10,10 @@ from compose_api.dependencies import get_database_service
 from compose_api.simulation.hpc_utils import get_correlation_id, get_experiment_id
 from compose_api.simulation.models import (
     JobType,
+    PBWhiteList,
     RegisteredSimulators,
     SimulationExperiment,
     SimulationRequest,
-    SimulatorVersion,
 )
 from compose_api.simulation.simulation_service import SimulationService
 
@@ -37,29 +36,25 @@ async def get_simulator_versions() -> RegisteredSimulators:
 
 
 async def run_simulation(
-    simulator: SimulatorVersion,
+    simulation_request: SimulationRequest,
     database_service: DatabaseService,
     simulation_service_slurm: SimulationService,
     router_config: RouterConfig,
-    omex_archive: Path,
-    variant_config: dict[str, dict[str, int | float | str]] | None = None,
     background_tasks: BackgroundTasks | None = None,
 ) -> SimulationExperiment:
-    simulation_request = SimulationRequest(
-        simulator=simulator,
-        variant_config=variant_config or {"named_parameters": {"param1": 0.5, "param2": 0.5}},
+    # TODO: Use an actual hash of the dependencies and PB
+    random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
+    simulation = await database_service.insert_simulation(
+        sim_request=simulation_request, pb_cache_hash=random_string_7_hex
     )
-    simulation = await database_service.insert_simulation(sim_request=simulation_request)
-    simulation.omex_archive = omex_archive
 
     async def dispatch_job() -> None:
-        random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
-        correlation_id = get_correlation_id(simulation=simulation, random_string=random_string_7_hex)
+        correlation_id = get_correlation_id(simulation=simulation, pb_cache_hash=random_string_7_hex)
         sim_slurmjobid = await simulation_service_slurm.submit_simulation_job(
             simulation=simulation,
-            simulator_version=simulator,
             database_service=database_service,
             correlation_id=correlation_id,
+            white_list=PBWhiteList(white_list=[]),  # TODO: Put actual white list
         )
         _hpcrun = await database_service.insert_hpcrun(
             slurmjobid=sim_slurmjobid,
