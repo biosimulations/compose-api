@@ -19,6 +19,7 @@ from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService
 from compose_api.simulation.hpc_utils import (
+    get_slurm_job_name,
     get_slurm_log_file,
     get_slurm_sim_experiment_dir,
     get_slurm_sim_input_file,
@@ -76,7 +77,7 @@ class SimulationServiceHpc(SimulationService):
 
         slurm_service = SlurmService(ssh_service=ssh_service)
 
-        slurm_job_name = f"sim-{correlation_id}"
+        slurm_job_name = get_slurm_job_name(correlation_id=correlation_id)
 
         slurm_log_file = get_slurm_log_file(slurm_job_name=slurm_job_name)
         slurm_submit_file = get_slurm_submit_file(slurm_job_name=slurm_job_name)

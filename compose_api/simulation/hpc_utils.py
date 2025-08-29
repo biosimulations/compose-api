@@ -35,6 +35,13 @@ def get_slurm_sim_experiment_dir(slurm_job_name: str) -> Path:
     return Path(settings.hpc_image_base_path) / f"experiment-{slurm_job_name}"
 
 
+def get_slurm_job_name(correlation_id: str) -> str:
+    """
+    Create a human-readable job name .
+    """
+    return f"sim-{correlation_id}"
+
+
 def get_correlation_id(simulation: Simulation | ORMSimulation, pb_cache_hash: str) -> str:
     """
     Generate a correlation ID for the Simulation based on its database ID and random string.

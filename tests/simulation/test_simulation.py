@@ -1,13 +1,19 @@
 import asyncio
+import math
+import os
 import random
 import string
+import tempfile
 import time
+from pathlib import Path
 
+import numpy
 import pytest
 
+from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
-from compose_api.simulation.hpc_utils import get_correlation_id
+from compose_api.simulation.hpc_utils import get_correlation_id, get_slurm_job_name, get_slurm_sim_experiment_dir
 from compose_api.simulation.models import JobType, PBWhiteList, SimulationRequest
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 
@@ -18,6 +24,7 @@ async def test_simulate(
     simulation_service_slurm: SimulationServiceHpc,
     database_service: DatabaseServiceSQL,
     simulation_request: SimulationRequest,
+    ssh_service: SSHService,
 ) -> None:
     # insert the latest commit into the database
     random_string = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
@@ -55,6 +62,30 @@ async def test_simulate(
     assert sim_slurmjob.is_done()
     assert not sim_slurmjob.is_failed()
     assert sim_slurmjob.job_id == sim_slurmjobid
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        remote_experiment_result = get_slurm_sim_experiment_dir(get_slurm_job_name(correlation_id)) / Path(
+            "output/output/report.csv"
+        )
+        experiment_result = Path(temp_dir) / "report.csv"
+        # SCP used because in test FS is not mounted
+        await ssh_service.scp_download(experiment_result, remote_experiment_result)
+        test_dir = os.path.dirname(__file__).rsplit("/", 1)[0]
+        report_csv_file = Path(os.path.join(test_dir, "fixtures/resources/report.csv"))
+        experiment_numpy = numpy.genfromtxt(experiment_result, delimiter=",", dtype=object)
+        report_numpy = numpy.genfromtxt(report_csv_file, delimiter=",", dtype=object)
+        assert report_numpy.shape == experiment_numpy.shape
+        r, c = report_numpy.shape
+        for i in range(r):
+            for j in range(c):
+                report_val = report_numpy[i, j].decode("utf-8")
+                experiment_val = experiment_numpy[i, j].decode("utf-8")
+                try:
+                    f_report = float(report_val)
+                    f_exp = float(experiment_val)
+                    assert math.isclose(f_report, f_exp, rel_tol=0, abs_tol=1e-9)
+                except ValueError:
+                    assert report_val == experiment_val  # Must be string portion of report then (columns)
 
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")

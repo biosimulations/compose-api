@@ -23,7 +23,6 @@ from tests.fixtures.simulation_fixtures import (  # noqa: F401
     simulation_service_slurm,
 )
 from tests.fixtures.slurm_fixtures import (  # noqa: F401
-    omex_file,
     simulation_request,
     slurm_service,
     slurm_template_hello_1s,
