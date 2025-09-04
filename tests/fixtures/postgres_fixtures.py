@@ -17,7 +17,7 @@ from compose_api.dependencies import (
 
 @pytest.fixture(scope="module")
 def postgres_url() -> Generator[str, None, None]:
-    with PostgresContainer("postgres:15") as postgres:
+    with PostgresContainer("postgres:15", username="test", password="test", dbname="test") as postgres:  # noqa: S106 Possible hardcoded password assigned to argument: "password"
         url = postgres.get_connection_url().replace("postgresql+psycopg2://", "postgresql+asyncpg://")
         yield url
 

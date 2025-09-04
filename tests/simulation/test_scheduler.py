@@ -28,7 +28,7 @@ async def insert_job(database_service: DatabaseServiceSQL, slurmjobid: int) -> t
     random_string = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
 
     simulation_request = SimulationRequest(omex_archive=Path(""))
-    simulation = await database_service.insert_simulation(sim_request=simulation_request, pb_cache_hash=random_string)
+    simulation = await database_service.insert_simulation(sim_request=simulation_request, correlation_id=random_string)
     slurm_job = SlurmJob(
         job_id=slurmjobid,
         name="name",
@@ -37,7 +37,7 @@ async def insert_job(database_service: DatabaseServiceSQL, slurmjobid: int) -> t
         job_state="RUNNING",
     )
 
-    correlation_id = get_correlation_id(simulation=simulation, pb_cache_hash=random_string)
+    correlation_id = get_correlation_id(random_string=random_string)
     hpcrun = await database_service.insert_hpcrun(
         slurmjobid=slurm_job.job_id,
         job_type=JobType.SIMULATION,

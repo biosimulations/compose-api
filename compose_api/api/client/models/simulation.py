@@ -20,11 +20,18 @@ T = TypeVar("T", bound="Simulation")
 
 @_attrs_define
 class Simulation:
-    """
-    Attributes:
-        database_id (int):
-        sim_request (SimulationRequest):
-        slurmjob_id (Union[None, Unset, int]):
+    """Everything required to execute the simulation and produce the same results.
+    Input file contains all the files required to run the simulation (process-bigraph.json, sbml, etc...).
+    pb_cache_hash is the hash affiliated with the specific process bi-graph and it's dependencies.
+    Args:
+        database_id: SimulatorVersion
+        sim_request: SimulationRequest
+        slurmjob_id: int | None
+
+        Attributes:
+            database_id (int):
+            sim_request (SimulationRequest):
+            slurmjob_id (Union[None, Unset, int]):
     """
 
     database_id: int

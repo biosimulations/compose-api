@@ -44,17 +44,13 @@ class ORMSimulator(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
-    git_repo_url: Mapped[str] = mapped_column(nullable=False)
-    git_branch: Mapped[str] = mapped_column(nullable=False)
-    git_commit_hash: Mapped[str] = mapped_column(nullable=False)  # first 7 characters of the commit hash
+    pb_cache_hash: Mapped[str] = mapped_column(nullable=False)
 
     def to_simulator_version(self) -> SimulatorVersion:
         return SimulatorVersion(
             database_id=self.id,
             created_at=self.created_at,
-            git_repo_url=self.git_repo_url,
-            git_branch=self.git_branch,
-            git_commit_hash=self.git_commit_hash,
+            pb_cache_hash=self.pb_cache_hash,
         )
 
 
@@ -95,7 +91,7 @@ class ORMSimulation(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
-    pb_cache_hash: Mapped[str] = mapped_column(nullable=False)
+    correlation_id: Mapped[str] = mapped_column(nullable=False, unique=True)
 
 
 class ORMWorkerEvent(Base):

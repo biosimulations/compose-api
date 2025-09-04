@@ -7,15 +7,15 @@ from ...client import AuthenticatedClient, Client
 from ...types import Response, UNSET
 from ... import errors
 
+from ...models.body_run_simulation import BodyRunSimulation
 from ...models.http_validation_error import HTTPValidationError
 from ...models.simulation_experiment import SimulationExperiment
-from ...models.simulation_request import SimulationRequest
 from typing import cast
 
 
 def _get_kwargs(
     *,
-    body: SimulationRequest,
+    body: BodyRunSimulation,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
 
@@ -24,9 +24,7 @@ def _get_kwargs(
         "url": "/core/simulation/run",
     }
 
-    _kwargs["json"] = body.to_dict()
-
-    headers["Content-Type"] = "application/json"
+    _kwargs["files"] = body.to_multipart()
 
     _kwargs["headers"] = headers
     return _kwargs
@@ -63,12 +61,12 @@ def _build_response(
 def sync_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: SimulationRequest,
+    body: BodyRunSimulation,
 ) -> Response[Union[HTTPValidationError, SimulationExperiment]]:
     """Run a simulation
 
     Args:
-        body (SimulationRequest):
+        body (BodyRunSimulation):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -92,12 +90,12 @@ def sync_detailed(
 def sync(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: SimulationRequest,
+    body: BodyRunSimulation,
 ) -> Optional[Union[HTTPValidationError, SimulationExperiment]]:
     """Run a simulation
 
     Args:
-        body (SimulationRequest):
+        body (BodyRunSimulation):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -116,12 +114,12 @@ def sync(
 async def asyncio_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: SimulationRequest,
+    body: BodyRunSimulation,
 ) -> Response[Union[HTTPValidationError, SimulationExperiment]]:
     """Run a simulation
 
     Args:
-        body (SimulationRequest):
+        body (BodyRunSimulation):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -143,12 +141,12 @@ async def asyncio_detailed(
 async def asyncio(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: SimulationRequest,
+    body: BodyRunSimulation,
 ) -> Optional[Union[HTTPValidationError, SimulationExperiment]]:
     """Run a simulation
 
     Args:
-        body (SimulationRequest):
+        body (BodyRunSimulation):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.

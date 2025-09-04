@@ -11,8 +11,8 @@ from typing import cast
 from typing import Union
 
 if TYPE_CHECKING:
-    from ..models.simulation import Simulation
     from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
+    from ..models.simulation import Simulation
 
 
 T = TypeVar("T", bound="SimulationExperiment")
@@ -23,7 +23,13 @@ class SimulationExperiment:
     """
     Attributes:
         experiment_id (str):
-        simulation (Simulation):
+        simulation (Simulation): Everything required to execute the simulation and produce the same results.
+            Input file contains all the files required to run the simulation (process-bigraph.json, sbml, etc...).
+            pb_cache_hash is the hash affiliated with the specific process bi-graph and it's dependencies.
+            Args:
+                database_id: SimulatorVersion
+                sim_request: SimulationRequest
+                slurmjob_id: int | None
         last_updated (Union[Unset, str]):
         metadata (Union[Unset, SimulationExperimentMetadata]):
     """
@@ -35,8 +41,8 @@ class SimulationExperiment:
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.simulation import Simulation
         from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
+        from ..models.simulation import Simulation
 
         experiment_id = self.experiment_id
 
@@ -63,8 +69,8 @@ class SimulationExperiment:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.simulation import Simulation
         from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
+        from ..models.simulation import Simulation
 
         d = dict(src_dict)
         experiment_id = d.pop("experiment_id")

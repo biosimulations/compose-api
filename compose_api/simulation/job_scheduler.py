@@ -2,7 +2,6 @@ import asyncio
 import logging
 from typing import Any
 
-import nats
 from async_lru import alru_cache
 from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
@@ -33,6 +32,9 @@ class JobScheduler:
         return await self.database_service.get_hpcrun_id_by_correlation_id(correlation_id=correlation_id)
 
     async def subscribe(self) -> None:
+        if not get_settings().hpc_has_messaging:
+            logger.info("Not subscribing to HPC messaging")
+            return
         subject = get_settings().nats_worker_event_subject
         logger.info(f"Subscribing to NATS messages for subject '{subject}'")
 
@@ -55,8 +57,6 @@ class JobScheduler:
             logger.error("NATS client is not connected.")
 
     async def start_polling(self, interval_seconds: int = 30) -> None:
-        if self.nats_client is None:
-            self.nats_client = await nats.connect(self.nats_url)
         if self._polling_task is not None and not self._polling_task.done():
             logger.warning("Polling task already running.")
             return

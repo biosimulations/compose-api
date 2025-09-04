@@ -7,7 +7,7 @@ from fastapi import BackgroundTasks, HTTPException
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.db.database_service import DatabaseService
 from compose_api.dependencies import get_database_service
-from compose_api.simulation.hpc_utils import get_correlation_id, get_experiment_id
+from compose_api.simulation.hpc_utils import get_correlation_id
 from compose_api.simulation.models import (
     JobType,
     PBWhiteList,
@@ -44,17 +44,18 @@ async def run_simulation(
 ) -> SimulationExperiment:
     # TODO: Use an actual hash of the dependencies and PB
     random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
+    correlation_id = get_correlation_id(random_string=random_string_7_hex)
+
     simulation = await database_service.insert_simulation(
-        sim_request=simulation_request, pb_cache_hash=random_string_7_hex
+        sim_request=simulation_request, correlation_id=random_string_7_hex
     )
 
     async def dispatch_job() -> None:
-        correlation_id = get_correlation_id(simulation=simulation, pb_cache_hash=random_string_7_hex)
         sim_slurmjobid = await simulation_service_slurm.submit_simulation_job(
             simulation=simulation,
             database_service=database_service,
             correlation_id=correlation_id,
-            white_list=PBWhiteList(white_list=[]),  # TODO: Put actual white list
+            white_list=PBWhiteList(white_list=["pypi:bspil-basico"]),  # TODO: Put actual white list
         )
         _hpcrun = await database_service.insert_hpcrun(
             slurmjobid=sim_slurmjobid,
@@ -67,8 +68,5 @@ async def run_simulation(
         background_tasks.add_task(dispatch_job)
     else:
         await dispatch_job()
-    experiment_id = get_experiment_id(
-        router_config=router_config, simulation=simulation, sim_request=simulation_request
-    )
 
-    return SimulationExperiment(experiment_id=experiment_id, simulation=simulation)
+    return SimulationExperiment(experiment_id=correlation_id, simulation=simulation)

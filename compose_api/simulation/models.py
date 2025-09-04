@@ -66,9 +66,7 @@ class HpcRun(BaseModel):
 
 
 class Simulator(BaseModel):
-    git_commit_hash: str  # Git commit hash for the specific simulator version (first 7 characters)
-    git_repo_url: str  # Git repository URL for the simulator
-    git_branch: str  # Git branch name for the simulator version
+    pb_cache_hash: str
 
 
 class SimulatorVersion(Simulator):
@@ -94,13 +92,11 @@ class Simulation(BaseModel):
         database_id: SimulatorVersion
         sim_request: SimulationRequest
         slurmjob_id: int | None
-        pb_cache_hash: str | None = None
     """
 
     database_id: int
     sim_request: SimulationRequest
     slurmjob_id: int | None = None
-    pb_cache_hash: str | None = None
 
 
 class PBWhiteList(BaseModel):

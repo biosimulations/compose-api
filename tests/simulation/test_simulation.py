@@ -28,9 +28,9 @@ async def test_simulate(
 ) -> None:
     # insert the latest commit into the database
     random_string = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
-    simulation = await database_service.insert_simulation(sim_request=simulation_request, pb_cache_hash=random_string)
+    simulation = await database_service.insert_simulation(sim_request=simulation_request, correlation_id=random_string)
 
-    correlation_id = get_correlation_id(simulation=simulation, pb_cache_hash=random_string)
+    correlation_id = get_correlation_id(random_string=random_string)
     sim_slurmjobid = await simulation_service_slurm.submit_simulation_job(
         white_list=PBWhiteList(white_list=["pypi:bspil-basico"]),
         simulation=simulation,
@@ -97,9 +97,9 @@ async def test_simulator_not_in_whitelist(
 ) -> None:
     # insert the latest commit into the database
     random_string = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
-    simulation = await database_service.insert_simulation(sim_request=simulation_request, pb_cache_hash=random_string)
+    simulation = await database_service.insert_simulation(sim_request=simulation_request, correlation_id=random_string)
 
-    correlation_id = get_correlation_id(simulation=simulation, pb_cache_hash=random_string)
+    correlation_id = get_correlation_id(random_string=random_string)
     with pytest.raises(ValueError):
         await simulation_service_slurm.submit_simulation_job(
             white_list=PBWhiteList(white_list=["pypi:bspil"]),

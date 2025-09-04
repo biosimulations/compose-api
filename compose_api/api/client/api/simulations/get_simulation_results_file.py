@@ -19,15 +19,12 @@ def _get_kwargs(
     *,
     body: Union["Settings", None],
     experiment_id: Union[Unset, str] = "experiment_96bb7a2_id_1_20250620-181422",
-    database_id: Union[Unset, int] = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
 
     params: dict[str, Any] = {}
 
     params["experiment_id"] = experiment_id
-
-    params["database_id"] = database_id
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -81,13 +78,11 @@ def sync_detailed(
     client: Union[AuthenticatedClient, Client],
     body: Union["Settings", None],
     experiment_id: Union[Unset, str] = "experiment_96bb7a2_id_1_20250620-181422",
-    database_id: Union[Unset, int] = UNSET,
 ) -> Response[Union[Any, HTTPValidationError]]:
     """Get simulation results as a zip file
 
     Args:
         experiment_id (Union[Unset, str]):  Default: 'experiment_96bb7a2_id_1_20250620-181422'.
-        database_id (Union[Unset, int]): Database Id of simulation
         body (Union['Settings', None]):
 
     Raises:
@@ -101,7 +96,6 @@ def sync_detailed(
     kwargs = _get_kwargs(
         body=body,
         experiment_id=experiment_id,
-        database_id=database_id,
     )
 
     response = client.get_httpx_client().request(
@@ -116,13 +110,11 @@ def sync(
     client: Union[AuthenticatedClient, Client],
     body: Union["Settings", None],
     experiment_id: Union[Unset, str] = "experiment_96bb7a2_id_1_20250620-181422",
-    database_id: Union[Unset, int] = UNSET,
 ) -> Optional[Union[Any, HTTPValidationError]]:
     """Get simulation results as a zip file
 
     Args:
         experiment_id (Union[Unset, str]):  Default: 'experiment_96bb7a2_id_1_20250620-181422'.
-        database_id (Union[Unset, int]): Database Id of simulation
         body (Union['Settings', None]):
 
     Raises:
@@ -137,7 +129,6 @@ def sync(
         client=client,
         body=body,
         experiment_id=experiment_id,
-        database_id=database_id,
     ).parsed
 
 
@@ -146,13 +137,11 @@ async def asyncio_detailed(
     client: Union[AuthenticatedClient, Client],
     body: Union["Settings", None],
     experiment_id: Union[Unset, str] = "experiment_96bb7a2_id_1_20250620-181422",
-    database_id: Union[Unset, int] = UNSET,
 ) -> Response[Union[Any, HTTPValidationError]]:
     """Get simulation results as a zip file
 
     Args:
         experiment_id (Union[Unset, str]):  Default: 'experiment_96bb7a2_id_1_20250620-181422'.
-        database_id (Union[Unset, int]): Database Id of simulation
         body (Union['Settings', None]):
 
     Raises:
@@ -166,7 +155,6 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         body=body,
         experiment_id=experiment_id,
-        database_id=database_id,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -179,13 +167,11 @@ async def asyncio(
     client: Union[AuthenticatedClient, Client],
     body: Union["Settings", None],
     experiment_id: Union[Unset, str] = "experiment_96bb7a2_id_1_20250620-181422",
-    database_id: Union[Unset, int] = UNSET,
 ) -> Optional[Union[Any, HTTPValidationError]]:
     """Get simulation results as a zip file
 
     Args:
         experiment_id (Union[Unset, str]):  Default: 'experiment_96bb7a2_id_1_20250620-181422'.
-        database_id (Union[Unset, int]): Database Id of simulation
         body (Union['Settings', None]):
 
     Raises:
@@ -201,6 +187,5 @@ async def asyncio(
             client=client,
             body=body,
             experiment_id=experiment_id,
-            database_id=database_id,
         )
     ).parsed

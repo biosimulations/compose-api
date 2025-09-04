@@ -6,11 +6,9 @@ from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
-from typing import cast
-
-if TYPE_CHECKING:
-    from ..models.simulation_request_variant_config import SimulationRequestVariantConfig
-    from ..models.simulator_version import SimulatorVersion
+from ..types import UNSET, Unset
+from typing import cast, Union
+from typing import Union
 
 
 T = TypeVar("T", bound="SimulationRequest")
@@ -20,44 +18,42 @@ T = TypeVar("T", bound="SimulationRequest")
 class SimulationRequest:
     """
     Attributes:
-        simulator (SimulatorVersion):
-        variant_config (SimulationRequestVariantConfig):
+        omex_archive (Union[None, Unset, str]):
     """
 
-    simulator: "SimulatorVersion"
-    variant_config: "SimulationRequestVariantConfig"
+    omex_archive: Union[None, Unset, str] = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.simulation_request_variant_config import SimulationRequestVariantConfig
-        from ..models.simulator_version import SimulatorVersion
-
-        simulator = self.simulator.to_dict()
-
-        variant_config = self.variant_config.to_dict()
+        omex_archive: Union[None, Unset, str]
+        if isinstance(self.omex_archive, Unset):
+            omex_archive = UNSET
+        else:
+            omex_archive = self.omex_archive
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({
-            "simulator": simulator,
-            "variant_config": variant_config,
-        })
+        field_dict.update({})
+        if omex_archive is not UNSET:
+            field_dict["omex_archive"] = omex_archive
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.simulation_request_variant_config import SimulationRequestVariantConfig
-        from ..models.simulator_version import SimulatorVersion
-
         d = dict(src_dict)
-        simulator = SimulatorVersion.from_dict(d.pop("simulator"))
 
-        variant_config = SimulationRequestVariantConfig.from_dict(d.pop("variant_config"))
+        def _parse_omex_archive(data: object) -> Union[None, Unset, str]:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(Union[None, Unset, str], data)
+
+        omex_archive = _parse_omex_archive(d.pop("omex_archive", UNSET))
 
         simulation_request = cls(
-            simulator=simulator,
-            variant_config=variant_config,
+            omex_archive=omex_archive,
         )
 
         simulation_request.additional_properties = d

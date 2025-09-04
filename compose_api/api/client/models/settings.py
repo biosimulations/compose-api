@@ -36,7 +36,7 @@ class Settings:
         mongodb_collection_sims (Union[Unset, str]):  Default: 'BiosimSims'.
         mongodb_collection_compare (Union[Unset, str]):  Default: 'BiosimCompare'.
         postgres_user (Union[Unset, str]):  Default: '<USER>'.
-        postgres_password (Union[Unset, str]):  Default: '<PASSWORD>'.
+        postgres_password (Union[Unset, str]):  Default: ''.
         postgres_database (Union[Unset, str]):  Default: 'compose_api'.
         postgres_host (Union[Unset, str]):  Default: 'localhost'.
         postgres_port (Union[Unset, int]):  Default: 5432.
@@ -57,13 +57,14 @@ class Settings:
         hpc_repo_base_path (Union[Unset, str]):  Default: ''.
         hpc_sim_base_path (Union[Unset, str]):  Default: ''.
         hpc_sim_config_file (Union[Unset, str]):  Default: 'publish.json'.
+        hpc_has_messaging (Union[Unset, bool]):  Default: False.
         nats_url (Union[Unset, str]):  Default: ''.
         nats_worker_event_subject (Union[Unset, str]):  Default: 'worker.events'.
         nats_emitter_url (Union[Unset, str]):  Default: ''.
         nats_emitter_magic_word (Union[Unset, str]):  Default: 'emitter-magic-word'.
         dev_mode (Union[Unset, str]):  Default: '0'.
-        app_dir (Union[Unset, str]):  Default: '/Users/jimschaff/Documents/workspace/compose-api/app'.
-        assets_dir (Union[Unset, str]):  Default: '/Users/jimschaff/Documents/workspace/compose-api/assets'.
+        app_dir (Union[Unset, str]):  Default: '/Users/evalencia/Documents/BioSimulatiors/compose-api/app'.
+        assets_dir (Union[Unset, str]):  Default: '/Users/evalencia/Documents/BioSimulatiors/compose-api/assets'.
         marimo_api_server (Union[Unset, str]):  Default: ''.
     """
 
@@ -83,7 +84,7 @@ class Settings:
     mongodb_collection_sims: Union[Unset, str] = "BiosimSims"
     mongodb_collection_compare: Union[Unset, str] = "BiosimCompare"
     postgres_user: Union[Unset, str] = "<USER>"
-    postgres_password: Union[Unset, str] = "<PASSWORD>"
+    postgres_password: Union[Unset, str] = ""
     postgres_database: Union[Unset, str] = "compose_api"
     postgres_host: Union[Unset, str] = "localhost"
     postgres_port: Union[Unset, int] = 5432
@@ -104,13 +105,14 @@ class Settings:
     hpc_repo_base_path: Union[Unset, str] = ""
     hpc_sim_base_path: Union[Unset, str] = ""
     hpc_sim_config_file: Union[Unset, str] = "publish.json"
+    hpc_has_messaging: Union[Unset, bool] = False
     nats_url: Union[Unset, str] = ""
     nats_worker_event_subject: Union[Unset, str] = "worker.events"
     nats_emitter_url: Union[Unset, str] = ""
     nats_emitter_magic_word: Union[Unset, str] = "emitter-magic-word"
     dev_mode: Union[Unset, str] = "0"
-    app_dir: Union[Unset, str] = "/Users/jimschaff/Documents/workspace/compose-api/app"
-    assets_dir: Union[Unset, str] = "/Users/jimschaff/Documents/workspace/compose-api/assets"
+    app_dir: Union[Unset, str] = "/Users/evalencia/Documents/BioSimulatiors/compose-api/app"
+    assets_dir: Union[Unset, str] = "/Users/evalencia/Documents/BioSimulatiors/compose-api/assets"
     marimo_api_server: Union[Unset, str] = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -191,6 +193,8 @@ class Settings:
         hpc_sim_base_path = self.hpc_sim_base_path
 
         hpc_sim_config_file = self.hpc_sim_config_file
+
+        hpc_has_messaging = self.hpc_has_messaging
 
         nats_url = self.nats_url
 
@@ -281,6 +285,8 @@ class Settings:
             field_dict["hpc_sim_base_path"] = hpc_sim_base_path
         if hpc_sim_config_file is not UNSET:
             field_dict["hpc_sim_config_file"] = hpc_sim_config_file
+        if hpc_has_messaging is not UNSET:
+            field_dict["hpc_has_messaging"] = hpc_has_messaging
         if nats_url is not UNSET:
             field_dict["nats_url"] = nats_url
         if nats_worker_event_subject is not UNSET:
@@ -392,6 +398,8 @@ class Settings:
 
         hpc_sim_config_file = d.pop("hpc_sim_config_file", UNSET)
 
+        hpc_has_messaging = d.pop("hpc_has_messaging", UNSET)
+
         nats_url = d.pop("nats_url", UNSET)
 
         nats_worker_event_subject = d.pop("nats_worker_event_subject", UNSET)
@@ -444,6 +452,7 @@ class Settings:
             hpc_repo_base_path=hpc_repo_base_path,
             hpc_sim_base_path=hpc_sim_base_path,
             hpc_sim_config_file=hpc_sim_config_file,
+            hpc_has_messaging=hpc_has_messaging,
             nats_url=nats_url,
             nats_worker_event_subject=nats_worker_event_subject,
             nats_emitter_url=nats_emitter_url,

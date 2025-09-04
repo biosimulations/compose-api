@@ -39,7 +39,7 @@ class DatabaseService(ABC):
         pass
 
     @abstractmethod
-    async def insert_simulator(self, git_commit_hash: str, git_repo_url: str, git_branch: str) -> SimulatorVersion:
+    async def insert_simulator(self, pb_cache_hash: str) -> SimulatorVersion:
         pass
 
     @abstractmethod
@@ -89,7 +89,7 @@ class DatabaseService(ABC):
         pass
 
     @abstractmethod
-    async def insert_simulation(self, sim_request: SimulationRequest, pb_cache_hash: str) -> Simulation:
+    async def insert_simulation(self, sim_request: SimulationRequest, correlation_id: str) -> Simulation:
         pass
 
     @abstractmethod
@@ -163,15 +163,13 @@ class DatabaseServiceSQL(DatabaseService):
         return orm_hpc_job
 
     @override
-    async def insert_simulator(self, git_commit_hash: str, git_repo_url: str, git_branch: str) -> SimulatorVersion:
+    async def insert_simulator(self, pb_cache_hash: str) -> SimulatorVersion:
         async with self.async_sessionmaker() as session, session.begin():
             stmt1 = (
                 select(ORMSimulator)
                 .where(
                     and_(
-                        ORMSimulator.git_commit_hash == git_commit_hash,
-                        ORMSimulator.git_repo_url == git_repo_url,
-                        ORMSimulator.git_branch == git_branch,
+                        ORMSimulator.pb_cache_hash == pb_cache_hash,
                     )
                 )
                 .limit(1)
@@ -180,17 +178,12 @@ class DatabaseServiceSQL(DatabaseService):
             existing_orm_simulator: ORMSimulator | None = result1.scalars().one_or_none()
             if existing_orm_simulator is not None:
                 # If the simulator already exists
-                logger.error(
-                    f"Simulator with git_commit_hash={git_commit_hash}, git_repo_url={git_repo_url}, "
-                    f"git_branch={git_branch} already exists in the database"
-                )
-                raise RuntimeError(f"Simulator with git_commit_hash={git_commit_hash} already exists in the database")
+                logger.error(f"Simulator with pb_cache_hash={pb_cache_hash}, already exists in the database")
+                raise RuntimeError(f"Simulator with pb_cache_hash={pb_cache_hash} already exists in the database")
 
             # did not find the simulator, so insert it
             new_orm_simulator = ORMSimulator(
-                git_commit_hash=git_commit_hash,
-                git_repo_url=git_repo_url,
-                git_branch=git_branch,
+                pb_cache_hash=pb_cache_hash,
             )
             session.add(new_orm_simulator)
             await session.flush()
@@ -206,9 +199,9 @@ class DatabaseServiceSQL(DatabaseService):
             return orm_simulator.to_simulator_version()
 
     @override
-    async def get_simulator_by_commit(self, commit_hash: str) -> SimulatorVersion | None:
+    async def get_simulator_by_commit(self, pb_cache_hash: str) -> SimulatorVersion | None:
         async with self.async_sessionmaker() as session, session.begin():
-            stmt1 = select(ORMSimulator).where(ORMSimulator.git_commit_hash == commit_hash).limit(1)
+            stmt1 = select(ORMSimulator).where(ORMSimulator.pb_cache_hash == pb_cache_hash).limit(1)
             result1: Result[tuple[ORMSimulator]] = await session.execute(stmt1)
             orm_simulator: ORMSimulator | None = result1.scalars().one_or_none()
             if orm_simulator is None:
@@ -321,9 +314,9 @@ class DatabaseServiceSQL(DatabaseService):
             return worker_events
 
     @override
-    async def insert_simulation(self, sim_request: SimulationRequest, pb_cache_hash: str) -> Simulation:
+    async def insert_simulation(self, sim_request: SimulationRequest, correlation_id: str) -> Simulation:
         async with self.async_sessionmaker() as session, session.begin():
-            orm_simulation = ORMSimulation(pb_cache_hash=pb_cache_hash)
+            orm_simulation = ORMSimulation(correlation_id=correlation_id)
             session.add(orm_simulation)
             await session.flush()  # Ensure the ORM object is inserted and has an ID
 
@@ -338,9 +331,7 @@ class DatabaseServiceSQL(DatabaseService):
                 return None
 
             sim_request = SimulationRequest(
-                omex_archive=get_slurm_sim_experiment_dir(
-                    get_correlation_id(orm_simulation, orm_simulation.pb_cache_hash)
-                )
+                omex_archive=get_slurm_sim_experiment_dir(get_correlation_id(orm_simulation.correlation_id))
             )
             simulation = Simulation(database_id=orm_simulation.id, sim_request=sim_request)
             return simulation
@@ -363,9 +354,7 @@ class DatabaseServiceSQL(DatabaseService):
             simulations: list[Simulation] = []
             for orm_simulation in orm_simulations:
                 sim_request = SimulationRequest(
-                    omex_archive=get_slurm_sim_experiment_dir(
-                        get_correlation_id(orm_simulation, orm_simulation.pb_cache_hash)
-                    )
+                    omex_archive=get_slurm_sim_experiment_dir(get_correlation_id(orm_simulation.correlation_id))
                 )
                 simulation = Simulation(database_id=orm_simulation.id, sim_request=sim_request)
                 simulations.append(simulation)

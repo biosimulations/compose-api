@@ -3,7 +3,6 @@ from pathlib import Path
 
 from compose_api.common.gateway.models import Namespace, RouterConfig
 from compose_api.config import get_settings
-from compose_api.db.tables_orm import ORMSimulation
 from compose_api.simulation.models import (
     Simulation,
     SimulationRequest,
@@ -42,12 +41,11 @@ def get_slurm_job_name(correlation_id: str) -> str:
     return f"sim-{correlation_id}"
 
 
-def get_correlation_id(simulation: Simulation | ORMSimulation, pb_cache_hash: str) -> str:
+def get_correlation_id(random_string: str) -> str:
     """
     Generate a correlation ID for the Simulation based on its database ID and random string.
     """
-    sim_id = simulation.id if isinstance(simulation, ORMSimulation) else simulation.database_id
-    return f"{sim_id}-{pb_cache_hash}"
+    return f"{random_string}"
 
 
 def parse_correlation_id(correlation_id: str) -> tuple[int, str, str]:
@@ -66,7 +64,7 @@ def parse_correlation_id(correlation_id: str) -> tuple[int, str, str]:
 def get_apptainer_image_file(simulator_version: SimulatorVersion) -> Path:
     settings = get_settings()
     hpc_image_remote_path = Path(settings.hpc_image_base_path)
-    return hpc_image_remote_path / f"simulator-{simulator_version.git_commit_hash}.sif"
+    return hpc_image_remote_path / f"simulator-{simulator_version.pb_cache_hash}.sif"
 
 
 def format_experiment_path(experiment_dirname: str, namespace: Namespace = Namespace.TEST) -> Path:
