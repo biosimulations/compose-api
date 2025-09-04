@@ -1,3 +1,4 @@
+import asyncio
 import time
 
 import pytest
@@ -42,7 +43,7 @@ async def test_sim_run(
 
         num_loops = 0
         while current_status.status != JobStatus.COMPLETED and num_loops < 10:
-            time.sleep(2)
+            await asyncio.sleep(2)
             current_status = await get_simulation_status.asyncio(
                 client=in_memory_api_client, simulation_id=sim_experiment.simulation.database_id
             )
