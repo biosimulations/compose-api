@@ -6,14 +6,16 @@ import string
 import tempfile
 import time
 from pathlib import Path
+from zipfile import ZipFile
 
 import numpy
 import pytest
 
+from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
-from compose_api.simulation.hpc_utils import get_correlation_id, get_slurm_job_name, get_slurm_sim_experiment_dir
+from compose_api.simulation.hpc_utils import get_correlation_id, get_slurm_job_name, get_slurm_sim_experiment_dir, get_slurm_sim_output_directory_path
 from compose_api.simulation.models import JobType, PBWhiteList, SimulationRequest
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 
@@ -51,7 +53,7 @@ async def test_simulate(
     assert hpcrun.ref_id == simulation.database_id
 
     start_time = time.time()
-    sim_slurmjob = None
+    sim_slurmjob: SlurmJob | None = None
     while start_time + 60 > time.time():
         sim_slurmjob = await simulation_service_slurm.get_slurm_job_status(slurmjobid=sim_slurmjobid)
         if sim_slurmjob is not None and sim_slurmjob.is_done():
@@ -60,16 +62,20 @@ async def test_simulate(
 
     assert sim_slurmjob is not None
     assert sim_slurmjob.is_done()
-    assert not sim_slurmjob.is_failed()
+    if sim_slurmjob.is_failed():
+        raise AssertionError(f"Slurm job {sim_slurmjobid} failed with status: {sim_slurmjob.job_state}[ exit code: {sim_slurmjob.exit_code} ]")
     assert sim_slurmjob.job_id == sim_slurmjobid
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        remote_experiment_result = get_slurm_sim_experiment_dir(get_slurm_job_name(correlation_id)) / Path(
-            "output/output/report.csv"
-        )
-        experiment_result = Path(temp_dir) / "report.csv"
+
+    pb_output_report_path = Path("output/report.csv") # This is determined by the test file itself
+    remote_experiment_result = await simulation_service_slurm.get_slurm_job_result_path(slurmjobid=sim_slurmjobid)
+    with tempfile.TemporaryDirectory(delete=False) as temp_dir:
+        experiment_result = Path(temp_dir) / pb_output_report_path
+        archive_result = Path(temp_dir) / os.path.basename(remote_experiment_result)
         # SCP used because in test FS is not mounted
-        await ssh_service.scp_download(experiment_result, remote_experiment_result)
+        await ssh_service.scp_download(archive_result, remote_experiment_result)
+        with ZipFile(archive_result) as zip_archive:
+            zip_archive.extractall(temp_dir)
         test_dir = os.path.dirname(__file__).rsplit("/", 1)[0]
         report_csv_file = Path(os.path.join(test_dir, "fixtures/resources/report.csv"))
         experiment_numpy = numpy.genfromtxt(experiment_result, delimiter=",", dtype=object)

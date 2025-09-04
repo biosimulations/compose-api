@@ -25,9 +25,14 @@ def get_slurm_singularity_def_file(slurm_job_name: str) -> Path:
     return Path(settings.hpc_image_base_path) / f"{slurm_job_name}.def"
 
 
-def get_slurm_sim_input_file(slurm_job_name: str) -> Path:
+def get_slurm_sim_input_file_path(slurm_job_name: str) -> Path:
     return get_slurm_sim_experiment_dir(slurm_job_name) / f"{slurm_job_name}.omex"
 
+def get_slurm_sim_output_directory_path(slurm_job_name: str) -> Path:
+    return get_slurm_sim_experiment_dir(slurm_job_name) / "output"
+
+def get_slurm_sim_results_file_path(slurm_job_name: str) -> Path:
+    return get_slurm_sim_experiment_dir(slurm_job_name) / "results.zip"
 
 def get_slurm_sim_experiment_dir(slurm_job_name: str) -> Path:
     settings = get_settings()
@@ -38,7 +43,7 @@ def get_slurm_job_name(correlation_id: str) -> str:
     """
     Create a human-readable job name .
     """
-    return f"sim-{correlation_id}"
+    return f"{correlation_id}"
 
 
 def get_correlation_id(random_string: str) -> str:

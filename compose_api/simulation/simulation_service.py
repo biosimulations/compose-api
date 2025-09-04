@@ -5,24 +5,25 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from textwrap import dedent
 
-from bsander.bsandr_utils.input_types import (  # type: ignore[import-untyped]
+from compose_api.btools.bsander.bsandr_utils.input_types import (
     ContainerizationEngine,
     ContainerizationTypes,
     ProgramArguments,
 )
-from bsander.execution import execute_bsander  # type: ignore[import-untyped]
+from compose_api.btools.bsander.execution import execute_bsander
 from typing_extensions import override
 
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
-from compose_api.common.ssh.ssh_service import SSHService
-from compose_api.config import get_settings
+from compose_api.common.ssh.ssh_service import SSHService, get_ssh_service
+from compose_api.config import get_settings, Settings
 from compose_api.db.database_service import DatabaseService
 from compose_api.simulation.hpc_utils import (
     get_slurm_job_name,
     get_slurm_log_file,
     get_slurm_sim_experiment_dir,
-    get_slurm_sim_input_file,
+    get_slurm_sim_input_file_path,
+    get_slurm_sim_results_file_path,
     get_slurm_singularity_def_file,
     get_slurm_submit_file,
 )
@@ -48,12 +49,22 @@ class SimulationService(ABC):
         pass
 
     @abstractmethod
+    async def get_slurm_job_result_path(self, slurmjobid: int) -> Path | None:
+        pass
+
+    @abstractmethod
     async def close(self) -> None:
         pass
 
 
 class SimulationServiceHpc(SimulationService):
     _latest_commit_hash: str | None = None
+
+    @staticmethod
+    def _get_services() -> tuple[SlurmService, SSHService, Settings]:
+        settings = get_settings()
+        ssh_service = get_ssh_service(settings)
+        return SlurmService(ssh_service=ssh_service), ssh_service, settings
 
     @override
     async def submit_simulation_job(
@@ -63,26 +74,17 @@ class SimulationServiceHpc(SimulationService):
         database_service: DatabaseService,
         correlation_id: str,
     ) -> int:
-        settings = get_settings()
-        ssh_service = SSHService(
-            hostname=settings.slurm_submit_host,
-            username=settings.slurm_submit_user,
-            key_path=Path(settings.slurm_submit_key_path),
-            known_hosts=Path(settings.slurm_submit_known_hosts) if settings.slurm_submit_known_hosts else None,
-        )
         if database_service is None:
             raise RuntimeError("DatabaseService is not available. Cannot submit Simulation job.")
         if simulation.sim_request.omex_archive is None:
             raise RuntimeError("Simulation.sim_request.omex_archive is not available. Cannot submit Simulation job.")
 
-        slurm_service = SlurmService(ssh_service=ssh_service)
-
+        slurm_service, ssh_service, settings = self._get_services()
         slurm_job_name = get_slurm_job_name(correlation_id=correlation_id)
-
         slurm_log_file = get_slurm_log_file(slurm_job_name=slurm_job_name)
         slurm_submit_file = get_slurm_submit_file(slurm_job_name=slurm_job_name)
         slurm_singularity_file = get_slurm_singularity_def_file(slurm_job_name=slurm_job_name)
-        slurm_input_file = get_slurm_sim_input_file(slurm_job_name=slurm_job_name)
+        slurm_input_file = get_slurm_sim_input_file_path(slurm_job_name=slurm_job_name)
         experiment_path = get_slurm_sim_experiment_dir(slurm_job_name=slurm_job_name)
 
         # build the submit script
@@ -120,6 +122,9 @@ class SimulationServiceHpc(SimulationService):
                         --bind {experiment_path}:/experiment \
                         {settings.hpc_image_base_path}/test.sif \
                          python3 /runtime/main.py /experiment/{slurm_job_name}.omex
+                    pushd {experiment_path}/output/
+                    zip -r {experiment_path}/results.zip ./*
+                    popd
                     echo "Simulation run completed. data saved to {experiment_path!s}."
                     """)
                 f.write(script_content)
@@ -136,16 +141,8 @@ class SimulationServiceHpc(SimulationService):
             )
             return slurm_jobid
 
-    @override
-    async def get_slurm_job_status(self, slurmjobid: int) -> SlurmJob | None:
-        settings = get_settings()
-        ssh_service = SSHService(
-            hostname=settings.slurm_submit_host,
-            username=settings.slurm_submit_user,
-            key_path=Path(settings.slurm_submit_key_path),
-            known_hosts=Path(settings.slurm_submit_known_hosts) if settings.slurm_submit_known_hosts else None,
-        )
-        slurm_service = SlurmService(ssh_service=ssh_service)
+    async def get_slurm_job(self, slurmjobid: int) -> SlurmJob | None:
+        slurm_service, _, _ = self._get_services()
         job_ids: list[SlurmJob] = await slurm_service.get_job_status_squeue(job_ids=[slurmjobid])
         if len(job_ids) == 0:
             job_ids = await slurm_service.get_job_status_sacct(job_ids=[slurmjobid])
@@ -156,6 +153,23 @@ class SimulationServiceHpc(SimulationService):
             return job_ids[0]
         else:
             raise RuntimeError(f"Multiple jobs found with ID {slurmjobid}: {job_ids}")
+
+    @override
+    async def get_slurm_job_status(self, slurmjobid: int) -> SlurmJob | None:
+        result = await self.get_slurm_job(slurmjobid)
+        return result
+
+    @override
+    async def get_slurm_job_result_path(self, slurmjobid: int) -> Path:
+        slurm_job = await self.get_slurm_job(slurmjobid)
+        if slurm_job is None:
+            raise ValueError(f"No job found with ID {slurmjobid}")
+        if not slurm_job.is_done():
+            raise RuntimeError(f"Job {slurmjobid} is not yet done.")
+        if slurm_job.job_state != "COMPLETED":
+            raise RuntimeError(f"Job `{slurmjobid}` has state `{slurm_job.job_state}`, not `COMPLETED`")
+        correlation_id = slurm_job.name
+        return get_slurm_sim_results_file_path(correlation_id)
 
     @override
     async def close(self) -> None:
