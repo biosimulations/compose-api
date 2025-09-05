@@ -1,8 +1,8 @@
 import os
 import shutil
 
-from spython.main.parse.parsers import DockerParser
-from spython.main.parse.writers import SingularityWriter
+from spython.main.parse.parsers import DockerParser  # type: ignore[import-untyped]
+from spython.main.parse.writers import SingularityWriter  # type: ignore[import-untyped]
 
 from compose_api.btools.bsander.bsandr_utils.experiment_archive import extract_archive_returning_pbif_path
 from compose_api.btools.bsander.bsandr_utils.input_types import (
@@ -16,21 +16,20 @@ from compose_api.btools.bsander.pbic3g.containerization.container_constructor im
 from compose_api.btools.bsander.pbic3g.local_registry import load_local_modules
 
 
-def execute_bsander(original_program_arguments: ProgramArguments):
-    new_input_file_path: None | str = None
+def execute_bsander(original_program_arguments: ProgramArguments) -> None:
+    new_input_file_path: str
     input_is_archive = original_program_arguments.input_file_path.endswith(
         ".zip"
     ) or original_program_arguments.input_file_path.endswith(".omex")
     required_program_arguments: ProgramArguments
     if input_is_archive:
         new_input_file_path = extract_archive_returning_pbif_path(
-            original_program_arguments.input_file_path, original_program_arguments.output_dir
+            original_program_arguments.input_file_path, str(original_program_arguments.output_dir)
         )
     else:
         new_input_file_path = os.path.join(
-            original_program_arguments.output_dir, os.path.basename(original_program_arguments.input_file_path)
+            str(original_program_arguments.output_dir), os.path.basename(original_program_arguments.input_file_path)
         )
-
         print(f"file copied to `{shutil.copy(original_program_arguments.input_file_path, new_input_file_path)}`")
     required_program_arguments = ProgramArguments(
         new_input_file_path,
@@ -48,7 +47,7 @@ def execute_bsander(original_program_arguments: ProgramArguments):
             raise NotImplementedError("Only single containerization is currently supported")
         docker_template: str = formulate_dockerfile_for_necessary_env(required_program_arguments)
         container_file_path: str
-        container_file_path = os.path.join(required_program_arguments.output_dir, "Dockerfile")
+        container_file_path = os.path.join(str(original_program_arguments.output_dir), "Dockerfile")
         with open(container_file_path, "w") as docker_file:
             docker_file.write(docker_template)
         if (
@@ -56,7 +55,7 @@ def execute_bsander(original_program_arguments: ProgramArguments):
             or required_program_arguments.containerization_engine == ContainerizationEngine.BOTH
         ):
             dockerfile_path = container_file_path
-            container_file_path = os.path.join(required_program_arguments.output_dir, "singularity.def")
+            container_file_path = os.path.join(str(original_program_arguments.output_dir), "singularity.def")
             dockerfile_parser = DockerParser(dockerfile_path)
             singularity_writer = SingularityWriter(dockerfile_parser.recipe)
             results = singularity_writer.convert()
@@ -69,7 +68,7 @@ def execute_bsander(original_program_arguments: ProgramArguments):
     # Reconstitute if archive
     if input_is_archive:
         base_name = os.path.basename(original_program_arguments.input_file_path)
-        new_archive_path = os.path.join(original_program_arguments.output_dir, base_name)
-        target_dir = os.path.join(original_program_arguments.output_dir, base_name.split(".")[0])
+        new_archive_path = os.path.join(str(original_program_arguments.output_dir), base_name)
+        target_dir = os.path.join(str(original_program_arguments.output_dir), base_name.split(".")[0])
         shutil.make_archive(new_archive_path, "zip", target_dir)
         shutil.move(new_archive_path + ".zip", new_archive_path)  # get rid of extra suffix

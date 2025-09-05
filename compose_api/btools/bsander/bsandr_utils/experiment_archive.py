@@ -20,12 +20,12 @@ def _extract_pbif_from_zip(archive_path: str, output_dir: str) -> str:
     return target_pbif
 
 
-def _extract_pbif_from_omex(archive_path: str, output_dir: str):
+def _extract_pbif_from_omex(archive_path: str, output_dir: str) -> str:
     # At the moment, we're not doing anything complicated...
     return _extract_pbif_from_zip(archive_path, output_dir)
 
 
-def extract_archive_returning_pbif_path(archive_path: str, output_dir: str):
+def extract_archive_returning_pbif_path(archive_path: str, output_dir: str) -> str:
     if archive_path.endswith(".omex"):
         return _extract_pbif_from_omex(archive_path, output_dir)
     elif archive_path.endswith(".zip"):

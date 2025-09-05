@@ -78,7 +78,7 @@ class SimulationServiceHpc(SimulationService):
             raise RuntimeError("DatabaseService is not available. Cannot submit Simulation job.")
         if simulation.sim_request.omex_archive is None:
             raise RuntimeError("Simulation.sim_request.omex_archive is not available. Cannot submit Simulation job.")
-
+        archive_to_execute: Path = simulation.sim_request.omex_archive
         slurm_service, ssh_service, settings = self._get_services()
         slurm_job_name = get_slurm_job_name(correlation_id=correlation_id)
         slurm_log_file = get_slurm_log_file(slurm_job_name=slurm_job_name)
@@ -90,10 +90,10 @@ class SimulationServiceHpc(SimulationService):
         # build the submit script
         with tempfile.TemporaryDirectory() as tmpdir:
             local_singularity_file = tmpdir + "/singularity.def"
-            processed_omex = Path(tmpdir + f"/{os.path.basename(simulation.sim_request.omex_archive.name)}")
+            processed_omex = Path(tmpdir + f"/{os.path.basename(archive_to_execute.name)}")
             execute_bsander(
                 ProgramArguments(
-                    input_file_path=str(simulation.sim_request.omex_archive),
+                    input_file_path=str(archive_to_execute),
                     output_dir=tmpdir,
                     containerization_type=ContainerizationTypes.SINGLE,
                     containerization_engine=ContainerizationEngine.APPTAINER,

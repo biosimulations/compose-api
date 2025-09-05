@@ -4,7 +4,7 @@ import pkgutil
 import re
 
 
-def load_local_modules():
+def load_local_modules() -> None:
     print("Loading local registry...")
     for package in importlib.metadata.distributions():
         if not does_package_require_bsail(package):
@@ -23,7 +23,7 @@ def does_package_require_bsail(package: importlib.metadata.Distribution) -> bool
     return False
 
 
-def recursive_dynamic_import(package_name: str):
+def recursive_dynamic_import(package_name: str) -> list[str]:
     classes_to_import = []
     adjusted_package_name = package_name.replace("-", "_")
     try:

@@ -30,5 +30,5 @@ ENTRYPOINT ["python3", "/runtime/main.py"]
 _sub_keys: set[str] = {match for match in re.findall(r"\$\${#(\w+)}", get_generic_dockerfile_template())}  # noqa: C416
 
 
-def pull_substitution_keys_from_document():
+def pull_substitution_keys_from_document() -> list[str]:
     return list(_sub_keys)
