@@ -1,5 +1,6 @@
 import re
 
+
 def get_generic_dockerfile_template() -> str:
     return """
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm
@@ -24,7 +25,10 @@ RUN python3 -m pip install -e /runtime
 ENTRYPOINT ["python3", "/runtime/main.py"]
 """.strip()
 
+
 # Note the capture group; that's what re.findall will return!
-_sub_keys: set[str] = { match for match in re.findall(r"\$\${#(\w+)}", get_generic_dockerfile_template()) }
+_sub_keys: set[str] = {match for match in re.findall(r"\$\${#(\w+)}", get_generic_dockerfile_template())}  # noqa: C416
+
+
 def pull_substitution_keys_from_document():
     return list(_sub_keys)

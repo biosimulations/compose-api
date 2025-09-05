@@ -28,11 +28,14 @@ def get_slurm_singularity_def_file(slurm_job_name: str) -> Path:
 def get_slurm_sim_input_file_path(slurm_job_name: str) -> Path:
     return get_slurm_sim_experiment_dir(slurm_job_name) / f"{slurm_job_name}.omex"
 
+
 def get_slurm_sim_output_directory_path(slurm_job_name: str) -> Path:
     return get_slurm_sim_experiment_dir(slurm_job_name) / "output"
 
+
 def get_slurm_sim_results_file_path(slurm_job_name: str) -> Path:
     return get_slurm_sim_experiment_dir(slurm_job_name) / "results.zip"
+
 
 def get_slurm_sim_experiment_dir(slurm_job_name: str) -> Path:
     settings = get_settings()

@@ -41,11 +41,11 @@ class SSHService:
                 )
                 return result.returncode, result.stdout, result.stderr
             except asyncssh.ProcessError as exc:
-                logger.exception(msg=f"failed to send command `{command}`, stderr:\n\t{str(exc.stderr)}", exc_info=exc)
-                raise RuntimeError(f"failed to send command `{command}`, stderr:\n\t{str(exc.stderr)})") from exc
+                logger.exception(msg=f"failed to send command `{command}`, stderr:\n\t{exc.stderr!s}", exc_info=exc)
+                raise RuntimeError(f"failed to send command `{command}`, stderr:\n\t{exc.stderr!s})") from exc
             except (OSError, asyncssh.Error) as exc:
-                logger.exception(msg=f"failed to send command `{command}`, stderr:\n\t{str(exc)}", exc_info=exc)
-                raise RuntimeError(f"failed to send command `{command}`, stderr:\n\t{str(exc)}") from exc
+                logger.exception(msg=f"failed to send command `{command}`, stderr:\n\t{exc!s}", exc_info=exc)
+                raise RuntimeError(f"failed to send command `{command}`, stderr:\n\t{exc!s}") from exc
 
     async def scp_upload(self, local_file: Path, remote_path: Path) -> None:
         async with asyncssh.connect(
@@ -56,9 +56,7 @@ class SSHService:
                 logger.info(msg=f"sent file {local_file} to {remote_path}")
             except asyncssh.Error as exc:
                 logger.exception(msg=f"failed to send file {local_file} to {remote_path}", exc_info=exc)
-                raise RuntimeError(
-                    f"failed to send file {local_file} to {remote_path}, error {str(exc)}"
-                ) from exc
+                raise RuntimeError(f"failed to send file {local_file} to {remote_path}, error {exc!s}") from exc
 
     async def scp_download(self, local_file: Path, remote_path: Path) -> None:
         async with asyncssh.connect(
@@ -70,7 +68,7 @@ class SSHService:
             except asyncssh.Error as exc:
                 logger.exception(msg=f"failed to retrieve remote file {remote_path} to {local_file}", exc_info=exc)
                 raise RuntimeError(
-                    f"failed to retrieve remote file {remote_path} to {local_file}, error {str(exc)}"
+                    f"failed to retrieve remote file {remote_path} to {local_file}, error {exc!s}"
                 ) from exc
 
     async def close(self) -> None:

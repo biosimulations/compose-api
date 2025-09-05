@@ -7,15 +7,18 @@ import re
 def load_local_modules():
     print("Loading local registry...")
     for package in importlib.metadata.distributions():
-        if not does_package_require_bsail(package): continue
+        if not does_package_require_bsail(package):
+            continue
         # If a package requires BSail, it probably has abstractions for us; worth importing.
         recursive_dynamic_import(package.name)
 
 
 def does_package_require_bsail(package: importlib.metadata.Distribution) -> bool:
     for key in package.metadata:
-        if key != "Requires-Dist": continue
-        if not re.match("bsail \([=><\d.]+,?[=><\d.]+\)", package.metadata[key]): continue
+        if key != "Requires-Dist":
+            continue
+        if not re.match(r"bsail \([=><\d.]+,?[=><\d.]+\)", package.metadata[key]):
+            continue
         return True
     return False
 
@@ -38,8 +41,8 @@ def recursive_dynamic_import(package_name: str):
     #         continue
     #     classes_to_import.append((class_name, clazz))
 
-    modules_to_check = pkgutil.iter_modules(module.__path__) if hasattr(module, '__path__') else []
-    for _module_loader, subname, isPkg in modules_to_check:
+    modules_to_check = pkgutil.iter_modules(module.__path__) if hasattr(module, "__path__") else []
+    for _module_loader, subname, _isPkg in modules_to_check:
         # if not isPkg: continue
         classes_to_import += recursive_dynamic_import(f"{adjusted_package_name}.{subname}")
 

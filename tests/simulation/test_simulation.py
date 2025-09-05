@@ -15,7 +15,9 @@ from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
-from compose_api.simulation.hpc_utils import get_correlation_id, get_slurm_job_name, get_slurm_sim_experiment_dir, get_slurm_sim_output_directory_path
+from compose_api.simulation.hpc_utils import (
+    get_correlation_id,
+)
 from compose_api.simulation.models import JobType, PBWhiteList, SimulationRequest
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 
@@ -63,11 +65,12 @@ async def test_simulate(
     assert sim_slurmjob is not None
     assert sim_slurmjob.is_done()
     if sim_slurmjob.is_failed():
-        raise AssertionError(f"Slurm job {sim_slurmjobid} failed with status: {sim_slurmjob.job_state}[ exit code: {sim_slurmjob.exit_code} ]")
+        raise AssertionError(
+            f"Slurm job {sim_slurmjobid} failed with status: {sim_slurmjob.job_state}[ exit code: {sim_slurmjob.exit_code} ]"  # noqa: E501
+        )
     assert sim_slurmjob.job_id == sim_slurmjobid
 
-
-    pb_output_report_path = Path("output/report.csv") # This is determined by the test file itself
+    pb_output_report_path = Path("output/report.csv")  # This is determined by the test file itself
     remote_experiment_result = await simulation_service_slurm.get_slurm_job_result_path(slurmjobid=sim_slurmjobid)
     with tempfile.TemporaryDirectory(delete=False) as temp_dir:
         experiment_result = Path(temp_dir) / pb_output_report_path

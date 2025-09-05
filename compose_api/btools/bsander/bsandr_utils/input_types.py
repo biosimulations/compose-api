@@ -3,16 +3,16 @@ from enum import Enum
 
 
 class ContainerizationTypes(Enum):
-    NONE=0
-    SINGLE=1
-    MULTIPLE=2
+    NONE = 0
+    SINGLE = 1
+    MULTIPLE = 2
 
 
 class ContainerizationEngine(Enum):
-    NONE=0
-    DOCKER=1
-    APPTAINER=2
-    BOTH=3
+    NONE = 0
+    DOCKER = 1
+    APPTAINER = 2
+    BOTH = 3
 
 
 @dataclass

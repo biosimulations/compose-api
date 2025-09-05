@@ -5,18 +5,18 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from textwrap import dedent
 
+from typing_extensions import override
+
 from compose_api.btools.bsander.bsandr_utils.input_types import (
     ContainerizationEngine,
     ContainerizationTypes,
     ProgramArguments,
 )
 from compose_api.btools.bsander.execution import execute_bsander
-from typing_extensions import override
-
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.common.ssh.ssh_service import SSHService, get_ssh_service
-from compose_api.config import get_settings, Settings
+from compose_api.config import Settings, get_settings
 from compose_api.db.database_service import DatabaseService
 from compose_api.simulation.hpc_utils import (
     get_slurm_job_name,
