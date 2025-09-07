@@ -41,7 +41,7 @@ Documentation = "https://biosimulations.github.io/compose-api/"
 [dependency-groups]
 dev = [
     "pytest>=8.3.5,<9",
-    "pytest-cov>=4.0.0,<5",
+    "pytest-cov>=6.3,<7",
     "deptry>=0.23.0,<0.24",
     "mypy>=1.5.1,<2",
     "pre-commit>=3.4.0,<4",
