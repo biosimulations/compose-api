@@ -11,8 +11,8 @@ from typing import cast
 from typing import Union
 
 if TYPE_CHECKING:
-    from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
     from ..models.simulation import Simulation
+    from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
 
 
 T = TypeVar("T", bound="SimulationExperiment")
@@ -41,8 +41,8 @@ class SimulationExperiment:
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
         from ..models.simulation import Simulation
+        from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
 
         experiment_id = self.experiment_id
 
@@ -69,8 +69,8 @@ class SimulationExperiment:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
         from ..models.simulation import Simulation
+        from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
 
         d = dict(src_dict)
         experiment_id = d.pop("experiment_id")

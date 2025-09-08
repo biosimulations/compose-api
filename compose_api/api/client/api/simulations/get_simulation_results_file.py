@@ -8,20 +8,13 @@ from ...types import Response, UNSET
 from ... import errors
 
 from ...models.http_validation_error import HTTPValidationError
-from ...models.settings import Settings
-from ...types import UNSET, Unset
 from typing import cast
-from typing import cast, Union
-from typing import Union
 
 
 def _get_kwargs(
     *,
-    body: Union["Settings", None],
-    experiment_id: Union[Unset, str] = "experiment_96bb7a2_id_1_20250620-181422",
+    experiment_id: str,
 ) -> dict[str, Any]:
-    headers: dict[str, Any] = {}
-
     params: dict[str, Any] = {}
 
     params["experiment_id"] = experiment_id
@@ -34,15 +27,6 @@ def _get_kwargs(
         "params": params,
     }
 
-    _kwargs["json"]: Union[None, dict[str, Any]]
-    if isinstance(body, Settings):
-        _kwargs["json"] = body.to_dict()
-    else:
-        _kwargs["json"] = body
-
-    headers["Content-Type"] = "application/json"
-
-    _kwargs["headers"] = headers
     return _kwargs
 
 
@@ -50,7 +34,7 @@ def _parse_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
 ) -> Optional[Union[Any, HTTPValidationError]]:
     if response.status_code == 200:
-        response_200 = cast(Any, None)
+        response_200 = cast(Any, response.content)
         return response_200
     if response.status_code == 422:
         response_422 = HTTPValidationError.from_dict(response.json())
@@ -76,14 +60,12 @@ def _build_response(
 def sync_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: Union["Settings", None],
-    experiment_id: Union[Unset, str] = "experiment_96bb7a2_id_1_20250620-181422",
+    experiment_id: str,
 ) -> Response[Union[Any, HTTPValidationError]]:
     """Get simulation results as a zip file
 
     Args:
-        experiment_id (Union[Unset, str]):  Default: 'experiment_96bb7a2_id_1_20250620-181422'.
-        body (Union['Settings', None]):
+        experiment_id (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -94,7 +76,6 @@ def sync_detailed(
     """
 
     kwargs = _get_kwargs(
-        body=body,
         experiment_id=experiment_id,
     )
 
@@ -108,14 +89,12 @@ def sync_detailed(
 def sync(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: Union["Settings", None],
-    experiment_id: Union[Unset, str] = "experiment_96bb7a2_id_1_20250620-181422",
+    experiment_id: str,
 ) -> Optional[Union[Any, HTTPValidationError]]:
     """Get simulation results as a zip file
 
     Args:
-        experiment_id (Union[Unset, str]):  Default: 'experiment_96bb7a2_id_1_20250620-181422'.
-        body (Union['Settings', None]):
+        experiment_id (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -127,7 +106,6 @@ def sync(
 
     return sync_detailed(
         client=client,
-        body=body,
         experiment_id=experiment_id,
     ).parsed
 
@@ -135,14 +113,12 @@ def sync(
 async def asyncio_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: Union["Settings", None],
-    experiment_id: Union[Unset, str] = "experiment_96bb7a2_id_1_20250620-181422",
+    experiment_id: str,
 ) -> Response[Union[Any, HTTPValidationError]]:
     """Get simulation results as a zip file
 
     Args:
-        experiment_id (Union[Unset, str]):  Default: 'experiment_96bb7a2_id_1_20250620-181422'.
-        body (Union['Settings', None]):
+        experiment_id (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -153,7 +129,6 @@ async def asyncio_detailed(
     """
 
     kwargs = _get_kwargs(
-        body=body,
         experiment_id=experiment_id,
     )
 
@@ -165,14 +140,12 @@ async def asyncio_detailed(
 async def asyncio(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: Union["Settings", None],
-    experiment_id: Union[Unset, str] = "experiment_96bb7a2_id_1_20250620-181422",
+    experiment_id: str,
 ) -> Optional[Union[Any, HTTPValidationError]]:
     """Get simulation results as a zip file
 
     Args:
-        experiment_id (Union[Unset, str]):  Default: 'experiment_96bb7a2_id_1_20250620-181422'.
-        body (Union['Settings', None]):
+        experiment_id (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -185,7 +158,6 @@ async def asyncio(
     return (
         await asyncio_detailed(
             client=client,
-            body=body,
             experiment_id=experiment_id,
         )
     ).parsed
