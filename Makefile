@@ -15,6 +15,13 @@ check: ## Run code quality tools.
 	@echo "🚀 Checking for obsolete dependencies: Running deptry"
 	@uv run deptry .
 
+.PHONY: clients
+clients: ## Run code quality tools.
+	@echo "🚀 Generating OpenAPI Spec"
+	@python3 compose_api/api/openapi_spec.py
+	@echo "🚀 Creating HTTPX Clients"
+	@scripts/generate-api-client.sh
+
 .PHONY: test
 test: ## Test the code with pytest
 	@echo "🚀 Testing code: Running pytest"
