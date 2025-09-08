@@ -2,7 +2,7 @@ from typing import override
 
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.db.database_service import DatabaseService
-from compose_api.simulation.models import PBWhiteList, Simulation
+from compose_api.simulation.models import PBAllowList, Simulation
 from compose_api.simulation.simulation_service import SimulationService
 
 
@@ -10,7 +10,7 @@ class ConcreteSimulationService(SimulationService):
     @override
     async def submit_simulation_job(
         self,
-        white_list: PBWhiteList,
+        white_list: PBAllowList,
         simulation: Simulation,
         database_service: DatabaseService,
         correlation_id: str,

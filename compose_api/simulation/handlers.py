@@ -10,7 +10,7 @@ from compose_api.dependencies import get_database_service
 from compose_api.simulation.hpc_utils import get_correlation_id
 from compose_api.simulation.models import (
     JobType,
-    PBWhiteList,
+    PBAllowList,
     RegisteredSimulators,
     SimulationExperiment,
     SimulationRequest,
@@ -55,7 +55,7 @@ async def run_simulation(
             simulation=simulation,
             database_service=database_service,
             correlation_id=correlation_id,
-            white_list=PBWhiteList(white_list=["pypi:bspil-basico"]),  # TODO: Put actual white list
+            white_list=PBAllowList(allow_list=["pypi:bspil-basico"]),  # TODO: Put actual white list
         )
         _hpcrun = await database_service.insert_hpcrun(
             slurmjobid=sim_slurmjobid,

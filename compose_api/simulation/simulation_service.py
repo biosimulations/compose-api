@@ -15,7 +15,7 @@ from compose_api.btools.bsander.bsandr_utils.input_types import (
 from compose_api.btools.bsander.execution import execute_bsander
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
-from compose_api.common.ssh.ssh_service import SSHService, get_ssh_service
+from compose_api.common.ssh.ssh_service import SSHService, get_custom_ssh_service
 from compose_api.config import Settings, get_settings
 from compose_api.db.database_service import DatabaseService
 from compose_api.simulation.hpc_utils import (
@@ -27,7 +27,7 @@ from compose_api.simulation.hpc_utils import (
     get_slurm_singularity_def_file,
     get_slurm_submit_file,
 )
-from compose_api.simulation.models import PBWhiteList, Simulation
+from compose_api.simulation.models import PBAllowList, Simulation
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -37,7 +37,7 @@ class SimulationService(ABC):
     @abstractmethod
     async def submit_simulation_job(
         self,
-        white_list: PBWhiteList,
+        white_list: PBAllowList,
         simulation: Simulation,
         database_service: DatabaseService,
         correlation_id: str,
@@ -63,13 +63,13 @@ class SimulationServiceHpc(SimulationService):
     @staticmethod
     def _get_services() -> tuple[SlurmService, SSHService, Settings]:
         settings = get_settings()
-        ssh_service = get_ssh_service(settings)
+        ssh_service = get_custom_ssh_service(settings)
         return SlurmService(ssh_service=ssh_service), ssh_service, settings
 
     @override
     async def submit_simulation_job(
         self,
-        white_list: PBWhiteList,
+        white_list: PBAllowList,
         simulation: Simulation,
         database_service: DatabaseService,
         correlation_id: str,
@@ -97,7 +97,7 @@ class SimulationServiceHpc(SimulationService):
                     output_dir=tmpdir,
                     containerization_type=ContainerizationTypes.SINGLE,
                     containerization_engine=ContainerizationEngine.APPTAINER,
-                    whitelist_entries=white_list.white_list,
+                    whitelist_entries=white_list.allow_list,
                 )
             )
             local_submit_file = Path(tmpdir) / f"{slurm_job_name}.sbatch"

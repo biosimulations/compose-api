@@ -99,8 +99,8 @@ class Simulation(BaseModel):
     slurmjob_id: int | None = None
 
 
-class PBWhiteList(BaseModel):
-    white_list: list[str]
+class PBAllowList(BaseModel):
+    allow_list: list[str]
 
 
 class SimulationExperiment(BaseModel):
