@@ -1,13 +1,8 @@
 import logging
-import os
-import re
-import tempfile
 from abc import ABC, abstractmethod
 from pathlib import Path
 
 import numpy
-import polars as pl
-from anyio import mkdtemp
 from pydantic import BaseModel
 from typing_extensions import override
 
@@ -19,9 +14,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 assets_dir = Path(get_settings().assets_dir)
-TEST_CHUNK_DIR = assets_dir / "tests" / "test_history"
-TEST_CHUNK_PATH = TEST_CHUNK_DIR / "1200.pq"
-TEST_EXPERIMENT_ID = "experiment_96bb7a2_id_1_20250620-181422"
 
 
 class DataService(ABC):
@@ -35,25 +27,8 @@ class DataService(ABC):
         return get_ssh_service(settings=self.settings)
 
     @abstractmethod
-    def get_remote_chunk_path(
-        self, db_id: int, commit_hash: str, chunk_id: int, namespace: Namespace | None = None
-    ) -> Path:
+    async def get_results_zip(self, experiment_id: str, namespace: Namespace) -> Path:
         pass
-
-    @abstractmethod
-    async def download_chunk(self, remote_chunk_path: Path, local_dirpath: Path | None = None) -> Path:
-        pass
-
-    @abstractmethod
-    async def get_simulation_chunk_paths(self, experiment_id: str, namespace: Namespace) -> list[Path]:
-        pass
-
-    @abstractmethod
-    async def read_simulation_chunks(self, experiment_id: str, namespace: Namespace) -> tuple[Path, pl.LazyFrame]:
-        pass
-
-    def scan_simulation_chunks(self, chunks_dirpath: Path) -> pl.LazyFrame:
-        return pl.scan_parquet(f"{chunks_dirpath!s}/*.pq", rechunk=True)
 
     @abstractmethod
     async def close(self) -> None:
@@ -62,57 +37,8 @@ class DataService(ABC):
 
 class DataServiceHpc(DataService):
     @override
-    def get_remote_chunk_path(
-        self, db_id: int, commit_hash: str, chunk_id: int, namespace: Namespace | None = None
-    ) -> Path:
-        raise NotImplementedError()
-
-    async def download_chunk(self, remote_chunk_path: Path, local_dirpath: Path | None = None) -> Path:
-        # make local mirror for temp
-        results_fname = str(remote_chunk_path).split("/")[-1]
-        local_dest = local_dirpath or Path(tempfile.mkdtemp())
-        local_fpath = local_dest / results_fname
-
-        try:
-            await self.ssh_service.scp_download(local_file=local_fpath, remote_path=remote_chunk_path)
-            return local_fpath
-        except Exception as e:
-            raise OSError(e) from e
-
-    async def get_simulation_chunk_paths(self, experiment_id: str, namespace: Namespace) -> list[Path]:
-        experiment_dir = Path(f"{self.settings.slurm_base_path}/{namespace}/sims/{experiment_id}")
-        chunks_dir = Path(
-            os.path.join(
-                experiment_dir,
-                "history",
-                f"experiment_id={experiment_id}",
-                "variant=0",
-                "lineage_seed=0",
-                "generation=1",
-                "agent_id=0",
-            )
-        )
-        ret, stdout, stderr = await self.ssh_service.run_command(f"ls -al {chunks_dir} | grep .pq")
-        filenames = [Path(os.path.join(chunks_dir, fname)) for fname in re.findall(r"(\d+\.pq)", stdout)]
-        return filenames
-
-    async def read_simulation_chunks(self, experiment_id: str, namespace: Namespace) -> tuple[Path, pl.LazyFrame]:
-        # TODO: instead use a session so as to not iteratively reauth
-        local_chunks_dir = Path(await mkdtemp(dir="datamount", prefix=experiment_id))
-        for chunkpath in await self.get_simulation_chunk_paths(experiment_id, namespace):
-            local_fp = local_chunks_dir / chunkpath.parts[-1]
-            await self.ssh_service.scp_download(local_file=local_fp, remote_path=chunkpath)
-
-        return local_chunks_dir, self.scan_simulation_chunks(local_chunks_dir)
-
-    async def read_chunks(self, experiment_id: str, namespace: Namespace) -> Path:
-        # TODO: instead use a session so as to not iteratively reauth
-        local_chunks_dir = Path(await mkdtemp(dir="datamount", prefix=experiment_id))
-        for chunkpath in await self.get_simulation_chunk_paths(experiment_id, namespace):
-            local_fp = local_chunks_dir / chunkpath.parts[-1]
-            await self.ssh_service.scp_download(local_file=local_fp, remote_path=chunkpath)
-
-        return local_chunks_dir
+    async def get_results_zip(self, experiment_id: str, namespace: Namespace) -> Path:
+        return Path(f"{self.settings.internal_mount_dir}/{namespace.value}/{experiment_id}/result.zip")
 
     @override
     async def close(self) -> None:

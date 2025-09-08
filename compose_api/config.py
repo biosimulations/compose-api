@@ -80,6 +80,9 @@ class Settings(BaseSettings):
     assets_dir: str = f"{REPO_ROOT}/assets"
     marimo_api_server: str = ""
 
+    # Should mount to /home/FCAM/crbmapi/compose_api externally
+    internal_mount_dir: str = "/mnt/crpbmapi"
+
 
 @lru_cache
 def get_settings() -> Settings:

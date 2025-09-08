@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 from compose_api.common.gateway.models import Namespace, RouterConfig
@@ -78,24 +77,6 @@ def get_apptainer_image_file(simulator_version: SimulatorVersion) -> Path:
 def format_experiment_path(experiment_dirname: str, namespace: Namespace = Namespace.TEST) -> Path:
     base_path = f"/home/FCAM/crbmapi/compose_api/{namespace}/sims"
     return Path(base_path) / experiment_dirname
-
-
-def get_remote_chunks_dirpath(
-    slurm_job_name: str,
-) -> Path:
-    remote_dir_root = get_slurm_sim_experiment_dir(slurm_job_name)
-    experiment_dirname = str(remote_dir_root).split("/")[-1]
-    return Path(
-        os.path.join(
-            remote_dir_root,
-            "history",
-            f"experiment_id={experiment_dirname}",
-            "variant=0",
-            "lineage_seed=0",
-            "generation=1",
-            "agent_id=0",
-        )
-    )
 
 
 def get_experiment_id(router_config: RouterConfig, simulation: Simulation, sim_request: SimulationRequest) -> str:

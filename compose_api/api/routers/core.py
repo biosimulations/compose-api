@@ -1,18 +1,17 @@
 import logging
-import shutil
 import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse
+from starlette.responses import FileResponse
 
 from compose_api.common.gateway.models import Namespace, RouterConfig, ServerMode
 from compose_api.common.ssh.ssh_service import get_ssh_service
 from compose_api.dependencies import (
+    get_data_service,
     get_database_service,
     get_simulation_service,
 )
-from compose_api.simulation.data_service import DataServiceHpc
 from compose_api.simulation.handlers import (
     run_simulation,
 )
@@ -233,23 +232,28 @@ async def get_simulation_status(simulation_id: int = Query(...)) -> HpcRun:
 @config.router.get(
     path="/simulation/run/results/file",
     response_class=FileResponse,
+    responses={
+        200: {
+            "content": {"application/octet-stream": {"schema": {"format": "binary"}}},
+            "description": "Simulation result zip file",
+        }
+    },
     operation_id="get-simulation-results-file",
     tags=["Simulations"],
     dependencies=[Depends(get_simulation_service), Depends(get_ssh_service)],
     summary="Get simulation results as a zip file",
 )
-async def get_results(
-    background_tasks: BackgroundTasks,
-    experiment_id: str = Query(default="experiment_96bb7a2_id_1_20250620-181422"),
-) -> FileResponse:
+async def get_results(experiment_id: str = Query()) -> FileResponse:
+    service = get_data_service()
+    if service is None:
+        logger.error("Data service is not initialized")
+        raise HTTPException(status_code=500, detail="Data service is not initialized")
     try:
-        service = DataServiceHpc()
-        local_dir = await service.read_chunks(experiment_id, Namespace.TEST)
-        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
-            zip_path = Path(tmp.name)
-            shutil.make_archive(str(zip_path.with_suffix("")), "zip", root_dir=local_dir)
-            background_tasks.add_task(shutil.rmtree, local_dir)
-        return FileResponse(path=zip_path, filename=f"{experiment_id}_chunks.zip", media_type="application/zip")
+        zip_path = await service.get_results_zip(experiment_id, Namespace.TEST)
+        file_response = FileResponse(
+            path=zip_path, filename=f"{experiment_id}_results.zip", media_type="application/zip"
+        )
+        return file_response
     except Exception as e:
         # logger.exception(f"Error fetching simulation results for id: {database_id}.")
         raise HTTPException(status_code=500, detail=str(e)) from e
