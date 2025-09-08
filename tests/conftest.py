@@ -21,6 +21,7 @@ from tests.fixtures.nats_fixtures import (  # noqa: F401
 from tests.fixtures.postgres_fixtures import async_postgres_engine, database_service, postgres_url  # noqa: F401
 from tests.fixtures.simulation_fixtures import job_scheduler, simulation_service_slurm  # noqa: F401
 from tests.fixtures.slurm_fixtures import (  # noqa: F401
+    data_service,
     simulation_request,
     slurm_service,
     slurm_template_hello_1s,

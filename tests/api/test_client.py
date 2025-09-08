@@ -1,18 +1,22 @@
 import asyncio
+import tempfile
+from pathlib import Path
 
 import pytest
 
 from compose_api.api.client import Client
-from compose_api.api.client.api.simulations import get_simulation_status, run_simulation
+from compose_api.api.client.api.simulations import get_simulation_results_file, get_simulation_status, run_simulation
 from compose_api.api.client.models import HpcRun, JobStatus, SimulationExperiment
 from compose_api.api.client.models.body_run_simulation import BodyRunSimulation
 from compose_api.api.client.types import File
 from compose_api.common.gateway.models import ServerMode
 from compose_api.db.database_service import DatabaseServiceSQL
+from compose_api.simulation.data_service import DataService
 from compose_api.simulation.job_scheduler import JobScheduler
 from compose_api.simulation.models import SimulationRequest
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 from compose_api.version import __version__
+from tests.fixtures import simulation_fixtures
 
 server_urls = [ServerMode.DEV, ServerMode.PROD]
 current_version = __version__
@@ -25,6 +29,7 @@ async def test_sim_run(
     database_service: DatabaseServiceSQL,
     simulation_service_slurm: SimulationServiceHpc,
     job_scheduler: JobScheduler,
+    data_service: DataService,
 ) -> None:
     assert simulation_request.omex_archive is not None
     with open(simulation_request.omex_archive, "rb") as f:
@@ -59,6 +64,16 @@ async def test_sim_run(
             raise TypeError()
 
         assert current_status.status == JobStatus.COMPLETED
+
+        results = await get_simulation_results_file.asyncio_detailed(
+            client=in_memory_api_client, experiment_id=sim_experiment.experiment_id
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir_path = Path(temp_dir)
+            experiment_results = temp_dir_path / Path("experiment_results.zip")
+            with open(experiment_results, "wb") as results_file:
+                results_file.write(results.content)
+            simulation_fixtures.helper_test_sim_results(experiment_results, temp_dir_path)
 
     # response = await httpx_client.get("/version")
     # assert response.status_code == 200
