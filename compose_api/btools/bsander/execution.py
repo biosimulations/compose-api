@@ -8,6 +8,7 @@ from compose_api.btools.bsander.bsandr_utils.experiment_archive import extract_a
 from compose_api.btools.bsander.bsandr_utils.input_types import (
     ContainerizationEngine,
     ContainerizationTypes,
+    ExperimentPrimaryDependencies,
     ProgramArguments,
 )
 from compose_api.btools.bsander.pbic3g.containerization.container_constructor import (
@@ -16,7 +17,7 @@ from compose_api.btools.bsander.pbic3g.containerization.container_constructor im
 from compose_api.btools.bsander.pbic3g.local_registry import load_local_modules
 
 
-def execute_bsander(original_program_arguments: ProgramArguments) -> None:
+def execute_bsander(original_program_arguments: ProgramArguments) -> ExperimentPrimaryDependencies:
     new_input_file_path: str
     input_is_archive = original_program_arguments.input_file_path.endswith(
         ".zip"
@@ -34,7 +35,7 @@ def execute_bsander(original_program_arguments: ProgramArguments) -> None:
     required_program_arguments = ProgramArguments(
         new_input_file_path,
         original_program_arguments.output_dir,
-        original_program_arguments.whitelist_entries,
+        original_program_arguments.passlist_entries,
         original_program_arguments.containerization_type,
         original_program_arguments.containerization_engine,
     )
@@ -42,10 +43,13 @@ def execute_bsander(original_program_arguments: ProgramArguments) -> None:
     load_local_modules()  # Collect Abstracts
     # TODO: Add feature - resolve abstracts
 
+    # Determine Dependencies
+    docker_template: str
+    primary_dependencies: ExperimentPrimaryDependencies
+    docker_template, primary_dependencies = formulate_dockerfile_for_necessary_env(required_program_arguments)
     if required_program_arguments.containerization_type != ContainerizationTypes.NONE:
         if required_program_arguments.containerization_type != ContainerizationTypes.SINGLE:
             raise NotImplementedError("Only single containerization is currently supported")
-        docker_template: str = formulate_dockerfile_for_necessary_env(required_program_arguments)
         container_file_path: str
         container_file_path = os.path.join(str(original_program_arguments.output_dir), "Dockerfile")
         with open(container_file_path, "w") as docker_file:
@@ -72,3 +76,4 @@ def execute_bsander(original_program_arguments: ProgramArguments) -> None:
         target_dir = os.path.join(str(original_program_arguments.output_dir), base_name.split(".")[0])
         shutil.make_archive(new_archive_path, "zip", target_dir)
         shutil.move(new_archive_path + ".zip", new_archive_path)  # get rid of extra suffix
+    return primary_dependencies

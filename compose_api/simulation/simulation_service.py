@@ -97,7 +97,7 @@ class SimulationServiceHpc(SimulationService):
                     output_dir=tmpdir,
                     containerization_type=ContainerizationTypes.SINGLE,
                     containerization_engine=ContainerizationEngine.APPTAINER,
-                    whitelist_entries=white_list.allow_list,
+                    passlist_entries=white_list.allow_list,
                 )
             )
             local_submit_file = Path(tmpdir) / f"{slurm_job_name}.sbatch"

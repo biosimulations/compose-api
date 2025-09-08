@@ -1,38 +1,40 @@
 import re
 from typing import Optional
 
-from compose_api.btools.bsander.bsandr_utils.input_types import ProgramArguments
+from compose_api.btools.bsander.bsandr_utils.input_types import ExperimentPrimaryDependencies, ProgramArguments
 from compose_api.btools.bsander.pbic3g.containerization.container_file import (
     get_generic_dockerfile_template,
     pull_substitution_keys_from_document,
 )
 
 
-def formulate_dockerfile_for_necessary_env(program_arguments: ProgramArguments) -> str:
+def formulate_dockerfile_for_necessary_env(
+    program_arguments: ProgramArguments,
+) -> tuple[str, ExperimentPrimaryDependencies]:
     docker_template: str = get_generic_dockerfile_template()
     pb_document_str: str
     with open(program_arguments.input_file_path) as pb_document_file:
         pb_document_str = pb_document_file.read()
-    pypi_deps, conda_deps, updated_document_str = determine_dependencies(
-        pb_document_str, program_arguments.whitelist_entries
-    )
+    experiment_deps, updated_document_str = determine_dependencies(pb_document_str, program_arguments.passlist_entries)
     if updated_document_str != pb_document_str:  # we need to update file
         with open(program_arguments.input_file_path, "w") as pb_document_file:
             pb_document_file.write(updated_document_str)
     for desired_field in generate_necessary_values():
         match_target: str = "$${#" + desired_field + "}"
         if desired_field == "PYPI_DEPENDENCIES":
-            if len(pypi_deps) == 0:
+            if len(experiment_deps.get_pypi_dependencies()) == 0:
                 docker_template = docker_template.replace(match_target, "# No PyPI dependencies!")
                 continue
             pypi_section = """
 RUN python3 -m pip install $${#DEPENDENCIES}
 """.strip()
-            dependency_str = convert_dependencies_to_installation_string_representation(pypi_deps)
+            dependency_str = convert_dependencies_to_installation_string_representation(
+                experiment_deps.get_pypi_dependencies()
+            )
             filled_section = pypi_section.replace("$${#DEPENDENCIES}", dependency_str)
             docker_template = docker_template.replace(match_target, filled_section)
         elif desired_field == "CONDA_FORGE_DEPENDENCIES":
-            if len(conda_deps) == 0:
+            if len(experiment_deps.get_conda_dependencies()) == 0:
                 docker_template = docker_template.replace(match_target, "# No conda dependencies!")
                 continue
             conda_section = """
@@ -42,13 +44,13 @@ RUN mv bin/micromamba /usr/local/bin/
 RUN micromamba create -y -p /opt/conda -c conda-forge $${#DEPENDENCIES} python=3.12
 ENV PATH=/opt/conda/bin:$PATH
 """.strip()
-            dependency_str = " ".join(conda_deps)
+            dependency_str = " ".join(experiment_deps.get_conda_dependencies())
             filled_section = conda_section.replace("$${#DEPENDENCIES}", dependency_str)
             docker_template = docker_template.replace(match_target, filled_section)
         else:
             raise ValueError(f"unknown field in template dockerfile: {desired_field}")
 
-    return docker_template
+    return docker_template, experiment_deps
 
 
 def generate_necessary_values() -> list[str]:
@@ -61,7 +63,7 @@ def generate_necessary_values() -> list[str]:
 #         ex: "pypi:copasi-basico[~0.8]@basico.model_io.load_model" (if this was a class, and not a function)
 def determine_dependencies(  # noqa: C901
     string_to_search: str, whitelist_entries: Optional[list[str]] = None
-) -> tuple[list[str], list[str], str]:
+) -> tuple[ExperimentPrimaryDependencies, str]:
     whitelist_mapping: dict[str, set[str]] | None
     if whitelist_entries is not None:
         whitelist_mapping = {}
@@ -114,7 +116,9 @@ def determine_dependencies(  # noqa: C901
         version_str = match[2] if package_version != "" else ""
         complete_match = f"{source_name}:{package_name}{version_str}@{match[4]}"
         adjusted_search_string = adjusted_search_string.replace(complete_match, f"local:{match[4]}")
-    return approved_dependencies["pypi"], approved_dependencies["conda"], adjusted_search_string.strip()
+    return ExperimentPrimaryDependencies(
+        approved_dependencies["pypi"], approved_dependencies["conda"]
+    ), adjusted_search_string.strip()
 
 
 def convert_dependencies_to_installation_string_representation(dependencies: list[str]) -> str:
