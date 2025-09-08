@@ -15,6 +15,11 @@ class ContainerizationEngine(Enum):
     BOTH = 3
 
 
+class ContainerizationFileRepr:
+    def __init__(self, representation: str):
+        self.representation = representation
+
+
 class ExperimentPrimaryDependencies:
     _pypi_dependencies: list[str]
     _conda_dependencies: list[str]

@@ -7,6 +7,7 @@ from spython.main.parse.writers import SingularityWriter  # type: ignore[import-
 from compose_api.btools.bsander.bsandr_utils.experiment_archive import extract_archive_returning_pbif_path
 from compose_api.btools.bsander.bsandr_utils.input_types import (
     ContainerizationEngine,
+    ContainerizationFileRepr,
     ContainerizationTypes,
     ExperimentPrimaryDependencies,
     ProgramArguments,
@@ -17,7 +18,9 @@ from compose_api.btools.bsander.pbic3g.containerization.container_constructor im
 from compose_api.btools.bsander.pbic3g.local_registry import load_local_modules
 
 
-def execute_bsander(original_program_arguments: ProgramArguments) -> ExperimentPrimaryDependencies:
+def execute_bsander(
+    original_program_arguments: ProgramArguments,
+) -> tuple[ContainerizationFileRepr, ExperimentPrimaryDependencies]:
     new_input_file_path: str
     input_is_archive = original_program_arguments.input_file_path.endswith(
         ".zip"
@@ -44,7 +47,7 @@ def execute_bsander(original_program_arguments: ProgramArguments) -> ExperimentP
     # TODO: Add feature - resolve abstracts
 
     # Determine Dependencies
-    docker_template: str
+    docker_template: ContainerizationFileRepr
     primary_dependencies: ExperimentPrimaryDependencies
     docker_template, primary_dependencies = formulate_dockerfile_for_necessary_env(required_program_arguments)
     if required_program_arguments.containerization_type != ContainerizationTypes.NONE:
@@ -53,7 +56,7 @@ def execute_bsander(original_program_arguments: ProgramArguments) -> ExperimentP
         container_file_path: str
         container_file_path = os.path.join(str(original_program_arguments.output_dir), "Dockerfile")
         with open(container_file_path, "w") as docker_file:
-            docker_file.write(docker_template)
+            docker_file.write(docker_template.representation)
         if (
             required_program_arguments.containerization_engine == ContainerizationEngine.APPTAINER
             or required_program_arguments.containerization_engine == ContainerizationEngine.BOTH
@@ -72,8 +75,14 @@ def execute_bsander(original_program_arguments: ProgramArguments) -> ExperimentP
     # Reconstitute if archive
     if input_is_archive:
         base_name = os.path.basename(original_program_arguments.input_file_path)
-        new_archive_path = os.path.join(str(original_program_arguments.output_dir), base_name)
+        output_dir: str = (
+            os.path.dirname(original_program_arguments.input_file_path)
+            if original_program_arguments.output_dir is None
+            else str(original_program_arguments.output_dir)
+        )
+        new_archive_path = os.path.join(output_dir, base_name)
+        # Note: If no output dir is provided (dir is `None`), then input file WILL BE OVERWRITTEN
         target_dir = os.path.join(str(original_program_arguments.output_dir), base_name.split(".")[0])
         shutil.make_archive(new_archive_path, "zip", target_dir)
         shutil.move(new_archive_path + ".zip", new_archive_path)  # get rid of extra suffix
-    return primary_dependencies
+    return docker_template, primary_dependencies

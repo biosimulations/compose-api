@@ -1,7 +1,11 @@
 import re
 from typing import Optional
 
-from compose_api.btools.bsander.bsandr_utils.input_types import ExperimentPrimaryDependencies, ProgramArguments
+from compose_api.btools.bsander.bsandr_utils.input_types import (
+    ContainerizationFileRepr,
+    ExperimentPrimaryDependencies,
+    ProgramArguments,
+)
 from compose_api.btools.bsander.pbic3g.containerization.container_file import (
     get_generic_dockerfile_template,
     pull_substitution_keys_from_document,
@@ -10,7 +14,7 @@ from compose_api.btools.bsander.pbic3g.containerization.container_file import (
 
 def formulate_dockerfile_for_necessary_env(
     program_arguments: ProgramArguments,
-) -> tuple[str, ExperimentPrimaryDependencies]:
+) -> tuple[ContainerizationFileRepr, ExperimentPrimaryDependencies]:
     docker_template: str = get_generic_dockerfile_template()
     pb_document_str: str
     with open(program_arguments.input_file_path) as pb_document_file:
@@ -50,7 +54,7 @@ ENV PATH=/opt/conda/bin:$PATH
         else:
             raise ValueError(f"unknown field in template dockerfile: {desired_field}")
 
-    return docker_template, experiment_deps
+    return ContainerizationFileRepr(docker_template), experiment_deps
 
 
 def generate_necessary_values() -> list[str]:
