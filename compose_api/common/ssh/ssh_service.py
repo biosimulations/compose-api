@@ -75,11 +75,14 @@ class SSHService:
         pass  # nothing to do here because we don't yet keep the connection around.
 
 
-def get_ssh_service(settings: Settings | None = None) -> SSHService:
-    ssh_settings = settings or get_settings()
+def get_custom_ssh_service(settings: Settings) -> SSHService:
     return SSHService(
-        hostname=ssh_settings.slurm_submit_host,
-        username=ssh_settings.slurm_submit_user,
-        key_path=Path(ssh_settings.slurm_submit_key_path),
-        known_hosts=Path(ssh_settings.slurm_submit_known_hosts) if ssh_settings.slurm_submit_known_hosts else None,
+        hostname=settings.slurm_submit_host,
+        username=settings.slurm_submit_user,
+        key_path=Path(settings.slurm_submit_key_path),
+        known_hosts=Path(settings.slurm_submit_known_hosts) if settings.slurm_submit_known_hosts else None,
     )
+
+
+def get_ssh_service() -> SSHService:
+    return get_custom_ssh_service(get_settings())
