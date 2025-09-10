@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import InstrumentedAttribute
 from typing_extensions import override
 
+from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr, ExperimentPrimaryDependencies
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.db.tables_orm import (
     JobStatusDB,
@@ -16,7 +17,7 @@ from compose_api.db.tables_orm import (
     ORMSimulator,
     ORMWorkerEvent,
 )
-from compose_api.simulation.hpc_utils import get_correlation_id, get_slurm_sim_experiment_dir
+from compose_api.simulation.hpc_utils import get_singularity_hash, get_slurm_sim_experiment_dir
 from compose_api.simulation.models import (
     HpcRun,
     JobType,
@@ -39,7 +40,9 @@ class DatabaseService(ABC):
         pass
 
     @abstractmethod
-    async def insert_simulator(self, pb_cache_hash: str) -> SimulatorVersion:
+    async def insert_simulator(
+        self, singularity_def_rep: ContainerizationFileRepr, experiment_dependencies: ExperimentPrimaryDependencies
+    ) -> SimulatorVersion:
         pass
 
     @abstractmethod
@@ -47,7 +50,7 @@ class DatabaseService(ABC):
         pass
 
     @abstractmethod
-    async def get_simulator_by_commit(self, commit_hash: str) -> SimulatorVersion | None:
+    async def get_simulator_by_def_hash(self, singularity_def_hash: str) -> SimulatorVersion | None:
         pass
 
     @abstractmethod
@@ -89,11 +92,17 @@ class DatabaseService(ABC):
         pass
 
     @abstractmethod
-    async def insert_simulation(self, sim_request: SimulationRequest, correlation_id: str) -> Simulation:
+    async def insert_simulation(
+        self, sim_request: SimulationRequest, experiment_id: str, simulator_version: SimulatorVersion
+    ) -> Simulation:
         pass
 
     @abstractmethod
     async def get_simulation(self, simulation_id: int) -> Simulation | None:
+        pass
+
+    @abstractmethod
+    async def list_simulations_that_use_simulator(self, simulator_id: int) -> list[Simulation]:
         pass
 
     @abstractmethod
@@ -163,13 +172,16 @@ class DatabaseServiceSQL(DatabaseService):
         return orm_hpc_job
 
     @override
-    async def insert_simulator(self, pb_cache_hash: str) -> SimulatorVersion:
+    async def insert_simulator(
+        self, singularity_def_rep: ContainerizationFileRepr, experiment_dependencies: ExperimentPrimaryDependencies
+    ) -> SimulatorVersion:
         async with self.async_sessionmaker() as session, session.begin():
+            singularity_hash = get_singularity_hash(singularity_def_rep)
             stmt1 = (
                 select(ORMSimulator)
                 .where(
                     and_(
-                        ORMSimulator.pb_cache_hash == pb_cache_hash,
+                        ORMSimulator.singularity_def_hash == singularity_hash,
                     )
                 )
                 .limit(1)
@@ -178,12 +190,16 @@ class DatabaseServiceSQL(DatabaseService):
             existing_orm_simulator: ORMSimulator | None = result1.scalars().one_or_none()
             if existing_orm_simulator is not None:
                 # If the simulator already exists
-                logger.error(f"Simulator with pb_cache_hash={pb_cache_hash}, already exists in the database")
-                raise RuntimeError(f"Simulator with pb_cache_hash={pb_cache_hash} already exists in the database")
+                logger.error(f"Simulator with singularity_def_hash={singularity_hash}, already exists in the database")
+                raise RuntimeError(
+                    f"Simulator with singularity_def_hash={singularity_hash} already exists in the database"
+                )
 
             # did not find the simulator, so insert it
             new_orm_simulator = ORMSimulator(
-                pb_cache_hash=pb_cache_hash,
+                singularity_def=singularity_def_rep.representation,
+                singularity_def_hash=singularity_hash,
+                primary_packages=experiment_dependencies.get_compact_repr(),
             )
             session.add(new_orm_simulator)
             await session.flush()
@@ -199,9 +215,9 @@ class DatabaseServiceSQL(DatabaseService):
             return orm_simulator.to_simulator_version()
 
     @override
-    async def get_simulator_by_commit(self, pb_cache_hash: str) -> SimulatorVersion | None:
+    async def get_simulator_by_def_hash(self, singularity_def_hash: str) -> SimulatorVersion | None:
         async with self.async_sessionmaker() as session, session.begin():
-            stmt1 = select(ORMSimulator).where(ORMSimulator.pb_cache_hash == pb_cache_hash).limit(1)
+            stmt1 = select(ORMSimulator).where(ORMSimulator.singularity_def_hash == singularity_def_hash).limit(1)
             result1: Result[tuple[ORMSimulator]] = await session.execute(stmt1)
             orm_simulator: ORMSimulator | None = result1.scalars().one_or_none()
             if orm_simulator is None:
@@ -314,13 +330,17 @@ class DatabaseServiceSQL(DatabaseService):
             return worker_events
 
     @override
-    async def insert_simulation(self, sim_request: SimulationRequest, correlation_id: str) -> Simulation:
+    async def insert_simulation(
+        self, sim_request: SimulationRequest, experiment_id: str, simulator_version: SimulatorVersion
+    ) -> Simulation:
         async with self.async_sessionmaker() as session, session.begin():
-            orm_simulation = ORMSimulation(correlation_id=correlation_id)
+            orm_simulation = ORMSimulation(experiment_id=experiment_id, simulator_id=simulator_version.database_id)
             session.add(orm_simulation)
             await session.flush()  # Ensure the ORM object is inserted and has an ID
 
-            simulation = Simulation(database_id=orm_simulation.id, sim_request=sim_request)
+            simulation = Simulation(
+                database_id=orm_simulation.id, sim_request=sim_request, simulator_version=simulator_version
+            )
             return simulation
 
     @override
@@ -329,12 +349,28 @@ class DatabaseServiceSQL(DatabaseService):
             orm_simulation: ORMSimulation | None = await self._get_orm_simulation(session, simulation_id)
             if orm_simulation is None:
                 return None
+            orm_simulator: ORMSimulator | None = await self._get_orm_simulator(session, orm_simulation.simulator_id)
+            if orm_simulator is None:
+                raise Exception(
+                    f"Simulation with id {simulation_id} does not have a simulator with id {orm_simulation.simulator_id}"  # noqa: E501
+                )
 
-            sim_request = SimulationRequest(
-                omex_archive=get_slurm_sim_experiment_dir(get_correlation_id(orm_simulation.correlation_id))
+            sim_request = SimulationRequest(omex_archive=get_slurm_sim_experiment_dir(orm_simulation.experiment_id))
+
+            simulation = Simulation(
+                database_id=orm_simulation.id,
+                sim_request=sim_request,
+                simulator_version=orm_simulator.to_simulator_version(),
             )
-            simulation = Simulation(database_id=orm_simulation.id, sim_request=sim_request)
             return simulation
+
+    @override
+    async def list_simulations_that_use_simulator(self, simulator_id: int) -> list[Simulation]:
+        return await self._list_simulations(simulator_id)
+
+    @override
+    async def list_simulations(self) -> list[Simulation]:
+        return await self._list_simulations()
 
     @override
     async def delete_simulation(self, simulation_id: int) -> None:
@@ -344,19 +380,30 @@ class DatabaseServiceSQL(DatabaseService):
                 raise Exception(f"Simulation with id {simulation_id} not found in the database")
             await session.delete(orm_simulation)
 
-    @override
-    async def list_simulations(self) -> list[Simulation]:
+    async def _list_simulations(self, simulator_id: int | None = None) -> list[Simulation]:
         async with self.async_sessionmaker() as session:
-            stmt = select(ORMSimulation)
-            result: Result[tuple[ORMSimulation]] = await session.execute(stmt)
-            orm_simulations = result.scalars().all()
+            if simulator_id is None:
+                stmt = select(ORMSimulation, ORMSimulator).join(
+                    ORMSimulator, onclause=ORMSimulation.simulator_id == ORMSimulator.id
+                )
+            else:
+                stmt = (
+                    select(ORMSimulation, ORMSimulator)
+                    .join(ORMSimulator, onclause=ORMSimulation.simulator_id == ORMSimulator.id)
+                    .where(ORMSimulator.id == simulator_id)
+                )
+            result: Result[tuple[ORMSimulation, ORMSimulator]] = await session.execute(stmt)
+            orm_simulations = result.fetchall()
 
             simulations: list[Simulation] = []
-            for orm_simulation in orm_simulations:
-                sim_request = SimulationRequest(
-                    omex_archive=get_slurm_sim_experiment_dir(get_correlation_id(orm_simulation.correlation_id))
+            for row in orm_simulations:
+                orm_simulation, orm_simulator = row.t
+                sim_request = SimulationRequest(omex_archive=get_slurm_sim_experiment_dir(orm_simulation.experiment_id))
+                simulation = Simulation(
+                    database_id=orm_simulation.id,
+                    sim_request=sim_request,
+                    simulator_version=orm_simulator.to_simulator_version(),
                 )
-                simulation = Simulation(database_id=orm_simulation.id, sim_request=sim_request)
                 simulations.append(simulation)
 
             return simulations

@@ -10,6 +10,8 @@ from typing import Any
 from pydantic import BaseModel as _BaseModel
 from pydantic import Field
 
+from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr, ExperimentPrimaryDependencies
+
 
 @dataclass
 class FlexData:
@@ -66,7 +68,10 @@ class HpcRun(BaseModel):
 
 
 class Simulator(BaseModel):
-    pb_cache_hash: str
+    singularity_def: ContainerizationFileRepr
+    singularity_def_hash: str
+    primary_packages: ExperimentPrimaryDependencies
+    # primary_processes: str
 
 
 class SimulatorVersion(Simulator):
@@ -80,7 +85,7 @@ class RegisteredSimulators(BaseModel):
 
 
 class SimulationRequest(BaseModel):
-    omex_archive: Path | None = None
+    omex_archive: Path
 
 
 class Simulation(BaseModel):
@@ -96,6 +101,7 @@ class Simulation(BaseModel):
 
     database_id: int
     sim_request: SimulationRequest
+    simulator_version: SimulatorVersion
     slurmjob_id: int | None = None
 
 
