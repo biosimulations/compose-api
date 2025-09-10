@@ -12,10 +12,11 @@ from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
+from compose_api.simulation import handlers
 from compose_api.simulation.hpc_utils import (
-    get_correlation_id,
+    get_experiment_id,
 )
-from compose_api.simulation.models import JobType, PBAllowList, SimulationRequest
+from compose_api.simulation.models import JobType, PBAllowList, SimulationRequest, SimulatorVersion
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 from tests.fixtures import simulation_fixtures
 
@@ -27,35 +28,28 @@ async def test_simulate(
     database_service: DatabaseServiceSQL,
     simulation_request: SimulationRequest,
     ssh_service: SSHService,
+    dummy_simulator: SimulatorVersion,
 ) -> None:
     # insert the latest commit into the database
-    random_string = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
-    simulation = await database_service.insert_simulation(sim_request=simulation_request, correlation_id=random_string)
 
-    correlation_id = get_correlation_id(random_string=random_string)
-    sim_slurmjobid = await simulation_service_slurm.submit_simulation_job(
-        white_list=PBAllowList(allow_list=["pypi:bspil-basico"]),
-        simulation=simulation,
+    sim_experiement = await handlers.run_simulation(
+        simulation_request=simulation_request,
         database_service=database_service,
-        correlation_id=correlation_id,
+        simulation_service_slurm=simulation_service_slurm,
+        background_tasks=None,
+        pb_allow_list=None,
     )
-    assert sim_slurmjobid is not None
+    assert sim_experiement is not None
 
-    hpcrun = await database_service.insert_hpcrun(
-        slurmjobid=sim_slurmjobid,
-        job_type=JobType.SIMULATION,
-        ref_id=simulation.database_id,
-        correlation_id=correlation_id,
-    )
+    hpcrun = await database_service.get_hpcrun_by_ref(sim_experiement.simulation.database_id, JobType.SIMULATION)
     assert hpcrun is not None
-    assert hpcrun.slurmjobid == sim_slurmjobid
     assert hpcrun.job_type == JobType.SIMULATION
-    assert hpcrun.ref_id == simulation.database_id
+    assert hpcrun.ref_id == sim_experiement.simulation.database_id
 
     start_time = time.time()
     sim_slurmjob: SlurmJob | None = None
     while start_time + 60 > time.time():
-        sim_slurmjob = await simulation_service_slurm.get_slurm_job_status(slurmjobid=sim_slurmjobid)
+        sim_slurmjob = await simulation_service_slurm.get_slurm_job_status(slurmjobid=hpcrun.slurmjobid)
         if sim_slurmjob is not None and sim_slurmjob.is_done():
             break
         await asyncio.sleep(5)
@@ -64,11 +58,11 @@ async def test_simulate(
     assert sim_slurmjob.is_done()
     if sim_slurmjob.is_failed():
         raise AssertionError(
-            f"Slurm job {sim_slurmjobid} failed with status: {sim_slurmjob.job_state}[ exit code: {sim_slurmjob.exit_code} ]"  # noqa: E501
+            f"Slurm job {sim_slurmjob.job_id} failed with status: {sim_slurmjob.job_state}[ exit code: {sim_slurmjob.exit_code} ]"  # noqa: E501
         )
-    assert sim_slurmjob.job_id == sim_slurmjobid
+    assert sim_slurmjob.job_id == hpcrun.slurmjobid
 
-    remote_experiment_result = await simulation_service_slurm.get_slurm_job_result_path(slurmjobid=sim_slurmjobid)
+    remote_experiment_result = await simulation_service_slurm.get_slurm_job_result_path(slurmjobid=sim_slurmjob.job_id)
     with tempfile.TemporaryDirectory(delete=False) as temp_dir:
         temp_dir_path = Path(temp_dir)
         archive_result = temp_dir_path / os.path.basename(remote_experiment_result)
@@ -83,16 +77,25 @@ async def test_simulator_not_in_allowlist(
     simulation_service_slurm: SimulationServiceHpc,
     database_service: DatabaseServiceSQL,
     simulation_request: SimulationRequest,
+    dummy_simulator: SimulatorVersion,
 ) -> None:
     # insert the latest commit into the database
-    random_string = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
-    simulation = await database_service.insert_simulation(sim_request=simulation_request, correlation_id=random_string)
+    experiement_id = get_experiment_id(dummy_simulator, "".join(random.choices(string.hexdigits, k=7)))  # noqa: S311 doesn't need to be secure
 
-    correlation_id = get_correlation_id(random_string=random_string)
+    simulation = await database_service.insert_simulation(
+        sim_request=simulation_request, experiment_id=experiement_id, simulator_version=dummy_simulator
+    )
+
     with pytest.raises(ValueError):
+        await handlers.run_simulation(
+            simulation_request,
+            database_service,
+            simulation_service_slurm,
+            None,
+            pb_allow_list=PBAllowList(allow_list=["pypi:bspil"]),
+        )
         await simulation_service_slurm.submit_simulation_job(
-            white_list=PBAllowList(allow_list=["pypi:bspil"]),
             simulation=simulation,
             database_service=database_service,
-            correlation_id=correlation_id,
+            experiment_id=experiement_id,
         )

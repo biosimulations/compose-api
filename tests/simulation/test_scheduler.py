@@ -12,7 +12,7 @@ from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
-from compose_api.simulation.hpc_utils import get_correlation_id
+from compose_api.simulation.hpc_utils import get_correlation_id, get_experiment_id
 from compose_api.simulation.job_scheduler import JobScheduler
 from compose_api.simulation.models import (
     HpcRun,
@@ -20,15 +20,22 @@ from compose_api.simulation.models import (
     JobType,
     Simulation,
     SimulationRequest,
+    SimulatorVersion,
     WorkerEvent,
 )
 
 
-async def insert_job(database_service: DatabaseServiceSQL, slurmjobid: int) -> tuple[Simulation, SlurmJob, HpcRun]:
-    random_string = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
-
+async def insert_job(
+    database_service: DatabaseServiceSQL, slurmjobid: int, simulator: SimulatorVersion
+) -> tuple[Simulation, SlurmJob, HpcRun]:
     simulation_request = SimulationRequest(omex_archive=Path(""))
-    simulation = await database_service.insert_simulation(sim_request=simulation_request, correlation_id=random_string)
+    random_string = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
+    experiement_id = get_experiment_id(simulator, random_string)
+
+    simulation = await database_service.insert_simulation(
+        sim_request=simulation_request, experiment_id=experiement_id, simulator_version=simulator
+    )
+    simulation.slurmjob_id = slurmjobid
     slurm_job = SlurmJob(
         job_id=slurmjobid,
         name="name",
@@ -55,6 +62,7 @@ async def test_messaging(
     nats_producer_client: NATSClient,
     database_service: DatabaseServiceSQL,
     slurm_service: SlurmService,
+    dummy_simulator: SimulatorVersion,
 ) -> None:
     scheduler = JobScheduler(
         nats_client=nats_subscriber_client, database_service=database_service, slurm_service=slurm_service
@@ -62,7 +70,9 @@ async def test_messaging(
     await scheduler.subscribe()
 
     # Simulate a job submission and worker event handling
-    simulation, slurm_job, hpc_run = await insert_job(database_service=database_service, slurmjobid=1)
+    simulation, slurm_job, hpc_run = await insert_job(
+        database_service=database_service, slurmjobid=1, simulator=dummy_simulator
+    )
 
     # get the initial state of a job
     sequence_number = 1
@@ -93,6 +103,7 @@ async def test_job_scheduler(
     database_service: DatabaseServiceSQL,
     slurm_service: SlurmService,
     slurm_template_hello_10s: str,
+    dummy_simulator: SimulatorVersion,
 ) -> None:
     scheduler = JobScheduler(
         nats_client=nats_subscriber_client, database_service=database_service, slurm_service=slurm_service
@@ -118,7 +129,9 @@ async def test_job_scheduler(
         )
 
     # Simulate job submission
-    simulation, slurm_job, hpc_run = await insert_job(database_service=database_service, slurmjobid=job_id)
+    simulation, slurm_job, hpc_run = await insert_job(
+        database_service=database_service, slurmjobid=job_id, simulator=dummy_simulator
+    )
     assert hpc_run.status == JobStatus.RUNNING
 
     # Wait for the job to receive a RUNNING status
