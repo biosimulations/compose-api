@@ -8,6 +8,7 @@ import numpy
 import pytest_asyncio
 from nats.aio.client import Client as NATSClient
 
+from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr, ExperimentPrimaryDependencies
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.db.database_service import DatabaseService
 from compose_api.dependencies import (
@@ -17,6 +18,7 @@ from compose_api.dependencies import (
     set_simulation_service,
 )
 from compose_api.simulation.job_scheduler import JobScheduler
+from compose_api.simulation.models import JobType, SimulatorVersion
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 
 
@@ -52,8 +54,24 @@ async def job_scheduler(
     set_job_scheduler(saved_job_service)
 
 
+@pytest_asyncio.fixture(scope="function")
+async def dummy_simulator(database_service: DatabaseService) -> AsyncGenerator[SimulatorVersion, None]:
+    simulator = await database_service.insert_simulator(
+        ContainerizationFileRepr(representation="singularity def"), ExperimentPrimaryDependencies(["pypi"], ["conda"])
+    )
+    yield simulator
+    simulations = await database_service.list_simulations_that_use_simulator(simulator_id=simulator.database_id)
+    for sim in simulations:
+        hpc_run = await database_service.get_hpcrun_by_ref(sim.database_id, JobType.SIMULATION)
+        if hpc_run is not None:
+            await database_service.delete_hpcrun(hpcrun_id=hpc_run.database_id)
+        await database_service.delete_simulation(simulation_id=sim.database_id)
+
+    await database_service.delete_simulator(simulator.database_id)
+
+
 def helper_test_sim_results(archive_results: Path, temp_dir: Path) -> None:
-    experiment_result = temp_dir / "output/report.csv"
+    experiment_result = temp_dir / "report.csv"
     with ZipFile(archive_results) as zip_archive:
         zip_archive.extractall(temp_dir)
     test_dir = os.path.dirname(__file__).rsplit("/", 1)[0]
