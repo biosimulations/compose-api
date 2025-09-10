@@ -1,13 +1,21 @@
 import logging
+import os.path
 import random
 import string
+import tempfile
+from pathlib import Path
 
 from fastapi import BackgroundTasks, HTTPException
 
-from compose_api.common.gateway.models import RouterConfig
+from compose_api.btools.bsander.bsandr_utils.input_types import (
+    ContainerizationEngine,
+    ContainerizationTypes,
+    ProgramArguments,
+)
+from compose_api.btools.bsander.execution import execute_bsander
 from compose_api.db.database_service import DatabaseService
 from compose_api.dependencies import get_database_service
-from compose_api.simulation.hpc_utils import get_correlation_id
+from compose_api.simulation.hpc_utils import get_correlation_id, get_experiment_id, get_singularity_hash
 from compose_api.simulation.models import (
     JobType,
     PBAllowList,
@@ -39,24 +47,43 @@ async def run_simulation(
     simulation_request: SimulationRequest,
     database_service: DatabaseService,
     simulation_service_slurm: SimulationService,
-    router_config: RouterConfig,
     background_tasks: BackgroundTasks | None = None,
+    pb_allow_list: PBAllowList | None = None,
 ) -> SimulationExperiment:
-    # TODO: Use an actual hash of the dependencies and PB
     random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
-    correlation_id = get_correlation_id(random_string=random_string_7_hex)
+    # TODO: Put/Get actual allow list
+    allow_list = pb_allow_list.allow_list if pb_allow_list is not None else ["pypi:bspil-basico"]
+
+    with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
+        singularity_rep, experiment_dep = execute_bsander(
+            ProgramArguments(
+                input_file_path=str(simulation_request.omex_archive),
+                output_dir=tmp_dir,
+                containerization_type=ContainerizationTypes.SINGLE,
+                containerization_engine=ContainerizationEngine.APPTAINER,
+                passlist_entries=allow_list,
+            )
+        )
+        simulation_request.omex_archive = Path(tmp_dir + f"/{os.path.basename(simulation_request.omex_archive.name)}")
+
+    simulator_version = await database_service.get_simulator_by_def_hash(get_singularity_hash(singularity_rep))
+    if simulator_version is None:
+        simulator_version = await database_service.insert_simulator(singularity_rep, experiment_dep)
+
+    experiment_id = get_experiment_id(simulator=simulator_version, random_str=random_string_7_hex)
 
     simulation = await database_service.insert_simulation(
-        sim_request=simulation_request, correlation_id=random_string_7_hex
+        sim_request=simulation_request, experiment_id=random_string_7_hex, simulator_version=simulator_version
     )
 
     async def dispatch_job() -> None:
         sim_slurmjobid = await simulation_service_slurm.submit_simulation_job(
             simulation=simulation,
             database_service=database_service,
-            correlation_id=correlation_id,
-            white_list=PBAllowList(allow_list=["pypi:bspil-basico"]),  # TODO: Put actual white list
+            experiment_id=experiment_id,
         )
+
+        correlation_id = get_correlation_id(random_string=random_string_7_hex)
         _hpcrun = await database_service.insert_hpcrun(
             slurmjobid=sim_slurmjobid,
             job_type=JobType.SIMULATION,
@@ -69,4 +96,4 @@ async def run_simulation(
     else:
         await dispatch_job()
 
-    return SimulationExperiment(experiment_id=correlation_id, simulation=simulation)
+    return SimulationExperiment(experiment_id=experiment_id, simulation=simulation)

@@ -94,7 +94,6 @@ async def submit_simulation(background_tasks: BackgroundTasks, uploaded_file: Up
             simulation_request=simulation_request,
             database_service=db_service,
             simulation_service_slurm=sim_service,
-            router_config=config,
             background_tasks=background_tasks,
         )
     except Exception as e:
