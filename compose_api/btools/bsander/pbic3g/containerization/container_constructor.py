@@ -54,7 +54,7 @@ ENV PATH=/opt/conda/bin:$PATH
         else:
             raise ValueError(f"unknown field in template dockerfile: {desired_field}")
 
-    return ContainerizationFileRepr(docker_template), experiment_deps
+    return ContainerizationFileRepr(representation=docker_template), experiment_deps
 
 
 def generate_necessary_values() -> list[str]:

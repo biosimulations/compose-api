@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from enum import Enum
 
+from pydantic import BaseModel
+
 
 class ContainerizationTypes(Enum):
     NONE = 0
@@ -15,15 +17,23 @@ class ContainerizationEngine(Enum):
     BOTH = 3
 
 
-class ContainerizationFileRepr:
-    def __init__(self, representation: str):
-        self.representation = representation
+class ContainerizationFileRepr(BaseModel):
+    representation: str
 
 
-class ExperimentPrimaryDependencies:
+class ExperimentPrimaryDependencies(BaseModel):
     _pypi_dependencies: list[str]
     _conda_dependencies: list[str]
     _compact_repr: str
+
+    @staticmethod
+    def from_compact_repr(representation: str) -> "ExperimentPrimaryDependencies":
+        split_dep_type = representation.split(";")
+        if len(split_dep_type) != 2:
+            raise ValueError(f"Invalid primary dependency representation: {representation}")
+        pypi_dependencies = split_dep_type[0].split(",")
+        conda_dependencies = split_dep_type[1].split(",")
+        return ExperimentPrimaryDependencies(pypi_dependencies=pypi_dependencies, conda_dependencies=conda_dependencies)
 
     def __init__(self, pypi_dependencies: list[str], conda_dependencies: list[str]) -> None:
         self._pypi_dependencies = pypi_dependencies
