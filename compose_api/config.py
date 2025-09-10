@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     slurm_qos: str = ""
     slurm_log_base_path: str = ""
     slurm_base_path: str = ""
+    slurm_sbatch_base_path: str = ""
 
     hpc_image_base_path: str = ""
     hpc_repo_base_path: str = ""

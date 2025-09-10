@@ -1,10 +1,10 @@
+import hashlib
 from pathlib import Path
 
-from compose_api.common.gateway.models import Namespace, RouterConfig
+from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr
+from compose_api.common.gateway.models import Namespace
 from compose_api.config import get_settings
 from compose_api.simulation.models import (
-    Simulation,
-    SimulationRequest,
     SimulatorVersion,
 )
 
@@ -16,7 +16,7 @@ def get_slurm_log_file(slurm_job_name: str) -> Path:
 
 def get_slurm_submit_file(slurm_job_name: str) -> Path:
     settings = get_settings()
-    return Path(settings.hpc_image_base_path) / f"{slurm_job_name}.sbatch"
+    return Path(settings.slurm_sbatch_base_path) / f"{slurm_job_name}.sbatch"
 
 
 def get_slurm_singularity_def_file(slurm_job_name: str) -> Path:
@@ -24,28 +24,28 @@ def get_slurm_singularity_def_file(slurm_job_name: str) -> Path:
     return Path(settings.hpc_image_base_path) / f"{slurm_job_name}.def"
 
 
-def get_slurm_sim_input_file_path(slurm_job_name: str) -> Path:
-    return get_slurm_sim_experiment_dir(slurm_job_name) / f"{slurm_job_name}.omex"
+def get_slurm_sim_input_file_path(experiment_id: str) -> Path:
+    return get_slurm_sim_experiment_dir(experiment_id) / f"{experiment_id}.omex"
 
 
-def get_slurm_sim_output_directory_path(slurm_job_name: str) -> Path:
-    return get_slurm_sim_experiment_dir(slurm_job_name) / "output"
+def get_slurm_sim_output_directory_path(experiment_id: str) -> Path:
+    return get_slurm_sim_experiment_dir(experiment_id) / "output"
 
 
-def get_slurm_sim_results_file_path(slurm_job_name: str) -> Path:
-    return get_slurm_sim_experiment_dir(slurm_job_name) / "results.zip"
+def get_slurm_sim_results_file_path(experiment_id: str) -> Path:
+    return get_slurm_sim_experiment_dir(experiment_id) / "results.zip"
 
 
-def get_slurm_sim_experiment_dir(slurm_job_name: str) -> Path:
+def get_slurm_sim_experiment_dir(experiment_id: str) -> Path:
     settings = get_settings()
-    return Path(settings.hpc_image_base_path) / f"experiment-{slurm_job_name}"
+    return Path(settings.hpc_sim_base_path) / f"experiment-{experiment_id}"
 
 
-def get_slurm_job_name(correlation_id: str) -> str:
+def get_slurm_job_name(experiment_id: str) -> str:
     """
     Create a human-readable job name .
     """
-    return f"{correlation_id}"
+    return f"{experiment_id}"
 
 
 def get_correlation_id(random_string: str) -> str:
@@ -55,23 +55,10 @@ def get_correlation_id(random_string: str) -> str:
     return f"{random_string}"
 
 
-def parse_correlation_id(correlation_id: str) -> tuple[int, str, str]:
-    """
-    Extract the simulation database ID and git commit hash from the correlation ID.
-    """
-    parts = correlation_id.split("_")
-    if len(parts) != 3:
-        raise ValueError(f"Invalid correlation ID format: {correlation_id}")
-    simulation_id = int(parts[0])
-    simulator_commit_hash = parts[1]
-    random_string = parts[2]
-    return simulation_id, simulator_commit_hash, random_string
-
-
 def get_apptainer_image_file(simulator_version: SimulatorVersion) -> Path:
     settings = get_settings()
     hpc_image_remote_path = Path(settings.hpc_image_base_path)
-    return hpc_image_remote_path / f"simulator-{simulator_version.pb_cache_hash}.sif"
+    return hpc_image_remote_path / f"simulator-{simulator_version.singularity_def_hash}.sif"
 
 
 def format_experiment_path(experiment_dirname: str, namespace: Namespace = Namespace.TEST) -> Path:
@@ -79,5 +66,9 @@ def format_experiment_path(experiment_dirname: str, namespace: Namespace = Names
     return Path(base_path) / experiment_dirname
 
 
-def get_experiment_id(router_config: RouterConfig, simulation: Simulation, sim_request: SimulationRequest) -> str:
-    return router_config.prefix.replace("/", "") + "_"
+def get_experiment_id(simulator: SimulatorVersion, random_str: str) -> str:
+    return f"{simulator.singularity_def_hash}_{random_str}"
+
+
+def get_singularity_hash(singularity_def_rep: ContainerizationFileRepr) -> str:
+    return hashlib.md5(singularity_def_rep.representation.encode("utf-8")).hexdigest()  # noqa: S324

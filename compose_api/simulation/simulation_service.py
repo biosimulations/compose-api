@@ -1,5 +1,4 @@
 import logging
-import os
 import tempfile
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -7,12 +6,6 @@ from textwrap import dedent
 
 from typing_extensions import override
 
-from compose_api.btools.bsander.bsandr_utils.input_types import (
-    ContainerizationEngine,
-    ContainerizationTypes,
-    ProgramArguments,
-)
-from compose_api.btools.bsander.execution import execute_bsander
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.common.ssh.ssh_service import SSHService, get_custom_ssh_service
@@ -27,7 +20,7 @@ from compose_api.simulation.hpc_utils import (
     get_slurm_singularity_def_file,
     get_slurm_submit_file,
 )
-from compose_api.simulation.models import PBAllowList, Simulation
+from compose_api.simulation.models import Simulation
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -37,10 +30,9 @@ class SimulationService(ABC):
     @abstractmethod
     async def submit_simulation_job(
         self,
-        white_list: PBAllowList,
         simulation: Simulation,
         database_service: DatabaseService,
-        correlation_id: str,
+        experiment_id: str,
     ) -> int:
         pass
 
@@ -69,37 +61,25 @@ class SimulationServiceHpc(SimulationService):
     @override
     async def submit_simulation_job(
         self,
-        white_list: PBAllowList,
         simulation: Simulation,
         database_service: DatabaseService,
-        correlation_id: str,
+        experiment_id: str,
     ) -> int:
         if database_service is None:
             raise RuntimeError("DatabaseService is not available. Cannot submit Simulation job.")
         if simulation.sim_request.omex_archive is None:
             raise RuntimeError("Simulation.sim_request.omex_archive is not available. Cannot submit Simulation job.")
-        archive_to_execute: Path = simulation.sim_request.omex_archive
         slurm_service, ssh_service, settings = self._get_services()
-        slurm_job_name = get_slurm_job_name(correlation_id=correlation_id)
-        slurm_log_file = get_slurm_log_file(slurm_job_name=slurm_job_name)
-        slurm_submit_file = get_slurm_submit_file(slurm_job_name=slurm_job_name)
+        slurm_job_name = get_slurm_job_name(experiment_id=experiment_id)
         slurm_singularity_file = get_slurm_singularity_def_file(slurm_job_name=slurm_job_name)
-        slurm_input_file = get_slurm_sim_input_file_path(slurm_job_name=slurm_job_name)
-        experiment_path = get_slurm_sim_experiment_dir(slurm_job_name=slurm_job_name)
+        experiment_path = get_slurm_sim_experiment_dir(experiment_id=slurm_job_name)
 
         # build the submit script
         with tempfile.TemporaryDirectory() as tmpdir:
             local_singularity_file = tmpdir + "/singularity.def"
-            processed_omex = Path(tmpdir + f"/{os.path.basename(archive_to_execute.name)}")
-            execute_bsander(
-                ProgramArguments(
-                    input_file_path=str(archive_to_execute),
-                    output_dir=tmpdir,
-                    containerization_type=ContainerizationTypes.SINGLE,
-                    containerization_engine=ContainerizationEngine.APPTAINER,
-                    passlist_entries=white_list.allow_list,
-                )
-            )
+            with open(local_singularity_file, "w") as f:
+                f.write(simulation.simulator_version.singularity_def.representation)
+
             local_submit_file = Path(tmpdir) / f"{slurm_job_name}.sbatch"
             # --compat forces isolation similar to docker, https://docs.sylabs.io/guides/latest/user-guide/cli/singularity_exec.html
             with open(local_submit_file, "w") as f:
@@ -111,7 +91,7 @@ class SimulationServiceHpc(SimulationService):
                     #SBATCH --mem=8GB
                     #SBATCH --partition={settings.slurm_partition}
                     #SBATCH --qos={settings.slurm_qos}
-                    #SBATCH --output={slurm_log_file}
+                    #SBATCH --output={get_slurm_log_file(slurm_job_name=slurm_job_name)}
 
                     set -e
 
@@ -133,9 +113,9 @@ class SimulationServiceHpc(SimulationService):
             # submit the build script to slurm
             slurm_jobid = await slurm_service.submit_job(
                 local_sbatch_file=local_submit_file,
-                remote_sbatch_file=slurm_submit_file,
-                local_input_file=processed_omex,
-                remote_input_file=slurm_input_file,
+                remote_sbatch_file=get_slurm_submit_file(slurm_job_name=slurm_job_name),
+                local_input_file=simulation.sim_request.omex_archive,
+                remote_input_file=get_slurm_sim_input_file_path(experiment_id=slurm_job_name),
                 local_singularity_file=Path(local_singularity_file),
                 remote_singularity_file=slurm_singularity_file,
             )
