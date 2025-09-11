@@ -19,9 +19,14 @@ def get_slurm_submit_file(slurm_job_name: str) -> Path:
     return Path(settings.slurm_sbatch_base_path) / f"{slurm_job_name}.sbatch"
 
 
-def get_slurm_singularity_def_file(slurm_job_name: str) -> Path:
+def get_slurm_singularity_def_file(singularity_hash: str) -> Path:
     settings = get_settings()
-    return Path(settings.hpc_image_base_path) / f"{slurm_job_name}.def"
+    return Path(settings.hpc_image_base_path) / f"{singularity_hash}.def"
+
+
+def get_slurm_singularity_container_file(singularity_hash: str) -> Path:
+    settings = get_settings()
+    return Path(settings.hpc_image_base_path) / f"{singularity_hash}.sif"
 
 
 def get_slurm_sim_input_file_path(experiment_id: str) -> Path:

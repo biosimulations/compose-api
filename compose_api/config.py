@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     slurm_submit_known_hosts: str | None = None
     slurm_partition: str = ""
     slurm_node_list: str = ""  # comma-separated list of nodes, e.g., "node1,node2"
+    slurm_build_node: str = ""
     slurm_qos: str = ""
     slurm_log_base_path: str = ""
     slurm_base_path: str = ""

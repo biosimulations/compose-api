@@ -1,4 +1,6 @@
 import logging
+import random
+import string
 import tempfile
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -17,10 +19,11 @@ from compose_api.simulation.hpc_utils import (
     get_slurm_sim_experiment_dir,
     get_slurm_sim_input_file_path,
     get_slurm_sim_results_file_path,
+    get_slurm_singularity_container_file,
     get_slurm_singularity_def_file,
     get_slurm_submit_file,
 )
-from compose_api.simulation.models import Simulation
+from compose_api.simulation.models import Simulation, SimulatorVersion
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -34,6 +37,10 @@ class SimulationService(ABC):
         database_service: DatabaseService,
         experiment_id: str,
     ) -> int:
+        pass
+
+    @abstractmethod
+    async def build_container(self, simulator_version: SimulatorVersion) -> int:
         pass
 
     @abstractmethod
@@ -71,7 +78,9 @@ class SimulationServiceHpc(SimulationService):
             raise RuntimeError("Simulation.sim_request.omex_archive is not available. Cannot submit Simulation job.")
         slurm_service, ssh_service, settings = self._get_services()
         slurm_job_name = get_slurm_job_name(experiment_id=experiment_id)
-        slurm_singularity_file = get_slurm_singularity_def_file(slurm_job_name=slurm_job_name)
+        singularity_container_path = get_slurm_singularity_container_file(
+            singularity_hash=simulation.simulator_version.singularity_def_hash
+        )
         experiment_path = get_slurm_sim_experiment_dir(experiment_id=slurm_job_name)
 
         # build the submit script
@@ -95,12 +104,11 @@ class SimulationServiceHpc(SimulationService):
 
                     set -e
 
-                    # singularity build sim-{slurm_job_name}.sif {slurm_singularity_file}
                     echo "Simulation {slurm_job_name} running."
                     singularity exec \
                         --compat \
                         --bind {experiment_path}:/experiment \
-                        {settings.hpc_image_base_path}/test.sif \
+                        {singularity_container_path} \
                          python3 /runtime/main.py /experiment/{slurm_job_name}.omex
                     pushd {experiment_path}/output/
                     zip -r {experiment_path}/results.zip ./*
@@ -116,8 +124,6 @@ class SimulationServiceHpc(SimulationService):
                 remote_sbatch_file=get_slurm_submit_file(slurm_job_name=slurm_job_name),
                 local_input_file=simulation.sim_request.omex_archive,
                 remote_input_file=get_slurm_sim_input_file_path(experiment_id=slurm_job_name),
-                local_singularity_file=Path(local_singularity_file),
-                remote_singularity_file=slurm_singularity_file,
             )
             return slurm_jobid
 
@@ -133,6 +139,55 @@ class SimulationServiceHpc(SimulationService):
             return job_ids[0]
         else:
             raise RuntimeError(f"Multiple jobs found with ID {slurmjobid}: {job_ids}")
+
+    @override
+    async def build_container(self, simulator_version: SimulatorVersion) -> int:
+        slurm_service, ssh_service, settings = self._get_services()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            local_singularity_file = Path(tmpdir + "/singularity.def")
+            rand_string = "".join(random.choices(string.hexdigits, k=5))  # noqa: S311
+            slurm_job_name = f"singularity_build_{simulator_version.singularity_def_hash[:5]}_{rand_string}"
+            singularity_container_path = get_slurm_singularity_container_file(
+                singularity_hash=simulator_version.singularity_def_hash
+            )
+
+            slurm_singularity_file = get_slurm_singularity_def_file(
+                singularity_hash=simulator_version.singularity_def_hash
+            )
+            with open(local_singularity_file, "w") as f:
+                f.write(simulator_version.singularity_def.representation)
+
+            local_submit_file = Path(tmpdir) / f"{slurm_job_name}.sbatch"
+            with open(local_submit_file, "w") as f:
+                script_content = dedent(f"""\
+                    #!/bin/bash
+                    #SBATCH --job-name={slurm_job_name}
+                    #SBATCH --time=30:00
+                    #SBATCH --cpus-per-task 2
+                    #SBATCH --mem=8GB
+                    #SBATCH --nodelist={settings.slurm_build_node}
+                    #SBATCH --partition=vivarium
+                    #SBATCH --qos=vivarium
+                    #SBATCH --output={get_slurm_log_file(slurm_job_name=slurm_job_name)}
+
+                    set -e
+                    echo "Starting build for container {singularity_container_path}"
+                    pushd {settings.hpc_image_base_path}
+                    singularity build {singularity_container_path} {slurm_singularity_file}
+                    popd
+                    echo "Finished building container."
+                    """)
+                f.write(script_content)
+
+            # submit the build script to slurm
+            slurm_jobid = await slurm_service.submit_build_job(
+                local_sbatch_file=local_submit_file,
+                remote_sbatch_file=get_slurm_submit_file(slurm_job_name=slurm_job_name),
+                local_singularity_file=local_singularity_file,
+                remote_singularity_file=slurm_singularity_file,
+            )
+            return slurm_jobid
 
     @override
     async def get_slurm_job_status(self, slurmjobid: int) -> SlurmJob | None:

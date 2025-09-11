@@ -69,13 +69,19 @@ class SlurmService:
         remote_sbatch_file: Path,
         local_input_file: Path,
         remote_input_file: Path,
-        local_singularity_file: Path | None,
-        remote_singularity_file: Path,
     ) -> int:
-        if local_singularity_file is None or not local_singularity_file.exists():
-            raise Exception(f"local singularity file does not exist: {local_singularity_file}")
         await self.ssh_service.scp_upload(local_file=local_sbatch_file, remote_path=remote_sbatch_file)
         await self.ssh_service.scp_upload(local_file=local_input_file, remote_path=remote_input_file)
+        return await self._execute_sbatch_command(sbatch_file=remote_sbatch_file)
+
+    async def submit_build_job(
+        self,
+        local_sbatch_file: Path,
+        remote_sbatch_file: Path,
+        local_singularity_file: Path,
+        remote_singularity_file: Path,
+    ) -> int:
+        await self.ssh_service.scp_upload(local_file=local_sbatch_file, remote_path=remote_sbatch_file)
         await self.ssh_service.scp_upload(local_file=local_singularity_file, remote_path=remote_singularity_file)
         return await self._execute_sbatch_command(sbatch_file=remote_sbatch_file)
 
