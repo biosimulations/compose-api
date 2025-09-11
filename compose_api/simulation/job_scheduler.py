@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from asyncio import Queue
 from typing import Any
 
 from async_lru import alru_cache
@@ -9,15 +10,16 @@ from nats.aio.msg import Msg
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService
-from compose_api.simulation.models import JobStatus, WorkerEvent, WorkerEventMessagePayload
+from compose_api.simulation.models import HpcRun, JobStatus, WorkerEvent, WorkerEventMessagePayload
 
 logger = logging.getLogger(__name__)
 
 
-class JobScheduler:
+class JobMonitor:
     database_service: DatabaseService
     slurm_service: SlurmService
     nats_client: NATSClient
+    internal_listeners: dict[int, Queue[HpcRun]] = {}
     _polling_task: asyncio.Task[None] | None = None
     _stop_event: asyncio.Event
 
@@ -31,7 +33,7 @@ class JobScheduler:
     async def get_hpcrun_by_correlation_id(self, correlation_id: str) -> int | None:
         return await self.database_service.get_hpcrun_id_by_correlation_id(correlation_id=correlation_id)
 
-    async def subscribe(self) -> None:
+    async def subscribe_nats(self) -> None:
         if not get_settings().hpc_has_messaging:
             logger.info("Not subscribing to HPC messaging")
             return
@@ -104,6 +106,15 @@ class JobScheduler:
             if hpc_run.status != new_status:
                 await self.database_service.update_hpcrun_status(hpcrun_id=hpc_run.database_id, new_slurm_job=slurm_job)
                 logger.info(f"Updated HpcRun {hpc_run.database_id} status to {new_status}")
+
+            if slurm_job.job_id in self.internal_listeners:
+                self.internal_listeners[slurm_job.job_id].put_nowait(hpc_run)
+
+    def internal_subscribe(self, queue: Queue[HpcRun], job_id: int) -> None:
+        self.internal_listeners[job_id] = queue
+
+    def internal_unsubscribe(self, job_id: int) -> None:
+        self.internal_listeners.pop(job_id)
 
     async def close(self) -> None:
         await self.stop_polling()

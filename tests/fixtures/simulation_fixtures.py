@@ -17,7 +17,7 @@ from compose_api.dependencies import (
     set_job_scheduler,
     set_simulation_service,
 )
-from compose_api.simulation.job_scheduler import JobScheduler
+from compose_api.simulation.job_scheduler import JobMonitor
 from compose_api.simulation.models import JobType, SimulatorVersion
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 
@@ -37,14 +37,14 @@ async def simulation_service_slurm() -> AsyncGenerator[SimulationServiceHpc, Non
 @pytest_asyncio.fixture(scope="function")
 async def job_scheduler(
     database_service: DatabaseService, slurm_service: SlurmService, nats_subscriber_client: NATSClient
-) -> AsyncGenerator[JobScheduler, None]:
-    job_service = JobScheduler(
+) -> AsyncGenerator[JobMonitor, None]:
+    job_service = JobMonitor(
         nats_client=nats_subscriber_client, database_service=database_service, slurm_service=slurm_service
     )
     saved_job_service = get_job_scheduler()
     set_job_scheduler(job_service)
 
-    await job_service.subscribe()
+    await job_service.subscribe_nats()
     await job_service.start_polling(interval_seconds=2)
 
     yield job_service

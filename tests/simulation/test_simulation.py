@@ -16,6 +16,7 @@ from compose_api.simulation import handlers
 from compose_api.simulation.hpc_utils import (
     get_experiment_id,
 )
+from compose_api.simulation.job_scheduler import JobMonitor
 from compose_api.simulation.models import JobType, PBAllowList, SimulationRequest, SimulatorVersion
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 from tests.fixtures import simulation_fixtures
@@ -28,6 +29,7 @@ async def test_simulate(
     database_service: DatabaseServiceSQL,
     simulation_request: SimulationRequest,
     ssh_service: SSHService,
+    job_scheduler: JobMonitor,
     dummy_simulator: SimulatorVersion,
 ) -> None:
     # insert the latest commit into the database
@@ -36,6 +38,7 @@ async def test_simulate(
         simulation_request=simulation_request,
         database_service=database_service,
         simulation_service_slurm=simulation_service_slurm,
+        job_monitor=job_scheduler,
         background_tasks=None,
         pb_allow_list=None,
     )
@@ -44,7 +47,7 @@ async def test_simulate(
     hpcrun = await database_service.get_hpcrun_by_ref(sim_experiement.simulation.database_id, JobType.SIMULATION)
     assert hpcrun is not None
     assert hpcrun.job_type == JobType.SIMULATION
-    assert hpcrun.ref_id == sim_experiement.simulation.database_id
+    assert hpcrun.sim_id == sim_experiement.simulation.database_id
 
     start_time = time.time()
     sim_slurmjob: SlurmJob | None = None
@@ -77,6 +80,7 @@ async def test_simulator_not_in_allowlist(
     simulation_service_slurm: SimulationServiceHpc,
     database_service: DatabaseServiceSQL,
     simulation_request: SimulationRequest,
+    job_scheduler: JobMonitor,
     dummy_simulator: SimulatorVersion,
 ) -> None:
     # insert the latest commit into the database
@@ -91,7 +95,8 @@ async def test_simulator_not_in_allowlist(
             simulation_request,
             database_service,
             simulation_service_slurm,
-            None,
+            job_monitor=job_scheduler,
+            background_tasks=None,
             pb_allow_list=PBAllowList(allow_list=["pypi:bspil"]),
         )
         await simulation_service_slurm.submit_simulation_job(
