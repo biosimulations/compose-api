@@ -88,6 +88,10 @@ class DatabaseService(ABC):
         pass
 
     @abstractmethod
+    async def get_hpcrun_id_by_simulator_id(self, simulator_id: int) -> int | None:
+        pass
+
+    @abstractmethod
     async def delete_hpcrun(self, hpcrun_id: int) -> None:
         pass
 
@@ -161,7 +165,9 @@ class DatabaseServiceSQL(DatabaseService):
     def _get_job_type_ref(self, job_type: JobType) -> InstrumentedAttribute[int | None]:
         match job_type:
             case JobType.SIMULATION:
-                return ORMHpcRun.jobref_simulation_id
+                return ORMHpcRun.simulation_id
+            case JobType.BUILD_CONTAINER:
+                return ORMHpcRun.simulator_id
 
     async def _get_orm_hpcrun_by_ref(self, session: AsyncSession, ref_id: int, job_type: JobType) -> ORMHpcRun | None:
         reference = self._get_job_type_ref(job_type)
@@ -246,13 +252,16 @@ class DatabaseServiceSQL(DatabaseService):
 
     @override
     async def insert_hpcrun(self, slurmjobid: int, job_type: JobType, ref_id: int, correlation_id: str) -> HpcRun:
-        jobref_simulation_id = ref_id if job_type == JobType.SIMULATION else None
         async with self.async_sessionmaker() as session, session.begin():
+            simulation_key = ref_id if job_type == JobType.SIMULATION else None
+            simulator_key = ref_id if job_type == JobType.BUILD_CONTAINER else None
+
             orm_hpc_run = ORMHpcRun(
                 slurmjobid=slurmjobid,
                 job_type=JobTypeDB.from_job_type(job_type),
                 status=JobStatusDB.RUNNING,
-                jobref_simulation_id=jobref_simulation_id,
+                simulation_id=simulation_key,
+                simulator_id=simulator_key,
                 start_time=datetime.datetime.now(),
                 correlation_id=correlation_id,
             )
@@ -431,8 +440,17 @@ class DatabaseServiceSQL(DatabaseService):
 
     @override
     async def get_hpcrun_id_by_correlation_id(self, correlation_id: str) -> int | None:
+        return await self._get_hpcrun_id(correlation_id, ORMHpcRun.correlation_id)
+
+    @override
+    async def get_hpcrun_id_by_simulator_id(self, simulator_id: int) -> int | None:
+        return await self._get_hpcrun_id(simulator_id, ORMHpcRun.simulator_id)
+
+    async def _get_hpcrun_id(
+        self, foreign_key: int | str, column: InstrumentedAttribute[int | str | None]
+    ) -> int | None:
         async with self.async_sessionmaker() as session, session.begin():
-            stmt = select(ORMHpcRun.id).where(ORMHpcRun.correlation_id == correlation_id).limit(1)
+            stmt = select(ORMHpcRun.id).where(column == foreign_key).limit(1)
             result: Result[tuple[int]] = await session.execute(stmt)
             orm_hpcrun_id: int | None = result.scalar_one_or_none()
             return orm_hpcrun_id

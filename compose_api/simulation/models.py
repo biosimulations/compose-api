@@ -45,6 +45,7 @@ class BaseModel(_BaseModel):
 
 class JobType(enum.Enum):
     SIMULATION = "simulation"
+    BUILD_CONTAINER = "build_container"
 
 
 class JobStatus(StrEnum):
@@ -60,7 +61,8 @@ class HpcRun(BaseModel):
     slurmjobid: int  # Slurm job ID if applicable
     correlation_id: str  # to correlate with the WorkerEvent, if applicable ("N/A" if not applicable)
     job_type: JobType
-    ref_id: int  # primary key of the object this HPC run is associated with (sim, etc.)
+    sim_id: int | None
+    simulator_id: int | None
     status: JobStatus | None = None
     start_time: str | None = None  # ISO format datetime string
     end_time: str | None = None  # ISO format datetime string or None if still running

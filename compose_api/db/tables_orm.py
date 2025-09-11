@@ -27,6 +27,7 @@ class JobStatusDB(enum.Enum):
 
 class JobTypeDB(enum.Enum):
     SIMULATION = "simulation"
+    BUILD_CONTAINER = "build_container"
 
     def to_job_type(self) -> JobType:
         return JobType(self.value)
@@ -74,19 +75,19 @@ class ORMHpcRun(Base):
     status: Mapped[JobStatusDB] = mapped_column(nullable=False)
     error_message: Mapped[Optional[str]] = mapped_column(nullable=True)
 
-    jobref_simulation_id: Mapped[Optional[int]] = mapped_column(ForeignKey("simulation.id"), nullable=True, index=True)
+    simulation_id: Mapped[Optional[int]] = mapped_column(ForeignKey("simulation.id"), nullable=True, index=True)
     simulator_id: Mapped[Optional[int]] = mapped_column(ForeignKey("simulator.id"), nullable=True, index=True)
 
     def to_hpc_run(self) -> HpcRun:
-        simulation_ref_id = self.jobref_simulation_id
-        if simulation_ref_id is None:
+        if self.simulation_id is None and self.simulator_id is None:
             raise RuntimeError("ORMHpcRun must have at least one job reference set.")
         return HpcRun(
             database_id=self.id,
             slurmjobid=self.slurmjobid,
             correlation_id=self.correlation_id,
             job_type=self.job_type.to_job_type(),
-            ref_id=simulation_ref_id,
+            sim_id=self.simulation_id,
+            simulator_id=self.simulator_id,
             status=self.status.to_job_status(),
             error_message=self.error_message,
             start_time=str(self.start_time) if self.start_time else None,
