@@ -10,6 +10,7 @@ from compose_api.common.ssh.ssh_service import get_ssh_service
 from compose_api.dependencies import (
     get_data_service,
     get_database_service,
+    get_job_scheduler,
     get_simulation_service,
 )
 from compose_api.simulation.handlers import (
@@ -72,6 +73,10 @@ async def submit_simulation(background_tasks: BackgroundTasks, uploaded_file: Up
     if db_service is None:
         logger.error("Database service is not initialized")
         raise HTTPException(status_code=500, detail="Database service is not initialized")
+    job_monitor = get_job_scheduler()
+    if job_monitor is None:
+        logger.error("Job Monitor service is not initialized")
+        raise HTTPException(status_code=500, detail="Job Monitor service is not initialized")
 
     # TODO ################################################################################
     # !!! Input validation for Omex file, preferably converting it to an internal type !!!#
@@ -95,6 +100,7 @@ async def submit_simulation(background_tasks: BackgroundTasks, uploaded_file: Up
             database_service=db_service,
             simulation_service_slurm=sim_service,
             background_tasks=background_tasks,
+            job_monitor=job_monitor,
         )
     except Exception as e:
         logger.exception("Error running simulation")

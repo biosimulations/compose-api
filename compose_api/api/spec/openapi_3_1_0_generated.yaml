@@ -122,6 +122,19 @@ components:
       required:
       - uploaded_file
       title: Body_run-simulation
+    ContainerizationFileRepr:
+      properties:
+        representation:
+          type: string
+          title: Representation
+      type: object
+      required:
+      - representation
+      title: ContainerizationFileRepr
+    ExperimentPrimaryDependencies:
+      properties: {}
+      type: object
+      title: ExperimentPrimaryDependencies
     HTTPValidationError:
       properties:
         detail:
@@ -144,9 +157,16 @@ components:
           title: Correlation Id
         job_type:
           $ref: '#/components/schemas/JobType'
-        ref_id:
-          type: integer
-          title: Ref Id
+        sim_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Sim Id
+        simulator_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Simulator Id
         status:
           anyOf:
           - $ref: '#/components/schemas/JobStatus'
@@ -172,7 +192,8 @@ components:
       - slurmjobid
       - correlation_id
       - job_type
-      - ref_id
+      - sim_id
+      - simulator_id
       title: HpcRun
     JobStatus:
       type: string
@@ -187,6 +208,7 @@ components:
       type: string
       enum:
       - simulation
+      - build_container
       title: JobType
     Simulation:
       properties:
@@ -195,6 +217,8 @@ components:
           title: Database Id
         sim_request:
           $ref: '#/components/schemas/SimulationRequest'
+        simulator_version:
+          $ref: '#/components/schemas/SimulatorVersion'
         slurmjob_id:
           anyOf:
           - type: integer
@@ -204,6 +228,7 @@ components:
       required:
       - database_id
       - sim_request
+      - simulator_version
       title: Simulation
       description: "Everything required to execute the simulation and produce the\
         \ same results.\nInput file contains all the files required to run the simulation\
@@ -234,13 +259,38 @@ components:
     SimulationRequest:
       properties:
         omex_archive:
-          anyOf:
-          - type: string
-            format: path
-          - type: 'null'
+          type: string
+          format: path
           title: Omex Archive
       type: object
+      required:
+      - omex_archive
       title: SimulationRequest
+    SimulatorVersion:
+      properties:
+        singularity_def:
+          $ref: '#/components/schemas/ContainerizationFileRepr'
+        singularity_def_hash:
+          type: string
+          title: Singularity Def Hash
+        primary_packages:
+          $ref: '#/components/schemas/ExperimentPrimaryDependencies'
+        database_id:
+          type: integer
+          title: Database Id
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - singularity_def
+      - singularity_def_hash
+      - primary_packages
+      - database_id
+      title: SimulatorVersion
     ValidationError:
       properties:
         loc:

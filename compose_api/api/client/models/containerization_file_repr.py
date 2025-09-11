@@ -7,26 +7,26 @@ from attrs import field as _attrs_field
 from ..types import UNSET, Unset
 
 
-T = TypeVar("T", bound="SimulationRequest")
+T = TypeVar("T", bound="ContainerizationFileRepr")
 
 
 @_attrs_define
-class SimulationRequest:
+class ContainerizationFileRepr:
     """
     Attributes:
-        omex_archive (str):
+        representation (str):
     """
 
-    omex_archive: str
+    representation: str
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        omex_archive = self.omex_archive
+        representation = self.representation
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
-            "omex_archive": omex_archive,
+            "representation": representation,
         })
 
         return field_dict
@@ -34,14 +34,14 @@ class SimulationRequest:
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        omex_archive = d.pop("omex_archive")
+        representation = d.pop("representation")
 
-        simulation_request = cls(
-            omex_archive=omex_archive,
+        containerization_file_repr = cls(
+            representation=representation,
         )
 
-        simulation_request.additional_properties = d
-        return simulation_request
+        containerization_file_repr.additional_properties = d
+        return containerization_file_repr
 
     @property
     def additional_keys(self) -> list[str]:

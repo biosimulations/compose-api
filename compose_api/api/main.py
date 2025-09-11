@@ -71,7 +71,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     job_scheduler = get_job_scheduler()
     if not job_scheduler:
         raise RuntimeError("JobScheduler is not initialized. Please check your configuration.")
-    await job_scheduler.subscribe()
+    await job_scheduler.subscribe_nats()
     await job_scheduler.start_polling(interval_seconds=5)  # configurable interval
 
     try:

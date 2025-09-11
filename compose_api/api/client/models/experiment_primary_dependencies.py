@@ -7,41 +7,28 @@ from attrs import field as _attrs_field
 from ..types import UNSET, Unset
 
 
-T = TypeVar("T", bound="SimulationRequest")
+T = TypeVar("T", bound="ExperimentPrimaryDependencies")
 
 
 @_attrs_define
-class SimulationRequest:
-    """
-    Attributes:
-        omex_archive (str):
-    """
+class ExperimentPrimaryDependencies:
+    """ """
 
-    omex_archive: str
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        omex_archive = self.omex_archive
-
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({
-            "omex_archive": omex_archive,
-        })
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        omex_archive = d.pop("omex_archive")
+        experiment_primary_dependencies = cls()
 
-        simulation_request = cls(
-            omex_archive=omex_archive,
-        )
-
-        simulation_request.additional_properties = d
-        return simulation_request
+        experiment_primary_dependencies.additional_properties = d
+        return experiment_primary_dependencies
 
     @property
     def additional_keys(self) -> list[str]:

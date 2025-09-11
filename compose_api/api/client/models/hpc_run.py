@@ -24,7 +24,8 @@ class HpcRun:
         slurmjobid (int):
         correlation_id (str):
         job_type (JobType):
-        ref_id (int):
+        sim_id (Union[None, int]):
+        simulator_id (Union[None, int]):
         status (Union[JobStatus, None, Unset]):
         start_time (Union[None, Unset, str]):
         end_time (Union[None, Unset, str]):
@@ -35,7 +36,8 @@ class HpcRun:
     slurmjobid: int
     correlation_id: str
     job_type: JobType
-    ref_id: int
+    sim_id: Union[None, int]
+    simulator_id: Union[None, int]
     status: Union[JobStatus, None, Unset] = UNSET
     start_time: Union[None, Unset, str] = UNSET
     end_time: Union[None, Unset, str] = UNSET
@@ -51,7 +53,11 @@ class HpcRun:
 
         job_type = self.job_type.value
 
-        ref_id = self.ref_id
+        sim_id: Union[None, int]
+        sim_id = self.sim_id
+
+        simulator_id: Union[None, int]
+        simulator_id = self.simulator_id
 
         status: Union[None, Unset, str]
         if isinstance(self.status, Unset):
@@ -86,7 +92,8 @@ class HpcRun:
             "slurmjobid": slurmjobid,
             "correlation_id": correlation_id,
             "job_type": job_type,
-            "ref_id": ref_id,
+            "sim_id": sim_id,
+            "simulator_id": simulator_id,
         })
         if status is not UNSET:
             field_dict["status"] = status
@@ -110,7 +117,19 @@ class HpcRun:
 
         job_type = JobType(d.pop("job_type"))
 
-        ref_id = d.pop("ref_id")
+        def _parse_sim_id(data: object) -> Union[None, int]:
+            if data is None:
+                return data
+            return cast(Union[None, int], data)
+
+        sim_id = _parse_sim_id(d.pop("sim_id"))
+
+        def _parse_simulator_id(data: object) -> Union[None, int]:
+            if data is None:
+                return data
+            return cast(Union[None, int], data)
+
+        simulator_id = _parse_simulator_id(d.pop("simulator_id"))
 
         def _parse_status(data: object) -> Union[JobStatus, None, Unset]:
             if data is None:
@@ -161,7 +180,8 @@ class HpcRun:
             slurmjobid=slurmjobid,
             correlation_id=correlation_id,
             job_type=job_type,
-            ref_id=ref_id,
+            sim_id=sim_id,
+            simulator_id=simulator_id,
             status=status,
             start_time=start_time,
             end_time=end_time,
