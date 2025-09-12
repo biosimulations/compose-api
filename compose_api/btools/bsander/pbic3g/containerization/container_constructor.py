@@ -72,7 +72,7 @@ def determine_dependencies(  # noqa: C901
     if whitelist_entries is not None:
         whitelist_mapping = {}
         for whitelist_entry in whitelist_entries:
-            entry = whitelist_entry.split(":")
+            entry = whitelist_entry.split("::")
             if len(entry) != 2:
                 raise ValueError(f"invalid whitelist entry: {whitelist_entry}")
             source, package = (entry[0], entry[1])
@@ -91,14 +91,16 @@ def determine_dependencies(  # noqa: C901
     import_name_legal_syntax = r"[A-Za-z_]\w*(\.[A-Za-z_]\w*)*"
     known_sources = ["pypi", "conda"]
     approved_dependencies: dict[str, list[str]] = {source: [] for source in known_sources}
-    regex_pattern = f"({source_name_legal_syntax}):({package_name_legal_syntax})({version_string_legal_syntax})?@({import_name_legal_syntax})"  #  noqa: E501
+    regex_pattern = f"python:({source_name_legal_syntax})<({package_name_legal_syntax})({version_string_legal_syntax})?>@({import_name_legal_syntax})"  #  noqa: E501
     adjusted_search_string = str(string_to_search)
     matches = re.findall(regex_pattern, string_to_search)
     if len(matches) == 0:
         local_protocol_matches = re.findall(f"local:{import_name_legal_syntax}", string_to_search)
         if len(local_protocol_matches) == 0:
             raise ValueError("No dependencies found in document; unable to generate environment.")
-        raise ValueError("Document is using local protocols; unable to determine needed environment.")
+        match_str_list: str = ",".join([str(match) for match in matches])
+        if len(match_str_list) != 0: # For some reason, we can get a single "match" that's empty...
+            raise ValueError(f"Document is using the following local protocols: `{match_str_list}`; unable to determine needed environment.")
     for match in matches:
         source_name = match[0]
         package_name = match[1]
