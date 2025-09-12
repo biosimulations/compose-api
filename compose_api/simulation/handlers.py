@@ -1,5 +1,4 @@
 import asyncio
-import contextlib
 import logging
 import os.path
 import random
@@ -126,8 +125,13 @@ async def _dispatch_job(
         job_monitor.internal_subscribe(job_queue, hpc_build_run.slurmjobid)
         while current_status != JobStatus.COMPLETED:
             wait_time += 1
-            with contextlib.suppress(TimeoutError):
+            try:
                 current_status = (await asyncio.wait_for(job_queue.get(), timeout=60)).status
+            except TimeoutError:
+                # If no status update from monitor, get most recent from DB of absolute truth
+                current_status = (await database_service.get_hpcrun_by_slurmjobid(hpc_build_run.slurmjobid)).status
+                if current_status is None:
+                    raise Exception("")
 
             if current_status == JobStatus.FAILED:
                 raise Exception(f"Building container for simulator {simulator_version} has failed.")

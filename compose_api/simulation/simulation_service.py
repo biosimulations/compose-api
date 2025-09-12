@@ -152,9 +152,12 @@ class SimulationServiceHpc(SimulationService):
                 singularity_hash=simulator_version.singularity_def_hash
             )
 
-            slurm_singularity_file = get_slurm_singularity_def_file(
+            singularity_def_file = get_slurm_singularity_def_file(
                 singularity_hash=simulator_version.singularity_def_hash
             )
+            def_file_name = singularity_def_file.name.split("/")[-1]
+            container_file_name = singularity_container_path.name.split("/")[-1]
+
             with open(local_singularity_file, "w") as f:
                 f.write(simulator_version.singularity_def.representation)
 
@@ -164,17 +167,20 @@ class SimulationServiceHpc(SimulationService):
                     #!/bin/bash
                     #SBATCH --job-name={slurm_job_name}
                     #SBATCH --time=30:00
-                    #SBATCH --cpus-per-task 2
-                    #SBATCH --mem=8GB
+                    #SBATCH --cpus-per-task 1
+                    #SBATCH --mem=4GB
                     #SBATCH --nodelist={settings.slurm_build_node}
-                    #SBATCH --partition=vivarium
-                    #SBATCH --qos=vivarium
+                    #SBATCH --partition=general
+                    #SBATCH --qos=general
                     #SBATCH --output={get_slurm_log_file(slurm_job_name=slurm_job_name)}
 
                     set -e
                     echo "Starting build for container {singularity_container_path}"
-                    pushd {settings.hpc_image_base_path}
-                    singularity build {singularity_container_path} {slurm_singularity_file}
+                    pushd /tmp
+                    mv {singularity_def_file} /tmp/{def_file_name}
+                    singularity build --fakeroot {container_file_name} {def_file_name}
+                    mv {container_file_name} {singularity_container_path}
+                    mv {def_file_name} {singularity_def_file} # Cleanup
                     popd
                     echo "Finished building container."
                     """)
@@ -185,7 +191,7 @@ class SimulationServiceHpc(SimulationService):
                 local_sbatch_file=local_submit_file,
                 remote_sbatch_file=get_slurm_submit_file(slurm_job_name=slurm_job_name),
                 local_singularity_file=local_singularity_file,
-                remote_singularity_file=slurm_singularity_file,
+                remote_singularity_file=singularity_def_file,
             )
             return slurm_jobid
 
