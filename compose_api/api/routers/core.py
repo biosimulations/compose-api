@@ -19,6 +19,7 @@ from compose_api.simulation.handlers import (
 from compose_api.simulation.models import (
     HpcRun,
     JobType,
+    PBAllowList,
     SimulationExperiment,
     SimulationRequest,
 )
@@ -101,6 +102,10 @@ async def submit_simulation(background_tasks: BackgroundTasks, uploaded_file: Up
             simulation_service_slurm=sim_service,
             background_tasks=background_tasks,
             job_monitor=job_monitor,
+            # TODO: Put/Get actual allow list
+            pb_allow_list=PBAllowList(
+                allow_list=["git+https://github.com/biosimulators/bspil-basico.git@initial_work"]
+            ),
         )
     except Exception as e:
         logger.exception("Error running simulation")

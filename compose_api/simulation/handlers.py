@@ -55,11 +55,10 @@ async def run_simulation(
     database_service: DatabaseService,
     simulation_service_slurm: SimulationService,
     job_monitor: JobMonitor,
+    pb_allow_list: PBAllowList,
     background_tasks: BackgroundTasks | None = None,
-    pb_allow_list: PBAllowList | None = None,
 ) -> SimulationExperiment:
-    # TODO: Put/Get actual allow list
-    allow_list = pb_allow_list.allow_list if pb_allow_list is not None else ["pypi:bspil-basico"]
+    allow_list = pb_allow_list.allow_list
 
     with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
         singularity_rep, experiment_dep = execute_bsander(
