@@ -54,6 +54,7 @@ class JobStatus(StrEnum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    PENDING = "pending"
 
 
 class HpcRun(BaseModel):

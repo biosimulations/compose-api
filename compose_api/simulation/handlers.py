@@ -129,9 +129,12 @@ async def _dispatch_job(
                 current_status = (await asyncio.wait_for(job_queue.get(), timeout=60)).status
             except TimeoutError:
                 # If no status update from monitor, get most recent from DB of absolute truth
-                current_status = (await database_service.get_hpcrun_by_slurmjobid(hpc_build_run.slurmjobid)).status
-                if current_status is None:
-                    raise Exception("")
+                latest_hpc = await database_service.get_hpcrun_by_slurmjobid(hpc_build_run.slurmjobid)
+                if latest_hpc is None:
+                    raise Exception(
+                        f"Can't get HPC Run with jobID {hpc_build_run.slurmjobid} for container build {simulator_version.singularity_def_hash}"  # noqa: E501
+                    )
+                current_status = latest_hpc.status
 
             if current_status == JobStatus.FAILED:
                 raise Exception(f"Building container for simulator {simulator_version} has failed.")

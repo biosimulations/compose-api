@@ -99,8 +99,10 @@ def determine_dependencies(  # noqa: C901
         if len(local_protocol_matches) == 0:
             raise ValueError("No dependencies found in document; unable to generate environment.")
         match_str_list: str = ",".join([str(match) for match in matches])
-        if len(match_str_list) != 0: # For some reason, we can get a single "match" that's empty...
-            raise ValueError(f"Document is using the following local protocols: `{match_str_list}`; unable to determine needed environment.")
+        if len(match_str_list) != 0:  # For some reason, we can get a single "match" that's empty...
+            raise ValueError(
+                f"Document is using the following local protocols: `{match_str_list}`; unable to determine needed environment."  # noqa: E501
+            )
     for match in matches:
         source_name = match[0]
         package_name = match[1]
