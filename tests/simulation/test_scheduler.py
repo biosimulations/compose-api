@@ -44,7 +44,7 @@ async def insert_job(
         job_state="RUNNING",
     )
 
-    correlation_id = get_correlation_id(random_string=random_string)
+    correlation_id = get_correlation_id(random_string=random_string, job_type=JobType.SIMULATION)
     hpcrun = await database_service.insert_hpcrun(
         slurmjobid=slurm_job.job_id,
         job_type=JobType.SIMULATION,
@@ -114,7 +114,7 @@ async def test_job_scheduler(
     # Submit a toy slurm job which takes 10 seconds to run
     _all_jobs_before_submit: list[SlurmJob] = await slurm_service.get_job_status_squeue()
     settings = get_settings()
-    remote_path = Path(settings.slurm_log_base_path)
+    remote_path = Path(settings.slurm_sbatch_base_path)
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_dir = Path(tmpdir)
         # write slurm_template_hello_1s to a temp file

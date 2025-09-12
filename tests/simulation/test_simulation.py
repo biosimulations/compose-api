@@ -40,7 +40,9 @@ async def test_simulate(
         simulation_service_slurm=simulation_service_slurm,
         job_monitor=job_scheduler,
         background_tasks=None,
-        pb_allow_list=PBAllowList(allow_list=["pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work"]),
+        pb_allow_list=PBAllowList(
+            allow_list=["pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work"]
+        ),
     )
     assert sim_experiement is not None
 

@@ -116,7 +116,7 @@ async def _dispatch_job(
             slurmjobid=build_slurm_id,
             job_type=JobType.BUILD_CONTAINER,
             ref_id=simulator_version.database_id,
-            correlation_id=random_string_7_hex,
+            correlation_id=get_correlation_id(random_string=random_string_7_hex, job_type=JobType.BUILD_CONTAINER),
         )
 
         wait_time = 0
@@ -147,7 +147,7 @@ async def _dispatch_job(
         experiment_id=experiment_id,
     )
 
-    correlation_id = get_correlation_id(random_string=random_string_7_hex)
+    correlation_id = get_correlation_id(random_string=random_string_7_hex, job_type=JobType.SIMULATION)
     _hpcrun = await database_service.insert_hpcrun(
         slurmjobid=sim_slurmjobid,
         job_type=JobType.SIMULATION,

@@ -5,6 +5,7 @@ from compose_api.btools.bsander.bsandr_utils.input_types import Containerization
 from compose_api.common.gateway.models import Namespace
 from compose_api.config import get_settings
 from compose_api.simulation.models import (
+    JobType,
     SimulatorVersion,
 )
 
@@ -53,11 +54,11 @@ def get_slurm_job_name(experiment_id: str) -> str:
     return f"{experiment_id}"
 
 
-def get_correlation_id(random_string: str) -> str:
+def get_correlation_id(random_string: str, job_type: JobType) -> str:
     """
     Generate a correlation ID for the Simulation based on its database ID and random string.
     """
-    return f"{random_string}"
+    return f"{job_type.value}-{random_string}"
 
 
 def get_apptainer_image_file(simulator_version: SimulatorVersion) -> Path:
