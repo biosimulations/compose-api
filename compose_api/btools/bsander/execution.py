@@ -48,8 +48,10 @@ def execute_bsander(
 
     # Determine Dependencies
     docker_template: ContainerizationFileRepr
+    returned_template: ContainerizationFileRepr
     primary_dependencies: ExperimentPrimaryDependencies
     docker_template, primary_dependencies = formulate_dockerfile_for_necessary_env(required_program_arguments)
+    returned_template = docker_template
     if required_program_arguments.containerization_type != ContainerizationTypes.NONE:
         if required_program_arguments.containerization_type != ContainerizationTypes.SINGLE:
             raise NotImplementedError("Only single containerization is currently supported")
@@ -66,6 +68,7 @@ def execute_bsander(
             dockerfile_parser = DockerParser(dockerfile_path)
             singularity_writer = SingularityWriter(dockerfile_parser.recipe)
             results = singularity_writer.convert()
+            returned_template = ContainerizationFileRepr(representation=results)
             with open(container_file_path, "w") as container_file:
                 container_file.write(results)
             if required_program_arguments.containerization_engine != ContainerizationEngine.BOTH:
@@ -85,4 +88,4 @@ def execute_bsander(
         target_dir = os.path.join(str(original_program_arguments.output_dir), base_name.split(".")[0])
         shutil.make_archive(new_archive_path, "zip", target_dir)
         shutil.move(new_archive_path + ".zip", new_archive_path)  # get rid of extra suffix
-    return docker_template, primary_dependencies
+    return returned_template, primary_dependencies
