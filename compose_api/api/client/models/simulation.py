@@ -12,8 +12,8 @@ from typing import cast, Union
 from typing import Union
 
 if TYPE_CHECKING:
-    from ..models.simulation_request import SimulationRequest
     from ..models.simulator_version import SimulatorVersion
+    from ..models.simulation_request import SimulationRequest
 
 
 T = TypeVar("T", bound="Simulation")
@@ -43,8 +43,8 @@ class Simulation:
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.simulation_request import SimulationRequest
         from ..models.simulator_version import SimulatorVersion
+        from ..models.simulation_request import SimulationRequest
 
         database_id = self.database_id
 
@@ -72,8 +72,8 @@ class Simulation:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.simulation_request import SimulationRequest
         from ..models.simulator_version import SimulatorVersion
+        from ..models.simulation_request import SimulationRequest
 
         d = dict(src_dict)
         database_id = d.pop("database_id")

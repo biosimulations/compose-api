@@ -142,20 +142,34 @@ async def submit_simulation(background_tasks: BackgroundTasks, uploaded_file: Up
     summary="Get the simulation status record by its ID",
 )
 async def get_simulation_status(simulation_id: int = Query(...)) -> HpcRun:
+    return await _get_hpc_run_status(ref_id=simulation_id, job_type=JobType.SIMULATION)
+
+
+@config.router.get(
+    path="/simulator/build/status",
+    response_model=HpcRun,
+    operation_id="get-simulator-build-status",
+    tags=["Simulations"],
+    dependencies=[Depends(get_database_service)],
+    summary="Get the simulator build status record by its ID",
+)
+async def get_simulator_build_status(simulator_id: int = Query(...)) -> HpcRun:
+    return await _get_hpc_run_status(ref_id=simulator_id, job_type=JobType.BUILD_CONTAINER)
+
+
+async def _get_hpc_run_status(ref_id: int, job_type: JobType) -> HpcRun:
     db_service = get_database_service()
     if db_service is None:
         logger.error("SSH service is not initialized")
         raise HTTPException(status_code=500, detail="SSH service is not initialized")
     try:
-        simulation_hpcrun: HpcRun | None = await db_service.get_hpcrun_by_ref(
-            ref_id=simulation_id, job_type=JobType.SIMULATION
-        )
+        simulation_hpcrun: HpcRun | None = await db_service.get_hpcrun_by_ref(ref_id=ref_id, job_type=job_type)
     except Exception as e:
-        logger.exception(f"Error fetching simulation results for simulation id: {simulation_id}.")
+        logger.exception(f"Error fetching status for {job_type} id: {ref_id}.")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
     if simulation_hpcrun is None:
-        raise HTTPException(status_code=404, detail=f"Simulation with id {simulation_id} not found.")
+        raise HTTPException(status_code=404, detail=f"{job_type} with id {ref_id} not found.")
     return simulation_hpcrun
 
 

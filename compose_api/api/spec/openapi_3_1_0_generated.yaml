@@ -54,6 +54,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /core/simulator/build/status:
+    get:
+      tags:
+      - Simulations
+      summary: Get the simulator build status record by its ID
+      operationId: get-simulator-build-status
+      parameters:
+      - name: simulator_id
+        in: query
+        required: true
+        schema:
+          type: integer
+          title: Simulator Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HpcRun'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /core/simulation/run/results/file:
     get:
       tags:
@@ -203,6 +229,7 @@ components:
       - running
       - completed
       - failed
+      - pending
       title: JobStatus
     JobType:
       type: string
