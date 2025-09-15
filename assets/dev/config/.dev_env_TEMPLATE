@@ -32,3 +32,4 @@ SLURM_SBATCH_BASE_PATH=
 
 # The home compose_api dir for crbmapi
 INTERNAL_MOUNT_DIR=/mnt/crbmapi
+NAMESPACE=test

@@ -84,6 +84,7 @@ class Settings(BaseSettings):
 
     # Should mount to /home/FCAM/crbmapi/compose_api externally
     internal_mount_dir: str = "/mnt/crpbmapi"
+    namespace: str = "test"
 
 
 @lru_cache

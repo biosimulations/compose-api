@@ -7,6 +7,7 @@ from starlette.responses import FileResponse
 
 from compose_api.common.gateway.models import Namespace, RouterConfig, ServerMode
 from compose_api.common.ssh.ssh_service import get_ssh_service
+from compose_api.config import get_settings
 from compose_api.dependencies import (
     get_data_service,
     get_database_service,
@@ -282,7 +283,7 @@ async def get_results(experiment_id: str = Query()) -> FileResponse:
         logger.error("Data service is not initialized")
         raise HTTPException(status_code=500, detail="Data service is not initialized")
     try:
-        zip_path = await service.get_results_zip(experiment_id, Namespace.TEST)
+        zip_path = await service.get_results_zip(experiment_id, Namespace(get_settings().namespace))
         file_response = FileResponse(
             path=zip_path, filename=f"{experiment_id}_results.zip", media_type="application/zip"
         )
