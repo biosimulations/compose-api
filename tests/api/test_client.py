@@ -39,7 +39,7 @@ async def test_sim_run(
         assert isinstance(sim_experiment, SimulationExperiment)
 
         current_status = await get_simulation_status.asyncio(
-            client=in_memory_api_client, simulation_id=sim_experiment.simulation.database_id
+            client=in_memory_api_client, simulation_id=sim_experiment.simulation_id
         )
 
         if not isinstance(current_status, HpcRun) or not isinstance(current_status.status, JobStatus):
@@ -49,7 +49,7 @@ async def test_sim_run(
         while current_status.status != JobStatus.COMPLETED and num_loops < 10:
             await asyncio.sleep(2)
             current_status = await get_simulation_status.asyncio(
-                client=in_memory_api_client, simulation_id=sim_experiment.simulation.database_id
+                client=in_memory_api_client, simulation_id=sim_experiment.simulation_id
             )
             num_loops += 1
 
@@ -57,7 +57,7 @@ async def test_sim_run(
                 raise TypeError()
 
         current_status = await get_simulation_status.asyncio(
-            client=in_memory_api_client, simulation_id=sim_experiment.simulation.database_id
+            client=in_memory_api_client, simulation_id=sim_experiment.simulation_id
         )
 
         if not isinstance(current_status, HpcRun) or not isinstance(current_status.status, JobStatus):
