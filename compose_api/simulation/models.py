@@ -114,7 +114,8 @@ class PBAllowList(BaseModel):
 
 class SimulationExperiment(BaseModel):
     experiment_id: str
-    simulation: Simulation
+    simulation_id: int
+    simulator_id: int
     last_updated: str = Field(default_factory=lambda: str(datetime.datetime.now()))
     metadata: Mapping[str, str] = Field(default_factory=dict)
 

@@ -104,7 +104,16 @@ async def submit_simulation(background_tasks: BackgroundTasks, uploaded_file: Up
             job_monitor=job_monitor,
             # TODO: Put/Get actual allow list
             pb_allow_list=PBAllowList(
-                allow_list=["pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work"]
+                allow_list=[
+                    "pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work",
+                    "pypi:cobra",
+                    "pypi:tellurium",
+                    "pypi:copasi-basico",
+                    "pypi:smoldyn",
+                    "pypi:numpy",
+                    "pypi:matplotlib",
+                    "pypi:scipy",
+                ]
             ),
         )
     except Exception as e:

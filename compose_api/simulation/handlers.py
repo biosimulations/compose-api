@@ -96,7 +96,9 @@ async def run_simulation(
     else:
         await perform_job()
 
-    return SimulationExperiment(experiment_id=experiment_id, simulation=simulation)
+    return SimulationExperiment(
+        experiment_id=experiment_id, simulation_id=simulation.database_id, simulator_id=simulator_version.database_id
+    )
 
 
 async def _dispatch_job(

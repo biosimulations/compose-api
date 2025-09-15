@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: compose-api
-  version: 0.0.1
+  version: 0.1.0
 paths:
   /core/simulation/run:
     post:
@@ -148,19 +148,6 @@ components:
       required:
       - uploaded_file
       title: Body_run-simulation
-    ContainerizationFileRepr:
-      properties:
-        representation:
-          type: string
-          title: Representation
-      type: object
-      required:
-      - representation
-      title: ContainerizationFileRepr
-    ExperimentPrimaryDependencies:
-      properties: {}
-      type: object
-      title: ExperimentPrimaryDependencies
     HTTPValidationError:
       properties:
         detail:
@@ -237,39 +224,17 @@ components:
       - simulation
       - build_container
       title: JobType
-    Simulation:
-      properties:
-        database_id:
-          type: integer
-          title: Database Id
-        sim_request:
-          $ref: '#/components/schemas/SimulationRequest'
-        simulator_version:
-          $ref: '#/components/schemas/SimulatorVersion'
-        slurmjob_id:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Slurmjob Id
-      type: object
-      required:
-      - database_id
-      - sim_request
-      - simulator_version
-      title: Simulation
-      description: "Everything required to execute the simulation and produce the\
-        \ same results.\nInput file contains all the files required to run the simulation\
-        \ (process-bigraph.json, sbml, etc...).\npb_cache_hash is the hash affiliated\
-        \ with the specific process bi-graph and it's dependencies.\nArgs:\n    database_id:\
-        \ SimulatorVersion\n    sim_request: SimulationRequest\n    slurmjob_id: int\
-        \ | None"
     SimulationExperiment:
       properties:
         experiment_id:
           type: string
           title: Experiment Id
-        simulation:
-          $ref: '#/components/schemas/Simulation'
+        simulation_id:
+          type: integer
+          title: Simulation Id
+        simulator_id:
+          type: integer
+          title: Simulator Id
         last_updated:
           type: string
           title: Last Updated
@@ -281,43 +246,9 @@ components:
       type: object
       required:
       - experiment_id
-      - simulation
+      - simulation_id
+      - simulator_id
       title: SimulationExperiment
-    SimulationRequest:
-      properties:
-        omex_archive:
-          type: string
-          format: path
-          title: Omex Archive
-      type: object
-      required:
-      - omex_archive
-      title: SimulationRequest
-    SimulatorVersion:
-      properties:
-        singularity_def:
-          $ref: '#/components/schemas/ContainerizationFileRepr'
-        singularity_def_hash:
-          type: string
-          title: Singularity Def Hash
-        primary_packages:
-          $ref: '#/components/schemas/ExperimentPrimaryDependencies'
-        database_id:
-          type: integer
-          title: Database Id
-        created_at:
-          anyOf:
-          - type: string
-            format: date-time
-          - type: 'null'
-          title: Created At
-      type: object
-      required:
-      - singularity_def
-      - singularity_def_hash
-      - primary_packages
-      - database_id
-      title: SimulatorVersion
     ValidationError:
       properties:
         loc:

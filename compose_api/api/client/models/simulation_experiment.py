@@ -12,7 +12,6 @@ from typing import Union
 
 if TYPE_CHECKING:
     from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
-    from ..models.simulation import Simulation
 
 
 T = TypeVar("T", bound="SimulationExperiment")
@@ -23,30 +22,27 @@ class SimulationExperiment:
     """
     Attributes:
         experiment_id (str):
-        simulation (Simulation): Everything required to execute the simulation and produce the same results.
-            Input file contains all the files required to run the simulation (process-bigraph.json, sbml, etc...).
-            pb_cache_hash is the hash affiliated with the specific process bi-graph and it's dependencies.
-            Args:
-                database_id: SimulatorVersion
-                sim_request: SimulationRequest
-                slurmjob_id: int | None
+        simulation_id (int):
+        simulator_id (int):
         last_updated (Union[Unset, str]):
         metadata (Union[Unset, SimulationExperimentMetadata]):
     """
 
     experiment_id: str
-    simulation: "Simulation"
+    simulation_id: int
+    simulator_id: int
     last_updated: Union[Unset, str] = UNSET
     metadata: Union[Unset, "SimulationExperimentMetadata"] = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
-        from ..models.simulation import Simulation
 
         experiment_id = self.experiment_id
 
-        simulation = self.simulation.to_dict()
+        simulation_id = self.simulation_id
+
+        simulator_id = self.simulator_id
 
         last_updated = self.last_updated
 
@@ -58,7 +54,8 @@ class SimulationExperiment:
         field_dict.update(self.additional_properties)
         field_dict.update({
             "experiment_id": experiment_id,
-            "simulation": simulation,
+            "simulation_id": simulation_id,
+            "simulator_id": simulator_id,
         })
         if last_updated is not UNSET:
             field_dict["last_updated"] = last_updated
@@ -70,12 +67,13 @@ class SimulationExperiment:
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
-        from ..models.simulation import Simulation
 
         d = dict(src_dict)
         experiment_id = d.pop("experiment_id")
 
-        simulation = Simulation.from_dict(d.pop("simulation"))
+        simulation_id = d.pop("simulation_id")
+
+        simulator_id = d.pop("simulator_id")
 
         last_updated = d.pop("last_updated", UNSET)
 
@@ -88,7 +86,8 @@ class SimulationExperiment:
 
         simulation_experiment = cls(
             experiment_id=experiment_id,
-            simulation=simulation,
+            simulation_id=simulation_id,
+            simulator_id=simulator_id,
             last_updated=last_updated,
             metadata=metadata,
         )

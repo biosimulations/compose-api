@@ -46,10 +46,10 @@ async def test_simulate(
     )
     assert sim_experiement is not None
 
-    hpcrun = await database_service.get_hpcrun_by_ref(sim_experiement.simulation.database_id, JobType.SIMULATION)
+    hpcrun = await database_service.get_hpcrun_by_ref(sim_experiement.simulation_id, JobType.SIMULATION)
     assert hpcrun is not None
     assert hpcrun.job_type == JobType.SIMULATION
-    assert hpcrun.sim_id == sim_experiement.simulation.database_id
+    assert hpcrun.sim_id == sim_experiement.simulation_id
 
     start_time = time.time()
     sim_slurmjob: SlurmJob | None = None
