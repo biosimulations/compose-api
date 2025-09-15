@@ -1,6 +1,9 @@
 # Use the official Python image from the Docker Hub
 FROM python:3.13.2-slim-bookworm AS base
 
+ARG APP_GID=10000
+ARG APP_UID=16997
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     openssh-client && \
@@ -11,18 +14,23 @@ ENV PYTHONUNBUFFERED=1
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
+# create user/group
+RUN groupadd -g $APP_GID appgroup && \
+    useradd -m -u $APP_UID -g $APP_GID appuser
+USER appuser
+
 # Change the working directory to the `app` directory
 WORKDIR /app
 
 # Copy the lockfile and `pyproject.toml` into the image
-COPY uv.lock /app/uv.lock
-COPY pyproject.toml /app/pyproject.toml
+COPY --chown=appuser:appgroup uv.lock /app/uv.lock
+COPY --chown=appuser:appgroup pyproject.toml /app/pyproject.toml
 
 # Install dependencies
 RUN uv sync --frozen --no-install-project
 
 # Copy the project into the image
-COPY . /app
+COPY --chown=appuser:appgroup . /app
 
 # Sync the project
 RUN uv sync --frozen
