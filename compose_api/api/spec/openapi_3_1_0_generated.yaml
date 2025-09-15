@@ -28,6 +28,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /core/simulation/analyze:
+    post:
+      tags:
+      - Simulations
+      summary: Analyze a simulation, and determine what containers should be built
+        to execute it.
+      description: Resulting container definition file
+      operationId: analyze-simulation-omex
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_analyze-simulation-omex'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/plain:
+              schema:
+                type: string
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /core/simulation/run/status:
     get:
       tags:
@@ -138,6 +165,16 @@ paths:
                 title: Response Get Version Version Get
 components:
   schemas:
+    Body_analyze-simulation-omex:
+      properties:
+        uploaded_file:
+          type: string
+          format: binary
+          title: Uploaded File
+      type: object
+      required:
+      - uploaded_file
+      title: Body_analyze-simulation-omex
     Body_run-simulation:
       properties:
         uploaded_file:

@@ -1,5 +1,6 @@
 """Contains all the data models used in inputs/outputs"""
 
+from .body_analyze_simulation_omex import BodyAnalyzeSimulationOmex
 from .body_run_simulation import BodyRunSimulation
 from .check_health_health_get_response_check_health_health_get import CheckHealthHealthGetResponseCheckHealthHealthGet
 from .hpc_run import HpcRun
@@ -11,6 +12,7 @@ from .simulation_experiment_metadata import SimulationExperimentMetadata
 from .validation_error import ValidationError
 
 __all__ = (
+    "BodyAnalyzeSimulationOmex",
     "BodyRunSimulation",
     "CheckHealthHealthGetResponseCheckHealthHealthGet",
     "HpcRun",
