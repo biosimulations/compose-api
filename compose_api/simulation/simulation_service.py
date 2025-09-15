@@ -113,6 +113,7 @@ class SimulationServiceHpc(SimulationService):
                     pushd {experiment_path}/output/
                     zip -r {experiment_path}/results.zip ./*
                     popd
+                    chmod u=rwx,g=rx,o=rx {experiment_path}
                     echo "Simulation run completed. data saved to {experiment_path!s}."
                     """)
                 f.write(script_content)

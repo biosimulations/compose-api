@@ -9,6 +9,7 @@ from typing_extensions import override
 from compose_api.common.gateway.models import Namespace
 from compose_api.common.ssh.ssh_service import SSHService, get_custom_ssh_service
 from compose_api.config import Settings, get_settings
+from compose_api.simulation.hpc_utils import get_internal_experiment_dir
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -38,7 +39,7 @@ class DataService(ABC):
 class DataServiceHpc(DataService):
     @override
     async def get_results_zip(self, experiment_id: str, namespace: Namespace) -> Path:
-        return Path(f"{self.settings.internal_mount_dir}/{namespace.value}/{experiment_id}/result.zip")
+        return Path(f"{get_internal_experiment_dir(experiment_id=experiment_id, namespace=namespace)}/results.zip")
 
     @override
     async def close(self) -> None:

@@ -47,6 +47,11 @@ def get_slurm_sim_experiment_dir(experiment_id: str) -> Path:
     return Path(settings.hpc_sim_base_path) / f"experiment-{experiment_id}"
 
 
+def get_internal_experiment_dir(experiment_id: str, namespace: Namespace) -> Path:
+    settings = get_settings()
+    return Path(settings.internal_mount_dir) / f"{namespace.value}/sims/experiment-{experiment_id}"
+
+
 def get_slurm_job_name(experiment_id: str) -> str:
     """
     Create a human-readable job name .
