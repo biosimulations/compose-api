@@ -18,12 +18,12 @@ logger = logging.getLogger(__name__)
 class JobMonitor:
     database_service: DatabaseService
     slurm_service: SlurmService
-    nats_client: NATSClient
+    nats_client: NATSClient | None
     internal_listeners: dict[int, Queue[HpcRun]] = {}
     _polling_task: asyncio.Task[None] | None = None
     _stop_event: asyncio.Event
 
-    def __init__(self, nats_client: NATSClient, database_service: DatabaseService, slurm_service: SlurmService):
+    def __init__(self, nats_client: NATSClient | None, database_service: DatabaseService, slurm_service: SlurmService):
         self.nats_client = nats_client
         self.database_service = database_service
         self.slurm_service = slurm_service
@@ -34,9 +34,8 @@ class JobMonitor:
         return await self.database_service.get_hpcrun_id_by_correlation_id(correlation_id=correlation_id)
 
     async def subscribe_nats(self) -> None:
-        if not get_settings().hpc_has_messaging:
-            logger.info("Not subscribing to HPC messaging")
-            return
+        if self.nats_client is None:
+            raise Exception("NATS client is not set")
         subject = get_settings().nats_worker_event_subject
         logger.info(f"Subscribing to NATS messages for subject '{subject}'")
 
@@ -119,4 +118,5 @@ class JobMonitor:
     async def close(self) -> None:
         await self.stop_polling()
         logger.debug("Closing NATS client connection")
-        await self.nats_client.close()
+        if self.nats_client:
+            await self.nats_client.close()

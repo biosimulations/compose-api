@@ -154,7 +154,7 @@ async def init_standalone(enable_ssl: bool = True) -> None:
     )
     slurm_service = SlurmService(ssh_service=ssh_service)
 
-    nats_client = await nats.connect(_settings.nats_url)
+    nats_client = await nats.connect(_settings.nats_url) if get_settings().hpc_has_messaging else None
     job_scheduler = JobMonitor(nats_client=nats_client, database_service=database, slurm_service=slurm_service)
     set_job_scheduler(job_scheduler)
 
