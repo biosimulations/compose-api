@@ -21,12 +21,14 @@ from compose_api.dependencies import (
     get_simulation_service,
 )
 from compose_api.simulation.handlers import (
+    get_simulator_versions,
     run_simulation,
 )
 from compose_api.simulation.models import (
     HpcRun,
     JobType,
     PBAllowList,
+    RegisteredSimulators,
     SimulationExperiment,
     SimulationRequest,
 )
@@ -222,6 +224,18 @@ async def _get_hpc_run_status(ref_id: int, job_type: JobType) -> HpcRun:
     if simulation_hpcrun is None:
         raise HTTPException(status_code=404, detail=f"{job_type} with id {ref_id} not found.")
     return simulation_hpcrun
+
+
+@config.router.get(
+    path="/simulator/list",
+    response_model=RegisteredSimulators,
+    operation_id="get-simulator-list",
+    tags=["Simulations"],
+    dependencies=[Depends(get_database_service)],
+    summary="Get the list of simulators",
+)
+async def get_simulator_list() -> RegisteredSimulators:
+    return await get_simulator_versions()
 
 
 # @config.router.get(

@@ -107,6 +107,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /core/simulator/list:
+    get:
+      tags:
+      - Simulations
+      summary: Get the list of simulators
+      operationId: get-simulator-list
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisteredSimulators'
   /core/simulation/run/results/file:
     get:
       tags:
@@ -185,6 +198,32 @@ components:
       required:
       - uploaded_file
       title: Body_run-simulation
+    ContainerizationFileRepr:
+      properties:
+        representation:
+          type: string
+          title: Representation
+      type: object
+      required:
+      - representation
+      title: ContainerizationFileRepr
+    ExperimentPrimaryDependencies:
+      properties:
+        pypi_dependencies:
+          items:
+            type: string
+          type: array
+          title: Pypi Dependencies
+        conda_dependencies:
+          items:
+            type: string
+          type: array
+          title: Conda Dependencies
+      type: object
+      required:
+      - pypi_dependencies
+      - conda_dependencies
+      title: ExperimentPrimaryDependencies
     HTTPValidationError:
       properties:
         detail:
@@ -261,6 +300,23 @@ components:
       - simulation
       - build_container
       title: JobType
+    RegisteredSimulators:
+      properties:
+        versions:
+          items:
+            $ref: '#/components/schemas/SimulatorVersion'
+          type: array
+          title: Versions
+        timestamp:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Timestamp
+      type: object
+      required:
+      - versions
+      title: RegisteredSimulators
     SimulationExperiment:
       properties:
         experiment_id:
@@ -286,6 +342,31 @@ components:
       - simulation_id
       - simulator_id
       title: SimulationExperiment
+    SimulatorVersion:
+      properties:
+        singularity_def:
+          $ref: '#/components/schemas/ContainerizationFileRepr'
+        singularity_def_hash:
+          type: string
+          title: Singularity Def Hash
+        primary_packages:
+          $ref: '#/components/schemas/ExperimentPrimaryDependencies'
+        database_id:
+          type: integer
+          title: Database Id
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - singularity_def
+      - singularity_def_hash
+      - primary_packages
+      - database_id
+      title: SimulatorVersion
     ValidationError:
       properties:
         loc:
