@@ -10,6 +10,7 @@ from compose_api.api.client.models import HpcRun, JobStatus, SimulationExperimen
 from compose_api.api.client.models.body_run_simulation import BodyRunSimulation
 from compose_api.api.client.types import File
 from compose_api.common.gateway.models import ServerMode
+from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation.data_service import DataService
 from compose_api.simulation.job_scheduler import JobMonitor
@@ -22,6 +23,7 @@ server_urls = [ServerMode.DEV, ServerMode.PROD]
 current_version = __version__
 
 
+@pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
 @pytest.mark.asyncio
 async def test_sim_run(
     in_memory_api_client: Client,
