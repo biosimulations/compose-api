@@ -14,15 +14,15 @@ from compose_api.simulation.models import (
 
 
 @pytest.mark.asyncio
-async def test_save_request_to_mongo(database_service: DatabaseServiceSQL, dummy_simulator: SimulatorVersion) -> None:
+async def test_save_request_to_mongo(database_service: DatabaseServiceSQL, simulator: SimulatorVersion) -> None:
     # When the server first receives the Omex file it's placed in a temp dir for further processing
     local_path = Path("/tmp/fjdsljkl")  # noqa: S108
     sim_request = SimulationRequest(omex_archive=local_path)
 
-    experiment_id = get_experiment_id(dummy_simulator, "".join(random.choices(string.hexdigits, k=7)))  # noqa: S311 doesn't need to be secure
+    experiment_id = get_experiment_id(simulator, "".join(random.choices(string.hexdigits, k=7)))  # noqa: S311 doesn't need to be secure
 
     # insert a document into the database
-    sim: Simulation = await database_service.insert_simulation(sim_request, experiment_id, dummy_simulator)
+    sim: Simulation = await database_service.insert_simulation(sim_request, experiment_id, simulator)
     assert sim.database_id is not None
 
     # reread the document from the database

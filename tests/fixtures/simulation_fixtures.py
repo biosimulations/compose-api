@@ -62,7 +62,7 @@ async def job_scheduler(
 
 
 @pytest_asyncio.fixture(scope="function")
-async def dummy_simulator(database_service: DatabaseService) -> AsyncGenerator[SimulatorVersion, None]:
+async def simulator(database_service: DatabaseService) -> AsyncGenerator[SimulatorVersion, None]:
     omex_path = os.path.join(os.path.dirname(__file__), "resources/interesting-test.omex")
     with tempfile.TemporaryDirectory() as temp_dir:
         singularity_def, experiment_dep = execute_bsander(

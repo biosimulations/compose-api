@@ -71,7 +71,7 @@ async def test_simulate(
     simulation_request: SimulationRequest,
     ssh_service: SSHService,
     job_scheduler: JobMonitor,
-    dummy_simulator: SimulatorVersion,
+    simulator: SimulatorVersion,
 ) -> None:
     # insert the latest commit into the database
 
@@ -124,13 +124,13 @@ async def test_simulator_not_in_allowlist(
     database_service: DatabaseServiceSQL,
     simulation_request: SimulationRequest,
     job_scheduler: JobMonitor,
-    dummy_simulator: SimulatorVersion,
+    simulator: SimulatorVersion,
 ) -> None:
     # insert the latest commit into the database
-    experiement_id = get_experiment_id(dummy_simulator, "".join(random.choices(string.hexdigits, k=7)))  # noqa: S311 doesn't need to be secure
+    experiement_id = get_experiment_id(simulator, "".join(random.choices(string.hexdigits, k=7)))  # noqa: S311 doesn't need to be secure
 
     simulation = await database_service.insert_simulation(
-        sim_request=simulation_request, experiment_id=experiement_id, simulator_version=dummy_simulator
+        sim_request=simulation_request, experiment_id=experiement_id, simulator_version=simulator
     )
 
     with pytest.raises(ValueError):

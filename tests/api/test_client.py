@@ -32,7 +32,7 @@ async def test_sim_run(
     simulation_service_slurm: SimulationServiceHpc,
     job_scheduler: JobMonitor,
     data_service: DataService,
-    dummy_simulator: Simulator,
+    simulator: Simulator,
 ) -> None:
     assert simulation_request.omex_archive is not None
     with open(simulation_request.omex_archive, "rb") as f:
