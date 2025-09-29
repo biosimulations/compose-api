@@ -1,5 +1,6 @@
 import math
 import os
+import tempfile
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from zipfile import ZipFile
@@ -8,7 +9,13 @@ import numpy
 import pytest_asyncio
 from nats.aio.client import Client as NATSClient
 
-from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr, ExperimentPrimaryDependencies
+from compose_api.btools.bsander.bsandr_utils.input_types import (
+    ContainerizationEngine,
+    ContainerizationTypes,
+    ProgramArguments,
+)
+from compose_api.btools.bsander.execution import execute_bsander
+from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.db.database_service import DatabaseService
 from compose_api.dependencies import (
@@ -18,7 +25,7 @@ from compose_api.dependencies import (
     set_simulation_service,
 )
 from compose_api.simulation.job_scheduler import JobMonitor
-from compose_api.simulation.models import JobType, SimulatorVersion
+from compose_api.simulation.models import JobStatus, JobType, SimulatorVersion
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 
 
@@ -56,8 +63,25 @@ async def job_scheduler(
 
 @pytest_asyncio.fixture(scope="function")
 async def dummy_simulator(database_service: DatabaseService) -> AsyncGenerator[SimulatorVersion, None]:
-    simulator = await database_service.insert_simulator(
-        ContainerizationFileRepr(representation="singularity def"), ExperimentPrimaryDependencies(["pypi"], ["conda"])
+    omex_path = os.path.join(os.path.dirname(__file__), "resources/interesting-test.omex")
+    with tempfile.TemporaryDirectory() as temp_dir:
+        singularity_def, experiment_dep = execute_bsander(
+            ProgramArguments(
+                input_file_path=omex_path,
+                output_dir=temp_dir,
+                containerization_type=ContainerizationTypes.SINGLE,
+                containerization_engine=ContainerizationEngine.APPTAINER,
+                passlist_entries=["pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work"],
+            )
+        )
+
+    simulator = await database_service.insert_simulator(singularity_def, experiment_dep)
+    fake_hpc_run = await database_service.insert_hpcrun(
+        40, JobType.BUILD_CONTAINER, simulator.database_id, "jfldsjaljl"
+    )
+    await database_service.update_hpcrun_status(
+        fake_hpc_run.database_id,
+        SlurmJob(job_id=123, name="fds", account="foo", user_name="foo", job_state=JobStatus.COMPLETED),
     )
     yield simulator
     simulations = await database_service.list_simulations_that_use_simulator(simulator_id=simulator.database_id)
@@ -67,6 +91,7 @@ async def dummy_simulator(database_service: DatabaseService) -> AsyncGenerator[S
             await database_service.delete_hpcrun(hpcrun_id=hpc_run.database_id)
         await database_service.delete_simulation(simulation_id=sim.database_id)
 
+    await database_service.delete_hpcrun(fake_hpc_run.database_id)
     await database_service.delete_simulator(simulator.database_id)
 
 

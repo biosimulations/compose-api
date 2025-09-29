@@ -8,6 +8,12 @@ from pathlib import Path
 
 import pytest
 
+from compose_api.btools.bsander.bsandr_utils.input_types import (
+    ContainerizationEngine,
+    ContainerizationTypes,
+    ProgramArguments,
+)
+from compose_api.btools.bsander.execution import execute_bsander
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.config import get_settings
@@ -20,6 +26,41 @@ from compose_api.simulation.job_scheduler import JobMonitor
 from compose_api.simulation.models import JobType, PBAllowList, SimulationRequest, SimulatorVersion
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 from tests.fixtures import simulation_fixtures
+
+
+@pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
+@pytest.mark.asyncio
+async def test_build_simulator(
+    simulation_service_slurm: SimulationServiceHpc,
+    database_service: DatabaseServiceSQL,
+    simulation_request: SimulationRequest,
+    ssh_service: SSHService,
+    job_scheduler: JobMonitor,
+) -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        singularity_def, experiment_dep = execute_bsander(
+            ProgramArguments(
+                input_file_path=str(simulation_request.omex_archive),
+                output_dir=temp_dir,
+                containerization_type=ContainerizationTypes.SINGLE,
+                containerization_engine=ContainerizationEngine.APPTAINER,
+                passlist_entries=["pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work"],
+            )
+        )
+    simulator = await database_service.insert_simulator(singularity_def, experiment_dep)
+    start_time = time.time()
+    slurm_job_id = await simulation_service_slurm.build_container(simulator)
+
+    slurm_build_job: SlurmJob | None = None
+    while start_time + (60 * 20) > time.time():  # No longer than twenty mins
+        slurm_build_job = await simulation_service_slurm.get_slurm_job_status(slurmjobid=slurm_job_id)
+        if slurm_build_job is not None and slurm_build_job.is_done():
+            break
+        await asyncio.sleep(30)
+
+    assert slurm_build_job is not None
+    assert slurm_build_job.is_done()
+    assert not slurm_build_job.is_failed()
 
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")

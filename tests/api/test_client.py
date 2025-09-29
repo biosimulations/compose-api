@@ -14,7 +14,7 @@ from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation.data_service import DataService
 from compose_api.simulation.job_scheduler import JobMonitor
-from compose_api.simulation.models import SimulationRequest
+from compose_api.simulation.models import SimulationRequest, Simulator
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 from compose_api.version import __version__
 from tests.fixtures import simulation_fixtures
@@ -32,6 +32,7 @@ async def test_sim_run(
     simulation_service_slurm: SimulationServiceHpc,
     job_scheduler: JobMonitor,
     data_service: DataService,
+    dummy_simulator: Simulator,
 ) -> None:
     assert simulation_request.omex_archive is not None
     with open(simulation_request.omex_archive, "rb") as f:
