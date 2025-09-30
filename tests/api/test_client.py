@@ -27,15 +27,15 @@ current_version = __version__
 @pytest.mark.asyncio
 async def test_sim_run(
     in_memory_api_client: Client,
-    simulation_request: SimulationRequest,
+        simulation_request_pypi: SimulationRequest,
     database_service: DatabaseServiceSQL,
     simulation_service_slurm: SimulationServiceHpc,
     job_scheduler: JobMonitor,
     data_service: DataService,
     simulator: Simulator,
 ) -> None:
-    assert simulation_request.omex_archive is not None
-    with open(simulation_request.omex_archive, "rb") as f:
+    assert simulation_request_pypi.omex_archive is not None
+    with open(simulation_request_pypi.omex_archive, "rb") as f:
         sim_experiment = await run_simulation.asyncio(
             client=in_memory_api_client, body=BodyRunSimulation(uploaded_file=File(file_name=f.name, payload=f))
         )

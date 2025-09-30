@@ -31,7 +31,10 @@ from compose_api.simulation.models import (
     RegisteredSimulators,
     SimulationExperiment,
     SimulationRequest,
+    # AllenInstituteMultiScaleActinSettings
 )
+
+# from multiscale_actin.processes.multiscale_actin_model import MultiscaleActinModelSettings
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +117,7 @@ async def submit_simulation(background_tasks: BackgroundTasks, uploaded_file: Up
             # TODO: Put/Get actual allow list
             pb_allow_list=PBAllowList(
                 allow_list=[
+                    "conda:git+https://github.com/CodeByDrescher/multiscale-actin.git"
                     "pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work",
                     "pypi::cobra",
                     "pypi::tellurium",
@@ -172,6 +176,7 @@ async def analyze_simulation(uploaded_file: UploadFile) -> str:
                 containerization_type=ContainerizationTypes.SINGLE,
                 containerization_engine=ContainerizationEngine.APPTAINER,
                 passlist_entries=[
+                    "conda::git+https://github.com/CodeByDrescher/multiscale-actin.git"
                     "pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work",
                     "pypi::cobra",
                     "pypi::tellurium",
@@ -346,3 +351,18 @@ async def get_results(experiment_id: str = Query()) -> FileResponse:
     except Exception as e:
         # logger.exception(f"Error fetching simulation results for id: {database_id}.")
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# @config.router.get(
+#     path="/generate/readdy_actin_model",
+#     response_model=RegisteredSimulators,
+#     operation_id="generate-readdy-actin-model",
+#     tags=["Generators"],
+#     dependencies=[Depends(get_database_service)],
+#     summary="Generates a Process Bigraph configuration of a Allen Institute multiscale-actin experiment run by the ReaDDy simulator.",
+# )
+# async def get_simulator_list(inbound_settings: AllenInstituteMultiScaleActinSettings) -> RegisteredSimulators:
+#     random_seed = inbound_settings.random_seed == None
+#
+#     settings: MultiscaleActinModelSettings = MultiscaleActinModelSettings()
+#     return await get_simulator_versions()

@@ -81,10 +81,14 @@ def slurm_template_hello_1s(slurm_template_hello_TEMPLATE: str) -> str:
 
 
 @pytest_asyncio.fixture
-async def simulation_request(database_service: DatabaseServiceSQL) -> SimulationRequest:
-    omex_path = Path(os.path.join(os.path.dirname(__file__), "resources/interesting-test.omex"))
+async def simulation_request_pypi(database_service: DatabaseServiceSQL) -> SimulationRequest:
+    omex_path = Path(os.path.join(os.path.dirname(__file__), "resources/interesting-test-pypi.omex"))
     return SimulationRequest(omex_archive=omex_path)
 
+@pytest_asyncio.fixture
+async def simulation_request_conda(database_service: DatabaseServiceSQL) -> SimulationRequest:
+    omex_path = Path(os.path.join(os.path.dirname(__file__), "resources/allen_msa_experiment.omex"))
+    return SimulationRequest(omex_archive=omex_path)
 
 @pytest.fixture(scope="session")
 def slurm_template_hello_10s(slurm_template_hello_TEMPLATE: str) -> str:

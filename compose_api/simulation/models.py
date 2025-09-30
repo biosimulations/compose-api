@@ -12,7 +12,6 @@ from pydantic import Field
 
 from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr, ExperimentPrimaryDependencies
 
-
 @dataclass
 class FlexData:
     _data: dict[str, Any] = field(default_factory=dict)
@@ -150,3 +149,83 @@ class WorkerEventMessagePayload(BaseModel):
 
 class RequestedObservables(BaseModel):
     items: list[str] = Field(default_factory=list)
+
+# class AllenInstituteMultiScaleActinSettings(BaseModel):
+#     name: str = "actin_membrane",
+#     internal_timestep: float = 0.1,  # ns
+#     box_size: list[float] = [float(150.0)] * 3,  # nm
+#     periodic_boundary: bool = True,
+#     reaction_distance: float = 1.0,  # nm
+#     n_cpu: int = 4,
+#     only_linear_actin_constraints: bool = True,
+#     reactions: bool = True,
+#     dimerize_rate: float = 1e-30,  # 1/ns
+#     dimerize_reverse_rate: float = 1.4e-9,  # 1/ns
+#     trimerize_rate: float = 2.1e-2,  # 1/ns
+#     trimerize_reverse_rate: float = 1.4e-9,  # 1/ns
+#     pointed_growth_ATP_rate: float = 2.4e-5,  # 1/ns
+#     pointed_growth_ADP_rate: float = 2.95e-6,  # 1/ns
+#     pointed_shrink_ATP_rate: float = 8.0e-10,  # 1/ns
+#     pointed_shrink_ADP_rate: float = 3.0e-10,  # 1/ns
+#     barbed_growth_ATP_rate: float = 1e30,  # 1/ns
+#     barbed_growth_ADP_rate: float = 7.0e-5,  # 1/ns
+#     nucleate_ATP_rate: float = 2.1e-2,  # 1/ns
+#     nucleate_ADP_rate: float = 7.0e-5,  # 1/ns
+#     barbed_shrink_ATP_rate: float = 1.4e-9,  # 1/ns
+#     barbed_shrink_ADP_rate: float = 8.0e-9,  # 1/ns
+#     arp_bind_ATP_rate: float = 2.1e-2,  # 1/ns
+#     arp_bind_ADP_rate: float = 7.0e-5,  # 1/ns
+#     arp_unbind_ATP_rate: float = 1.4e-9,  # 1/ns
+#     arp_unbind_ADP_rate: float = 8.0e-9,  # 1/ns
+#     barbed_growth_branch_ATP_rate: float = 2.1e-2,  # 1/ns
+#     barbed_growth_branch_ADP_rate: float = 7.0e-5,  # 1/ns
+#     debranching_ATP_rate: float = 1.4e-9,  # 1/ns
+#     debranching_ADP_rate: float = 7.0e-5,  # 1/ns
+#     cap_bind_rate: float = 2.1e-2,  # 1/ns
+#     cap_unbind_rate: float = 1.4e-9,  # 1/ns
+#     hydrolysis_actin_rate: float = 1e-30,  # 1/ns
+#     hydrolysis_arp_rate: float = 3.5e-5,  # 1/ns
+#     nucleotide_exchange_actin_rate: float = 1e-5,  # 1/ns
+#     nucleotide_exchange_arp_rate: float = 1e-5,  # 1/ns
+#     verbose: bool = False,
+#     use_box_actin: bool = True,
+#     use_box_arp: bool = False,
+#     use_box_cap: bool = False,
+#     obstacle_radius: float = 0.0,
+#     obstacle_diff_coeff: float = 0.0,
+#     use_box_obstacle: bool = False,
+#     position_obstacle_stride: int = 0,
+#     displace_pointed_end_tangent: bool = False,
+#     displace_pointed_end_radial: bool = False,
+#     tangent_displacement_nm: float = 0.0,
+#     radial_displacement_radius_nm: float = 0.0,
+#     radial_displacement_angle_deg: float = 0.0,
+#     longitudinal_bonds: bool = True,
+#     displace_stride: int = 1,
+#     bonds_force_multiplier: float = 0.2,
+#     angles_force_constant: float = 1000.0,
+#     dihedrals_force_constant: float = 1000.0,
+#     actin_constraints: bool = True,
+#     actin_box_center_x: float = 12.0,
+#     actin_box_center_y: float = 0.0,
+#     actin_box_center_z: float = 0.0,
+#     actin_box_size_x: float = 20.0,
+#     actin_box_size_y: float = 50.0,
+#     actin_box_size_z: float = 50.0,
+#     add_extra_box: bool = False,
+#     barbed_binding_site: bool = True,
+#     binding_site_reaction_distance: float = 3.0,
+#     add_membrane: bool = True,
+#     membrane_center_x: float = 25.0,
+#     membrane_center_y: float = 0.0,
+#     membrane_center_z: float = 0.0,
+#     membrane_size_x: float = 0.0,
+#     membrane_size_y: float = 100.0,
+#     membrane_size_z: float = 100.0,
+#     membrane_particle_radius: float = 2.5,
+#     obstacle_controlled_position_x: float = 0.0,
+#     obstacle_controlled_position_y: float = 0.0,
+#     obstacle_controlled_position_z: float = 0.0,
+#     random_seed: int | None = None,
+#     output_base_name: str = "test",
+#     output_dir_path: str = ""

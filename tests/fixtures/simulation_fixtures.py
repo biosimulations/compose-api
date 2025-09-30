@@ -119,6 +119,6 @@ def helper_test_sim_results(archive_results: Path, temp_dir: Path) -> None:
 
 # @pytest_asyncio.fixture
 # async def experiment_file() -> File:
-#     omex_path = Path(os.path.join(os.path.dirname(__file__), "resources/interesting-test.omex"))
+#     omex_path = Path(os.path.join(os.path.dirname(__file__), "resources/interesting-test-pypi.omex"))
 #
 #     return File(omex_path)

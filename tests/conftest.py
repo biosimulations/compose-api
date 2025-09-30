@@ -22,7 +22,8 @@ from tests.fixtures.postgres_fixtures import async_postgres_engine, database_ser
 from tests.fixtures.simulation_fixtures import job_scheduler, simulation_service_slurm, simulator  # noqa: F401
 from tests.fixtures.slurm_fixtures import (  # noqa: F401
     data_service,
-    simulation_request,
+    simulation_request_pypi,
+    simulation_request_conda,
     slurm_service,
     slurm_template_hello_1s,
     slurm_template_hello_10s,
