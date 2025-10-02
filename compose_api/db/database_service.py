@@ -255,6 +255,8 @@ class DatabaseServiceSQL(DatabaseService):
         async with self.async_sessionmaker() as session, session.begin():
             simulation_key = ref_id if job_type == JobType.SIMULATION else None
             simulator_key = ref_id if job_type == JobType.BUILD_CONTAINER else None
+            if simulator_key is None and simulation_key is None:
+                raise ValueError(f"Simulation key and simulation key is None, with job type {job_type}")
 
             orm_hpc_run = ORMHpcRun(
                 slurmjobid=slurmjobid,
