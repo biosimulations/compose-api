@@ -15,11 +15,9 @@ from compose_api.config import get_settings
 from compose_api.dependencies import (
     get_job_monitor,
     init_standalone,
-    set_data_service,
     shutdown_standalone,
 )
 from compose_api.version import __version__
-from tests.fixtures.mocks import TestDataService
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +62,6 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     if bool(int(dev_mode)):
         logger.warning("Development Mode is currently engaged!!!", stacklevel=1)
         start_standalone.keywords["enable_ssl"] = True
-        set_data_service(TestDataService())  # Won't require mounting file system
     await start_standalone()
 
     # --- JobMonitor setup ---

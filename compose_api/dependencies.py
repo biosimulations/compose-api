@@ -6,6 +6,7 @@ import nats
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
+from compose_api.common.gateway.models import Namespace
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.config import get_settings
@@ -15,6 +16,7 @@ from compose_api.log_config import setup_logging
 from compose_api.simulation.data_service import DataService, DataServiceHpc
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.simulation_service import SimulationService, SimulationServiceHpc
+from tests.fixtures.mocks import TestDataService
 
 logger = logging.getLogger(__name__)
 setup_logging(logger)
@@ -115,7 +117,10 @@ async def init_standalone(enable_ssl: bool = True) -> None:
 
     # set services that don't require params (currently using hpc)
     set_simulation_service(SimulationServiceHpc())
-    set_data_service(DataServiceHpc())
+    if _settings.namespace == Namespace.DEVELOPMENT or _settings.namespace == Namespace.TEST:
+        set_data_service(TestDataService())
+    else:
+        set_data_service(DataServiceHpc())
 
     PG_USER = _settings.postgres_user
     PG_PSWD = _settings.postgres_password
