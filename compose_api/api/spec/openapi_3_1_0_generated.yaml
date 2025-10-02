@@ -32,8 +32,8 @@ paths:
     post:
       tags:
       - Simulations
-      summary: Analyze a simulation, and determine what containers should be built
-        to execute it.
+      summary: "Analyze a process bi-graph,\n    and determine the singularity definition\
+        \ file which would build an environment it can run in."
       description: Resulting container definition file
       operationId: analyze-simulation-omex
       requestBody:

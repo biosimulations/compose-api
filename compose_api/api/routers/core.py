@@ -157,7 +157,8 @@ async def submit_simulation(background_tasks: BackgroundTasks, uploaded_file: Up
     description="Resulting container definition file",
     operation_id="analyze-simulation-omex",
     tags=["Simulations"],
-    summary="Analyze a simulation, and determine what containers should be built to execute it.",
+    summary="""Analyze a process bi-graph,
+    and determine the singularity definition file which would build an environment it can run in.""",
 )
 async def analyze_simulation(uploaded_file: UploadFile) -> str:
     with tempfile.TemporaryDirectory() as tmp_dir:

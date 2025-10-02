@@ -61,7 +61,8 @@ def sync_detailed(
     client: Union[AuthenticatedClient, Client],
     body: BodyAnalyzeSimulationOmex,
 ) -> Response[Union[HTTPValidationError, str]]:
-    """Analyze a simulation, and determine what containers should be built to execute it.
+    """Analyze a process bi-graph,
+        and determine the singularity definition file which would build an environment it can run in.
 
      Resulting container definition file
 
@@ -92,7 +93,8 @@ def sync(
     client: Union[AuthenticatedClient, Client],
     body: BodyAnalyzeSimulationOmex,
 ) -> Optional[Union[HTTPValidationError, str]]:
-    """Analyze a simulation, and determine what containers should be built to execute it.
+    """Analyze a process bi-graph,
+        and determine the singularity definition file which would build an environment it can run in.
 
      Resulting container definition file
 
@@ -118,7 +120,8 @@ async def asyncio_detailed(
     client: Union[AuthenticatedClient, Client],
     body: BodyAnalyzeSimulationOmex,
 ) -> Response[Union[HTTPValidationError, str]]:
-    """Analyze a simulation, and determine what containers should be built to execute it.
+    """Analyze a process bi-graph,
+        and determine the singularity definition file which would build an environment it can run in.
 
      Resulting container definition file
 
@@ -147,7 +150,8 @@ async def asyncio(
     client: Union[AuthenticatedClient, Client],
     body: BodyAnalyzeSimulationOmex,
 ) -> Optional[Union[HTTPValidationError, str]]:
-    """Analyze a simulation, and determine what containers should be built to execute it.
+    """Analyze a process bi-graph,
+        and determine the singularity definition file which would build an environment it can run in.
 
      Resulting container definition file
 
