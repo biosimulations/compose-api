@@ -4,7 +4,7 @@ from pathlib import Path
 import asyncssh
 from asyncssh import SSHCompletedProcess
 
-from compose_api.config import Settings, get_settings
+from compose_api.config import get_settings
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -75,14 +75,11 @@ class SSHService:
         pass  # nothing to do here because we don't yet keep the connection around.
 
 
-def get_custom_ssh_service(settings: Settings) -> SSHService:
+def get_ssh_service() -> SSHService:
+    settings = get_settings()
     return SSHService(
         hostname=settings.slurm_submit_host,
         username=settings.slurm_submit_user,
         key_path=Path(settings.slurm_submit_key_path),
         known_hosts=Path(settings.slurm_submit_known_hosts) if settings.slurm_submit_known_hosts else None,
     )
-
-
-def get_ssh_service() -> SSHService:
-    return get_custom_ssh_service(get_settings())

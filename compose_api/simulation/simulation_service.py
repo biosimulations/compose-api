@@ -10,7 +10,7 @@ from typing_extensions import override
 
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
-from compose_api.common.ssh.ssh_service import SSHService, get_custom_ssh_service
+from compose_api.common.ssh.ssh_service import SSHService, get_ssh_service
 from compose_api.config import Settings, get_settings
 from compose_api.db.database_service import DatabaseService
 from compose_api.simulation.hpc_utils import (
@@ -62,7 +62,7 @@ class SimulationServiceHpc(SimulationService):
     @staticmethod
     def _get_services() -> tuple[SlurmService, SSHService, Settings]:
         settings = get_settings()
-        ssh_service = get_custom_ssh_service(settings)
+        ssh_service = get_ssh_service()
         return SlurmService(ssh_service=ssh_service), ssh_service, settings
 
     @override
