@@ -114,7 +114,7 @@ async def test_simulate(
         archive_result = temp_dir_path / os.path.basename(remote_experiment_result)
         # SCP used because in test FS is not mounted
         await ssh_service.scp_download(archive_result, remote_experiment_result)
-        simulation_fixtures.helper_test_sim_results(archive_result, temp_dir_path)
+        simulation_fixtures.assert_test_sim_results(archive_result, temp_dir_path)
 
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")

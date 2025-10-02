@@ -95,7 +95,7 @@ async def simulator(database_service: DatabaseService) -> AsyncGenerator[Simulat
     await database_service.delete_simulator(simulator.database_id)
 
 
-def helper_test_sim_results(archive_results: Path, temp_dir: Path) -> None:
+def assert_test_sim_results(archive_results: Path, temp_dir: Path) -> None:
     experiment_result = temp_dir / "report.csv"
     with ZipFile(archive_results) as zip_archive:
         zip_archive.extractall(temp_dir)

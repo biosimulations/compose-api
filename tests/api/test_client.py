@@ -76,7 +76,7 @@ async def test_sim_run(
             experiment_results = temp_dir_path / Path("experiment_results.zip")
             with open(experiment_results, "wb") as results_file:
                 results_file.write(results.content)
-            simulation_fixtures.helper_test_sim_results(experiment_results, temp_dir_path)
+            simulation_fixtures.assert_test_sim_results(experiment_results, temp_dir_path)
 
     # response = await httpx_client.get("/version")
     # assert response.status_code == 200
