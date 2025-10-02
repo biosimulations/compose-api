@@ -94,7 +94,9 @@ async def run_simulation(
     background_tasks.add_task(perform_job)
 
     return SimulationExperiment(
-        experiment_id=experiment_id, simulation_id=simulation.database_id, simulator_id=simulator_version.database_id
+        experiment_id=experiment_id,
+        simulation_database_id=simulation.database_id,
+        simulator_database_id=simulator_version.database_id,
     )
 
 
