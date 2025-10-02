@@ -322,12 +322,12 @@ components:
         experiment_id:
           type: string
           title: Experiment Id
-        simulation_id:
+        simulation_database_id:
           type: integer
-          title: Simulation Id
-        simulator_id:
+          title: Simulation Database Id
+        simulator_database_id:
           type: integer
-          title: Simulator Id
+          title: Simulator Database Id
         last_updated:
           type: string
           title: Last Updated
@@ -339,8 +339,8 @@ components:
       type: object
       required:
       - experiment_id
-      - simulation_id
-      - simulator_id
+      - simulation_database_id
+      - simulator_database_id
       title: SimulationExperiment
     SimulatorVersion:
       properties:

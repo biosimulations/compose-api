@@ -14,8 +14,8 @@ from typing import Union
 import datetime
 
 if TYPE_CHECKING:
-    from ..models.experiment_primary_dependencies import ExperimentPrimaryDependencies
     from ..models.containerization_file_repr import ContainerizationFileRepr
+    from ..models.experiment_primary_dependencies import ExperimentPrimaryDependencies
 
 
 T = TypeVar("T", bound="SimulatorVersion")
@@ -40,8 +40,8 @@ class SimulatorVersion:
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.experiment_primary_dependencies import ExperimentPrimaryDependencies
         from ..models.containerization_file_repr import ContainerizationFileRepr
+        from ..models.experiment_primary_dependencies import ExperimentPrimaryDependencies
 
         singularity_def = self.singularity_def.to_dict()
 
@@ -74,8 +74,8 @@ class SimulatorVersion:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.experiment_primary_dependencies import ExperimentPrimaryDependencies
         from ..models.containerization_file_repr import ContainerizationFileRepr
+        from ..models.experiment_primary_dependencies import ExperimentPrimaryDependencies
 
         d = dict(src_dict)
         singularity_def = ContainerizationFileRepr.from_dict(d.pop("singularity_def"))
