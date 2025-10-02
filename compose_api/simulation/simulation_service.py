@@ -44,14 +44,6 @@ class SimulationService(ABC):
         pass
 
     @abstractmethod
-    async def get_slurm_job_status(self, slurmjobid: int) -> SlurmJob | None:
-        pass
-
-    @abstractmethod
-    async def get_slurm_job_result_path(self, slurmjobid: int) -> Path | None:
-        pass
-
-    @abstractmethod
     async def close(self) -> None:
         pass
 
@@ -195,12 +187,6 @@ class SimulationServiceHpc(SimulationService):
             )
             return slurm_jobid
 
-    @override
-    async def get_slurm_job_status(self, slurmjobid: int) -> SlurmJob | None:
-        result = await self.get_slurm_job(slurmjobid)
-        return result
-
-    @override
     async def get_slurm_job_result_path(self, slurmjobid: int) -> Path:
         slurm_job = await self.get_slurm_job(slurmjobid)
         if slurm_job is None:
