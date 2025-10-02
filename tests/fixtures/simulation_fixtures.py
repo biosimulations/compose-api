@@ -75,24 +75,26 @@ async def simulator(database_service: DatabaseService) -> AsyncGenerator[Simulat
             )
         )
 
-    simulator = await database_service.insert_simulator(singularity_def, experiment_dep)
-    fake_hpc_run = await database_service.insert_hpcrun(
+    simulator = await database_service.get_simulator_db().insert_simulator(singularity_def, experiment_dep)
+    fake_hpc_run = await database_service.get_hpc_db().insert_hpcrun(
         40, JobType.BUILD_CONTAINER, simulator.database_id, "jfldsjaljl"
     )
-    await database_service.update_hpcrun_status(
+    await database_service.get_hpc_db().update_hpcrun_status(
         fake_hpc_run.database_id,
         SlurmJob(job_id=123, name="fds", account="foo", user_name="foo", job_state=JobStatus.COMPLETED),
     )
     yield simulator
-    simulations = await database_service.list_simulations_that_use_simulator(simulator_id=simulator.database_id)
+    simulations = await database_service.get_simulator_db().list_simulations_that_use_simulator(
+        simulator_id=simulator.database_id
+    )
     for sim in simulations:
-        hpc_run = await database_service.get_hpcrun_by_ref(sim.database_id, JobType.SIMULATION)
+        hpc_run = await database_service.get_hpc_db().get_hpcrun_by_ref(sim.database_id, JobType.SIMULATION)
         if hpc_run is not None:
-            await database_service.delete_hpcrun(hpcrun_id=hpc_run.database_id)
-        await database_service.delete_simulation(simulation_id=sim.database_id)
+            await database_service.get_hpc_db().delete_hpcrun(hpcrun_id=hpc_run.database_id)
+        await database_service.get_simulator_db().delete_simulation(simulation_id=sim.database_id)
 
-    await database_service.delete_hpcrun(fake_hpc_run.database_id)
-    await database_service.delete_simulator(simulator.database_id)
+    await database_service.get_hpc_db().delete_hpcrun(fake_hpc_run.database_id)
+    await database_service.get_simulator_db().delete_simulator(simulator.database_id)
 
 
 def assert_test_sim_results(archive_results: Path, temp_dir: Path) -> None:

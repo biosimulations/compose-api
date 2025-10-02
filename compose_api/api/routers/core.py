@@ -217,7 +217,9 @@ async def _get_hpc_run_status(ref_id: int, job_type: JobType) -> HpcRun:
         logger.error("SSH service is not initialized")
         raise HTTPException(status_code=500, detail="SSH service is not initialized")
     try:
-        simulation_hpcrun: HpcRun | None = await db_service.get_hpcrun_by_ref(ref_id=ref_id, job_type=job_type)
+        simulation_hpcrun: HpcRun | None = await db_service.get_hpc_db().get_hpcrun_by_ref(
+            ref_id=ref_id, job_type=job_type
+        )
     except Exception as e:
         logger.exception(f"Error fetching status for {job_type} id: {ref_id}.")
         raise HTTPException(status_code=500, detail=str(e)) from e

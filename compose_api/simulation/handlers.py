@@ -42,7 +42,7 @@ async def get_simulator_versions() -> RegisteredSimulators:
         logger.error("Simulation database service is not initialized")
         raise HTTPException(status_code=500, detail="Simulation database service is not initialized")
     try:
-        simulators = await sim_db_service.list_simulators()
+        simulators = await sim_db_service.get_simulator_db().list_simulators()
         return RegisteredSimulators(versions=simulators)
     except Exception as e:
         logger.exception("Error getting list of simulation versions")
@@ -71,14 +71,15 @@ async def run_simulation(
         )
         simulation_request.omex_archive = Path(tmp_dir + f"/{os.path.basename(simulation_request.omex_archive.name)}")
 
-    simulator_version = await database_service.get_simulator_by_def_hash(get_singularity_hash(singularity_rep))
+    simulator_db = database_service.get_simulator_db()
+    simulator_version = await simulator_db.get_simulator_by_def_hash(get_singularity_hash(singularity_rep))
     if simulator_version is None:
-        simulator_version = await database_service.insert_simulator(singularity_rep, experiment_dep)
+        simulator_version = await simulator_db.insert_simulator(singularity_rep, experiment_dep)
 
     random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
     experiment_id = get_experiment_id(simulator=simulator_version, random_str=random_string_7_hex)
 
-    simulation = await database_service.insert_simulation(
+    simulation = await simulator_db.insert_simulation(
         sim_request=simulation_request, experiment_id=experiment_id, simulator_version=simulator_version
     )
 
@@ -108,12 +109,13 @@ async def _dispatch_job(
     experiment_id: str,
 ) -> None:
     simulator_version = simulation.simulator_version
-    simulator_hpc_id = await database_service.get_hpcrun_id_by_simulator_id(simulator_id=simulator_version.database_id)
+    hpc_db = database_service.get_hpc_db()
+    simulator_hpc_id = await hpc_db.get_hpcrun_id_by_simulator_id(simulator_id=simulator_version.database_id)
     random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
 
     if simulator_hpc_id is None:
         build_slurm_id = await simulation_service_slurm.build_container(simulator_version=simulator_version)
-        hpc_build_run = await database_service.insert_hpcrun(
+        hpc_build_run = await hpc_db.insert_hpcrun(
             slurmjobid=build_slurm_id,
             job_type=JobType.BUILD_CONTAINER,
             ref_id=simulator_version.database_id,
@@ -130,7 +132,7 @@ async def _dispatch_job(
                 current_status = (await asyncio.wait_for(job_queue.get(), timeout=60)).status
             except TimeoutError:
                 # If no status update from monitor, get most recent from DB of absolute truth
-                latest_hpc = await database_service.get_hpcrun_by_slurmjobid(hpc_build_run.slurmjobid)
+                latest_hpc = await hpc_db.get_hpcrun_by_slurmjobid(hpc_build_run.slurmjobid)
                 if latest_hpc is None:
                     raise Exception(
                         f"Can't get HPC Run with jobID {hpc_build_run.slurmjobid} for container build {simulator_version.singularity_def_hash}"  # noqa: E501
@@ -152,7 +154,7 @@ async def _dispatch_job(
     )
 
     correlation_id = get_correlation_id(random_string=random_string_7_hex, job_type=JobType.SIMULATION)
-    _hpcrun = await database_service.insert_hpcrun(
+    _hpcrun = await hpc_db.insert_hpcrun(
         slurmjobid=sim_slurmjobid,
         job_type=JobType.SIMULATION,
         ref_id=simulation.database_id,

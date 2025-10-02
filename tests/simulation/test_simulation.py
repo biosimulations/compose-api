@@ -48,7 +48,7 @@ async def test_build_simulator(
                 passlist_entries=["pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work"],
             )
         )
-    simulator = await database_service.insert_simulator(singularity_def, experiment_dep)
+    simulator = await database_service.get_simulator_db().insert_simulator(singularity_def, experiment_dep)
     start_time = time.time()
     slurm_job_id = await simulation_service_slurm.build_container(simulator)
 
@@ -91,7 +91,9 @@ async def test_simulate(
     assert sim_experiement is not None
     await test_bg_tasks.call_tasks()
 
-    hpcrun = await database_service.get_hpcrun_by_ref(sim_experiement.simulation_database_id, JobType.SIMULATION)
+    hpcrun = await database_service.get_hpc_db().get_hpcrun_by_ref(
+        sim_experiement.simulation_database_id, JobType.SIMULATION
+    )
     assert hpcrun is not None
     assert hpcrun.job_type == JobType.SIMULATION
     assert hpcrun.sim_id == sim_experiement.simulation_database_id
@@ -134,7 +136,7 @@ async def test_simulator_not_in_allowlist(
     test_bg_tasks = TestBackgroundTask()
     experiement_id = get_experiment_id(simulator, "".join(random.choices(string.hexdigits, k=7)))  # noqa: S311 doesn't need to be secure
 
-    simulation = await database_service.insert_simulation(
+    simulation = await database_service.get_simulator_db().insert_simulation(
         sim_request=simulation_request, experiment_id=experiement_id, simulator_version=simulator
     )
 

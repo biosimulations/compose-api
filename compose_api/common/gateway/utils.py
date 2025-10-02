@@ -11,7 +11,7 @@ def root_prefix(major: int) -> str:
 
 
 async def get_simulation_hpcrun(simulation_id: int, db_service: DatabaseService) -> HpcRun | None:
-    hpcrun = await db_service.get_hpcrun_by_ref(ref_id=simulation_id, job_type=JobType.SIMULATION)
+    hpcrun = await db_service.get_hpc_db().get_hpcrun_by_ref(ref_id=simulation_id, job_type=JobType.SIMULATION)
     return hpcrun
 
 

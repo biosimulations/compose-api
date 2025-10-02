@@ -32,7 +32,7 @@ async def insert_job(
     random_string = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
     experiement_id = get_experiment_id(simulator, random_string)
 
-    simulation = await database_service.insert_simulation(
+    simulation = await database_service.get_simulator_db().insert_simulation(
         sim_request=simulation_request, experiment_id=experiement_id, simulator_version=simulator
     )
     simulation.slurmjob_id = slurmjobid
@@ -45,7 +45,7 @@ async def insert_job(
     )
 
     correlation_id = get_correlation_id(random_string=random_string, job_type=JobType.SIMULATION)
-    hpcrun = await database_service.insert_hpcrun(
+    hpcrun = await database_service.get_hpc_db().insert_hpcrun(
         slurmjobid=slurm_job.job_id,
         job_type=JobType.SIMULATION,
         ref_id=simulation.database_id,
@@ -90,7 +90,7 @@ async def test_messaging(
     )
     # get the updated state of the job
     await asyncio.sleep(0.1)
-    _updated_worker_events = await database_service.list_worker_events(
+    _updated_worker_events = await database_service.get_hpc_db().list_worker_events(
         hpcrun_id=hpc_run.database_id, prev_sequence_number=sequence_number - 1
     )
     assert len(_updated_worker_events) == 1
@@ -138,7 +138,7 @@ async def test_job_monitor(
     await asyncio.sleep(5)
 
     # Check if the job is in the database
-    running_hpcrun: HpcRun | None = await database_service.get_hpcrun_by_slurmjobid(slurmjobid=job_id)
+    running_hpcrun: HpcRun | None = await database_service.get_hpc_db().get_hpcrun_by_slurmjobid(slurmjobid=job_id)
     assert running_hpcrun is not None
     assert running_hpcrun.status == JobStatus.RUNNING
 
@@ -146,7 +146,7 @@ async def test_job_monitor(
     await asyncio.sleep(20)
 
     # Check if the job is in the database
-    completed_hpcrun: HpcRun | None = await database_service.get_hpcrun_by_slurmjobid(slurmjobid=job_id)
+    completed_hpcrun: HpcRun | None = await database_service.get_hpc_db().get_hpcrun_by_slurmjobid(slurmjobid=job_id)
     assert completed_hpcrun is not None
     assert completed_hpcrun.status == JobStatus.COMPLETED
 

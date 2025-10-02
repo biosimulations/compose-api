@@ -22,11 +22,11 @@ async def test_save_request_to_mongo(database_service: DatabaseServiceSQL, simul
     experiment_id = get_experiment_id(simulator, "".join(random.choices(string.hexdigits, k=7)))  # noqa: S311 doesn't need to be secure
 
     # insert a document into the database
-    sim: Simulation = await database_service.insert_simulation(sim_request, experiment_id, simulator)
+    sim: Simulation = await database_service.get_simulator_db().insert_simulation(sim_request, experiment_id, simulator)
     assert sim.database_id is not None
 
     # reread the document from the database
-    sim2 = await database_service.get_simulation(sim.database_id)
+    sim2 = await database_service.get_simulator_db().get_simulation(sim.database_id)
     assert sim2 is not None
 
     assert sim.database_id == sim2.database_id
@@ -36,6 +36,6 @@ async def test_save_request_to_mongo(database_service: DatabaseServiceSQL, simul
     assert sim2.sim_request.omex_archive == get_slurm_sim_experiment_dir(experiment_id)
 
     # delete the document from the database
-    await database_service.delete_simulation(sim.database_id)
-    sim3 = await database_service.get_simulation(sim.database_id)
+    await database_service.get_simulator_db().delete_simulation(sim.database_id)
+    sim3 = await database_service.get_simulator_db().get_simulation(sim.database_id)
     assert sim3 is None
