@@ -1,5 +1,9 @@
 import tempfile
 from pathlib import Path
+from typing import Annotated, Any, Callable
+
+from fastapi import BackgroundTasks
+from typing_extensions import Doc, ParamSpec
 
 from compose_api.common.gateway.models import Namespace
 from compose_api.config import get_settings
@@ -18,3 +22,31 @@ class TestDataService(DataService):
 
     async def close(self) -> None:
         pass
+
+
+Pam = ParamSpec("Pam")
+
+
+class TestBackgroundTask(BackgroundTasks):
+    tasks_to_execute: list[Any] = []
+
+    def add_task(
+        self,
+        func: Annotated[
+            Callable[Pam, Any],
+            Doc(
+                """
+                The function to call after the response is sent.
+
+                It can be a regular `def` function or an `async def` function.
+                """
+            ),
+        ],
+        *args: Pam.args,
+        **kwargs: Pam.kwargs,
+    ) -> None:
+        self.tasks_to_execute.append(func)
+
+    async def call_tasks(self) -> None:
+        for func in self.tasks_to_execute:
+            await func()

@@ -26,6 +26,7 @@ from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import JobType, PBAllowList, SimulationRequest, SimulatorVersion
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 from tests.fixtures import simulation_fixtures
+from tests.fixtures.mocks import TestBackgroundTask
 
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
@@ -53,7 +54,7 @@ async def test_build_simulator(
 
     slurm_build_job: SlurmJob | None = None
     while start_time + (60 * 20) > time.time():  # No longer than twenty mins
-        slurm_build_job = await simulation_service_slurm.get_slurm_job_status(slurmjobid=slurm_job_id)
+        slurm_build_job = await simulation_service_slurm.get_slurm_job(slurmjobid=slurm_job_id)
         if slurm_build_job is not None and slurm_build_job.is_done():
             break
         await asyncio.sleep(30)
@@ -75,17 +76,20 @@ async def test_simulate(
 ) -> None:
     # insert the latest commit into the database
 
+    test_bg_tasks = TestBackgroundTask()
+
     sim_experiement = await handlers.run_simulation(
         simulation_request=simulation_request,
         database_service=database_service,
         simulation_service_slurm=simulation_service_slurm,
         job_monitor=job_monitor,
-        background_tasks=None,
+        background_tasks=test_bg_tasks,
         pb_allow_list=PBAllowList(
             allow_list=["pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work"]
         ),
     )
     assert sim_experiement is not None
+    await test_bg_tasks.call_tasks()
 
     hpcrun = await database_service.get_hpcrun_by_ref(sim_experiement.simulation_id, JobType.SIMULATION)
     assert hpcrun is not None
@@ -95,7 +99,7 @@ async def test_simulate(
     start_time = time.time()
     sim_slurmjob: SlurmJob | None = None
     while start_time + 60 > time.time():
-        sim_slurmjob = await simulation_service_slurm.get_slurm_job_status(slurmjobid=hpcrun.slurmjobid)
+        sim_slurmjob = await simulation_service_slurm.get_slurm_job(slurmjobid=hpcrun.slurmjobid)
         if sim_slurmjob is not None and sim_slurmjob.is_done():
             break
         await asyncio.sleep(5)
@@ -127,6 +131,7 @@ async def test_simulator_not_in_allowlist(
     simulator: SimulatorVersion,
 ) -> None:
     # insert the latest commit into the database
+    test_bg_tasks = TestBackgroundTask()
     experiement_id = get_experiment_id(simulator, "".join(random.choices(string.hexdigits, k=7)))  # noqa: S311 doesn't need to be secure
 
     simulation = await database_service.insert_simulation(
@@ -139,9 +144,10 @@ async def test_simulator_not_in_allowlist(
             database_service,
             simulation_service_slurm,
             job_monitor=job_monitor,
-            background_tasks=None,
+            background_tasks=test_bg_tasks,
             pb_allow_list=PBAllowList(allow_list=["pypi:bspil"]),
         )
+        await test_bg_tasks.call_tasks()
         await simulation_service_slurm.submit_simulation_job(
             simulation=simulation,
             database_service=database_service,

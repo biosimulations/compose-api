@@ -55,7 +55,7 @@ async def run_simulation(
     simulation_service_slurm: SimulationService,
     job_monitor: JobMonitor,
     pb_allow_list: PBAllowList,
-    background_tasks: BackgroundTasks | None = None,
+    background_tasks: BackgroundTasks,
 ) -> SimulationExperiment:
     allow_list = pb_allow_list.allow_list
 
@@ -91,10 +91,7 @@ async def run_simulation(
             experiment_id=experiment_id,
         )
 
-    if background_tasks:
-        background_tasks.add_task(perform_job)
-    else:
-        await perform_job()
+    background_tasks.add_task(perform_job)
 
     return SimulationExperiment(
         experiment_id=experiment_id, simulation_id=simulation.database_id, simulator_id=simulator_version.database_id
