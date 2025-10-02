@@ -59,14 +59,17 @@ class Settings(BaseSettings):
     slurm_submit_known_hosts: str | None = None
     slurm_partition: str = ""
     slurm_node_list: str = ""  # comma-separated list of nodes, e.g., "node1,node2"
+    slurm_build_node: str = ""
     slurm_qos: str = ""
     slurm_log_base_path: str = ""
     slurm_base_path: str = ""
+    slurm_sbatch_base_path: str = ""
 
     hpc_image_base_path: str = ""
     hpc_repo_base_path: str = ""
     hpc_sim_base_path: str = ""
     hpc_sim_config_file: str = "publish.json"
+    hpc_has_messaging: bool = False
 
     nats_url: str = ""
     nats_worker_event_subject: str = "worker.events"
@@ -78,6 +81,10 @@ class Settings(BaseSettings):
     app_dir: str = f"{REPO_ROOT}/app"
     assets_dir: str = f"{REPO_ROOT}/assets"
     marimo_api_server: str = ""
+
+    # Should mount to /home/FCAM/crbmapi/compose_api externally
+    internal_mount_dir: str = "/mnt/crpbmapi"
+    namespace: str = "test"
 
 
 @lru_cache

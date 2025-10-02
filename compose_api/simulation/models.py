@@ -1,14 +1,16 @@
 import datetime
 import enum
-import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel as _BaseModel
 from pydantic import Field
+
+from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr, ExperimentPrimaryDependencies
 
 
 @dataclass
@@ -43,6 +45,7 @@ class BaseModel(_BaseModel):
 
 class JobType(enum.Enum):
     SIMULATION = "simulation"
+    BUILD_CONTAINER = "build_container"
 
 
 class JobStatus(StrEnum):
@@ -51,6 +54,7 @@ class JobStatus(StrEnum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    PENDING = "pending"
 
 
 class HpcRun(BaseModel):
@@ -58,7 +62,8 @@ class HpcRun(BaseModel):
     slurmjobid: int  # Slurm job ID if applicable
     correlation_id: str  # to correlate with the WorkerEvent, if applicable ("N/A" if not applicable)
     job_type: JobType
-    ref_id: int  # primary key of the object this HPC run is associated with (sim, etc.)
+    sim_id: int | None
+    simulator_id: int | None
     status: JobStatus | None = None
     start_time: str | None = None  # ISO format datetime string
     end_time: str | None = None  # ISO format datetime string or None if still running
@@ -66,9 +71,10 @@ class HpcRun(BaseModel):
 
 
 class Simulator(BaseModel):
-    git_commit_hash: str  # Git commit hash for the specific simulator version (first 7 characters)
-    git_repo_url: str  # Git repository URL for the simulator
-    git_branch: str  # Git branch name for the simulator version
+    singularity_def: ContainerizationFileRepr
+    singularity_def_hash: str
+    primary_packages: ExperimentPrimaryDependencies
+    # primary_processes: str
 
 
 class SimulatorVersion(Simulator):
@@ -82,26 +88,34 @@ class RegisteredSimulators(BaseModel):
 
 
 class SimulationRequest(BaseModel):
-    simulator: SimulatorVersion
-    variant_config: dict[str, dict[str, int | float | str]]
-
-    @property
-    def variant_config_hash(self) -> str:
-        """Generate a deep hash of the variant config hash for caching purposes."""
-        json = self.model_dump_json(exclude_unset=True, exclude_none=True)
-        # Use a consistent hashing function to ensure reproducibility
-        return hashlib.md5(json.encode()).hexdigest()  # noqa: S324 insecure hash `md5` is okay for caching
+    omex_archive: Path
 
 
 class Simulation(BaseModel):
+    """
+    Everything required to execute the simulation and produce the same results.
+    Input file contains all the files required to run the simulation (process-bigraph.json, sbml, etc...).
+    pb_cache_hash is the hash affiliated with the specific process bi-graph and it's dependencies.
+    Args:
+        database_id: SimulatorVersion
+        sim_request: SimulationRequest
+        slurmjob_id: int | None
+    """
+
     database_id: int
     sim_request: SimulationRequest
+    simulator_version: SimulatorVersion
     slurmjob_id: int | None = None
+
+
+class PBAllowList(BaseModel):
+    allow_list: list[str]
 
 
 class SimulationExperiment(BaseModel):
     experiment_id: str
-    simulation: Simulation
+    simulation_database_id: int
+    simulator_database_id: int
     last_updated: str = Field(default_factory=lambda: str(datetime.datetime.now()))
     metadata: Mapping[str, str] = Field(default_factory=dict)
 

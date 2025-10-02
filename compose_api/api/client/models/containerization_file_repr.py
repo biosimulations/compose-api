@@ -7,37 +7,50 @@ from attrs import field as _attrs_field
 from ..types import UNSET, Unset
 
 
-T = TypeVar("T", bound="WorkerEventMass")
+T = TypeVar("T", bound="ContainerizationFileRepr")
 
 
 @_attrs_define
-class WorkerEventMass:
-    """ """
+class ContainerizationFileRepr:
+    """
+    Attributes:
+        representation (str):
+    """
 
-    additional_properties: dict[str, float] = _attrs_field(init=False, factory=dict)
+    representation: str
+    additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        representation = self.representation
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
+        field_dict.update({
+            "representation": representation,
+        })
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        worker_event_mass = cls()
+        representation = d.pop("representation")
 
-        worker_event_mass.additional_properties = d
-        return worker_event_mass
+        containerization_file_repr = cls(
+            representation=representation,
+        )
+
+        containerization_file_repr.additional_properties = d
+        return containerization_file_repr
 
     @property
     def additional_keys(self) -> list[str]:
         return list(self.additional_properties.keys())
 
-    def __getitem__(self, key: str) -> float:
+    def __getitem__(self, key: str) -> Any:
         return self.additional_properties[key]
 
-    def __setitem__(self, key: str, value: float) -> None:
+    def __setitem__(self, key: str, value: Any) -> None:
         self.additional_properties[key] = value
 
     def __delitem__(self, key: str) -> None:

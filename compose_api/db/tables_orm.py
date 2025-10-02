@@ -8,6 +8,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncAttrs, AsyncEngine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr, ExperimentPrimaryDependencies
 from compose_api.simulation.models import HpcRun, JobStatus, JobType, SimulatorVersion, WorkerEvent
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ class JobStatusDB(enum.Enum):
 
 class JobTypeDB(enum.Enum):
     SIMULATION = "simulation"
+    BUILD_CONTAINER = "build_container"
 
     def to_job_type(self) -> JobType:
         return JobType(self.value)
@@ -44,17 +46,18 @@ class ORMSimulator(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
-    git_repo_url: Mapped[str] = mapped_column(nullable=False)
-    git_branch: Mapped[str] = mapped_column(nullable=False)
-    git_commit_hash: Mapped[str] = mapped_column(nullable=False)  # first 7 characters of the commit hash
+    singularity_def: Mapped[str] = mapped_column(nullable=False)
+    singularity_def_hash: Mapped[str] = mapped_column(nullable=False)
+    primary_packages: Mapped[str] = mapped_column(nullable=False)
+    # primary_processes: Mapped[str] = mapped_column(nullable=False) TODO:
 
     def to_simulator_version(self) -> SimulatorVersion:
         return SimulatorVersion(
             database_id=self.id,
             created_at=self.created_at,
-            git_repo_url=self.git_repo_url,
-            git_branch=self.git_branch,
-            git_commit_hash=self.git_commit_hash,
+            singularity_def=ContainerizationFileRepr(representation=self.singularity_def),
+            singularity_def_hash=self.singularity_def_hash,
+            primary_packages=ExperimentPrimaryDependencies.from_compact_repr(self.primary_packages),
         )
 
 
@@ -65,24 +68,26 @@ class ORMHpcRun(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
 
     job_type: Mapped[JobTypeDB] = mapped_column(nullable=False)
-    correlation_id: Mapped[str] = mapped_column(nullable=False, index=True)
+    correlation_id: Mapped[str] = mapped_column(nullable=False, index=True, unique=True)
     slurmjobid: Mapped[int] = mapped_column(nullable=True)
     start_time: Mapped[Optional[datetime.datetime]] = mapped_column(nullable=True)
     end_time: Mapped[Optional[datetime.datetime]] = mapped_column(nullable=True)
     status: Mapped[JobStatusDB] = mapped_column(nullable=False)
     error_message: Mapped[Optional[str]] = mapped_column(nullable=True)
-    jobref_simulation_id: Mapped[Optional[int]] = mapped_column(ForeignKey("simulation.id"), nullable=True, index=True)
+
+    simulation_id: Mapped[Optional[int]] = mapped_column(ForeignKey("simulation.id"), nullable=True, index=True)
+    simulator_id: Mapped[Optional[int]] = mapped_column(ForeignKey("simulator.id"), nullable=True, index=True)
 
     def to_hpc_run(self) -> HpcRun:
-        ref_id = self.jobref_simulation_id
-        if ref_id is None:
+        if self.simulation_id is None and self.simulator_id is None:
             raise RuntimeError("ORMHpcRun must have at least one job reference set.")
         return HpcRun(
             database_id=self.id,
             slurmjobid=self.slurmjobid,
             correlation_id=self.correlation_id,
             job_type=self.job_type.to_job_type(),
-            ref_id=ref_id,
+            sim_id=self.simulation_id,
+            simulator_id=self.simulator_id,
             status=self.status.to_job_status(),
             error_message=self.error_message,
             start_time=str(self.start_time) if self.start_time else None,
@@ -95,10 +100,8 @@ class ORMSimulation(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
-
+    experiment_id: Mapped[str] = mapped_column(nullable=False, unique=True)
     simulator_id: Mapped[int] = mapped_column(ForeignKey("simulator.id"), nullable=False, index=True)
-    variant_config: Mapped[dict[str, dict[str, int | float | str]]] = mapped_column(JSONB, nullable=False)
-    variant_config_hash: Mapped[str] = mapped_column(nullable=False)
 
 
 class ORMWorkerEvent(Base):
@@ -107,11 +110,13 @@ class ORMWorkerEvent(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
 
-    correlation_id: Mapped[str] = mapped_column(nullable=False, index=True)
+    correlation_id: Mapped[str] = mapped_column(
+        ForeignKey(f"{ORMHpcRun.__tablename__}.correlation_id", ondelete="CASCADE")
+    )
     sequence_number: Mapped[int] = mapped_column(nullable=False, index=True)
     mass: Mapped[dict[str, float]] = mapped_column(JSONB, nullable=False)
     time: Mapped[float] = mapped_column(nullable=True)
-    hpcrun_id: Mapped[int] = mapped_column(ForeignKey("hpcrun.id"), nullable=False, index=True)
+    hpcrun_id: Mapped[int] = mapped_column(ForeignKey("hpcrun.id", ondelete="CASCADE"), nullable=False, index=True)
 
     @classmethod
     def from_worker_event(cls, worker_event: "WorkerEvent", hpcrun_id: int) -> "ORMWorkerEvent":

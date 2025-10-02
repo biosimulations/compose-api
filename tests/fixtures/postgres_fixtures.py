@@ -5,19 +5,19 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from testcontainers.postgres import PostgresContainer  # type: ignore [import-untyped]
 
+from compose_api.db.database_service import DatabaseService, DatabaseServiceSQL
+from compose_api.db.tables_orm import create_db
 from compose_api.dependencies import (
     get_database_service,
     get_postgres_engine,
     set_database_service,
     set_postgres_engine,
 )
-from compose_api.simulation.database_service import DatabaseService, DatabaseServiceSQL
-from compose_api.simulation.tables_orm import create_db
 
 
 @pytest.fixture(scope="module")
 def postgres_url() -> Generator[str, None, None]:
-    with PostgresContainer("postgres:15") as postgres:
+    with PostgresContainer("postgres:15", username="test", password="test", dbname="test") as postgres:  # noqa: S106 Possible hardcoded password assigned to argument: "password"
         url = postgres.get_connection_url().replace("postgresql+psycopg2://", "postgresql+asyncpg://")
         yield url
 

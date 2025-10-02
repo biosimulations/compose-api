@@ -4,7 +4,7 @@ from pathlib import Path
 import asyncssh
 from asyncssh import SSHCompletedProcess
 
-from compose_api.config import Settings, get_settings
+from compose_api.config import get_settings
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -41,11 +41,11 @@ class SSHService:
                 )
                 return result.returncode, result.stdout, result.stderr
             except asyncssh.ProcessError as exc:
-                logger.exception(msg=f"failed to send command {command}, stderr {str(exc.stderr)[:100]}", exc_info=exc)
-                raise RuntimeError(f"failed to send command {command}, stderr {str(exc.stderr)[:100]})") from exc
+                logger.exception(msg=f"failed to send command `{command}`, stderr:\n\t{exc.stderr!s}", exc_info=exc)
+                raise RuntimeError(f"failed to send command `{command}`, stderr:\n\t{exc.stderr!s})") from exc
             except (OSError, asyncssh.Error) as exc:
-                logger.exception(msg=f"failed to send command {command}, stderr {str(exc)[:100]}", exc_info=exc)
-                raise RuntimeError(f"failed to send command {command}, error {str(exc)[:100]}") from exc
+                logger.exception(msg=f"failed to send command `{command}`, stderr:\n\t{exc!s}", exc_info=exc)
+                raise RuntimeError(f"failed to send command `{command}`, stderr:\n\t{exc!s}") from exc
 
     async def scp_upload(self, local_file: Path, remote_path: Path) -> None:
         async with asyncssh.connect(
@@ -56,9 +56,7 @@ class SSHService:
                 logger.info(msg=f"sent file {local_file} to {remote_path}")
             except asyncssh.Error as exc:
                 logger.exception(msg=f"failed to send file {local_file} to {remote_path}", exc_info=exc)
-                raise RuntimeError(
-                    f"failed to send file {local_file} to {remote_path}, error {str(exc)[:100]}"
-                ) from exc
+                raise RuntimeError(f"failed to send file {local_file} to {remote_path}, error {exc!s}") from exc
 
     async def scp_download(self, local_file: Path, remote_path: Path) -> None:
         async with asyncssh.connect(
@@ -70,18 +68,18 @@ class SSHService:
             except asyncssh.Error as exc:
                 logger.exception(msg=f"failed to retrieve remote file {remote_path} to {local_file}", exc_info=exc)
                 raise RuntimeError(
-                    f"failed to retrieve remote file {remote_path} to {local_file}, error {str(exc)[:100]}"
+                    f"failed to retrieve remote file {remote_path} to {local_file}, error {exc!s}"
                 ) from exc
 
     async def close(self) -> None:
         pass  # nothing to do here because we don't yet keep the connection around.
 
 
-def get_ssh_service(settings: Settings | None = None) -> SSHService:
-    ssh_settings = settings or get_settings()
+def get_ssh_service() -> SSHService:
+    settings = get_settings()
     return SSHService(
-        hostname=ssh_settings.slurm_submit_host,
-        username=ssh_settings.slurm_submit_user,
-        key_path=Path(ssh_settings.slurm_submit_key_path),
-        known_hosts=Path(ssh_settings.slurm_submit_known_hosts) if ssh_settings.slurm_submit_known_hosts else None,
+        hostname=settings.slurm_submit_host,
+        username=settings.slurm_submit_user,
+        key_path=Path(settings.slurm_submit_key_path),
+        known_hosts=Path(settings.slurm_submit_known_hosts) if settings.slurm_submit_known_hosts else None,
     )

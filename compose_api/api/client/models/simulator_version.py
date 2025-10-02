@@ -13,6 +13,10 @@ from typing import cast, Union
 from typing import Union
 import datetime
 
+if TYPE_CHECKING:
+    from ..models.containerization_file_repr import ContainerizationFileRepr
+    from ..models.experiment_primary_dependencies import ExperimentPrimaryDependencies
+
 
 T = TypeVar("T", bound="SimulatorVersion")
 
@@ -21,26 +25,29 @@ T = TypeVar("T", bound="SimulatorVersion")
 class SimulatorVersion:
     """
     Attributes:
-        git_commit_hash (str):
-        git_repo_url (str):
-        git_branch (str):
+        singularity_def (ContainerizationFileRepr):
+        singularity_def_hash (str):
+        primary_packages (ExperimentPrimaryDependencies):
         database_id (int):
         created_at (Union[None, Unset, datetime.datetime]):
     """
 
-    git_commit_hash: str
-    git_repo_url: str
-    git_branch: str
+    singularity_def: "ContainerizationFileRepr"
+    singularity_def_hash: str
+    primary_packages: "ExperimentPrimaryDependencies"
     database_id: int
     created_at: Union[None, Unset, datetime.datetime] = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        git_commit_hash = self.git_commit_hash
+        from ..models.containerization_file_repr import ContainerizationFileRepr
+        from ..models.experiment_primary_dependencies import ExperimentPrimaryDependencies
 
-        git_repo_url = self.git_repo_url
+        singularity_def = self.singularity_def.to_dict()
 
-        git_branch = self.git_branch
+        singularity_def_hash = self.singularity_def_hash
+
+        primary_packages = self.primary_packages.to_dict()
 
         database_id = self.database_id
 
@@ -55,9 +62,9 @@ class SimulatorVersion:
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
-            "git_commit_hash": git_commit_hash,
-            "git_repo_url": git_repo_url,
-            "git_branch": git_branch,
+            "singularity_def": singularity_def,
+            "singularity_def_hash": singularity_def_hash,
+            "primary_packages": primary_packages,
             "database_id": database_id,
         })
         if created_at is not UNSET:
@@ -67,12 +74,15 @@ class SimulatorVersion:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        from ..models.containerization_file_repr import ContainerizationFileRepr
+        from ..models.experiment_primary_dependencies import ExperimentPrimaryDependencies
+
         d = dict(src_dict)
-        git_commit_hash = d.pop("git_commit_hash")
+        singularity_def = ContainerizationFileRepr.from_dict(d.pop("singularity_def"))
 
-        git_repo_url = d.pop("git_repo_url")
+        singularity_def_hash = d.pop("singularity_def_hash")
 
-        git_branch = d.pop("git_branch")
+        primary_packages = ExperimentPrimaryDependencies.from_dict(d.pop("primary_packages"))
 
         database_id = d.pop("database_id")
 
@@ -94,9 +104,9 @@ class SimulatorVersion:
         created_at = _parse_created_at(d.pop("created_at", UNSET))
 
         simulator_version = cls(
-            git_commit_hash=git_commit_hash,
-            git_repo_url=git_repo_url,
-            git_branch=git_branch,
+            singularity_def=singularity_def,
+            singularity_def_hash=singularity_def_hash,
+            primary_packages=primary_packages,
             database_id=database_id,
             created_at=created_at,
         )

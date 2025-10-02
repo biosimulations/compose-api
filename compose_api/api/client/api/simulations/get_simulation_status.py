@@ -9,27 +9,16 @@ from ... import errors
 
 from ...models.hpc_run import HpcRun
 from ...models.http_validation_error import HTTPValidationError
-from ...types import UNSET, Unset
 from typing import cast
-from typing import cast, Union
-from typing import Union
 
 
 def _get_kwargs(
     *,
     simulation_id: int,
-    num_events: Union[None, Unset, int] = UNSET,
 ) -> dict[str, Any]:
     params: dict[str, Any] = {}
 
     params["simulation_id"] = simulation_id
-
-    json_num_events: Union[None, Unset, int]
-    if isinstance(num_events, Unset):
-        json_num_events = UNSET
-    else:
-        json_num_events = num_events
-    params["num_events"] = json_num_events
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -74,13 +63,11 @@ def sync_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
     simulation_id: int,
-    num_events: Union[None, Unset, int] = UNSET,
 ) -> Response[Union[HTTPValidationError, HpcRun]]:
     """Get the simulation status record by its ID
 
     Args:
         simulation_id (int):
-        num_events (Union[None, Unset, int]):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -92,7 +79,6 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         simulation_id=simulation_id,
-        num_events=num_events,
     )
 
     response = client.get_httpx_client().request(
@@ -106,13 +92,11 @@ def sync(
     *,
     client: Union[AuthenticatedClient, Client],
     simulation_id: int,
-    num_events: Union[None, Unset, int] = UNSET,
 ) -> Optional[Union[HTTPValidationError, HpcRun]]:
     """Get the simulation status record by its ID
 
     Args:
         simulation_id (int):
-        num_events (Union[None, Unset, int]):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -125,7 +109,6 @@ def sync(
     return sync_detailed(
         client=client,
         simulation_id=simulation_id,
-        num_events=num_events,
     ).parsed
 
 
@@ -133,13 +116,11 @@ async def asyncio_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
     simulation_id: int,
-    num_events: Union[None, Unset, int] = UNSET,
 ) -> Response[Union[HTTPValidationError, HpcRun]]:
     """Get the simulation status record by its ID
 
     Args:
         simulation_id (int):
-        num_events (Union[None, Unset, int]):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -151,7 +132,6 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         simulation_id=simulation_id,
-        num_events=num_events,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -163,13 +143,11 @@ async def asyncio(
     *,
     client: Union[AuthenticatedClient, Client],
     simulation_id: int,
-    num_events: Union[None, Unset, int] = UNSET,
 ) -> Optional[Union[HTTPValidationError, HpcRun]]:
     """Get the simulation status record by its ID
 
     Args:
         simulation_id (int):
-        num_events (Union[None, Unset, int]):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -183,6 +161,5 @@ async def asyncio(
         await asyncio_detailed(
             client=client,
             simulation_id=simulation_id,
-            num_events=num_events,
         )
     ).parsed

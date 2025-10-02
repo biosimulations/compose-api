@@ -1,3 +1,4 @@
+import os
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from textwrap import dedent
@@ -8,6 +9,11 @@ import pytest_asyncio
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.config import get_settings
+from compose_api.db.database_service import DatabaseServiceSQL
+from compose_api.dependencies import get_data_service, set_data_service
+from compose_api.simulation.data_service import DataService
+from compose_api.simulation.models import SimulationRequest
+from tests.fixtures.mocks import TestDataService
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -74,8 +80,26 @@ def slurm_template_hello_1s(slurm_template_hello_TEMPLATE: str) -> str:
     return template
 
 
+@pytest_asyncio.fixture
+async def simulation_request(database_service: DatabaseServiceSQL) -> SimulationRequest:
+    omex_path = Path(os.path.join(os.path.dirname(__file__), "resources/interesting-test.omex"))
+    return SimulationRequest(omex_archive=omex_path)
+
+
 @pytest.fixture(scope="session")
 def slurm_template_hello_10s(slurm_template_hello_TEMPLATE: str) -> str:
     template = slurm_template_hello_TEMPLATE
     template = template.replace("SLEEP_TIME", "10")
     return template
+
+
+@pytest_asyncio.fixture(scope="function")
+async def data_service() -> AsyncGenerator[DataService, None]:
+    old_data_service = get_data_service()
+    new_data_service = TestDataService()
+
+    set_data_service(new_data_service)
+    yield new_data_service
+
+    await new_data_service.close()
+    set_data_service(old_data_service)

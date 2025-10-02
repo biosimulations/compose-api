@@ -36,6 +36,11 @@ class SlurmJob(BaseModel):
             return False
         return self.job_state.upper() in ["COMPLETED", "FAILED"]
 
+    def is_failed(self) -> bool:
+        if not self.job_state:
+            return False
+        return self.job_state.upper() == "FAILED"
+
     @staticmethod
     def get_sacct_format_string() -> str:
         return "jobid,jobname,account,user,state,start,end,elapsed,exitcode"

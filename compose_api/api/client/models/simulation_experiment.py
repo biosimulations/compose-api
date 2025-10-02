@@ -11,7 +11,6 @@ from typing import cast
 from typing import Union
 
 if TYPE_CHECKING:
-    from ..models.simulation import Simulation
     from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
 
 
@@ -23,24 +22,27 @@ class SimulationExperiment:
     """
     Attributes:
         experiment_id (str):
-        simulation (Simulation):
+        simulation_database_id (int):
+        simulator_database_id (int):
         last_updated (Union[Unset, str]):
         metadata (Union[Unset, SimulationExperimentMetadata]):
     """
 
     experiment_id: str
-    simulation: "Simulation"
+    simulation_database_id: int
+    simulator_database_id: int
     last_updated: Union[Unset, str] = UNSET
     metadata: Union[Unset, "SimulationExperimentMetadata"] = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.simulation import Simulation
         from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
 
         experiment_id = self.experiment_id
 
-        simulation = self.simulation.to_dict()
+        simulation_database_id = self.simulation_database_id
+
+        simulator_database_id = self.simulator_database_id
 
         last_updated = self.last_updated
 
@@ -52,7 +54,8 @@ class SimulationExperiment:
         field_dict.update(self.additional_properties)
         field_dict.update({
             "experiment_id": experiment_id,
-            "simulation": simulation,
+            "simulation_database_id": simulation_database_id,
+            "simulator_database_id": simulator_database_id,
         })
         if last_updated is not UNSET:
             field_dict["last_updated"] = last_updated
@@ -63,13 +66,14 @@ class SimulationExperiment:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.simulation import Simulation
         from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
 
         d = dict(src_dict)
         experiment_id = d.pop("experiment_id")
 
-        simulation = Simulation.from_dict(d.pop("simulation"))
+        simulation_database_id = d.pop("simulation_database_id")
+
+        simulator_database_id = d.pop("simulator_database_id")
 
         last_updated = d.pop("last_updated", UNSET)
 
@@ -82,7 +86,8 @@ class SimulationExperiment:
 
         simulation_experiment = cls(
             experiment_id=experiment_id,
-            simulation=simulation,
+            simulation_database_id=simulation_database_id,
+            simulator_database_id=simulator_database_id,
             last_updated=last_updated,
             metadata=metadata,
         )

@@ -7,14 +7,25 @@ from ...client import AuthenticatedClient, Client
 from ...types import Response, UNSET
 from ... import errors
 
-from ...models.registered_simulators import RegisteredSimulators
+from ...models.hpc_run import HpcRun
+from ...models.http_validation_error import HTTPValidationError
 from typing import cast
 
 
-def _get_kwargs() -> dict[str, Any]:
+def _get_kwargs(
+    *,
+    simulator_id: int,
+) -> dict[str, Any]:
+    params: dict[str, Any] = {}
+
+    params["simulator_id"] = simulator_id
+
+    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
+
     _kwargs: dict[str, Any] = {
         "method": "get",
-        "url": "/core/simulator/versions",
+        "url": "/core/simulator/build/status",
+        "params": params,
     }
 
     return _kwargs
@@ -22,11 +33,15 @@ def _get_kwargs() -> dict[str, Any]:
 
 def _parse_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Optional[RegisteredSimulators]:
+) -> Optional[Union[HTTPValidationError, HpcRun]]:
     if response.status_code == 200:
-        response_200 = RegisteredSimulators.from_dict(response.json())
+        response_200 = HpcRun.from_dict(response.json())
 
         return response_200
+    if response.status_code == 422:
+        response_422 = HTTPValidationError.from_dict(response.json())
+
+        return response_422
     if client.raise_on_unexpected_status:
         raise errors.UnexpectedStatus(response.status_code, response.content)
     else:
@@ -35,7 +50,7 @@ def _parse_response(
 
 def _build_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Response[RegisteredSimulators]:
+) -> Response[Union[HTTPValidationError, HpcRun]]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -47,18 +62,24 @@ def _build_response(
 def sync_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
-) -> Response[RegisteredSimulators]:
-    """get the list of available simulator versions
+    simulator_id: int,
+) -> Response[Union[HTTPValidationError, HpcRun]]:
+    """Get the simulator build status record by its ID
+
+    Args:
+        simulator_id (int):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[RegisteredSimulators]
+        Response[Union[HTTPValidationError, HpcRun]]
     """
 
-    kwargs = _get_kwargs()
+    kwargs = _get_kwargs(
+        simulator_id=simulator_id,
+    )
 
     response = client.get_httpx_client().request(
         **kwargs,
@@ -70,37 +91,48 @@ def sync_detailed(
 def sync(
     *,
     client: Union[AuthenticatedClient, Client],
-) -> Optional[RegisteredSimulators]:
-    """get the list of available simulator versions
+    simulator_id: int,
+) -> Optional[Union[HTTPValidationError, HpcRun]]:
+    """Get the simulator build status record by its ID
+
+    Args:
+        simulator_id (int):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        RegisteredSimulators
+        Union[HTTPValidationError, HpcRun]
     """
 
     return sync_detailed(
         client=client,
+        simulator_id=simulator_id,
     ).parsed
 
 
 async def asyncio_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
-) -> Response[RegisteredSimulators]:
-    """get the list of available simulator versions
+    simulator_id: int,
+) -> Response[Union[HTTPValidationError, HpcRun]]:
+    """Get the simulator build status record by its ID
+
+    Args:
+        simulator_id (int):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[RegisteredSimulators]
+        Response[Union[HTTPValidationError, HpcRun]]
     """
 
-    kwargs = _get_kwargs()
+    kwargs = _get_kwargs(
+        simulator_id=simulator_id,
+    )
 
     response = await client.get_async_httpx_client().request(**kwargs)
 
@@ -110,19 +142,24 @@ async def asyncio_detailed(
 async def asyncio(
     *,
     client: Union[AuthenticatedClient, Client],
-) -> Optional[RegisteredSimulators]:
-    """get the list of available simulator versions
+    simulator_id: int,
+) -> Optional[Union[HTTPValidationError, HpcRun]]:
+    """Get the simulator build status record by its ID
+
+    Args:
+        simulator_id (int):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        RegisteredSimulators
+        Union[HTTPValidationError, HpcRun]
     """
 
     return (
         await asyncio_detailed(
             client=client,
+            simulator_id=simulator_id,
         )
     ).parsed

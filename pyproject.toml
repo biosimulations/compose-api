@@ -31,6 +31,7 @@ dependencies = [
     "tqdm>=4.67.1,<5",
     "seaborn>=0.13.2,<0.14",
     "python-dateutil>=2.9.0.post0,<3",
+    "spython"
 ]
 
 [project.urls]
@@ -52,7 +53,7 @@ dev = [
     "testcontainers[nats, postgres]>=4.10.0,<5",
     "types-tqdm>=4.67.0.20250516,<5",
     "openapi-python-client>=0.25.2,<0.26",
-    "types-python-dateutil>=2.9.0.20250708,<3",
+    "types-python-dateutil>=2.9.0.20250708,<3"
 ]
 docs = [
     "mkdocs>=1.4.2,<2",
@@ -68,6 +69,9 @@ default-groups = [
     "dev",
     "docs",
 ]
+
+[tool.uv.sources]
+bsander = { git = "https://github.com/biosimulators/bsander.git" }
 
 [tool.hatch.build.targets.sdist]
 include = [

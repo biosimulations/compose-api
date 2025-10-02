@@ -1,28 +1,29 @@
 import asyncio
 import logging
+from asyncio import Queue
 from typing import Any
 
-import nats
 from async_lru import alru_cache
 from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
 
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.config import get_settings
-from compose_api.simulation.database_service import DatabaseService
-from compose_api.simulation.models import JobStatus, WorkerEvent, WorkerEventMessagePayload
+from compose_api.db.database_service import DatabaseService
+from compose_api.simulation.models import HpcRun, JobStatus, WorkerEvent, WorkerEventMessagePayload
 
 logger = logging.getLogger(__name__)
 
 
-class JobScheduler:
+class JobMonitor:
     database_service: DatabaseService
     slurm_service: SlurmService
-    nats_client: NATSClient
+    nats_client: NATSClient | None
+    internal_listeners: dict[int, Queue[HpcRun]] = {}
     _polling_task: asyncio.Task[None] | None = None
     _stop_event: asyncio.Event
 
-    def __init__(self, nats_client: NATSClient, database_service: DatabaseService, slurm_service: SlurmService):
+    def __init__(self, nats_client: NATSClient | None, database_service: DatabaseService, slurm_service: SlurmService):
         self.nats_client = nats_client
         self.database_service = database_service
         self.slurm_service = slurm_service
@@ -32,7 +33,9 @@ class JobScheduler:
     async def get_hpcrun_by_correlation_id(self, correlation_id: str) -> int | None:
         return await self.database_service.get_hpcrun_id_by_correlation_id(correlation_id=correlation_id)
 
-    async def subscribe(self) -> None:
+    async def subscribe_nats(self) -> None:
+        if self.nats_client is None:
+            raise Exception("NATS client is not set")
         subject = get_settings().nats_worker_event_subject
         logger.info(f"Subscribing to NATS messages for subject '{subject}'")
 
@@ -55,8 +58,6 @@ class JobScheduler:
             logger.error("NATS client is not connected.")
 
     async def start_polling(self, interval_seconds: int = 30) -> None:
-        if self.nats_client is None:
-            self.nats_client = await nats.connect(self.nats_url)
         if self._polling_task is not None and not self._polling_task.done():
             logger.warning("Polling task already running.")
             return
@@ -105,7 +106,17 @@ class JobScheduler:
                 await self.database_service.update_hpcrun_status(hpcrun_id=hpc_run.database_id, new_slurm_job=slurm_job)
                 logger.info(f"Updated HpcRun {hpc_run.database_id} status to {new_status}")
 
+            if slurm_job.job_id in self.internal_listeners:
+                self.internal_listeners[slurm_job.job_id].put_nowait(hpc_run)
+
+    def internal_subscribe(self, queue: Queue[HpcRun], job_id: int) -> None:
+        self.internal_listeners[job_id] = queue
+
+    def internal_unsubscribe(self, job_id: int) -> None:
+        self.internal_listeners.pop(job_id)
+
     async def close(self) -> None:
         await self.stop_polling()
         logger.debug("Closing NATS client connection")
-        await self.nats_client.close()
+        if self.nats_client:
+            await self.nats_client.close()

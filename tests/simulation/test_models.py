@@ -1,47 +1,39 @@
 import random
+import string
+from pathlib import Path
 
 import pytest
 
-from compose_api.simulation.database_service import DatabaseServiceSQL
+from compose_api.db.database_service import DatabaseServiceSQL
+from compose_api.simulation.hpc_utils import get_experiment_id, get_slurm_sim_experiment_dir
 from compose_api.simulation.models import (
     Simulation,
     SimulationRequest,
+    SimulatorVersion,
 )
 
 
 @pytest.mark.asyncio
-async def test_save_request_to_mongo(database_service: DatabaseServiceSQL) -> None:
-    param1_value = random.random()  # noqa: S311 Standard pseudo-random generators are not suitable for cryptographic purposes
-    param2_value = random.random()  # noqa: S311 Standard pseudo-random generators are not suitable for cryptographic purposes
+async def test_save_request_to_mongo(database_service: DatabaseServiceSQL, simulator: SimulatorVersion) -> None:
+    # When the server first receives the Omex file it's placed in a temp dir for further processing
+    local_path = Path("/tmp/fjdsljkl")  # noqa: S108
+    sim_request = SimulationRequest(omex_archive=local_path)
 
-    for simulator in await database_service.list_simulators():
-        await database_service.delete_simulator(simulator_id=simulator.database_id)
-
-    simulator_version = await database_service.insert_simulator(
-        git_commit_hash="9c3d1c8",
-        git_repo_url="https://github.com/sim_org/simulator",
-        git_branch="main",
-    )
-
-    sim_request = SimulationRequest(
-        simulator=simulator_version,
-        variant_config={
-            "named_parameters": {
-                "param1": param1_value,
-                "param2": param2_value,
-            }
-        },
-    )
+    experiment_id = get_experiment_id(simulator, "".join(random.choices(string.hexdigits, k=7)))  # noqa: S311 doesn't need to be secure
 
     # insert a document into the database
-    sim: Simulation = await database_service.insert_simulation(sim_request)
+    sim: Simulation = await database_service.insert_simulation(sim_request, experiment_id, simulator)
     assert sim.database_id is not None
 
     # reread the document from the database
     sim2 = await database_service.get_simulation(sim.database_id)
     assert sim2 is not None
 
-    assert sim == sim2
+    assert sim.database_id == sim2.database_id
+    assert sim.slurmjob_id == sim2.slurmjob_id
+    assert sim.sim_request.omex_archive != sim2.sim_request.omex_archive
+    assert sim.sim_request.omex_archive == local_path
+    assert sim2.sim_request.omex_archive == get_slurm_sim_experiment_dir(experiment_id)
 
     # delete the document from the database
     await database_service.delete_simulation(sim.database_id)

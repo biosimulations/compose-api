@@ -11,33 +11,31 @@ from nats.aio.client import Client as NATSClient
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.config import get_settings
-from compose_api.simulation.database_service import DatabaseServiceSQL
-from compose_api.simulation.hpc_utils import get_correlation_id
-from compose_api.simulation.job_scheduler import JobScheduler
+from compose_api.db.database_service import DatabaseServiceSQL
+from compose_api.simulation.hpc_utils import get_correlation_id, get_experiment_id
+from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import (
     HpcRun,
     JobStatus,
     JobType,
     Simulation,
     SimulationRequest,
+    SimulatorVersion,
     WorkerEvent,
 )
 
 
-async def insert_job(database_service: DatabaseServiceSQL, slurmjobid: int) -> tuple[Simulation, SlurmJob, HpcRun]:
-    latest_commit_hash = str(uuid.uuid4())
-    repo_url = "https://github.com/some/repo"
-    main_branch = "main"
+async def insert_job(
+    database_service: DatabaseServiceSQL, slurmjobid: int, simulator: SimulatorVersion
+) -> tuple[Simulation, SlurmJob, HpcRun]:
+    simulation_request = SimulationRequest(omex_archive=Path(""))
+    random_string = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
+    experiement_id = get_experiment_id(simulator, random_string)
 
-    simulator = await database_service.insert_simulator(
-        git_commit_hash=latest_commit_hash, git_repo_url=repo_url, git_branch=main_branch
+    simulation = await database_service.insert_simulation(
+        sim_request=simulation_request, experiment_id=experiement_id, simulator_version=simulator
     )
-
-    simulation_request = SimulationRequest(
-        simulator=simulator,
-        variant_config={"named_parameters": {"param1": 0.5, "param2": 0.5}},
-    )
-    simulation = await database_service.insert_simulation(sim_request=simulation_request)
+    simulation.slurmjob_id = slurmjobid
     slurm_job = SlurmJob(
         job_id=slurmjobid,
         name="name",
@@ -46,8 +44,7 @@ async def insert_job(database_service: DatabaseServiceSQL, slurmjobid: int) -> t
         job_state="RUNNING",
     )
 
-    random_string = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
-    correlation_id = get_correlation_id(simulation=simulation, random_string=random_string)
+    correlation_id = get_correlation_id(random_string=random_string, job_type=JobType.SIMULATION)
     hpcrun = await database_service.insert_hpcrun(
         slurmjobid=slurm_job.job_id,
         job_type=JobType.SIMULATION,
@@ -65,14 +62,17 @@ async def test_messaging(
     nats_producer_client: NATSClient,
     database_service: DatabaseServiceSQL,
     slurm_service: SlurmService,
+    simulator: SimulatorVersion,
 ) -> None:
-    scheduler = JobScheduler(
+    monitor = JobMonitor(
         nats_client=nats_subscriber_client, database_service=database_service, slurm_service=slurm_service
     )
-    await scheduler.subscribe()
+    await monitor.subscribe_nats()
 
     # Simulate a job submission and worker event handling
-    simulation, slurm_job, hpc_run = await insert_job(database_service=database_service, slurmjobid=1)
+    simulation, slurm_job, hpc_run = await insert_job(
+        database_service=database_service, slurmjobid=1, simulator=simulator
+    )
 
     # get the initial state of a job
     sequence_number = 1
@@ -98,22 +98,23 @@ async def test_messaging(
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
 @pytest.mark.asyncio
-async def test_job_scheduler(
+async def test_job_monitor(
     nats_subscriber_client: NATSClient,
     database_service: DatabaseServiceSQL,
     slurm_service: SlurmService,
     slurm_template_hello_10s: str,
+    simulator: SimulatorVersion,
 ) -> None:
-    scheduler = JobScheduler(
+    monitor = JobMonitor(
         nats_client=nats_subscriber_client, database_service=database_service, slurm_service=slurm_service
     )
-    await scheduler.subscribe()
-    await scheduler.start_polling(interval_seconds=1)
+    await monitor.subscribe_nats()
+    await monitor.start_polling(interval_seconds=1)
 
     # Submit a toy slurm job which takes 10 seconds to run
     _all_jobs_before_submit: list[SlurmJob] = await slurm_service.get_job_status_squeue()
     settings = get_settings()
-    remote_path = Path(settings.slurm_log_base_path)
+    remote_path = Path(settings.slurm_sbatch_base_path)
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_dir = Path(tmpdir)
         # write slurm_template_hello_1s to a temp file
@@ -122,12 +123,15 @@ async def test_job_scheduler(
             f.write(slurm_template_hello_10s)
 
         remote_sbatch_file = remote_path / local_sbatch_file.name
-        job_id: int = await slurm_service.submit_job(
-            local_sbatch_file=local_sbatch_file, remote_sbatch_file=remote_sbatch_file
+        job_id: int = await slurm_service._submit_canary_job(
+            local_sbatch_file=local_sbatch_file,
+            remote_sbatch_file=remote_sbatch_file,
         )
 
     # Simulate job submission
-    simulation, slurm_job, hpc_run = await insert_job(database_service=database_service, slurmjobid=job_id)
+    simulation, slurm_job, hpc_run = await insert_job(
+        database_service=database_service, slurmjobid=job_id, simulator=simulator
+    )
     assert hpc_run.status == JobStatus.RUNNING
 
     # Wait for the job to receive a RUNNING status
@@ -147,4 +151,4 @@ async def test_job_scheduler(
     assert completed_hpcrun.status == JobStatus.COMPLETED
 
     # Stop polling
-    await scheduler.stop_polling()
+    await monitor.stop_polling()

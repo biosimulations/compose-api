@@ -1,3 +1,4 @@
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -19,20 +20,18 @@ async def test_ssh_command(ssh_service: SSHService) -> None:
 @pytest.mark.asyncio
 async def test_scp_upload_download(ssh_service: SSHService) -> None:
     # create local temp text file with content "hello world"
-    local_path = Path("temp.txt")
-    with open(local_path, "w") as f:
+    with tempfile.NamedTemporaryFile(mode="w+") as f:
         f.write("hello world")
+        f.flush()
 
-    remote_path = Path(f"remote_temp_{uuid.uuid4().hex}.txt")
-    local_path_2 = Path("temp2.txt")
+        remote_path = Path(f"test_servers_scp/remote_temp_{uuid.uuid4().hex}.txt")
 
-    await ssh_service.scp_upload(local_file=local_path, remote_path=remote_path)
-    await ssh_service.scp_download(remote_path=remote_path, local_file=local_path_2)
+        with tempfile.NamedTemporaryFile(mode="w+") as f2:
+            await ssh_service.scp_upload(local_file=Path(f.name), remote_path=remote_path)
+            await ssh_service.scp_download(remote_path=remote_path, local_file=Path(f2.name))
+            f2.flush()
+            f2.seek(0)
+            assert f2.read() == "hello world"
 
-    with open(local_path_2) as f:
-        assert f.read() == "hello world"
-
-    return_code, stdout, stderr = await ssh_service.run_command(f"rm {remote_path}")
-    assert return_code == 0
-    local_path.unlink()
-    local_path_2.unlink()
+            return_code, stdout, stderr = await ssh_service.run_command(f"rm {remote_path}")
+            assert return_code == 0

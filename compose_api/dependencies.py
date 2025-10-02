@@ -6,15 +6,17 @@ import nats
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
+from compose_api.common.gateway.models import Namespace
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.config import get_settings
+from compose_api.db.database_service import DatabaseService, DatabaseServiceSQL
+from compose_api.db.tables_orm import create_db
 from compose_api.log_config import setup_logging
 from compose_api.simulation.data_service import DataService, DataServiceHpc
-from compose_api.simulation.database_service import DatabaseService, DatabaseServiceSQL
-from compose_api.simulation.job_scheduler import JobScheduler
+from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.simulation_service import SimulationService, SimulationServiceHpc
-from compose_api.simulation.tables_orm import create_db
+from tests.fixtures.mocks import TestDataService
 
 logger = logging.getLogger(__name__)
 setup_logging(logger)
@@ -71,19 +73,19 @@ def get_simulation_service() -> SimulationService | None:
     return global_simulation_service
 
 
-# ------ job scheduler (standalone) -----------------------------
+# ------ job monitor (standalone) -----------------------------
 
-global_job_scheduler: JobScheduler | None = None
-
-
-def set_job_scheduler(job_scheduler: JobScheduler | None) -> None:
-    global global_job_scheduler
-    global_job_scheduler = job_scheduler
+global_job_monitor: JobMonitor | None = None
 
 
-def get_job_scheduler() -> JobScheduler | None:
-    global global_job_scheduler
-    return global_job_scheduler
+def set_job_monitor(job_monitor: JobMonitor | None) -> None:
+    global global_job_monitor
+    global_job_monitor = job_monitor
+
+
+def get_job_monitor() -> JobMonitor | None:
+    global global_job_monitor
+    return global_job_monitor
 
 
 # ------ data service (standalone or pytest) ------------------
@@ -115,7 +117,10 @@ async def init_standalone(enable_ssl: bool = True) -> None:
 
     # set services that don't require params (currently using hpc)
     set_simulation_service(SimulationServiceHpc())
-    set_data_service(DataServiceHpc())
+    if _settings.namespace == Namespace.DEVELOPMENT or _settings.namespace == Namespace.TEST:
+        set_data_service(TestDataService())
+    else:
+        set_data_service(DataServiceHpc())
 
     PG_USER = _settings.postgres_user
     PG_PSWD = _settings.postgres_password
@@ -154,9 +159,9 @@ async def init_standalone(enable_ssl: bool = True) -> None:
     )
     slurm_service = SlurmService(ssh_service=ssh_service)
 
-    nats_client = await nats.connect(_settings.nats_url)
-    job_scheduler = JobScheduler(nats_client=nats_client, database_service=database, slurm_service=slurm_service)
-    set_job_scheduler(job_scheduler)
+    nats_client = await nats.connect(_settings.nats_url) if get_settings().hpc_has_messaging else None
+    job_monitor = JobMonitor(nats_client=nats_client, database_service=database, slurm_service=slurm_service)
+    set_job_monitor(job_monitor)
 
 
 async def shutdown_standalone() -> None:
@@ -172,7 +177,7 @@ async def shutdown_standalone() -> None:
     set_database_service(None)
     set_data_service(None)
 
-    job_scheduler = get_job_scheduler()
-    if job_scheduler:
-        await job_scheduler.close()
-        set_job_scheduler(None)
+    job_monitor = get_job_monitor()
+    if job_monitor:
+        await job_monitor.close()
+        set_job_monitor(None)
