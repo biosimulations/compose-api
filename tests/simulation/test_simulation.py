@@ -22,7 +22,7 @@ from compose_api.simulation import handlers
 from compose_api.simulation.hpc_utils import (
     get_experiment_id,
 )
-from compose_api.simulation.job_scheduler import JobMonitor
+from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import JobType, PBAllowList, SimulationRequest, SimulatorVersion
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 from tests.fixtures import simulation_fixtures
@@ -35,7 +35,7 @@ async def test_build_simulator(
     database_service: DatabaseServiceSQL,
     simulation_request: SimulationRequest,
     ssh_service: SSHService,
-    job_scheduler: JobMonitor,
+    job_monitor: JobMonitor,
 ) -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
         singularity_def, experiment_dep = execute_bsander(
@@ -70,7 +70,7 @@ async def test_simulate(
     database_service: DatabaseServiceSQL,
     simulation_request: SimulationRequest,
     ssh_service: SSHService,
-    job_scheduler: JobMonitor,
+    job_monitor: JobMonitor,
     simulator: SimulatorVersion,
 ) -> None:
     # insert the latest commit into the database
@@ -79,7 +79,7 @@ async def test_simulate(
         simulation_request=simulation_request,
         database_service=database_service,
         simulation_service_slurm=simulation_service_slurm,
-        job_monitor=job_scheduler,
+        job_monitor=job_monitor,
         background_tasks=None,
         pb_allow_list=PBAllowList(
             allow_list=["pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work"]
@@ -123,7 +123,7 @@ async def test_simulator_not_in_allowlist(
     simulation_service_slurm: SimulationServiceHpc,
     database_service: DatabaseServiceSQL,
     simulation_request: SimulationRequest,
-    job_scheduler: JobMonitor,
+    job_monitor: JobMonitor,
     simulator: SimulatorVersion,
 ) -> None:
     # insert the latest commit into the database
@@ -138,7 +138,7 @@ async def test_simulator_not_in_allowlist(
             simulation_request,
             database_service,
             simulation_service_slurm,
-            job_monitor=job_scheduler,
+            job_monitor=job_monitor,
             background_tasks=None,
             pb_allow_list=PBAllowList(allow_list=["pypi:bspil"]),
         )

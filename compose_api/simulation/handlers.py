@@ -17,7 +17,7 @@ from compose_api.btools.bsander.execution import execute_bsander
 from compose_api.db.database_service import DatabaseService
 from compose_api.dependencies import get_database_service
 from compose_api.simulation.hpc_utils import get_correlation_id, get_experiment_id, get_singularity_hash
-from compose_api.simulation.job_scheduler import JobMonitor
+from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import (
     HpcRun,
     JobStatus,

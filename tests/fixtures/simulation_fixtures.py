@@ -19,12 +19,12 @@ from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.db.database_service import DatabaseService
 from compose_api.dependencies import (
-    get_job_scheduler,
+    get_job_monitor,
     get_simulation_service,
-    set_job_scheduler,
+    set_job_monitor,
     set_simulation_service,
 )
-from compose_api.simulation.job_scheduler import JobMonitor
+from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import JobStatus, JobType, SimulatorVersion
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 
@@ -42,14 +42,14 @@ async def simulation_service_slurm() -> AsyncGenerator[SimulationServiceHpc, Non
 
 
 @pytest_asyncio.fixture(scope="function")
-async def job_scheduler(
+async def job_monitor(
     database_service: DatabaseService, slurm_service: SlurmService, nats_subscriber_client: NATSClient
 ) -> AsyncGenerator[JobMonitor, None]:
     job_service = JobMonitor(
         nats_client=nats_subscriber_client, database_service=database_service, slurm_service=slurm_service
     )
-    saved_job_service = get_job_scheduler()
-    set_job_scheduler(job_service)
+    saved_job_service = get_job_monitor()
+    set_job_monitor(job_service)
 
     await job_service.subscribe_nats()
     await job_service.start_polling(interval_seconds=2)
@@ -58,7 +58,7 @@ async def job_scheduler(
 
     await job_service.stop_polling()
     await job_service.close()
-    set_job_scheduler(saved_job_service)
+    set_job_monitor(saved_job_service)
 
 
 @pytest_asyncio.fixture(scope="function")

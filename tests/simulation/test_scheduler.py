@@ -13,7 +13,7 @@ from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation.hpc_utils import get_correlation_id, get_experiment_id
-from compose_api.simulation.job_scheduler import JobMonitor
+from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import (
     HpcRun,
     JobStatus,
@@ -64,10 +64,10 @@ async def test_messaging(
     slurm_service: SlurmService,
     simulator: SimulatorVersion,
 ) -> None:
-    scheduler = JobMonitor(
+    monitor = JobMonitor(
         nats_client=nats_subscriber_client, database_service=database_service, slurm_service=slurm_service
     )
-    await scheduler.subscribe_nats()
+    await monitor.subscribe_nats()
 
     # Simulate a job submission and worker event handling
     simulation, slurm_job, hpc_run = await insert_job(
@@ -98,18 +98,18 @@ async def test_messaging(
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
 @pytest.mark.asyncio
-async def test_job_scheduler(
+async def test_job_monitor(
     nats_subscriber_client: NATSClient,
     database_service: DatabaseServiceSQL,
     slurm_service: SlurmService,
     slurm_template_hello_10s: str,
     simulator: SimulatorVersion,
 ) -> None:
-    scheduler = JobMonitor(
+    monitor = JobMonitor(
         nats_client=nats_subscriber_client, database_service=database_service, slurm_service=slurm_service
     )
-    await scheduler.subscribe_nats()
-    await scheduler.start_polling(interval_seconds=1)
+    await monitor.subscribe_nats()
+    await monitor.start_polling(interval_seconds=1)
 
     # Submit a toy slurm job which takes 10 seconds to run
     _all_jobs_before_submit: list[SlurmJob] = await slurm_service.get_job_status_squeue()
@@ -151,4 +151,4 @@ async def test_job_scheduler(
     assert completed_hpcrun.status == JobStatus.COMPLETED
 
     # Stop polling
-    await scheduler.stop_polling()
+    await monitor.stop_polling()

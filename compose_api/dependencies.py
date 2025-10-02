@@ -13,7 +13,7 @@ from compose_api.db.database_service import DatabaseService, DatabaseServiceSQL
 from compose_api.db.tables_orm import create_db
 from compose_api.log_config import setup_logging
 from compose_api.simulation.data_service import DataService, DataServiceHpc
-from compose_api.simulation.job_scheduler import JobMonitor
+from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.simulation_service import SimulationService, SimulationServiceHpc
 
 logger = logging.getLogger(__name__)
@@ -71,19 +71,19 @@ def get_simulation_service() -> SimulationService | None:
     return global_simulation_service
 
 
-# ------ job scheduler (standalone) -----------------------------
+# ------ job monitor (standalone) -----------------------------
 
-global_job_scheduler: JobMonitor | None = None
-
-
-def set_job_scheduler(job_scheduler: JobMonitor | None) -> None:
-    global global_job_scheduler
-    global_job_scheduler = job_scheduler
+global_job_monitor: JobMonitor | None = None
 
 
-def get_job_scheduler() -> JobMonitor | None:
-    global global_job_scheduler
-    return global_job_scheduler
+def set_job_monitor(job_monitor: JobMonitor | None) -> None:
+    global global_job_monitor
+    global_job_monitor = job_monitor
+
+
+def get_job_monitor() -> JobMonitor | None:
+    global global_job_monitor
+    return global_job_monitor
 
 
 # ------ data service (standalone or pytest) ------------------
@@ -155,8 +155,8 @@ async def init_standalone(enable_ssl: bool = True) -> None:
     slurm_service = SlurmService(ssh_service=ssh_service)
 
     nats_client = await nats.connect(_settings.nats_url) if get_settings().hpc_has_messaging else None
-    job_scheduler = JobMonitor(nats_client=nats_client, database_service=database, slurm_service=slurm_service)
-    set_job_scheduler(job_scheduler)
+    job_monitor = JobMonitor(nats_client=nats_client, database_service=database, slurm_service=slurm_service)
+    set_job_monitor(job_monitor)
 
 
 async def shutdown_standalone() -> None:
@@ -172,7 +172,7 @@ async def shutdown_standalone() -> None:
     set_database_service(None)
     set_data_service(None)
 
-    job_scheduler = get_job_scheduler()
-    if job_scheduler:
-        await job_scheduler.close()
-        set_job_scheduler(None)
+    job_monitor = get_job_monitor()
+    if job_monitor:
+        await job_monitor.close()
+        set_job_monitor(None)

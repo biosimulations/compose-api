@@ -13,7 +13,7 @@ from compose_api.common.gateway.models import ServerMode
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation.data_service import DataService
-from compose_api.simulation.job_scheduler import JobMonitor
+from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import SimulationRequest, Simulator
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 from compose_api.version import __version__
@@ -30,7 +30,7 @@ async def test_sim_run(
     simulation_request: SimulationRequest,
     database_service: DatabaseServiceSQL,
     simulation_service_slurm: SimulationServiceHpc,
-    job_scheduler: JobMonitor,
+    job_monitor: JobMonitor,
     data_service: DataService,
     simulator: Simulator,
 ) -> None:

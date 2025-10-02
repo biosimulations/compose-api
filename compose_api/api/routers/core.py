@@ -17,7 +17,7 @@ from compose_api.config import get_settings
 from compose_api.dependencies import (
     get_data_service,
     get_database_service,
-    get_job_scheduler,
+    get_job_monitor,
     get_simulation_service,
 )
 from compose_api.simulation.handlers import (
@@ -83,7 +83,7 @@ async def submit_simulation(background_tasks: BackgroundTasks, uploaded_file: Up
     if db_service is None:
         logger.error("Database service is not initialized")
         raise HTTPException(status_code=500, detail="Database service is not initialized")
-    job_monitor = get_job_scheduler()
+    job_monitor = get_job_monitor()
     if job_monitor is None:
         logger.error("Job Monitor service is not initialized")
         raise HTTPException(status_code=500, detail="Job Monitor service is not initialized")

@@ -13,7 +13,7 @@ from starlette.middleware.cors import CORSMiddleware
 from compose_api.common.gateway.models import ServerMode
 from compose_api.config import get_settings
 from compose_api.dependencies import (
-    get_job_scheduler,
+    get_job_monitor,
     init_standalone,
     set_data_service,
     shutdown_standalone,
@@ -67,18 +67,18 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         set_data_service(TestDataService())  # Won't require mounting file system
     await start_standalone()
 
-    # --- JobScheduler setup ---
-    job_scheduler = get_job_scheduler()
-    if not job_scheduler:
-        raise RuntimeError("JobScheduler is not initialized. Please check your configuration.")
+    # --- JobMonitor setup ---
+    job_monitor = get_job_monitor()
+    if not job_monitor:
+        raise RuntimeError("JobMonitor is not initialized. Please check your configuration.")
     if get_settings().hpc_has_messaging:
-        await job_scheduler.subscribe_nats()
-    await job_scheduler.start_polling(interval_seconds=5)  # configurable interval
+        await job_monitor.subscribe_nats()
+    await job_monitor.start_polling(interval_seconds=5)  # configurable interval
 
     try:
         yield
     finally:
-        await job_scheduler.close()
+        await job_monitor.close()
     await shutdown_standalone()
 
 
