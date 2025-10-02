@@ -110,11 +110,13 @@ class ORMWorkerEvent(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
 
-    correlation_id: Mapped[str] = mapped_column(ForeignKey(f"{ORMHpcRun.__tablename__}.correlation_id"))
+    correlation_id: Mapped[str] = mapped_column(
+        ForeignKey(f"{ORMHpcRun.__tablename__}.correlation_id", ondelete="CASCADE")
+    )
     sequence_number: Mapped[int] = mapped_column(nullable=False, index=True)
     mass: Mapped[dict[str, float]] = mapped_column(JSONB, nullable=False)
     time: Mapped[float] = mapped_column(nullable=True)
-    hpcrun_id: Mapped[int] = mapped_column(ForeignKey("hpcrun.id"), nullable=False, index=True)
+    hpcrun_id: Mapped[int] = mapped_column(ForeignKey("hpcrun.id", ondelete="CASCADE"), nullable=False, index=True)
 
     @classmethod
     def from_worker_event(cls, worker_event: "WorkerEvent", hpcrun_id: int) -> "ORMWorkerEvent":
