@@ -10,7 +10,7 @@ from typing import Any
 from pydantic import BaseModel as _BaseModel
 from pydantic import Field
 
-from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr, ExperimentPrimaryDependencies
+from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr
 
 
 @dataclass
@@ -48,6 +48,17 @@ class JobType(enum.Enum):
     BUILD_CONTAINER = "build_container"
 
 
+class PackageType(enum.Enum):
+    PYTHON = "python"
+    CONDA = "conda"
+
+
+class BiGraphEdgeType(enum.Enum):
+    PROCESS = "process"
+    STEP = "step"
+    COMPOSITE = "composite"
+
+
 class JobStatus(StrEnum):
     WAITING = "waiting"
     QUEUED = "queued"
@@ -70,10 +81,39 @@ class HpcRun(BaseModel):
     error_message: str | None = None  # Error message if the simulation failed
 
 
+class BiGraphEdge(BaseModel):
+    original_module: str
+    name: str
+    edge_type: BiGraphEdgeType
+    edge_input: str
+    edge_output: str
+
+
+class BiGraphProcess(BiGraphEdge):
+    pass
+
+
+class BiGraphStep(BiGraphEdge):
+    pass
+
+
+class BiGraphComposite(BiGraphEdge):
+    pass
+
+
+class BiGraphPackage(BaseModel):
+    package_type: PackageType
+    source_uri: str
+    name: str
+    steps: list[BiGraphStep]
+    composites: list[BiGraphComposite]
+    processes: list[BiGraphProcess]
+
+
 class Simulator(BaseModel):
     singularity_def: ContainerizationFileRepr
     singularity_def_hash: str
-    primary_packages: ExperimentPrimaryDependencies
+    packages: list[BiGraphPackage] | None
     # primary_processes: str
 
 
@@ -84,6 +124,11 @@ class SimulatorVersion(Simulator):
 
 class RegisteredSimulators(BaseModel):
     versions: list[SimulatorVersion]
+    timestamp: datetime.datetime | None = Field(default_factory=datetime.datetime.now)
+
+
+class RegisteredProcesses(BaseModel):
+    versions: list[BiGraphProcess]
     timestamp: datetime.datetime | None = Field(default_factory=datetime.datetime.now)
 
 

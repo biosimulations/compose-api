@@ -8,8 +8,21 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncAttrs, AsyncEngine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr, ExperimentPrimaryDependencies
-from compose_api.simulation.models import HpcRun, JobStatus, JobType, SimulatorVersion, WorkerEvent
+from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr
+from compose_api.simulation.models import (
+    BiGraphComposite,
+    BiGraphEdge,
+    BiGraphEdgeType,
+    BiGraphPackage,
+    BiGraphProcess,
+    BiGraphStep,
+    HpcRun,
+    JobStatus,
+    JobType,
+    PackageType,
+    SimulatorVersion,
+    WorkerEvent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +50,31 @@ class JobTypeDB(enum.Enum):
         return JobTypeDB(job_type.value)
 
 
+class PackageTypeDB(enum.Enum):
+    PYTHON = "python"
+    CONDA = "conda"
+
+    def to_package_type(self) -> "PackageType":
+        return PackageType(self.value)
+
+    @classmethod
+    def from_package_type(cls, package_type: PackageType) -> "PackageTypeDB":
+        return PackageTypeDB(package_type.value)
+
+
+class BiGraphEdgeTypeDB(enum.Enum):
+    PROCESS = "process"
+    STEP = "step"
+    COMPOSITE = "composite"
+
+    def to_edge_type(self) -> "BiGraphEdgeType":
+        return BiGraphEdgeType(self.value)
+
+    @classmethod
+    def from_edge_type(cls, edge_type: BiGraphEdgeType) -> "BiGraphEdgeTypeDB":
+        return BiGraphEdgeTypeDB(edge_type.value)
+
+
 class Base(AsyncAttrs, DeclarativeBase):
     pass
 
@@ -48,8 +86,6 @@ class ORMSimulator(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
     singularity_def: Mapped[str] = mapped_column(nullable=False)
     singularity_def_hash: Mapped[str] = mapped_column(nullable=False)
-    primary_packages: Mapped[str] = mapped_column(nullable=False)
-    # primary_processes: Mapped[str] = mapped_column(nullable=False) TODO:
 
     def to_simulator_version(self) -> SimulatorVersion:
         return SimulatorVersion(
@@ -57,8 +93,90 @@ class ORMSimulator(Base):
             created_at=self.created_at,
             singularity_def=ContainerizationFileRepr(representation=self.singularity_def),
             singularity_def_hash=self.singularity_def_hash,
-            primary_packages=ExperimentPrimaryDependencies.from_compact_repr(self.primary_packages),
+            packages=None,
         )
+
+
+class ORMBiGraphEdge(Base):
+    __tablename__ = "bigraph_edge"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    inserted_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
+    original_module: Mapped[str] = mapped_column(nullable=False)
+    name: Mapped[str] = mapped_column(nullable=False)
+    edge_type: Mapped[BiGraphEdgeTypeDB] = mapped_column(nullable=False)
+    input: Mapped[str] = mapped_column(nullable=True)
+    output: Mapped[str] = mapped_column(nullable=True)
+
+    def to_bigraph_edge(self) -> BiGraphEdge:
+        edge_type = self.edge_type.to_edge_type()
+        match edge_type:
+            case BiGraphEdgeType.PROCESS:
+                return BiGraphProcess(
+                    original_module=self.original_module,
+                    name=self.name,
+                    edge_type=edge_type,
+                    edge_input=self.input,
+                    edge_output=self.output,
+                )
+            case BiGraphEdgeType.STEP:
+                return BiGraphStep(
+                    original_module=self.original_module,
+                    name=self.name,
+                    edge_type=edge_type,
+                    edge_input=self.input,
+                    edge_output=self.output,
+                )
+            case BiGraphEdgeType.COMPOSITE:
+                return BiGraphComposite(
+                    original_module=self.original_module,
+                    name=self.name,
+                    edge_type=edge_type,
+                    edge_input=self.input,
+                    edge_output=self.output,
+                )
+
+
+class ORMPackage(Base):
+    __tablename__ = "bigraph_package"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
+    source_uri: Mapped[str] = mapped_column(nullable=False)
+    package_type: Mapped[PackageTypeDB] = mapped_column(nullable=False)
+    name: Mapped[str] = mapped_column(nullable=False)
+
+    def to_bigraph_package(
+        self, processes: list[BiGraphProcess], steps: list[BiGraphStep], composites: list[BiGraphComposite]
+    ) -> BiGraphPackage:
+        return BiGraphPackage(
+            package_type=PackageType(self.package_type.value),
+            source_uri=self.source_uri,
+            name=self.name,
+            processes=processes,
+            steps=steps,
+            composites=composites,
+        )
+
+
+class ORMSimulatorToPackage(Base):
+    __tablename__ = "simulator_to_package"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    simulator_id: Mapped[int] = mapped_column(
+        ForeignKey(ORMSimulator.__tablename__ + ".id"), nullable=False, index=True
+    )
+    package_id: Mapped[int] = mapped_column(ForeignKey(ORMPackage.__tablename__ + ".id"), nullable=False, index=True)
+
+
+class ORMPackageToEdge(Base):
+    __tablename__ = "packages_to_edge"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    package_id: Mapped[int] = mapped_column(ForeignKey(ORMPackage.__tablename__ + ".id"), nullable=False, index=True)
+    process_id: Mapped[int] = mapped_column(
+        ForeignKey(ORMBiGraphEdge.__tablename__ + ".id"), nullable=False, index=True
+    )
 
 
 class ORMHpcRun(Base):

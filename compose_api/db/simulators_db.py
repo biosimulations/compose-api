@@ -5,13 +5,21 @@ from sqlalchemy import Result, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from typing_extensions import override
 
-from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr, ExperimentPrimaryDependencies
+from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr
 from compose_api.db.tables_orm import (
+    BiGraphEdgeTypeDB,
+    ORMBiGraphEdge,
+    ORMPackage,
+    ORMPackageToEdge,
     ORMSimulation,
     ORMSimulator,
+    ORMSimulatorToPackage,
+    PackageTypeDB,
 )
 from compose_api.simulation.hpc_utils import get_singularity_hash, get_slurm_sim_experiment_dir
 from compose_api.simulation.models import (
+    BiGraphEdge,
+    BiGraphPackage,
     Simulation,
     SimulationRequest,
     SimulatorVersion,
@@ -23,7 +31,7 @@ logger = logging.getLogger(__name__)
 class SimulatorDB(ABC):
     @abstractmethod
     async def insert_simulator(
-        self, singularity_def_rep: ContainerizationFileRepr, experiment_dependencies: ExperimentPrimaryDependencies
+        self, singularity_def_rep: ContainerizationFileRepr, packages: list[BiGraphPackage]
     ) -> SimulatorVersion:
         pass
 
@@ -92,7 +100,7 @@ class SimulatorDBSQL(SimulatorDB):
 
     @override
     async def insert_simulator(
-        self, singularity_def_rep: ContainerizationFileRepr, experiment_dependencies: ExperimentPrimaryDependencies
+        self, singularity_def_rep: ContainerizationFileRepr, packages: list[BiGraphPackage]
     ) -> SimulatorVersion:
         async with self.async_session_maker() as session, session.begin():
             singularity_hash = get_singularity_hash(singularity_def_rep)
@@ -118,12 +126,53 @@ class SimulatorDBSQL(SimulatorDB):
             new_orm_simulator = ORMSimulator(
                 singularity_def=singularity_def_rep.representation,
                 singularity_def_hash=singularity_hash,
-                primary_packages=experiment_dependencies.get_compact_repr(),
             )
             session.add(new_orm_simulator)
+
+            orm_packages: list[ORMPackage] = []
+            for package in packages:
+                orm_packages.append(await self._insert_package(session, package))
+
             await session.flush()
+            for orm_package in orm_packages:
+                relationship = ORMSimulatorToPackage(simulator_id=new_orm_simulator.id, package_id=orm_package.id)
+                session.add(relationship)
+
             # Ensure the ORM object is inserted and has an ID
             return new_orm_simulator.to_simulator_version()
+
+    async def _insert_package(self, session: AsyncSession, package: BiGraphPackage) -> ORMPackage:
+        new_orm_package = ORMPackage(
+            source_uri=package.source_uri,
+            package_type=PackageTypeDB.from_package_type(package.package_type),
+            name=package.name,
+        )
+        session.add(new_orm_package)
+        orm_processes: list[ORMBiGraphEdge] = []
+        for process in package.processes:
+            orm_processes.append(await self._insert_edge(session, process))
+        for step in package.steps:
+            orm_processes.append(await self._insert_edge(session, step))
+        for composite in package.composites:
+            orm_processes.append(await self._insert_edge(session, composite))
+        await session.flush()
+
+        for orm_process in orm_processes:
+            relationship = ORMPackageToEdge(package_id=new_orm_package.id, process_id=orm_process.id)
+            session.add(relationship)
+        return new_orm_package
+
+    @staticmethod
+    async def _insert_edge(session: AsyncSession, edge: BiGraphEdge) -> ORMBiGraphEdge:
+        new_orm_process = ORMBiGraphEdge(
+            original_module=edge.original_module,
+            name=edge.name,
+            edge_type=BiGraphEdgeTypeDB.from_edge_type(edge.edge_type),
+            input=edge.edge_input,
+            output=edge.edge_output,
+        )
+        session.add(new_orm_process)
+        return new_orm_process
 
     @override
     async def get_simulator(self, simulator_id: int) -> SimulatorVersion | None:
