@@ -19,7 +19,7 @@ def introspect_package(dependencies: ExperimentPrimaryDependencies) -> list[Pack
             response.raise_for_status()
             packages.append(
                 PackageOutline.from_pb_outline(
-                    pb_outline_json=response.json(), source=github_url, name=dep, package_type=PackageType.PYTHON
+                    pb_outline_json=response.json(), source=github_url, name=dep, package_type=PackageType.PYPI
                 )
             )
         except Exception as e:

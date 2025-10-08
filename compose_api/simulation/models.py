@@ -50,7 +50,7 @@ class JobType(enum.Enum):
 
 
 class PackageType(enum.Enum):
-    PYTHON = "python"
+    PYPI = "pypi"
     CONDA = "conda"
 
 

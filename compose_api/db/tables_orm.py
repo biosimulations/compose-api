@@ -51,7 +51,7 @@ class JobTypeDB(enum.Enum):
 
 
 class PackageTypeDB(enum.Enum):
-    PYTHON = "python"
+    PYPI = "pypi"
     CONDA = "conda"
 
     def to_package_type(self) -> "PackageType":
