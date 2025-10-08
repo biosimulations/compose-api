@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
+from urllib.parse import ParseResult
 
 from pydantic import BaseModel as _BaseModel
 from pydantic import Field
@@ -56,7 +57,6 @@ class PackageType(enum.Enum):
 class BiGraphEdgeType(enum.Enum):
     PROCESS = "process"
     STEP = "step"
-    COMPOSITE = "composite"
 
 
 class JobStatus(StrEnum):
@@ -82,11 +82,12 @@ class HpcRun(BaseModel):
 
 
 class BiGraphEdge(BaseModel):
-    original_module: str
+    database_id: int
+    module: str
     name: str
     edge_type: BiGraphEdgeType
-    edge_input: str
-    edge_output: str
+    inputs: str
+    outputs: str
 
 
 class BiGraphProcess(BiGraphEdge):
@@ -97,17 +98,42 @@ class BiGraphStep(BiGraphEdge):
     pass
 
 
-class BiGraphComposite(BiGraphEdge):
-    pass
-
-
 class BiGraphPackage(BaseModel):
+    database_id: int
     package_type: PackageType
-    source_uri: str
+    source_uri: ParseResult
     name: str
     steps: list[BiGraphStep]
-    composites: list[BiGraphComposite]
     processes: list[BiGraphProcess]
+
+
+class PackageOutline(BaseModel):
+    package_type: PackageType
+    source_uri: ParseResult
+    name: str
+    steps: list[BiGraphStep]
+    processes: list[BiGraphProcess]
+
+    @staticmethod
+    def from_pb_outline(
+        pb_outline_json: dict[str, Any], source: ParseResult, name: str, package_type: PackageType
+    ) -> "PackageOutline":
+        processes = []
+        if "processes" in pb_outline_json:
+            for process in pb_outline_json["processes"]:
+                processes.append(BiGraphProcess(edge_type=BiGraphEdgeType.PROCESS, **process))
+        steps = []
+        if "steps" in pb_outline_json:
+            for step in pb_outline_json["steps"]:
+                steps.append(BiGraphStep(edge_type=BiGraphEdgeType.STEP, **step))
+
+        return PackageOutline(
+            package_type=package_type,
+            source_uri=source,
+            name=name,
+            steps=steps,
+            processes=processes,
+        )
 
 
 class Simulator(BaseModel):

@@ -19,7 +19,11 @@ from compose_api.db.tables_orm import (
 from compose_api.simulation.hpc_utils import get_singularity_hash, get_slurm_sim_experiment_dir
 from compose_api.simulation.models import (
     BiGraphEdge,
+    BiGraphEdgeType,
     BiGraphPackage,
+    BiGraphProcess,
+    BiGraphStep,
+    PackageOutline,
     Simulation,
     SimulationRequest,
     SimulatorVersion,
@@ -31,7 +35,7 @@ logger = logging.getLogger(__name__)
 class SimulatorDB(ABC):
     @abstractmethod
     async def insert_simulator(
-        self, singularity_def_rep: ContainerizationFileRepr, packages: list[BiGraphPackage]
+        self, singularity_def_rep: ContainerizationFileRepr, packages: list[PackageOutline]
     ) -> SimulatorVersion:
         pass
 
@@ -74,6 +78,28 @@ class SimulatorDB(ABC):
         pass
 
     @abstractmethod
+    async def list_simulator_packages(self, simulator_id: int) -> list[BiGraphPackage]:
+        pass
+
+    @abstractmethod
+    async def list_all_edges_in_package(self, package_id: int) -> tuple[list[BiGraphProcess], list[BiGraphStep]]:
+        pass
+
+    @abstractmethod
+    async def list_edges_in_package(
+        self, package_id: int, edge_type: BiGraphEdgeType
+    ) -> list[BiGraphProcess] | list[BiGraphStep]:
+        pass
+
+    @abstractmethod
+    async def delete_bigraph_package(self, package_id: BiGraphPackage) -> None:
+        pass
+
+    @abstractmethod
+    async def delete_bigraph_edge(self, compute: BiGraphEdge) -> None:
+        pass
+
+    @abstractmethod
     async def close(self) -> None:
         pass
 
@@ -100,7 +126,7 @@ class SimulatorDBSQL(SimulatorDB):
 
     @override
     async def insert_simulator(
-        self, singularity_def_rep: ContainerizationFileRepr, packages: list[BiGraphPackage]
+        self, singularity_def_rep: ContainerizationFileRepr, packages: list[PackageOutline]
     ) -> SimulatorVersion:
         async with self.async_session_maker() as session, session.begin():
             singularity_hash = get_singularity_hash(singularity_def_rep)
@@ -141,9 +167,9 @@ class SimulatorDBSQL(SimulatorDB):
             # Ensure the ORM object is inserted and has an ID
             return new_orm_simulator.to_simulator_version()
 
-    async def _insert_package(self, session: AsyncSession, package: BiGraphPackage) -> ORMPackage:
+    async def _insert_package(self, session: AsyncSession, package: PackageOutline) -> ORMPackage:
         new_orm_package = ORMPackage(
-            source_uri=package.source_uri,
+            source_uri=package.source_uri.geturl(),
             package_type=PackageTypeDB.from_package_type(package.package_type),
             name=package.name,
         )
@@ -153,8 +179,6 @@ class SimulatorDBSQL(SimulatorDB):
             orm_processes.append(await self._insert_edge(session, process))
         for step in package.steps:
             orm_processes.append(await self._insert_edge(session, step))
-        for composite in package.composites:
-            orm_processes.append(await self._insert_edge(session, composite))
         await session.flush()
 
         for orm_process in orm_processes:
@@ -165,11 +189,11 @@ class SimulatorDBSQL(SimulatorDB):
     @staticmethod
     async def _insert_edge(session: AsyncSession, edge: BiGraphEdge) -> ORMBiGraphEdge:
         new_orm_process = ORMBiGraphEdge(
-            original_module=edge.original_module,
+            module=edge.module,
             name=edge.name,
             edge_type=BiGraphEdgeTypeDB.from_edge_type(edge.edge_type),
-            input=edge.edge_input,
-            output=edge.edge_output,
+            input=edge.inputs,
+            output=edge.outputs,
         )
         session.add(new_orm_process)
         return new_orm_process
@@ -290,6 +314,65 @@ class SimulatorDBSQL(SimulatorDB):
                 simulations.append(simulation)
 
             return simulations
+
+    async def list_simulator_packages(self, simulator_id: int) -> list[BiGraphPackage]:
+        async with self.async_session_maker() as session:
+            stmt = (
+                select(ORMPackage)
+                .join(ORMSimulatorToPackage, onclause=ORMSimulatorToPackage.package_id == ORMPackage.id)
+                .where(ORMSimulatorToPackage.simulator_id == simulator_id)
+            )
+
+            result: Result[tuple[ORMPackage]] = await session.execute(stmt)
+            orm_packages = result.scalars().all()
+            packages: list[BiGraphPackage] = []
+            for row in orm_packages:
+                processes, steps = await self._list_edges_in_package(row.id)
+                packages.append(row.to_bigraph_package(processes=processes, steps=steps))
+
+            return packages
+
+    async def list_all_edges_in_package(self, package_id: int) -> tuple[list[BiGraphProcess], list[BiGraphStep]]:
+        return await self._list_edges_in_package(package_id=package_id)
+
+    async def list_edges_in_package(
+        self, package_id: int, edge_type: BiGraphEdgeType
+    ) -> list[BiGraphProcess] | list[BiGraphStep]:
+        match edge_type:
+            case BiGraphEdgeType.PROCESS:
+                return (await self._list_edges_in_package(package_id))[0]
+            case BiGraphEdgeType.STEP:
+                return (await self._list_edges_in_package(package_id))[1]
+        raise ValueError(f"Edge type {edge_type} not supported")
+
+    async def _list_edges_in_package(self, package_id: int) -> tuple[list[BiGraphProcess], list[BiGraphStep]]:
+        async with self.async_session_maker() as session:
+            stmt = (
+                select(ORMBiGraphEdge)
+                .join(ORMPackageToEdge, onclause=ORMPackageToEdge.edge_id == ORMBiGraphEdge.id)
+                .where(ORMPackageToEdge.package_id == package_id)
+            )
+
+            result: Result[tuple[ORMBiGraphEdge]] = await session.execute(stmt)
+            orm_edges = result.scalars().all()
+
+            processes = []
+            steps = []
+            for edge in orm_edges:
+                if edge.edge_type == BiGraphEdgeTypeDB.PROCESS:
+                    processes.append(edge.to_bigraph_process())
+                elif edge.edge_type == BiGraphEdgeTypeDB.STEP:
+                    steps.append(edge.to_bigraph_step())
+
+            return processes, steps
+
+    async def delete_bigraph_package(self, package: BiGraphPackage) -> None:
+        async with self.async_session_maker() as session:
+            await session.delete(ORMPackage.from_bigraph_package(package))
+
+    async def delete_bigraph_edge(self, compute: BiGraphEdge) -> None:
+        async with self.async_session_maker() as session:
+            await session.delete(ORMBiGraphEdge.from_bigraph_edge(compute))
 
     @override
     async def close(self) -> None:

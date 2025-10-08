@@ -1,6 +1,7 @@
 import datetime
 import enum
 import logging
+import urllib.parse
 from typing import Optional
 
 from sqlalchemy import ForeignKey, func
@@ -10,7 +11,6 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr
 from compose_api.simulation.models import (
-    BiGraphComposite,
     BiGraphEdge,
     BiGraphEdgeType,
     BiGraphPackage,
@@ -65,7 +65,6 @@ class PackageTypeDB(enum.Enum):
 class BiGraphEdgeTypeDB(enum.Enum):
     PROCESS = "process"
     STEP = "step"
-    COMPOSITE = "composite"
 
     def to_edge_type(self) -> "BiGraphEdgeType":
         return BiGraphEdgeType(self.value)
@@ -102,39 +101,55 @@ class ORMBiGraphEdge(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     inserted_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
-    original_module: Mapped[str] = mapped_column(nullable=False)
+    module: Mapped[str] = mapped_column(nullable=False)
     name: Mapped[str] = mapped_column(nullable=False)
     edge_type: Mapped[BiGraphEdgeTypeDB] = mapped_column(nullable=False)
-    input: Mapped[str] = mapped_column(nullable=True)
-    output: Mapped[str] = mapped_column(nullable=True)
+    inputs: Mapped[str] = mapped_column(nullable=True)
+    outputs: Mapped[str] = mapped_column(nullable=True)
+
+    @classmethod
+    def from_bigraph_edge(cls, edge: BiGraphEdge) -> "ORMBiGraphEdge":
+        return cls(
+            id=edge.database_id,
+            module=edge.module,
+            name=edge.name,
+            edge_type=BiGraphEdgeTypeDB(edge.edge_type),
+            input=edge.inputs,
+            output=edge.outputs,
+        )
+
+    def to_bigraph_process(self) -> BiGraphProcess:
+        if self.edge_type != BiGraphEdgeTypeDB.PROCESS:
+            raise TypeError("Edge type must be BiGraphEdgeTypeDB Process")
+        return BiGraphProcess(
+            database_id=self.id,
+            module=self.module,
+            name=self.name,
+            edge_type=self.edge_type.to_edge_type(),
+            inputs=self.inputs,
+            outputs=self.outputs,
+        )
+
+    def to_bigraph_step(self) -> BiGraphStep:
+        if self.edge_type != BiGraphEdgeTypeDB.STEP:
+            raise TypeError("Edge type must be BiGraphEdgeTypeDB Step")
+        return BiGraphStep(
+            database_id=self.id,
+            module=self.module,
+            name=self.name,
+            edge_type=self.edge_type.to_edge_type(),
+            inputs=self.inputs,
+            outputs=self.outputs,
+        )
 
     def to_bigraph_edge(self) -> BiGraphEdge:
         edge_type = self.edge_type.to_edge_type()
         match edge_type:
             case BiGraphEdgeType.PROCESS:
-                return BiGraphProcess(
-                    original_module=self.original_module,
-                    name=self.name,
-                    edge_type=edge_type,
-                    edge_input=self.input,
-                    edge_output=self.output,
-                )
+                return self.to_bigraph_process()
             case BiGraphEdgeType.STEP:
-                return BiGraphStep(
-                    original_module=self.original_module,
-                    name=self.name,
-                    edge_type=edge_type,
-                    edge_input=self.input,
-                    edge_output=self.output,
-                )
-            case BiGraphEdgeType.COMPOSITE:
-                return BiGraphComposite(
-                    original_module=self.original_module,
-                    name=self.name,
-                    edge_type=edge_type,
-                    edge_input=self.input,
-                    edge_output=self.output,
-                )
+                return self.to_bigraph_step()
+        raise ValueError(f"Edge type must be BiGraphEdgeTypeDB: {edge_type}")
 
 
 class ORMPackage(Base):
@@ -146,16 +161,24 @@ class ORMPackage(Base):
     package_type: Mapped[PackageTypeDB] = mapped_column(nullable=False)
     name: Mapped[str] = mapped_column(nullable=False)
 
-    def to_bigraph_package(
-        self, processes: list[BiGraphProcess], steps: list[BiGraphStep], composites: list[BiGraphComposite]
-    ) -> BiGraphPackage:
+    @classmethod
+    def from_bigraph_package(cls, package: BiGraphPackage) -> "ORMPackage":
+        return cls(
+            id=package.database_id,
+            source_uri=package.source_uri.geturl(),
+            name=package.name,
+            package_type=PackageTypeDB.from_package_type(package.package_type),
+        )
+
+    def to_bigraph_package(self, processes: list[BiGraphProcess], steps: list[BiGraphStep]) -> BiGraphPackage:
+        uri = urllib.parse.urlparse(self.source_uri)
         return BiGraphPackage(
+            database_id=self.id,
             package_type=PackageType(self.package_type.value),
-            source_uri=self.source_uri,
+            source_uri=uri,
             name=self.name,
             processes=processes,
             steps=steps,
-            composites=composites,
         )
 
 
@@ -174,9 +197,7 @@ class ORMPackageToEdge(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     package_id: Mapped[int] = mapped_column(ForeignKey(ORMPackage.__tablename__ + ".id"), nullable=False, index=True)
-    process_id: Mapped[int] = mapped_column(
-        ForeignKey(ORMBiGraphEdge.__tablename__ + ".id"), nullable=False, index=True
-    )
+    edge_id: Mapped[int] = mapped_column(ForeignKey(ORMBiGraphEdge.__tablename__ + ".id"), nullable=False, index=True)
 
 
 class ORMHpcRun(Base):
