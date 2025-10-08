@@ -14,6 +14,7 @@ from compose_api.btools.bsander.bsandr_utils.input_types import (
     ProgramArguments,
 )
 from compose_api.btools.bsander.execution import execute_bsander
+from compose_api.btools.bsoil.introspect_package import introspect_package
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.config import get_settings
@@ -48,7 +49,9 @@ async def test_build_simulator(
                 passlist_entries=["pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work"],
             )
         )
-    simulator = await database_service.get_simulator_db().insert_simulator(singularity_def, experiment_dep)
+
+    packages = introspect_package(experiment_dep)
+    simulator = await database_service.get_simulator_db().insert_simulator(singularity_def, packages)
     start_time = time.time()
     slurm_job_id = await simulation_service_slurm.build_container(simulator)
 
