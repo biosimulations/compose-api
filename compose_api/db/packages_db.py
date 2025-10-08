@@ -7,16 +7,16 @@ from typing_extensions import override
 
 from compose_api.btools.bsander.bsandr_utils.input_types import ExperimentPrimaryDependencies
 from compose_api.db.tables_orm import (
-    BiGraphEdgeTypeDB,
-    ORMBiGraphEdge,
+    BiGraphComputeTypeDB,
+    ORMBiGraphCompute,
     ORMPackage,
-    ORMPackageToEdge,
+    ORMPackageToCompute,
     ORMSimulatorToPackage,
     PackageTypeDB,
 )
 from compose_api.simulation.models import (
-    BiGraphEdge,
-    BiGraphEdgeType,
+    BiGraphCompute,
+    BiGraphComputeType,
     BiGraphPackage,
     BiGraphProcess,
     BiGraphStep,
@@ -36,12 +36,12 @@ class PackageDB(ABC):
         pass
 
     @abstractmethod
-    async def list_all_edges_in_package(self, package_id: int) -> tuple[list[BiGraphProcess], list[BiGraphStep]]:
+    async def list_all_computes_in_package(self, package_id: int) -> tuple[list[BiGraphProcess], list[BiGraphStep]]:
         pass
 
     @abstractmethod
-    async def list_edges_in_package(
-        self, package_id: int, edge_type: BiGraphEdgeType
+    async def list_computes_in_package(
+        self, package_id: int, compute_type: BiGraphComputeType
     ) -> list[BiGraphProcess] | list[BiGraphStep]:
         pass
 
@@ -50,7 +50,7 @@ class PackageDB(ABC):
         pass
 
     @abstractmethod
-    async def delete_bigraph_edge(self, compute: BiGraphEdge) -> None:
+    async def delete_bigraph_compute(self, compute: BiGraphCompute) -> None:
         pass
 
     @abstractmethod
@@ -77,13 +77,13 @@ class PackageDBSQL(PackageDB):
         self.async_session_maker = async_engine_session_maker
 
     @staticmethod
-    async def _insert_edge(session: AsyncSession, edge: BiGraphEdge) -> ORMBiGraphEdge:
-        new_orm_process = ORMBiGraphEdge(
-            module=edge.module,
-            name=edge.name,
-            edge_type=BiGraphEdgeTypeDB.from_edge_type(edge.edge_type),
-            input=edge.inputs,
-            output=edge.outputs,
+    async def _insert_compute(session: AsyncSession, compute: BiGraphCompute) -> ORMBiGraphCompute:
+        new_orm_process = ORMBiGraphCompute(
+            module=compute.module,
+            name=compute.name,
+            compute_type=BiGraphComputeTypeDB.from_compute_type(compute.compute_type),
+            inputs=compute.inputs,
+            outputs=compute.outputs,
         )
         session.add(new_orm_process)
         return new_orm_process
@@ -97,15 +97,15 @@ class PackageDBSQL(PackageDB):
                 name=package.name,
             )
             session.add(new_orm_package)
-            orm_processes: list[ORMBiGraphEdge] = []
+            orm_processes: list[ORMBiGraphCompute] = []
             for process in package.processes:
-                orm_processes.append(await self._insert_edge(session, process))
+                orm_processes.append(await self._insert_compute(session, process))
             for step in package.steps:
-                orm_processes.append(await self._insert_edge(session, step))
+                orm_processes.append(await self._insert_compute(session, step))
             await session.flush()
 
             for orm_process in orm_processes:
-                relationship = ORMPackageToEdge(package_id=new_orm_package.id, edge_id=orm_process.id)
+                relationship = ORMPackageToCompute(package_id=new_orm_package.id, compute_id=orm_process.id)
                 session.add(relationship)
             return new_orm_package.to_bigraph_package(package.processes, package.steps)
 
@@ -121,42 +121,42 @@ class PackageDBSQL(PackageDB):
             orm_packages = result.scalars().all()
             packages: list[BiGraphPackage] = []
             for row in orm_packages:
-                processes, steps = await self._list_edges_in_package(row.id)
+                processes, steps = await self._list_computes_in_package(row.id)
                 packages.append(row.to_bigraph_package(processes=processes, steps=steps))
 
             return packages
 
-    async def list_all_edges_in_package(self, package_id: int) -> tuple[list[BiGraphProcess], list[BiGraphStep]]:
-        return await self._list_edges_in_package(package_id=package_id)
+    async def list_all_computes_in_package(self, package_id: int) -> tuple[list[BiGraphProcess], list[BiGraphStep]]:
+        return await self._list_computes_in_package(package_id=package_id)
 
-    async def list_edges_in_package(
-        self, package_id: int, edge_type: BiGraphEdgeType
+    async def list_computes_in_package(
+        self, package_id: int, compute_type: BiGraphComputeType
     ) -> list[BiGraphProcess] | list[BiGraphStep]:
-        match edge_type:
-            case BiGraphEdgeType.PROCESS:
-                return (await self._list_edges_in_package(package_id))[0]
-            case BiGraphEdgeType.STEP:
-                return (await self._list_edges_in_package(package_id))[1]
-        raise ValueError(f"Edge type {edge_type} not supported")
+        match compute_type:
+            case BiGraphComputeType.PROCESS:
+                return (await self._list_computes_in_package(package_id))[0]
+            case BiGraphComputeType.STEP:
+                return (await self._list_computes_in_package(package_id))[1]
+        raise ValueError(f"Compute type {compute_type} not supported")
 
-    async def _list_edges_in_package(self, package_id: int) -> tuple[list[BiGraphProcess], list[BiGraphStep]]:
+    async def _list_computes_in_package(self, package_id: int) -> tuple[list[BiGraphProcess], list[BiGraphStep]]:
         async with self.async_session_maker() as session:
             stmt = (
-                select(ORMBiGraphEdge)
-                .join(ORMPackageToEdge, onclause=ORMPackageToEdge.edge_id == ORMBiGraphEdge.id)
-                .where(ORMPackageToEdge.package_id == package_id)
+                select(ORMBiGraphCompute)
+                .join(ORMPackageToCompute, onclause=ORMPackageToCompute.compute_id == ORMBiGraphCompute.id)
+                .where(ORMPackageToCompute.package_id == package_id)
             )
 
-            result: Result[tuple[ORMBiGraphEdge]] = await session.execute(stmt)
-            orm_edges = result.scalars().all()
+            result: Result[tuple[ORMBiGraphCompute]] = await session.execute(stmt)
+            orm_computes = result.scalars().all()
 
             processes = []
             steps = []
-            for edge in orm_edges:
-                if edge.edge_type == BiGraphEdgeTypeDB.PROCESS:
-                    processes.append(edge.to_bigraph_process())
-                elif edge.edge_type == BiGraphEdgeTypeDB.STEP:
-                    steps.append(edge.to_bigraph_step())
+            for compute in orm_computes:
+                if compute.compute_type == BiGraphComputeTypeDB.PROCESS:
+                    processes.append(compute.to_bigraph_process())
+                elif compute.compute_type == BiGraphComputeTypeDB.STEP:
+                    steps.append(compute.to_bigraph_step())
 
             return processes, steps
 
@@ -164,9 +164,9 @@ class PackageDBSQL(PackageDB):
         async with self.async_session_maker() as session:
             await session.delete(ORMPackage.from_bigraph_package(package))
 
-    async def delete_bigraph_edge(self, compute: BiGraphEdge) -> None:
+    async def delete_bigraph_compute(self, compute: BiGraphCompute) -> None:
         async with self.async_session_maker() as session:
-            await session.delete(ORMBiGraphEdge.from_bigraph_edge(compute))
+            await session.delete(ORMBiGraphCompute.from_bigraph_compute(compute))
 
     async def dependencies_not_in_database(
         self, dependencies: ExperimentPrimaryDependencies
@@ -197,7 +197,7 @@ class PackageDBSQL(PackageDB):
             orm_packages = result.scalars().all()
             packages: list[BiGraphPackage] = []
             for row in orm_packages:
-                processes, steps = await self._list_edges_in_package(package_id=row.id)
+                processes, steps = await self._list_computes_in_package(package_id=row.id)
                 packages.append(row.to_bigraph_package(processes=processes, steps=steps))
             return packages
 

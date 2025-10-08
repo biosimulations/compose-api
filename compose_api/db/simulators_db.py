@@ -7,15 +7,12 @@ from typing_extensions import override
 
 from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr
 from compose_api.db.tables_orm import (
-    BiGraphEdgeTypeDB,
-    ORMBiGraphEdge,
     ORMSimulation,
     ORMSimulator,
     ORMSimulatorToPackage,
 )
 from compose_api.simulation.hpc_utils import get_singularity_hash, get_slurm_sim_experiment_dir
 from compose_api.simulation.models import (
-    BiGraphEdge,
     BiGraphPackage,
     Simulation,
     SimulationRequest,
@@ -133,18 +130,6 @@ class SimulatorDBSQL(SimulatorDB):
 
             # Ensure the ORM object is inserted and has an ID
             return new_orm_simulator.to_simulator_version()
-
-    @staticmethod
-    async def _insert_edge(session: AsyncSession, edge: BiGraphEdge) -> ORMBiGraphEdge:
-        new_orm_process = ORMBiGraphEdge(
-            module=edge.module,
-            name=edge.name,
-            edge_type=BiGraphEdgeTypeDB.from_edge_type(edge.edge_type),
-            input=edge.inputs,
-            output=edge.outputs,
-        )
-        session.add(new_orm_process)
-        return new_orm_process
 
     @override
     async def get_simulator(self, simulator_id: int) -> SimulatorVersion | None:

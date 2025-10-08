@@ -54,7 +54,7 @@ class PackageType(enum.Enum):
     CONDA = "conda"
 
 
-class BiGraphEdgeType(enum.Enum):
+class BiGraphComputeType(enum.Enum):
     PROCESS = "process"
     STEP = "step"
 
@@ -81,20 +81,20 @@ class HpcRun(BaseModel):
     error_message: str | None = None  # Error message if the simulation failed
 
 
-class BiGraphEdge(BaseModel):
+class BiGraphCompute(BaseModel):
     database_id: int
     module: str
     name: str
-    edge_type: BiGraphEdgeType
+    compute_type: BiGraphComputeType
     inputs: str
     outputs: str
 
 
-class BiGraphProcess(BiGraphEdge):
+class BiGraphProcess(BiGraphCompute):
     pass
 
 
-class BiGraphStep(BiGraphEdge):
+class BiGraphStep(BiGraphCompute):
     pass
 
 
@@ -121,11 +121,11 @@ class PackageOutline(BaseModel):
         processes = []
         if "processes" in pb_outline_json:
             for process in pb_outline_json["processes"]:
-                processes.append(BiGraphProcess(edge_type=BiGraphEdgeType.PROCESS, **process))
+                processes.append(BiGraphProcess(compute_type=BiGraphComputeType.PROCESS, **process))
         steps = []
         if "steps" in pb_outline_json:
             for step in pb_outline_json["steps"]:
-                steps.append(BiGraphStep(edge_type=BiGraphEdgeType.STEP, **step))
+                steps.append(BiGraphStep(compute_type=BiGraphComputeType.STEP, **step))
 
         return PackageOutline(
             package_type=package_type,

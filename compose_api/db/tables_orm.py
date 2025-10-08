@@ -11,8 +11,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr
 from compose_api.simulation.models import (
-    BiGraphEdge,
-    BiGraphEdgeType,
+    BiGraphCompute,
+    BiGraphComputeType,
     BiGraphPackage,
     BiGraphProcess,
     BiGraphStep,
@@ -62,16 +62,16 @@ class PackageTypeDB(enum.Enum):
         return PackageTypeDB(package_type.value)
 
 
-class BiGraphEdgeTypeDB(enum.Enum):
+class BiGraphComputeTypeDB(enum.Enum):
     PROCESS = "process"
     STEP = "step"
 
-    def to_edge_type(self) -> "BiGraphEdgeType":
-        return BiGraphEdgeType(self.value)
+    def to_compute_type(self) -> "BiGraphComputeType":
+        return BiGraphComputeType(self.value)
 
     @classmethod
-    def from_edge_type(cls, edge_type: BiGraphEdgeType) -> "BiGraphEdgeTypeDB":
-        return BiGraphEdgeTypeDB(edge_type.value)
+    def from_compute_type(cls, compute_type: BiGraphComputeType) -> "BiGraphComputeTypeDB":
+        return BiGraphComputeTypeDB(compute_type.value)
 
 
 class Base(AsyncAttrs, DeclarativeBase):
@@ -96,60 +96,60 @@ class ORMSimulator(Base):
         )
 
 
-class ORMBiGraphEdge(Base):
-    __tablename__ = "bigraph_edge"
+class ORMBiGraphCompute(Base):
+    __tablename__ = "bigraph_compute"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     inserted_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
     module: Mapped[str] = mapped_column(nullable=False)
     name: Mapped[str] = mapped_column(nullable=False)
-    edge_type: Mapped[BiGraphEdgeTypeDB] = mapped_column(nullable=False)
+    compute_type: Mapped[BiGraphComputeTypeDB] = mapped_column(nullable=False)
     inputs: Mapped[str] = mapped_column(nullable=True)
     outputs: Mapped[str] = mapped_column(nullable=True)
 
     @classmethod
-    def from_bigraph_edge(cls, edge: BiGraphEdge) -> "ORMBiGraphEdge":
+    def from_bigraph_compute(cls, compute: BiGraphCompute) -> "ORMBiGraphCompute":
         return cls(
-            id=edge.database_id,
-            module=edge.module,
-            name=edge.name,
-            edge_type=BiGraphEdgeTypeDB(edge.edge_type),
-            input=edge.inputs,
-            output=edge.outputs,
+            id=compute.database_id,
+            module=compute.module,
+            name=compute.name,
+            compute_type=BiGraphComputeTypeDB(compute.compute_type),
+            input=compute.inputs,
+            output=compute.outputs,
         )
 
     def to_bigraph_process(self) -> BiGraphProcess:
-        if self.edge_type != BiGraphEdgeTypeDB.PROCESS:
-            raise TypeError("Edge type must be BiGraphEdgeTypeDB Process")
+        if self.compute_type != BiGraphComputeTypeDB.PROCESS:
+            raise TypeError("Compute type must be BiGraphComputeTypeDB Process")
         return BiGraphProcess(
             database_id=self.id,
             module=self.module,
             name=self.name,
-            edge_type=self.edge_type.to_edge_type(),
+            compute_type=self.compute_type.to_compute_type(),
             inputs=self.inputs,
             outputs=self.outputs,
         )
 
     def to_bigraph_step(self) -> BiGraphStep:
-        if self.edge_type != BiGraphEdgeTypeDB.STEP:
-            raise TypeError("Edge type must be BiGraphEdgeTypeDB Step")
+        if self.compute_type != BiGraphComputeTypeDB.STEP:
+            raise TypeError("Compute type must be BiGraphComputeTypeDB Step")
         return BiGraphStep(
             database_id=self.id,
             module=self.module,
             name=self.name,
-            edge_type=self.edge_type.to_edge_type(),
+            compute_type=self.compute_type.to_compute_type(),
             inputs=self.inputs,
             outputs=self.outputs,
         )
 
-    def to_bigraph_edge(self) -> BiGraphEdge:
-        edge_type = self.edge_type.to_edge_type()
-        match edge_type:
-            case BiGraphEdgeType.PROCESS:
+    def to_bigraph_compute(self) -> BiGraphCompute:
+        compute_type = self.compute_type.to_compute_type()
+        match compute_type:
+            case BiGraphComputeType.PROCESS:
                 return self.to_bigraph_process()
-            case BiGraphEdgeType.STEP:
+            case BiGraphComputeType.STEP:
                 return self.to_bigraph_step()
-        raise ValueError(f"Edge type must be BiGraphEdgeTypeDB: {edge_type}")
+        raise ValueError(f"Compute type must be BiGraphComputeTypeDB: {compute_type}")
 
 
 class ORMPackage(Base):
@@ -192,12 +192,14 @@ class ORMSimulatorToPackage(Base):
     package_id: Mapped[int] = mapped_column(ForeignKey(ORMPackage.__tablename__ + ".id"), nullable=False, index=True)
 
 
-class ORMPackageToEdge(Base):
-    __tablename__ = "packages_to_edge"
+class ORMPackageToCompute(Base):
+    __tablename__ = "packages_to_compute"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     package_id: Mapped[int] = mapped_column(ForeignKey(ORMPackage.__tablename__ + ".id"), nullable=False, index=True)
-    edge_id: Mapped[int] = mapped_column(ForeignKey(ORMBiGraphEdge.__tablename__ + ".id"), nullable=False, index=True)
+    compute_id: Mapped[int] = mapped_column(
+        ForeignKey(ORMBiGraphCompute.__tablename__ + ".id"), nullable=False, index=True
+    )
 
 
 class ORMHpcRun(Base):
