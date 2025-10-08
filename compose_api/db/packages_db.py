@@ -10,7 +10,6 @@ from compose_api.db.tables_orm import (
     BiGraphComputeTypeDB,
     ORMBiGraphCompute,
     ORMPackage,
-    ORMPackageToCompute,
     ORMSimulatorToPackage,
     PackageTypeDB,
 )
@@ -77,13 +76,14 @@ class PackageDBSQL(PackageDB):
         self.async_session_maker = async_engine_session_maker
 
     @staticmethod
-    async def _insert_compute(session: AsyncSession, compute: BiGraphCompute) -> ORMBiGraphCompute:
+    async def _insert_compute(session: AsyncSession, compute: BiGraphCompute, package: ORMPackage) -> ORMBiGraphCompute:
         new_orm_process = ORMBiGraphCompute(
             module=compute.module,
             name=compute.name,
             compute_type=BiGraphComputeTypeDB.from_compute_type(compute.compute_type),
             inputs=compute.inputs,
             outputs=compute.outputs,
+            package_ref=package.id,
         )
         session.add(new_orm_process)
         return new_orm_process
@@ -98,15 +98,11 @@ class PackageDBSQL(PackageDB):
             )
             session.add(new_orm_package)
             orm_processes: list[ORMBiGraphCompute] = []
-            for process in package.processes:
-                orm_processes.append(await self._insert_compute(session, process))
-            for step in package.steps:
-                orm_processes.append(await self._insert_compute(session, step))
             await session.flush()
-
-            for orm_process in orm_processes:
-                relationship = ORMPackageToCompute(package_id=new_orm_package.id, compute_id=orm_process.id)
-                session.add(relationship)
+            for process in package.processes:
+                orm_processes.append(await self._insert_compute(session, process, new_orm_package))
+            for step in package.steps:
+                orm_processes.append(await self._insert_compute(session, step, new_orm_package))
             return new_orm_package.to_bigraph_package(package.processes, package.steps)
 
     async def list_simulator_packages(self, simulator_id: int) -> list[BiGraphPackage]:
@@ -141,11 +137,7 @@ class PackageDBSQL(PackageDB):
 
     async def _list_computes_in_package(self, package_id: int) -> tuple[list[BiGraphProcess], list[BiGraphStep]]:
         async with self.async_session_maker() as session:
-            stmt = (
-                select(ORMBiGraphCompute)
-                .join(ORMPackageToCompute, onclause=ORMPackageToCompute.compute_id == ORMBiGraphCompute.id)
-                .where(ORMPackageToCompute.package_id == package_id)
-            )
+            stmt = select(ORMBiGraphCompute).where(ORMBiGraphCompute.package_ref == package_id)
 
             result: Result[tuple[ORMBiGraphCompute]] = await session.execute(stmt)
             orm_computes = result.scalars().all()

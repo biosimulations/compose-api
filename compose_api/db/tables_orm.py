@@ -96,11 +96,42 @@ class ORMSimulator(Base):
         )
 
 
+class ORMPackage(Base):
+    __tablename__ = "bigraph_package"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
+    source_uri: Mapped[str] = mapped_column(nullable=False)
+    package_type: Mapped[PackageTypeDB] = mapped_column(nullable=False)
+    name: Mapped[str] = mapped_column(nullable=False)
+
+    @classmethod
+    def from_bigraph_package(cls, package: BiGraphPackage) -> "ORMPackage":
+        return cls(
+            id=package.database_id,
+            source_uri=package.source_uri.geturl(),
+            name=package.name,
+            package_type=PackageTypeDB.from_package_type(package.package_type),
+        )
+
+    def to_bigraph_package(self, processes: list[BiGraphProcess], steps: list[BiGraphStep]) -> BiGraphPackage:
+        uri = urllib.parse.urlparse(self.source_uri)
+        return BiGraphPackage(
+            database_id=self.id,
+            package_type=PackageType(self.package_type.value),
+            source_uri=uri,
+            name=self.name,
+            processes=processes,
+            steps=steps,
+        )
+
+
 class ORMBiGraphCompute(Base):
     __tablename__ = "bigraph_compute"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     inserted_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
+    package_ref: Mapped[int] = mapped_column(ForeignKey(ORMPackage.__tablename__ + ".id"), nullable=False, index=True)
     module: Mapped[str] = mapped_column(nullable=False)
     name: Mapped[str] = mapped_column(nullable=False)
     compute_type: Mapped[BiGraphComputeTypeDB] = mapped_column(nullable=False)
@@ -152,36 +183,6 @@ class ORMBiGraphCompute(Base):
         raise ValueError(f"Compute type must be BiGraphComputeTypeDB: {compute_type}")
 
 
-class ORMPackage(Base):
-    __tablename__ = "bigraph_package"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
-    source_uri: Mapped[str] = mapped_column(nullable=False)
-    package_type: Mapped[PackageTypeDB] = mapped_column(nullable=False)
-    name: Mapped[str] = mapped_column(nullable=False)
-
-    @classmethod
-    def from_bigraph_package(cls, package: BiGraphPackage) -> "ORMPackage":
-        return cls(
-            id=package.database_id,
-            source_uri=package.source_uri.geturl(),
-            name=package.name,
-            package_type=PackageTypeDB.from_package_type(package.package_type),
-        )
-
-    def to_bigraph_package(self, processes: list[BiGraphProcess], steps: list[BiGraphStep]) -> BiGraphPackage:
-        uri = urllib.parse.urlparse(self.source_uri)
-        return BiGraphPackage(
-            database_id=self.id,
-            package_type=PackageType(self.package_type.value),
-            source_uri=uri,
-            name=self.name,
-            processes=processes,
-            steps=steps,
-        )
-
-
 class ORMSimulatorToPackage(Base):
     __tablename__ = "simulator_to_package"
 
@@ -190,16 +191,6 @@ class ORMSimulatorToPackage(Base):
         ForeignKey(ORMSimulator.__tablename__ + ".id"), nullable=False, index=True
     )
     package_id: Mapped[int] = mapped_column(ForeignKey(ORMPackage.__tablename__ + ".id"), nullable=False, index=True)
-
-
-class ORMPackageToCompute(Base):
-    __tablename__ = "packages_to_compute"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    package_id: Mapped[int] = mapped_column(ForeignKey(ORMPackage.__tablename__ + ".id"), nullable=False, index=True)
-    compute_id: Mapped[int] = mapped_column(
-        ForeignKey(ORMBiGraphCompute.__tablename__ + ".id"), nullable=False, index=True
-    )
 
 
 class ORMHpcRun(Base):
