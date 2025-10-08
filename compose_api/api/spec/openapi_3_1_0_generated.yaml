@@ -81,45 +81,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /core/simulator/build/status:
-    get:
-      tags:
-      - Simulations
-      summary: Get the simulator build status record by its ID
-      operationId: get-simulator-build-status
-      parameters:
-      - name: simulator_id
-        in: query
-        required: true
-        schema:
-          type: integer
-          title: Simulator Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HpcRun'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /core/simulator/list:
-    get:
-      tags:
-      - Simulations
-      summary: Get the list of simulators
-      operationId: get-simulator-list
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RegisteredSimulators'
   /core/simulation/run/results/file:
     get:
       tags:
@@ -146,6 +107,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /core/simulator/build/status:
+    get:
+      tags:
+      - Simulators
+      summary: Get the simulator build status record by its ID
+      operationId: get-simulator-build-status
+      parameters:
+      - name: simulator_id
+        in: query
+        required: true
+        schema:
+          type: integer
+          title: Simulator Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HpcRun'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /core/simulator/list:
+    get:
+      tags:
+      - Simulators
+      summary: Get the list of simulators
+      operationId: get-simulator-list
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisteredSimulators'
   /health:
     get:
       tags:
@@ -178,6 +178,99 @@ paths:
                 title: Response Get Version Version Get
 components:
   schemas:
+    BiGraphComputeType:
+      type: string
+      enum:
+      - process
+      - step
+      title: BiGraphComputeType
+    BiGraphPackage:
+      properties:
+        database_id:
+          type: integer
+          title: Database Id
+        package_type:
+          $ref: '#/components/schemas/PackageType'
+        source_uri:
+          $ref: '#/components/schemas/ParseResult'
+        name:
+          type: string
+          title: Name
+        steps:
+          items:
+            $ref: '#/components/schemas/BiGraphStep'
+          type: array
+          title: Steps
+        processes:
+          items:
+            $ref: '#/components/schemas/BiGraphProcess'
+          type: array
+          title: Processes
+      type: object
+      required:
+      - database_id
+      - package_type
+      - source_uri
+      - name
+      - steps
+      - processes
+      title: BiGraphPackage
+    BiGraphProcess:
+      properties:
+        database_id:
+          type: integer
+          title: Database Id
+        module:
+          type: string
+          title: Module
+        name:
+          type: string
+          title: Name
+        compute_type:
+          $ref: '#/components/schemas/BiGraphComputeType'
+        inputs:
+          type: string
+          title: Inputs
+        outputs:
+          type: string
+          title: Outputs
+      type: object
+      required:
+      - database_id
+      - module
+      - name
+      - compute_type
+      - inputs
+      - outputs
+      title: BiGraphProcess
+    BiGraphStep:
+      properties:
+        database_id:
+          type: integer
+          title: Database Id
+        module:
+          type: string
+          title: Module
+        name:
+          type: string
+          title: Name
+        compute_type:
+          $ref: '#/components/schemas/BiGraphComputeType'
+        inputs:
+          type: string
+          title: Inputs
+        outputs:
+          type: string
+          title: Outputs
+      type: object
+      required:
+      - database_id
+      - module
+      - name
+      - compute_type
+      - inputs
+      - outputs
+      title: BiGraphStep
     Body_analyze-simulation-omex:
       properties:
         uploaded_file:
@@ -207,23 +300,6 @@ components:
       required:
       - representation
       title: ContainerizationFileRepr
-    ExperimentPrimaryDependencies:
-      properties:
-        pypi_dependencies:
-          items:
-            type: string
-          type: array
-          title: Pypi Dependencies
-        conda_dependencies:
-          items:
-            type: string
-          type: array
-          title: Conda Dependencies
-      type: object
-      required:
-      - pypi_dependencies
-      - conda_dependencies
-      title: ExperimentPrimaryDependencies
     HTTPValidationError:
       properties:
         detail:
@@ -300,6 +376,23 @@ components:
       - simulation
       - build_container
       title: JobType
+    PackageType:
+      type: string
+      enum:
+      - python
+      - conda
+      title: PackageType
+    ParseResult:
+      prefixItems:
+      - title: Scheme
+      - title: Netloc
+      - title: Path
+      - title: Params
+      - title: Query
+      - title: Fragment
+      type: array
+      maxItems: 6
+      minItems: 6
     RegisteredSimulators:
       properties:
         versions:
@@ -349,8 +442,13 @@ components:
         singularity_def_hash:
           type: string
           title: Singularity Def Hash
-        primary_packages:
-          $ref: '#/components/schemas/ExperimentPrimaryDependencies'
+        packages:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/BiGraphPackage'
+            type: array
+          - type: 'null'
+          title: Packages
         database_id:
           type: integer
           title: Database Id
@@ -364,7 +462,7 @@ components:
       required:
       - singularity_def
       - singularity_def_hash
-      - primary_packages
+      - packages
       - database_id
       title: SimulatorVersion
     ValidationError:
