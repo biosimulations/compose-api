@@ -76,7 +76,11 @@ async def simulator(database_service: DatabaseService) -> AsyncGenerator[Simulat
             )
         )
 
-    packages = introspect_package(experiment_dep)
+    package_outlines = introspect_package(experiment_dep)
+    packages = []
+    for outline in package_outlines:
+        packages.append(await database_service.get_package_db().insert_package(outline))
+
     simulator = await database_service.get_simulator_db().insert_simulator(singularity_def, packages)
     fake_hpc_run = await database_service.get_hpc_db().insert_hpcrun(
         40, JobType.BUILD_CONTAINER, simulator.database_id, "jfldsjaljl"
@@ -95,15 +99,15 @@ async def simulator(database_service: DatabaseService) -> AsyncGenerator[Simulat
             await database_service.get_hpc_db().delete_hpcrun(hpcrun_id=hpc_run.database_id)
         await database_service.get_simulator_db().delete_simulation(simulation_id=sim.database_id)
 
-    simulator_packages = await database_service.get_simulator_db().list_simulator_packages(
+    simulator_packages = await database_service.get_package_db().list_simulator_packages(
         simulator_id=simulator.database_id
     )
     for package in simulator_packages:
         for process in package.processes:
-            await database_service.get_simulator_db().delete_bigraph_edge(process)
+            await database_service.get_package_db().delete_bigraph_edge(process)
         for step in package.steps:
-            await database_service.get_simulator_db().delete_bigraph_edge(step)
-        await database_service.get_simulator_db().delete_bigraph_package(package)
+            await database_service.get_package_db().delete_bigraph_edge(step)
+        await database_service.get_package_db().delete_bigraph_package(package)
 
     await database_service.get_hpc_db().delete_hpcrun(fake_hpc_run.database_id)
     await database_service.get_simulator_db().delete_simulator(simulator.database_id)

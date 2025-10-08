@@ -50,7 +50,10 @@ async def test_build_simulator(
             )
         )
 
-    packages = introspect_package(experiment_dep)
+    package_outlines = introspect_package(experiment_dep)
+    packages = []
+    for outline in package_outlines:
+        packages.append(await database_service.get_package_db().insert_package(outline))
     simulator = await database_service.get_simulator_db().insert_simulator(singularity_def, packages)
     start_time = time.time()
     slurm_job_id = await simulation_service_slurm.build_container(simulator)
