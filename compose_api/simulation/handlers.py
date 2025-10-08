@@ -74,7 +74,13 @@ async def run_simulation(
     simulator_db = database_service.get_simulator_db()
     simulator_version = await simulator_db.get_simulator_by_def_hash(get_singularity_hash(singularity_rep))
     if simulator_version is None:
-        simulator_version = await simulator_db.insert_simulator(singularity_rep, experiment_dep)
+        bi_graph_packages = await database_service.get_package_db().list_packages_from_dependencies(
+            dependencies=experiment_dep
+        )
+        if len(bi_graph_packages) != (len(experiment_dep.pypi_dependencies) + len(experiment_dep.conda_dependencies)):
+            raise LookupError(f"Not all dependencies are in database: {experiment_dep}, {bi_graph_packages}")
+
+        simulator_version = await simulator_db.insert_simulator(singularity_rep, bi_graph_packages)
 
     random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
     experiment_id = get_experiment_id(simulator=simulator_version, random_str=random_string_7_hex)
