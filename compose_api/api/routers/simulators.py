@@ -37,7 +37,9 @@ config = RouterConfig(router=APIRouter(), prefix="/core", dependencies=[])
     summary="Get the simulator build status record by its ID",
 )
 async def get_simulator_build_status(simulator_id: int = Query(...)) -> HpcRun:
-    return await _get_hpc_run_status(ref_id=simulator_id, job_type=JobType.BUILD_CONTAINER)
+    return await _get_hpc_run_status(
+        db_service=get_database_service(), ref_id=simulator_id, job_type=JobType.BUILD_CONTAINER
+    )
 
 
 @config.router.get(

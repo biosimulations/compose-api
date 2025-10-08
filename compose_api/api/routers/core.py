@@ -12,6 +12,7 @@ from compose_api.btools.bsander.bsandr_utils.input_types import (
 )
 from compose_api.btools.bsander.execution import execute_bsander
 from compose_api.common.gateway.models import Namespace, RouterConfig, ServerMode
+from compose_api.common.gateway.utils import _get_hpc_run_status
 from compose_api.common.ssh.ssh_service import get_ssh_service
 from compose_api.config import get_settings
 from compose_api.dependencies import (
@@ -194,25 +195,9 @@ async def analyze_simulation(uploaded_file: UploadFile) -> str:
     summary="Get the simulation status record by its ID",
 )
 async def get_simulation_status(simulation_id: int = Query(...)) -> HpcRun:
-    return await _get_hpc_run_status(ref_id=simulation_id, job_type=JobType.SIMULATION)
-
-
-async def _get_hpc_run_status(ref_id: int, job_type: JobType) -> HpcRun:
-    db_service = get_database_service()
-    if db_service is None:
-        logger.error("SSH service is not initialized")
-        raise HTTPException(status_code=500, detail="SSH service is not initialized")
-    try:
-        simulation_hpcrun: HpcRun | None = await db_service.get_hpc_db().get_hpcrun_by_ref(
-            ref_id=ref_id, job_type=job_type
-        )
-    except Exception as e:
-        logger.exception(f"Error fetching status for {job_type} id: {ref_id}.")
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-    if simulation_hpcrun is None:
-        raise HTTPException(status_code=404, detail=f"{job_type} with id {ref_id} not found.")
-    return simulation_hpcrun
+    return await _get_hpc_run_status(
+        db_service=get_database_service(), ref_id=simulation_id, job_type=JobType.SIMULATION
+    )
 
 
 # @config.router.get(
