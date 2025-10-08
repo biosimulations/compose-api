@@ -13,7 +13,7 @@ from compose_api.db.tables_orm import (
 )
 from compose_api.simulation.hpc_utils import get_singularity_hash, get_slurm_sim_experiment_dir
 from compose_api.simulation.models import (
-    BiGraphPackage,
+    RegisteredPackage,
     Simulation,
     SimulationRequest,
     SimulatorVersion,
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 class SimulatorDB(ABC):
     @abstractmethod
     async def insert_simulator(
-        self, singularity_def_rep: ContainerizationFileRepr, packages_used: list[BiGraphPackage]
+        self, singularity_def_rep: ContainerizationFileRepr, packages_used: list[RegisteredPackage]
     ) -> SimulatorVersion:
         pass
 
@@ -94,7 +94,7 @@ class SimulatorDBSQL(SimulatorDB):
 
     @override
     async def insert_simulator(
-        self, singularity_def_rep: ContainerizationFileRepr, packages_used: list[BiGraphPackage]
+        self, singularity_def_rep: ContainerizationFileRepr, packages_used: list[RegisteredPackage]
     ) -> SimulatorVersion:
         async with self.async_session_maker() as session, session.begin():
             singularity_hash = get_singularity_hash(singularity_def_rep)

@@ -98,15 +98,6 @@ class BiGraphStep(BiGraphCompute):
     pass
 
 
-class BiGraphPackage(BaseModel):
-    database_id: int
-    package_type: PackageType
-    source_uri: ParseResult
-    name: str
-    steps: list[BiGraphStep]
-    processes: list[BiGraphProcess]
-
-
 class PackageOutline(BaseModel):
     package_type: PackageType
     source_uri: ParseResult
@@ -136,10 +127,14 @@ class PackageOutline(BaseModel):
         )
 
 
+class RegisteredPackage(PackageOutline):
+    database_id: int
+
+
 class Simulator(BaseModel):
     singularity_def: ContainerizationFileRepr
     singularity_def_hash: str
-    packages: list[BiGraphPackage] | None
+    packages: list[RegisteredPackage] | None
     # primary_processes: str
 
 

@@ -16,10 +16,10 @@ from compose_api.db.tables_orm import (
 from compose_api.simulation.models import (
     BiGraphCompute,
     BiGraphComputeType,
-    BiGraphPackage,
     BiGraphProcess,
     BiGraphStep,
     PackageOutline,
+    RegisteredPackage,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,11 +27,11 @@ logger = logging.getLogger(__name__)
 
 class PackageDB(ABC):
     @abstractmethod
-    async def insert_package(self, package_outline: PackageOutline) -> BiGraphPackage:
+    async def insert_package(self, package_outline: PackageOutline) -> RegisteredPackage:
         pass
 
     @abstractmethod
-    async def list_simulator_packages(self, simulator_id: int) -> list[BiGraphPackage]:
+    async def list_simulator_packages(self, simulator_id: int) -> list[RegisteredPackage]:
         pass
 
     @abstractmethod
@@ -45,7 +45,7 @@ class PackageDB(ABC):
         pass
 
     @abstractmethod
-    async def delete_bigraph_package(self, package_id: BiGraphPackage) -> None:
+    async def delete_bigraph_package(self, package_id: RegisteredPackage) -> None:
         pass
 
     @abstractmethod
@@ -61,7 +61,7 @@ class PackageDB(ABC):
     @abstractmethod
     async def list_packages_from_dependencies(
         self, dependencies: ExperimentPrimaryDependencies
-    ) -> list[BiGraphPackage]:
+    ) -> list[RegisteredPackage]:
         pass
 
     @abstractmethod
@@ -89,7 +89,7 @@ class PackageDBSQL(PackageDB):
         return new_orm_process
 
     @override
-    async def insert_package(self, package: PackageOutline) -> BiGraphPackage:
+    async def insert_package(self, package: PackageOutline) -> RegisteredPackage:
         async with self.async_session_maker() as session:
             new_orm_package = ORMPackage(
                 source_uri=package.source_uri.geturl(),
@@ -105,7 +105,7 @@ class PackageDBSQL(PackageDB):
                 orm_processes.append(await self._insert_compute(session, step, new_orm_package))
             return new_orm_package.to_bigraph_package(package.processes, package.steps)
 
-    async def list_simulator_packages(self, simulator_id: int) -> list[BiGraphPackage]:
+    async def list_simulator_packages(self, simulator_id: int) -> list[RegisteredPackage]:
         async with self.async_session_maker() as session:
             stmt = (
                 select(ORMPackage)
@@ -115,7 +115,7 @@ class PackageDBSQL(PackageDB):
 
             result: Result[tuple[ORMPackage]] = await session.execute(stmt)
             orm_packages = result.scalars().all()
-            packages: list[BiGraphPackage] = []
+            packages: list[RegisteredPackage] = []
             for row in orm_packages:
                 processes, steps = await self._list_computes_in_package(row.id)
                 packages.append(row.to_bigraph_package(processes=processes, steps=steps))
@@ -152,7 +152,7 @@ class PackageDBSQL(PackageDB):
 
             return processes, steps
 
-    async def delete_bigraph_package(self, package: BiGraphPackage) -> None:
+    async def delete_bigraph_package(self, package: RegisteredPackage) -> None:
         async with self.async_session_maker() as session:
             await session.delete(ORMPackage.from_bigraph_package(package))
 
@@ -182,12 +182,12 @@ class PackageDBSQL(PackageDB):
 
     async def list_packages_from_dependencies(
         self, dependencies: ExperimentPrimaryDependencies
-    ) -> list[BiGraphPackage]:
+    ) -> list[RegisteredPackage]:
         async with self.async_session_maker() as session:
             stmt = select(ORMPackage).where(ORMPackage.name.in_(dependencies.pypi_dependencies))
             result: Result[tuple[ORMPackage]] = await session.execute(stmt)
             orm_packages = result.scalars().all()
-            packages: list[BiGraphPackage] = []
+            packages: list[RegisteredPackage] = []
             for row in orm_packages:
                 processes, steps = await self._list_computes_in_package(package_id=row.id)
                 packages.append(row.to_bigraph_package(processes=processes, steps=steps))

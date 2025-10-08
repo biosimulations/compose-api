@@ -13,13 +13,13 @@ from compose_api.btools.bsander.bsandr_utils.input_types import Containerization
 from compose_api.simulation.models import (
     BiGraphCompute,
     BiGraphComputeType,
-    BiGraphPackage,
     BiGraphProcess,
     BiGraphStep,
     HpcRun,
     JobStatus,
     JobType,
     PackageType,
+    RegisteredPackage,
     SimulatorVersion,
     WorkerEvent,
 )
@@ -106,7 +106,7 @@ class ORMPackage(Base):
     name: Mapped[str] = mapped_column(nullable=False)
 
     @classmethod
-    def from_bigraph_package(cls, package: BiGraphPackage) -> "ORMPackage":
+    def from_bigraph_package(cls, package: RegisteredPackage) -> "ORMPackage":
         return cls(
             id=package.database_id,
             source_uri=package.source_uri.geturl(),
@@ -114,9 +114,9 @@ class ORMPackage(Base):
             package_type=PackageTypeDB.from_package_type(package.package_type),
         )
 
-    def to_bigraph_package(self, processes: list[BiGraphProcess], steps: list[BiGraphStep]) -> BiGraphPackage:
+    def to_bigraph_package(self, processes: list[BiGraphProcess], steps: list[BiGraphStep]) -> RegisteredPackage:
         uri = urllib.parse.urlparse(self.source_uri)
-        return BiGraphPackage(
+        return RegisteredPackage(
             database_id=self.id,
             package_type=PackageType(self.package_type.value),
             source_uri=uri,
