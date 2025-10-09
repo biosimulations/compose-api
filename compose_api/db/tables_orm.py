@@ -277,3 +277,13 @@ class ORMWorkerEvent(DeclarativeTableBase):
             time=event_time,
             hpcrun_id=hpcrun_id,
         )
+
+
+class ORMAllowList(DeclarativeTableBase):
+    __tablename__ = "allow_list"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    approved_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
+    package_name: Mapped[str] = mapped_column(nullable=False, index=True)
+    package_type: Mapped[PackageTypeDB] = mapped_column(nullable=False)
+    package_version: Mapped[str] = mapped_column(nullable=False)
