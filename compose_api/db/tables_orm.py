@@ -1,7 +1,6 @@
 import datetime
 import enum
 import logging
-import urllib.parse
 from typing import Optional
 
 from sqlalchemy import ForeignKey, func
@@ -101,7 +100,6 @@ class ORMPackage(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
-    source_uri: Mapped[str] = mapped_column(nullable=False)
     package_type: Mapped[PackageTypeDB] = mapped_column(nullable=False)
     name: Mapped[str] = mapped_column(nullable=False)
 
@@ -109,17 +107,14 @@ class ORMPackage(Base):
     def from_bigraph_package(cls, package: RegisteredPackage) -> "ORMPackage":
         return cls(
             id=package.database_id,
-            source_uri=package.source_uri.geturl(),
             name=package.name,
             package_type=PackageTypeDB.from_package_type(package.package_type),
         )
 
     def to_bigraph_package(self, processes: list[BiGraphProcess], steps: list[BiGraphStep]) -> RegisteredPackage:
-        uri = urllib.parse.urlparse(self.source_uri)
         return RegisteredPackage(
             database_id=self.id,
             package_type=PackageType(self.package_type.value),
-            source_uri=uri,
             name=self.name,
             processes=processes,
             steps=steps,

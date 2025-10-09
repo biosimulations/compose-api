@@ -13,14 +13,12 @@ logger = logging.getLogger(__name__)
 def introspect_package(dependencies: ExperimentPrimaryDependencies) -> list[PackageOutline]:
     packages = []
     for dep in dependencies.pypi_dependencies:
+        github_url = _get_package_github_origin(dep)
         try:
-            github_url = _get_package_github_origin(dep)
             response = requests.get(github_url.geturl(), timeout=10)
             response.raise_for_status()
             packages.append(
-                PackageOutline.from_pb_outline(
-                    pb_outline_json=response.json(), source=github_url, name=dep, package_type=PackageType.PYPI
-                )
+                PackageOutline.from_pb_outline(pb_outline_json=response.json(), name=dep, package_type=PackageType.PYPI)
             )
         except Exception as e:
             logger.exception("Failed to parse package info from github %s", github_url.geturl(), exc_info=e)

@@ -92,7 +92,6 @@ class PackageDBSQL(PackageDB):
     async def insert_package(self, package: PackageOutline) -> RegisteredPackage:
         async with self.async_session_maker() as session:
             new_orm_package = ORMPackage(
-                source_uri=package.source_uri.geturl(),
                 package_type=PackageTypeDB.from_package_type(package.package_type),
                 name=package.name,
             )

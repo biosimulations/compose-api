@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
-from urllib.parse import ParseResult
 
 from pydantic import BaseModel as _BaseModel
 from pydantic import Field
@@ -100,15 +99,12 @@ class BiGraphStep(BiGraphCompute):
 
 class PackageOutline(BaseModel):
     package_type: PackageType
-    source_uri: ParseResult
     name: str
     steps: list[BiGraphStep]
     processes: list[BiGraphProcess]
 
     @staticmethod
-    def from_pb_outline(
-        pb_outline_json: dict[str, Any], source: ParseResult, name: str, package_type: PackageType
-    ) -> "PackageOutline":
+    def from_pb_outline(pb_outline_json: dict[str, Any], name: str, package_type: PackageType) -> "PackageOutline":
         processes = []
         if "processes" in pb_outline_json:
             for process in pb_outline_json["processes"]:
@@ -120,7 +116,6 @@ class PackageOutline(BaseModel):
 
         return PackageOutline(
             package_type=package_type,
-            source_uri=source,
             name=name,
             steps=steps,
             processes=processes,
