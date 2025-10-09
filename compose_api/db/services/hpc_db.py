@@ -8,7 +8,7 @@ from sqlalchemy.orm import InstrumentedAttribute
 from typing_extensions import override
 
 from compose_api.common.hpc.models import SlurmJob
-from compose_api.db.tables_orm import (
+from compose_api.db.tables.hpc_tables import (
     JobStatusDB,
     JobTypeDB,
     ORMHpcRun,

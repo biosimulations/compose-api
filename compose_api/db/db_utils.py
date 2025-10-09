@@ -9,3 +9,6 @@ class DeclarativeTableBase(AsyncAttrs, DeclarativeBase):
 async def create_db(async_engine: AsyncEngine) -> None:
     async with async_engine.begin() as conn:
         await conn.run_sync(DeclarativeTableBase.metadata.create_all)
+
+
+package_table_name = "packages"
