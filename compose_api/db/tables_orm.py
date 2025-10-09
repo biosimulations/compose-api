@@ -5,10 +5,11 @@ from typing import Optional
 
 from sqlalchemy import ForeignKey, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.ext.asyncio import AsyncAttrs, AsyncEngine
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.orm import Mapped, mapped_column
 
 from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr
+from compose_api.db.database_service import DeclarativeTableBase
 from compose_api.simulation.models import (
     BiGraphCompute,
     BiGraphComputeType,
@@ -73,11 +74,7 @@ class BiGraphComputeTypeDB(enum.Enum):
         return BiGraphComputeTypeDB(compute_type.value)
 
 
-class Base(AsyncAttrs, DeclarativeBase):
-    pass
-
-
-class ORMSimulator(Base):
+class ORMSimulator(DeclarativeTableBase):
     __tablename__ = "simulator"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -95,7 +92,7 @@ class ORMSimulator(Base):
         )
 
 
-class ORMPackage(Base):
+class ORMPackage(DeclarativeTableBase):
     __tablename__ = "bigraph_package"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -121,7 +118,7 @@ class ORMPackage(Base):
         )
 
 
-class ORMBiGraphCompute(Base):
+class ORMBiGraphCompute(DeclarativeTableBase):
     __tablename__ = "bigraph_compute"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -178,7 +175,7 @@ class ORMBiGraphCompute(Base):
         raise ValueError(f"Compute type must be BiGraphComputeTypeDB: {compute_type}")
 
 
-class ORMSimulatorToPackage(Base):
+class ORMSimulatorToPackage(DeclarativeTableBase):
     __tablename__ = "simulator_to_package"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -188,7 +185,7 @@ class ORMSimulatorToPackage(Base):
     package_id: Mapped[int] = mapped_column(ForeignKey(ORMPackage.__tablename__ + ".id"), nullable=False, index=True)
 
 
-class ORMHpcRun(Base):
+class ORMHpcRun(DeclarativeTableBase):
     __tablename__ = "hpcrun"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -222,7 +219,7 @@ class ORMHpcRun(Base):
         )
 
 
-class ORMSimulation(Base):
+class ORMSimulation(DeclarativeTableBase):
     __tablename__ = "simulation"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -231,7 +228,7 @@ class ORMSimulation(Base):
     simulator_id: Mapped[int] = mapped_column(ForeignKey("simulator.id"), nullable=False, index=True)
 
 
-class ORMWorkerEvent(Base):
+class ORMWorkerEvent(DeclarativeTableBase):
     __tablename__ = "worker_event"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -285,4 +282,4 @@ class ORMWorkerEvent(Base):
 
 async def create_db(async_engine: AsyncEngine) -> None:
     async with async_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(DeclarativeTableBase.metadata.create_all)
