@@ -31,7 +31,7 @@ class JobMonitor:
 
     @alru_cache
     async def get_hpcrun_by_correlation_id(self, correlation_id: str) -> int | None:
-        return await self.database_service.get_hpcrun_id_by_correlation_id(correlation_id=correlation_id)
+        return await self.database_service.get_hpc_db().get_hpcrun_id_by_correlation_id(correlation_id=correlation_id)
 
     async def subscribe_nats(self) -> None:
         if self.nats_client is None:
@@ -49,7 +49,9 @@ class JobMonitor:
             if hpcrun_id is None:
                 logger.error(f"No HpcRun found for correlation ID {worker_event.correlation_id}. Skipping event.")
                 return
-            _updated_worker_event = await self.database_service.insert_worker_event(worker_event, hpcrun_id=hpcrun_id)
+            _updated_worker_event = await self.database_service.get_hpc_db().insert_worker_event(
+                worker_event, hpcrun_id=hpcrun_id
+            )
 
         await self.nats_client.subscribe(subject=subject, cb=message_handler)
         if self.nats_client.is_connected:
@@ -82,7 +84,7 @@ class JobMonitor:
 
     async def update_running_jobs(self) -> None:
         # Fetch all running HpcRun jobs
-        running_jobs = await self.database_service.list_running_hpcruns()
+        running_jobs = await self.database_service.get_hpc_db().list_running_hpcruns()
         if not running_jobs:
             logger.debug("No running jobs found for polling.")
             return
@@ -103,7 +105,9 @@ class JobMonitor:
                 logger.debug(f"HpcRun {hpc_run.database_id} is still running with status {new_status}")
                 continue
             if hpc_run.status != new_status:
-                await self.database_service.update_hpcrun_status(hpcrun_id=hpc_run.database_id, new_slurm_job=slurm_job)
+                await self.database_service.get_hpc_db().update_hpcrun_status(
+                    hpcrun_id=hpc_run.database_id, new_slurm_job=slurm_job
+                )
                 logger.info(f"Updated HpcRun {hpc_run.database_id} status to {new_status}")
 
             if slurm_job.job_id in self.internal_listeners:

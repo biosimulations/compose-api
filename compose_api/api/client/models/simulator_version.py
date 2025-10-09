@@ -15,7 +15,7 @@ import datetime
 
 if TYPE_CHECKING:
     from ..models.containerization_file_repr import ContainerizationFileRepr
-    from ..models.experiment_primary_dependencies import ExperimentPrimaryDependencies
+    from ..models.registered_package import RegisteredPackage
 
 
 T = TypeVar("T", bound="SimulatorVersion")
@@ -27,27 +27,35 @@ class SimulatorVersion:
     Attributes:
         singularity_def (ContainerizationFileRepr):
         singularity_def_hash (str):
-        primary_packages (ExperimentPrimaryDependencies):
+        packages (Union[None, list['RegisteredPackage']]):
         database_id (int):
         created_at (Union[None, Unset, datetime.datetime]):
     """
 
     singularity_def: "ContainerizationFileRepr"
     singularity_def_hash: str
-    primary_packages: "ExperimentPrimaryDependencies"
+    packages: Union[None, list["RegisteredPackage"]]
     database_id: int
     created_at: Union[None, Unset, datetime.datetime] = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         from ..models.containerization_file_repr import ContainerizationFileRepr
-        from ..models.experiment_primary_dependencies import ExperimentPrimaryDependencies
+        from ..models.registered_package import RegisteredPackage
 
         singularity_def = self.singularity_def.to_dict()
 
         singularity_def_hash = self.singularity_def_hash
 
-        primary_packages = self.primary_packages.to_dict()
+        packages: Union[None, list[dict[str, Any]]]
+        if isinstance(self.packages, list):
+            packages = []
+            for packages_type_0_item_data in self.packages:
+                packages_type_0_item = packages_type_0_item_data.to_dict()
+                packages.append(packages_type_0_item)
+
+        else:
+            packages = self.packages
 
         database_id = self.database_id
 
@@ -64,7 +72,7 @@ class SimulatorVersion:
         field_dict.update({
             "singularity_def": singularity_def,
             "singularity_def_hash": singularity_def_hash,
-            "primary_packages": primary_packages,
+            "packages": packages,
             "database_id": database_id,
         })
         if created_at is not UNSET:
@@ -75,14 +83,32 @@ class SimulatorVersion:
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.containerization_file_repr import ContainerizationFileRepr
-        from ..models.experiment_primary_dependencies import ExperimentPrimaryDependencies
+        from ..models.registered_package import RegisteredPackage
 
         d = dict(src_dict)
         singularity_def = ContainerizationFileRepr.from_dict(d.pop("singularity_def"))
 
         singularity_def_hash = d.pop("singularity_def_hash")
 
-        primary_packages = ExperimentPrimaryDependencies.from_dict(d.pop("primary_packages"))
+        def _parse_packages(data: object) -> Union[None, list["RegisteredPackage"]]:
+            if data is None:
+                return data
+            try:
+                if not isinstance(data, list):
+                    raise TypeError()
+                packages_type_0 = []
+                _packages_type_0 = data
+                for packages_type_0_item_data in _packages_type_0:
+                    packages_type_0_item = RegisteredPackage.from_dict(packages_type_0_item_data)
+
+                    packages_type_0.append(packages_type_0_item)
+
+                return packages_type_0
+            except:  # noqa: E722
+                pass
+            return cast(Union[None, list["RegisteredPackage"]], data)
+
+        packages = _parse_packages(d.pop("packages"))
 
         database_id = d.pop("database_id")
 
@@ -106,7 +132,7 @@ class SimulatorVersion:
         simulator_version = cls(
             singularity_def=singularity_def,
             singularity_def_hash=singularity_def_hash,
-            primary_packages=primary_packages,
+            packages=packages,
             database_id=database_id,
             created_at=created_at,
         )

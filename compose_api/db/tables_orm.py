@@ -8,8 +8,20 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncAttrs, AsyncEngine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr, ExperimentPrimaryDependencies
-from compose_api.simulation.models import HpcRun, JobStatus, JobType, SimulatorVersion, WorkerEvent
+from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr
+from compose_api.simulation.models import (
+    BiGraphCompute,
+    BiGraphComputeType,
+    BiGraphProcess,
+    BiGraphStep,
+    HpcRun,
+    JobStatus,
+    JobType,
+    PackageType,
+    RegisteredPackage,
+    SimulatorVersion,
+    WorkerEvent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +49,30 @@ class JobTypeDB(enum.Enum):
         return JobTypeDB(job_type.value)
 
 
+class PackageTypeDB(enum.Enum):
+    PYPI = "pypi"
+    CONDA = "conda"
+
+    def to_package_type(self) -> "PackageType":
+        return PackageType(self.value)
+
+    @classmethod
+    def from_package_type(cls, package_type: PackageType) -> "PackageTypeDB":
+        return PackageTypeDB(package_type.value)
+
+
+class BiGraphComputeTypeDB(enum.Enum):
+    PROCESS = "process"
+    STEP = "step"
+
+    def to_compute_type(self) -> "BiGraphComputeType":
+        return BiGraphComputeType(self.value)
+
+    @classmethod
+    def from_compute_type(cls, compute_type: BiGraphComputeType) -> "BiGraphComputeTypeDB":
+        return BiGraphComputeTypeDB(compute_type.value)
+
+
 class Base(AsyncAttrs, DeclarativeBase):
     pass
 
@@ -48,8 +84,6 @@ class ORMSimulator(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
     singularity_def: Mapped[str] = mapped_column(nullable=False)
     singularity_def_hash: Mapped[str] = mapped_column(nullable=False)
-    primary_packages: Mapped[str] = mapped_column(nullable=False)
-    # primary_processes: Mapped[str] = mapped_column(nullable=False) TODO:
 
     def to_simulator_version(self) -> SimulatorVersion:
         return SimulatorVersion(
@@ -57,8 +91,101 @@ class ORMSimulator(Base):
             created_at=self.created_at,
             singularity_def=ContainerizationFileRepr(representation=self.singularity_def),
             singularity_def_hash=self.singularity_def_hash,
-            primary_packages=ExperimentPrimaryDependencies.from_compact_repr(self.primary_packages),
+            packages=None,
         )
+
+
+class ORMPackage(Base):
+    __tablename__ = "bigraph_package"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
+    package_type: Mapped[PackageTypeDB] = mapped_column(nullable=False)
+    name: Mapped[str] = mapped_column(nullable=False)
+
+    @classmethod
+    def from_bigraph_package(cls, package: RegisteredPackage) -> "ORMPackage":
+        return cls(
+            id=package.database_id,
+            name=package.name,
+            package_type=PackageTypeDB.from_package_type(package.package_type),
+        )
+
+    def to_bigraph_package(self, processes: list[BiGraphProcess], steps: list[BiGraphStep]) -> RegisteredPackage:
+        return RegisteredPackage(
+            database_id=self.id,
+            package_type=PackageType(self.package_type.value),
+            name=self.name,
+            processes=processes,
+            steps=steps,
+        )
+
+
+class ORMBiGraphCompute(Base):
+    __tablename__ = "bigraph_compute"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    inserted_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
+    package_ref: Mapped[int] = mapped_column(ForeignKey(ORMPackage.__tablename__ + ".id"), nullable=False, index=True)
+    module: Mapped[str] = mapped_column(nullable=False)
+    name: Mapped[str] = mapped_column(nullable=False)
+    compute_type: Mapped[BiGraphComputeTypeDB] = mapped_column(nullable=False)
+    inputs: Mapped[str] = mapped_column(nullable=True)
+    outputs: Mapped[str] = mapped_column(nullable=True)
+
+    @classmethod
+    def from_bigraph_compute(cls, compute: BiGraphCompute) -> "ORMBiGraphCompute":
+        return cls(
+            id=compute.database_id,
+            module=compute.module,
+            name=compute.name,
+            compute_type=BiGraphComputeTypeDB(compute.compute_type),
+            input=compute.inputs,
+            output=compute.outputs,
+        )
+
+    def to_bigraph_process(self) -> BiGraphProcess:
+        if self.compute_type != BiGraphComputeTypeDB.PROCESS:
+            raise TypeError("Compute type must be BiGraphComputeTypeDB Process")
+        return BiGraphProcess(
+            database_id=self.id,
+            module=self.module,
+            name=self.name,
+            compute_type=self.compute_type.to_compute_type(),
+            inputs=self.inputs,
+            outputs=self.outputs,
+        )
+
+    def to_bigraph_step(self) -> BiGraphStep:
+        if self.compute_type != BiGraphComputeTypeDB.STEP:
+            raise TypeError("Compute type must be BiGraphComputeTypeDB Step")
+        return BiGraphStep(
+            database_id=self.id,
+            module=self.module,
+            name=self.name,
+            compute_type=self.compute_type.to_compute_type(),
+            inputs=self.inputs,
+            outputs=self.outputs,
+        )
+
+    def to_bigraph_compute(self) -> BiGraphCompute:
+        compute_type = self.compute_type.to_compute_type()
+        match compute_type:
+            case BiGraphComputeType.PROCESS:
+                return self.to_bigraph_process()
+            case BiGraphComputeType.STEP:
+                return self.to_bigraph_step()
+        raise ValueError(f"Compute type must be BiGraphComputeTypeDB: {compute_type}")
+
+
+class ORMSimulatorToPackage(Base):
+    __tablename__ = "simulator_to_package"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    simulator_id: Mapped[int] = mapped_column(
+        ForeignKey(ORMSimulator.__tablename__ + ".id"), nullable=False, index=True
+    )
+    package_id: Mapped[int] = mapped_column(ForeignKey(ORMPackage.__tablename__ + ".id"), nullable=False, index=True)
 
 
 class ORMHpcRun(Base):

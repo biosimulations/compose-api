@@ -10,7 +10,7 @@ from typing import Any
 from pydantic import BaseModel as _BaseModel
 from pydantic import Field
 
-from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr, ExperimentPrimaryDependencies
+from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr
 
 
 @dataclass
@@ -48,6 +48,16 @@ class JobType(enum.Enum):
     BUILD_CONTAINER = "build_container"
 
 
+class PackageType(enum.Enum):
+    PYPI = "pypi"
+    CONDA = "conda"
+
+
+class BiGraphComputeType(enum.Enum):
+    PROCESS = "process"
+    STEP = "step"
+
+
 class JobStatus(StrEnum):
     WAITING = "waiting"
     QUEUED = "queued"
@@ -70,10 +80,56 @@ class HpcRun(BaseModel):
     error_message: str | None = None  # Error message if the simulation failed
 
 
+class BiGraphCompute(BaseModel):
+    database_id: int
+    module: str
+    name: str
+    compute_type: BiGraphComputeType
+    inputs: str
+    outputs: str
+
+
+class BiGraphProcess(BiGraphCompute):
+    pass
+
+
+class BiGraphStep(BiGraphCompute):
+    pass
+
+
+class PackageOutline(BaseModel):
+    package_type: PackageType
+    name: str
+    steps: list[BiGraphStep]
+    processes: list[BiGraphProcess]
+
+    @staticmethod
+    def from_pb_outline(pb_outline_json: dict[str, Any], name: str, package_type: PackageType) -> "PackageOutline":
+        processes = []
+        if "processes" in pb_outline_json:
+            for process in pb_outline_json["processes"]:
+                processes.append(BiGraphProcess(compute_type=BiGraphComputeType.PROCESS, **process))
+        steps = []
+        if "steps" in pb_outline_json:
+            for step in pb_outline_json["steps"]:
+                steps.append(BiGraphStep(compute_type=BiGraphComputeType.STEP, **step))
+
+        return PackageOutline(
+            package_type=package_type,
+            name=name,
+            steps=steps,
+            processes=processes,
+        )
+
+
+class RegisteredPackage(PackageOutline):
+    database_id: int
+
+
 class Simulator(BaseModel):
     singularity_def: ContainerizationFileRepr
     singularity_def_hash: str
-    primary_packages: ExperimentPrimaryDependencies
+    packages: list[RegisteredPackage] | None
     # primary_processes: str
 
 
@@ -84,6 +140,11 @@ class SimulatorVersion(Simulator):
 
 class RegisteredSimulators(BaseModel):
     versions: list[SimulatorVersion]
+    timestamp: datetime.datetime | None = Field(default_factory=datetime.datetime.now)
+
+
+class RegisteredProcesses(BaseModel):
+    versions: list[BiGraphProcess]
     timestamp: datetime.datetime | None = Field(default_factory=datetime.datetime.now)
 
 
