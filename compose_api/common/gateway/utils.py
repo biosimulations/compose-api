@@ -29,7 +29,7 @@ def format_marimo_appname(appname: str) -> str:
         return appname.replace(appname[0], appname[0].upper())
 
 
-async def _get_hpc_run_status(db_service: DatabaseService, ref_id: int, job_type: JobType) -> HpcRun:
+async def get_hpc_run_status(db_service: DatabaseService, ref_id: int, job_type: JobType) -> HpcRun:
     if db_service is None:
         logger.error("SSH service is not initialized")
         raise HTTPException(status_code=500, detail="SSH service is not initialized")

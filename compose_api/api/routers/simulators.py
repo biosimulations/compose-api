@@ -1,9 +1,9 @@
 import logging
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-from compose_api.api.routers.core import _get_hpc_run_status
 from compose_api.common.gateway.models import RouterConfig, ServerMode
+from compose_api.common.gateway.utils import get_hpc_run_status
 from compose_api.dependencies import (
     get_database_service,
 )
@@ -37,9 +37,10 @@ config = RouterConfig(router=APIRouter(), prefix="/core", dependencies=[])
     summary="Get the simulator build status record by its ID",
 )
 async def get_simulator_build_status(simulator_id: int = Query(...)) -> HpcRun:
-    return await _get_hpc_run_status(
-        db_service=get_database_service(), ref_id=simulator_id, job_type=JobType.BUILD_CONTAINER
-    )
+    db_service = get_database_service()
+    if db_service is None:
+        raise HTTPException(status_code=500, detail="Database service is not initialized")
+    return await get_hpc_run_status(db_service=db_service, ref_id=simulator_id, job_type=JobType.BUILD_CONTAINER)
 
 
 @config.router.get(

@@ -12,7 +12,7 @@ from compose_api.btools.bsander.bsandr_utils.input_types import (
 )
 from compose_api.btools.bsander.execution import execute_bsander
 from compose_api.common.gateway.models import Namespace, RouterConfig, ServerMode
-from compose_api.common.gateway.utils import _get_hpc_run_status
+from compose_api.common.gateway.utils import get_hpc_run_status
 from compose_api.common.ssh.ssh_service import get_ssh_service
 from compose_api.config import get_settings
 from compose_api.dependencies import (
@@ -195,9 +195,10 @@ async def analyze_simulation(uploaded_file: UploadFile) -> str:
     summary="Get the simulation status record by its ID",
 )
 async def get_simulation_status(simulation_id: int = Query(...)) -> HpcRun:
-    return await _get_hpc_run_status(
-        db_service=get_database_service(), ref_id=simulation_id, job_type=JobType.SIMULATION
-    )
+    db_service = get_database_service()
+    if db_service is None:
+        raise HTTPException(status_code=500, detail="Database service is not initialized")
+    return await get_hpc_run_status(db_service=db_service, ref_id=simulation_id, job_type=JobType.SIMULATION)
 
 
 # @config.router.get(
