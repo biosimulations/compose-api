@@ -11,7 +11,7 @@ from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService, DatabaseServiceSQL
-from compose_api.db.tables_orm import create_db
+from compose_api.db.db_utils import create_db
 from compose_api.log_config import setup_logging
 from compose_api.simulation.data_service import DataService, DataServiceHpc
 from compose_api.simulation.job_monitor import JobMonitor

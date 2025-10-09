@@ -5,11 +5,10 @@ from typing import Optional
 
 from sqlalchemy import ForeignKey, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import Mapped, mapped_column
 
 from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr
-from compose_api.db.database_service import DeclarativeTableBase
+from compose_api.db.db_utils import DeclarativeTableBase
 from compose_api.simulation.models import (
     BiGraphCompute,
     BiGraphComputeType,
@@ -278,8 +277,3 @@ class ORMWorkerEvent(DeclarativeTableBase):
             time=event_time,
             hpcrun_id=hpcrun_id,
         )
-
-
-async def create_db(async_engine: AsyncEngine) -> None:
-    async with async_engine.begin() as conn:
-        await conn.run_sync(DeclarativeTableBase.metadata.create_all)

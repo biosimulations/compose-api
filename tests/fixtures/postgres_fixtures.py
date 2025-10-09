@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from testcontainers.postgres import PostgresContainer  # type: ignore [import-untyped]
 
 from compose_api.db.database_service import DatabaseService, DatabaseServiceSQL
-from compose_api.db.tables_orm import create_db
+from compose_api.db.db_utils import create_db
 from compose_api.dependencies import (
     get_database_service,
     get_postgres_engine,

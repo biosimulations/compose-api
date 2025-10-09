@@ -1,8 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 
-from sqlalchemy.ext.asyncio import AsyncAttrs, AsyncEngine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from typing_extensions import override
 
 from compose_api.db.services.hpc_db import HPCDatabaseService, HPCORMExecutor
@@ -10,10 +9,6 @@ from compose_api.db.services.packages_db import PackageDatabaseService, PackageO
 from compose_api.db.services.simulators_db import SimulatorDatabaseService, SimulatorORMExecutor
 
 logger = logging.getLogger(__name__)
-
-
-class DeclarativeTableBase(AsyncAttrs, DeclarativeBase):
-    pass
 
 
 class DatabaseService(ABC):
