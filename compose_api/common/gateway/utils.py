@@ -44,3 +44,15 @@ async def get_hpc_run_status(db_service: DatabaseService, ref_id: int, job_type:
     if simulation_hpcrun is None:
         raise HTTPException(status_code=404, detail=f"{job_type} with id {ref_id} not found.")
     return simulation_hpcrun
+
+
+allow_list = [
+    "pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work",
+    "pypi::cobra",
+    "pypi::tellurium",
+    "pypi::copasi-basico",
+    "pypi::smoldyn",
+    "pypi::numpy",
+    "pypi::matplotlib",
+    "pypi::scipy",
+]

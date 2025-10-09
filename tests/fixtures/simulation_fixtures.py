@@ -9,7 +9,6 @@ import numpy
 import pytest_asyncio
 from nats.aio.client import Client as NATSClient
 
-from compose_api.api.main import allow_list
 from compose_api.btools.bsander.bsandr_utils.input_types import (
     ContainerizationEngine,
     ContainerizationTypes,
@@ -17,6 +16,7 @@ from compose_api.btools.bsander.bsandr_utils.input_types import (
 )
 from compose_api.btools.bsander.execution import execute_bsander
 from compose_api.btools.bsoil.introspect_package import introspect_package
+from compose_api.common.gateway.utils import allow_list
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.db.database_service import DatabaseService

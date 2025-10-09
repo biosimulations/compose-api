@@ -5,7 +5,6 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, UploadFile
 from starlette.responses import FileResponse, PlainTextResponse
 
-from compose_api.api.main import allow_list
 from compose_api.btools.bsander.bsandr_utils.input_types import (
     ContainerizationEngine,
     ContainerizationTypes,
@@ -13,7 +12,7 @@ from compose_api.btools.bsander.bsandr_utils.input_types import (
 )
 from compose_api.btools.bsander.execution import execute_bsander
 from compose_api.common.gateway.models import Namespace, RouterConfig, ServerMode
-from compose_api.common.gateway.utils import get_hpc_run_status
+from compose_api.common.gateway.utils import allow_list, get_hpc_run_status
 from compose_api.common.ssh.ssh_service import get_ssh_service
 from compose_api.config import get_settings
 from compose_api.dependencies import (
