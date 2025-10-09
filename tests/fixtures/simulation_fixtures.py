@@ -9,6 +9,7 @@ import numpy
 import pytest_asyncio
 from nats.aio.client import Client as NATSClient
 
+from compose_api.api.main import allow_list
 from compose_api.btools.bsander.bsandr_utils.input_types import (
     ContainerizationEngine,
     ContainerizationTypes,
@@ -72,7 +73,7 @@ async def simulator(database_service: DatabaseService) -> AsyncGenerator[Simulat
                 output_dir=temp_dir,
                 containerization_type=ContainerizationTypes.SINGLE,
                 containerization_engine=ContainerizationEngine.APPTAINER,
-                passlist_entries=["pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work"],
+                passlist_entries=allow_list,
             )
         )
 

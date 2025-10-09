@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from compose_api.api.main import allow_list
 from compose_api.btools.bsander.bsandr_utils.input_types import (
     ContainerizationEngine,
     ContainerizationTypes,
@@ -46,7 +47,7 @@ async def test_build_simulator(
                 output_dir=temp_dir,
                 containerization_type=ContainerizationTypes.SINGLE,
                 containerization_engine=ContainerizationEngine.APPTAINER,
-                passlist_entries=["pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work"],
+                passlist_entries=allow_list,
             )
         )
 
@@ -90,9 +91,7 @@ async def test_simulate(
         simulation_service_slurm=simulation_service_slurm,
         job_monitor=job_monitor,
         background_tasks=test_bg_tasks,
-        pb_allow_list=PBAllowList(
-            allow_list=["pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work"]
-        ),
+        pb_allow_list=PBAllowList(allow_list=allow_list),
     )
     assert sim_experiement is not None
     await test_bg_tasks.call_tasks()

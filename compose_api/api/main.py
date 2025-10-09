@@ -95,6 +95,18 @@ for api_name in APP_ROUTERS:
         logger.exception(f"Could not register the following api: {api_name}")
 
 
+allow_list = [
+    "pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work",
+    "pypi::cobra",
+    "pypi::tellurium",
+    "pypi::copasi-basico",
+    "pypi::smoldyn",
+    "pypi::numpy",
+    "pypi::matplotlib",
+    "pypi::scipy",
+]
+
+
 # -- app-level endpoints -- #
 
 
