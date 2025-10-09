@@ -8,49 +8,38 @@ from ..types import UNSET, Unset
 
 from ..models.package_type import PackageType
 from typing import cast
-from typing import cast, Union
 
 if TYPE_CHECKING:
     from ..models.bi_graph_process import BiGraphProcess
     from ..models.bi_graph_step import BiGraphStep
 
 
-T = TypeVar("T", bound="BiGraphPackage")
+T = TypeVar("T", bound="RegisteredPackage")
 
 
 @_attrs_define
-class BiGraphPackage:
+class RegisteredPackage:
     """
     Attributes:
-        database_id (int):
         package_type (PackageType):
-        source_uri (list[Any]):
         name (str):
         steps (list['BiGraphStep']):
         processes (list['BiGraphProcess']):
+        database_id (int):
     """
 
-    database_id: int
     package_type: PackageType
-    source_uri: list[Any]
     name: str
     steps: list["BiGraphStep"]
     processes: list["BiGraphProcess"]
+    database_id: int
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         from ..models.bi_graph_process import BiGraphProcess
         from ..models.bi_graph_step import BiGraphStep
 
-        database_id = self.database_id
-
         package_type = self.package_type.value
-
-        source_uri = []
-        for componentsschemas_parse_result_item_data in self.source_uri:
-            componentsschemas_parse_result_item: Any
-            componentsschemas_parse_result_item = componentsschemas_parse_result_item_data
-            source_uri.append(componentsschemas_parse_result_item)
 
         name = self.name
 
@@ -64,15 +53,16 @@ class BiGraphPackage:
             processes_item = processes_item_data.to_dict()
             processes.append(processes_item)
 
+        database_id = self.database_id
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
-            "database_id": database_id,
             "package_type": package_type,
-            "source_uri": source_uri,
             "name": name,
             "steps": steps,
             "processes": processes,
+            "database_id": database_id,
         })
 
         return field_dict
@@ -83,22 +73,7 @@ class BiGraphPackage:
         from ..models.bi_graph_step import BiGraphStep
 
         d = dict(src_dict)
-        database_id = d.pop("database_id")
-
         package_type = PackageType(d.pop("package_type"))
-
-        source_uri = []
-        _source_uri = d.pop("source_uri")
-        for componentsschemas_parse_result_item_data in _source_uri:
-
-            def _parse_componentsschemas_parse_result_item(data: object) -> Any:
-                return cast(Any, data)
-
-            componentsschemas_parse_result_item = _parse_componentsschemas_parse_result_item(
-                componentsschemas_parse_result_item_data
-            )
-
-            source_uri.append(componentsschemas_parse_result_item)
 
         name = d.pop("name")
 
@@ -116,17 +91,18 @@ class BiGraphPackage:
 
             processes.append(processes_item)
 
-        bi_graph_package = cls(
-            database_id=database_id,
+        database_id = d.pop("database_id")
+
+        registered_package = cls(
             package_type=package_type,
-            source_uri=source_uri,
             name=name,
             steps=steps,
             processes=processes,
+            database_id=database_id,
         )
 
-        bi_graph_package.additional_properties = d
-        return bi_graph_package
+        registered_package.additional_properties = d
+        return registered_package
 
     @property
     def additional_keys(self) -> list[str]:

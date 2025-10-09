@@ -14,8 +14,8 @@ from typing import Union
 import datetime
 
 if TYPE_CHECKING:
-    from ..models.bi_graph_package import BiGraphPackage
     from ..models.containerization_file_repr import ContainerizationFileRepr
+    from ..models.registered_package import RegisteredPackage
 
 
 T = TypeVar("T", bound="SimulatorVersion")
@@ -27,21 +27,21 @@ class SimulatorVersion:
     Attributes:
         singularity_def (ContainerizationFileRepr):
         singularity_def_hash (str):
-        packages (Union[None, list['BiGraphPackage']]):
+        packages (Union[None, list['RegisteredPackage']]):
         database_id (int):
         created_at (Union[None, Unset, datetime.datetime]):
     """
 
     singularity_def: "ContainerizationFileRepr"
     singularity_def_hash: str
-    packages: Union[None, list["BiGraphPackage"]]
+    packages: Union[None, list["RegisteredPackage"]]
     database_id: int
     created_at: Union[None, Unset, datetime.datetime] = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.bi_graph_package import BiGraphPackage
         from ..models.containerization_file_repr import ContainerizationFileRepr
+        from ..models.registered_package import RegisteredPackage
 
         singularity_def = self.singularity_def.to_dict()
 
@@ -82,15 +82,15 @@ class SimulatorVersion:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.bi_graph_package import BiGraphPackage
         from ..models.containerization_file_repr import ContainerizationFileRepr
+        from ..models.registered_package import RegisteredPackage
 
         d = dict(src_dict)
         singularity_def = ContainerizationFileRepr.from_dict(d.pop("singularity_def"))
 
         singularity_def_hash = d.pop("singularity_def_hash")
 
-        def _parse_packages(data: object) -> Union[None, list["BiGraphPackage"]]:
+        def _parse_packages(data: object) -> Union[None, list["RegisteredPackage"]]:
             if data is None:
                 return data
             try:
@@ -99,14 +99,14 @@ class SimulatorVersion:
                 packages_type_0 = []
                 _packages_type_0 = data
                 for packages_type_0_item_data in _packages_type_0:
-                    packages_type_0_item = BiGraphPackage.from_dict(packages_type_0_item_data)
+                    packages_type_0_item = RegisteredPackage.from_dict(packages_type_0_item_data)
 
                     packages_type_0.append(packages_type_0_item)
 
                 return packages_type_0
             except:  # noqa: E722
                 pass
-            return cast(Union[None, list["BiGraphPackage"]], data)
+            return cast(Union[None, list["RegisteredPackage"]], data)
 
         packages = _parse_packages(d.pop("packages"))
 

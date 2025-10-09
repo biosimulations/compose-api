@@ -1,7 +1,6 @@
 """Contains all the data models used in inputs/outputs"""
 
 from .bi_graph_compute_type import BiGraphComputeType
-from .bi_graph_package import BiGraphPackage
 from .bi_graph_process import BiGraphProcess
 from .bi_graph_step import BiGraphStep
 from .body_analyze_simulation_omex import BodyAnalyzeSimulationOmex
@@ -13,6 +12,7 @@ from .http_validation_error import HTTPValidationError
 from .job_status import JobStatus
 from .job_type import JobType
 from .package_type import PackageType
+from .registered_package import RegisteredPackage
 from .registered_simulators import RegisteredSimulators
 from .simulation_experiment import SimulationExperiment
 from .simulation_experiment_metadata import SimulationExperimentMetadata
@@ -21,7 +21,6 @@ from .validation_error import ValidationError
 
 __all__ = (
     "BiGraphComputeType",
-    "BiGraphPackage",
     "BiGraphProcess",
     "BiGraphStep",
     "BodyAnalyzeSimulationOmex",
@@ -33,6 +32,7 @@ __all__ = (
     "JobStatus",
     "JobType",
     "PackageType",
+    "RegisteredPackage",
     "RegisteredSimulators",
     "SimulationExperiment",
     "SimulationExperimentMetadata",

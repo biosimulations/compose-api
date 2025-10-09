@@ -184,37 +184,6 @@ components:
       - process
       - step
       title: BiGraphComputeType
-    BiGraphPackage:
-      properties:
-        database_id:
-          type: integer
-          title: Database Id
-        package_type:
-          $ref: '#/components/schemas/PackageType'
-        source_uri:
-          $ref: '#/components/schemas/ParseResult'
-        name:
-          type: string
-          title: Name
-        steps:
-          items:
-            $ref: '#/components/schemas/BiGraphStep'
-          type: array
-          title: Steps
-        processes:
-          items:
-            $ref: '#/components/schemas/BiGraphProcess'
-          type: array
-          title: Processes
-      type: object
-      required:
-      - database_id
-      - package_type
-      - source_uri
-      - name
-      - steps
-      - processes
-      title: BiGraphPackage
     BiGraphProcess:
       properties:
         database_id:
@@ -379,20 +348,37 @@ components:
     PackageType:
       type: string
       enum:
-      - python
+      - pypi
       - conda
       title: PackageType
-    ParseResult:
-      prefixItems:
-      - title: Scheme
-      - title: Netloc
-      - title: Path
-      - title: Params
-      - title: Query
-      - title: Fragment
-      type: array
-      maxItems: 6
-      minItems: 6
+    RegisteredPackage:
+      properties:
+        package_type:
+          $ref: '#/components/schemas/PackageType'
+        name:
+          type: string
+          title: Name
+        steps:
+          items:
+            $ref: '#/components/schemas/BiGraphStep'
+          type: array
+          title: Steps
+        processes:
+          items:
+            $ref: '#/components/schemas/BiGraphProcess'
+          type: array
+          title: Processes
+        database_id:
+          type: integer
+          title: Database Id
+      type: object
+      required:
+      - package_type
+      - name
+      - steps
+      - processes
+      - database_id
+      title: RegisteredPackage
     RegisteredSimulators:
       properties:
         versions:
@@ -445,7 +431,7 @@ components:
         packages:
           anyOf:
           - items:
-              $ref: '#/components/schemas/BiGraphPackage'
+              $ref: '#/components/schemas/RegisteredPackage'
             type: array
           - type: 'null'
           title: Packages
