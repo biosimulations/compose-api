@@ -25,7 +25,7 @@ from compose_api.simulation.models import (
 logger = logging.getLogger(__name__)
 
 
-class PackageDB(ABC):
+class PackageDatabaseService(ABC):
     @abstractmethod
     async def insert_package(self, package_outline: PackageOutline) -> RegisteredPackage:
         pass
@@ -69,7 +69,7 @@ class PackageDB(ABC):
         pass
 
 
-class PackageDBSQL(PackageDB):
+class PackageORMExecutor(PackageDatabaseService):
     async_session_maker: async_sessionmaker[AsyncSession]
 
     def __init__(self, async_engine_session_maker: async_sessionmaker[AsyncSession]) -> None:
