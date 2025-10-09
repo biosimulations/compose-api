@@ -10,8 +10,8 @@ from ..models.package_type import PackageType
 from typing import cast
 
 if TYPE_CHECKING:
-    from ..models.bi_graph_process import BiGraphProcess
     from ..models.bi_graph_step import BiGraphStep
+    from ..models.bi_graph_process import BiGraphProcess
 
 
 T = TypeVar("T", bound="RegisteredPackage")
@@ -36,8 +36,8 @@ class RegisteredPackage:
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.bi_graph_process import BiGraphProcess
         from ..models.bi_graph_step import BiGraphStep
+        from ..models.bi_graph_process import BiGraphProcess
 
         package_type = self.package_type.value
 
@@ -69,8 +69,8 @@ class RegisteredPackage:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.bi_graph_process import BiGraphProcess
         from ..models.bi_graph_step import BiGraphStep
+        from ..models.bi_graph_process import BiGraphProcess
 
         d = dict(src_dict)
         package_type = PackageType(d.pop("package_type"))
