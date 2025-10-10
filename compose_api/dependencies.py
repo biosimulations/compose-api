@@ -58,6 +58,13 @@ def get_database_service() -> DatabaseService | None:
     return global_database_service
 
 
+def get_required_database_service() -> DatabaseService:
+    global global_database_service
+    if global_database_service is None:
+        raise ValueError("Database service is not initialized")
+    return global_database_service
+
+
 # ------- simulation service (standalone or pytest) ------
 
 global_simulation_service: SimulationService | None = None

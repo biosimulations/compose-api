@@ -12,8 +12,7 @@ from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.common.ssh.ssh_service import SSHService, get_ssh_service
 from compose_api.config import Settings, get_settings
-from compose_api.db.database_service import DatabaseService
-from compose_api.db.services.hpc_db import HPCDatabaseService
+from compose_api.dependencies import get_required_database_service
 from compose_api.simulation.hpc_utils import (
     get_correlation_id,
     get_slurm_job_name,
@@ -36,15 +35,12 @@ class SimulationService(ABC):
     async def submit_simulation_job(
         self,
         simulation: Simulation,
-        database_service: DatabaseService,
         experiment_id: str,
     ) -> int:
         pass
 
     @abstractmethod
-    async def build_container(
-        self, simulator_version: SimulatorVersion, hpc_db_service: HPCDatabaseService, random_str: str
-    ) -> HpcRun:
+    async def build_container(self, simulator_version: SimulatorVersion, random_str: str) -> HpcRun:
         pass
 
     @abstractmethod
@@ -65,11 +61,8 @@ class SimulationServiceHpc(SimulationService):
     async def submit_simulation_job(
         self,
         simulation: Simulation,
-        database_service: DatabaseService,
         experiment_id: str,
     ) -> int:
-        if database_service is None:
-            raise RuntimeError("DatabaseService is not available. Cannot submit Simulation job.")
         if simulation.sim_request.omex_archive is None:
             raise RuntimeError("Simulation.sim_request.omex_archive is not available. Cannot submit Simulation job.")
         slurm_service, ssh_service, settings = self._get_services()
@@ -137,9 +130,7 @@ class SimulationServiceHpc(SimulationService):
             raise RuntimeError(f"Multiple jobs found with ID {slurmjobid}: {job_ids}")
 
     @override
-    async def build_container(
-        self, simulator_version: SimulatorVersion, hpc_db_service: HPCDatabaseService, random_str: str
-    ) -> HpcRun:
+    async def build_container(self, simulator_version: SimulatorVersion, random_str: str) -> HpcRun:
         slurm_service, ssh_service, settings = self._get_services()
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -192,11 +183,15 @@ class SimulationServiceHpc(SimulationService):
                 remote_singularity_file=singularity_def_file,
             )
 
-            hpc_run = await hpc_db_service.insert_hpcrun(
-                slurmjobid=slurm_jobid,
-                job_type=JobType.BUILD_CONTAINER,
-                ref_id=simulator_version.database_id,
-                correlation_id=get_correlation_id(random_string=random_str, job_type=JobType.BUILD_CONTAINER),
+            hpc_run = (
+                await get_required_database_service()
+                .get_hpc_db()
+                .insert_hpcrun(
+                    slurmjobid=slurm_jobid,
+                    job_type=JobType.BUILD_CONTAINER,
+                    ref_id=simulator_version.database_id,
+                    correlation_id=get_correlation_id(random_string=random_str, job_type=JobType.BUILD_CONTAINER),
+                )
             )
 
             return hpc_run

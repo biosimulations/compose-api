@@ -58,9 +58,7 @@ async def test_build_simulator(
     simulator = await database_service.get_simulator_db().insert_simulator(singularity_def, packages)
     start_time = time.time()
     random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
-    hpc_run = await simulation_service_slurm.build_container(
-        simulator, hpc_db_service=database_service.get_hpc_db(), random_str=random_string_7_hex
-    )
+    hpc_run = await simulation_service_slurm.build_container(simulator, random_str=random_string_7_hex)
 
     slurm_build_job: SlurmJob | None = None
     while start_time + (60 * 20) > time.time():  # No longer than twenty mins
@@ -169,6 +167,5 @@ async def test_simulator_not_in_allowlist(
         await test_bg_tasks.call_tasks()
         await simulation_service_slurm.submit_simulation_job(
             simulation=simulation,
-            database_service=database_service,
             experiment_id=experiement_id,
         )

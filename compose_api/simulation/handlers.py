@@ -121,7 +121,7 @@ async def _dispatch_job(
 
     if simulator_hpc_id is None:
         hpc_run = await simulation_service_slurm.build_container(
-            simulator_version=simulator_version, hpc_db_service=hpc_db, random_str=random_string_7_hex
+            simulator_version=simulator_version, random_str=random_string_7_hex
         )
 
         wait_time = 0
@@ -151,7 +151,6 @@ async def _dispatch_job(
 
     sim_slurmjobid = await simulation_service_slurm.submit_simulation_job(
         simulation=simulation,
-        database_service=database_service,
         experiment_id=experiment_id,
     )
 
