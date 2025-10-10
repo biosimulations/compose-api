@@ -120,28 +120,24 @@ async def _dispatch_job(
     random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
 
     if simulator_hpc_id is None:
-        build_slurm_id = await simulation_service_slurm.build_container(simulator_version=simulator_version)
-        hpc_build_run = await hpc_db.insert_hpcrun(
-            slurmjobid=build_slurm_id,
-            job_type=JobType.BUILD_CONTAINER,
-            ref_id=simulator_version.database_id,
-            correlation_id=get_correlation_id(random_string=random_string_7_hex, job_type=JobType.BUILD_CONTAINER),
+        hpc_run = await simulation_service_slurm.build_container(
+            simulator_version=simulator_version, hpc_db_service=hpc_db, random_str=random_string_7_hex
         )
 
         wait_time = 0
-        current_status = hpc_build_run.status
+        current_status = hpc_run.status
         job_queue: asyncio.Queue[HpcRun] = asyncio.Queue()
-        job_monitor.internal_subscribe(job_queue, hpc_build_run.slurmjobid)
+        job_monitor.internal_subscribe(job_queue, hpc_run.slurmjobid)
         while current_status != JobStatus.COMPLETED:
             wait_time += 1
             try:
                 current_status = (await asyncio.wait_for(job_queue.get(), timeout=60)).status
             except TimeoutError:
                 # If no status update from monitor, get most recent from DB of absolute truth
-                latest_hpc = await hpc_db.get_hpcrun_by_slurmjobid(hpc_build_run.slurmjobid)
+                latest_hpc = await hpc_db.get_hpcrun_by_slurmjobid(hpc_run.slurmjobid)
                 if latest_hpc is None:
                     raise Exception(
-                        f"Can't get HPC Run with jobID {hpc_build_run.slurmjobid} for container build {simulator_version.singularity_def_hash}"  # noqa: E501
+                        f"Can't get HPC Run with jobID {hpc_run} for container build {simulator_version.singularity_def_hash}"  # noqa: E501
                     )
                 current_status = latest_hpc.status
 
@@ -151,7 +147,7 @@ async def _dispatch_job(
                 raise Exception(
                     f"Building container for simulator {simulator_version} took to long, job at status of {current_status}."  # noqa: E501
                 )
-        job_monitor.internal_unsubscribe(hpc_build_run.slurmjobid)
+        job_monitor.internal_unsubscribe(hpc_run.slurmjobid)
 
     sim_slurmjobid = await simulation_service_slurm.submit_simulation_job(
         simulation=simulation,
