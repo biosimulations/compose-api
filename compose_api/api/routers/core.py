@@ -12,7 +12,7 @@ from compose_api.btools.bsander.bsandr_utils.input_types import (
 )
 from compose_api.btools.bsander.execution import execute_bsander
 from compose_api.common.gateway.models import Namespace, RouterConfig, ServerMode
-from compose_api.common.gateway.utils import get_hpc_run_status
+from compose_api.common.gateway.utils import allow_list, get_hpc_run_status
 from compose_api.common.ssh.ssh_service import get_ssh_service
 from compose_api.config import get_settings
 from compose_api.dependencies import (
@@ -111,18 +111,7 @@ async def submit_simulation(background_tasks: BackgroundTasks, uploaded_file: Up
             background_tasks=background_tasks,
             job_monitor=job_monitor,
             # TODO: Put/Get actual allow list
-            pb_allow_list=PBAllowList(
-                allow_list=[
-                    "pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work",
-                    "pypi::cobra",
-                    "pypi::tellurium",
-                    "pypi::copasi-basico",
-                    "pypi::smoldyn",
-                    "pypi::numpy",
-                    "pypi::matplotlib",
-                    "pypi::scipy",
-                ]
-            ),
+            pb_allow_list=PBAllowList(allow_list=allow_list),
         )
     except Exception as e:
         logger.exception("Error running simulation")
@@ -171,16 +160,7 @@ async def analyze_simulation(uploaded_file: UploadFile) -> str:
                 output_dir=tmp_dir,
                 containerization_type=ContainerizationTypes.SINGLE,
                 containerization_engine=ContainerizationEngine.APPTAINER,
-                passlist_entries=[
-                    "pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work",
-                    "pypi::cobra",
-                    "pypi::tellurium",
-                    "pypi::copasi-basico",
-                    "pypi::smoldyn",
-                    "pypi::numpy",
-                    "pypi::matplotlib",
-                    "pypi::scipy",
-                ],
+                passlist_entries=allow_list,
             )
         )
     return singularity_rep.representation

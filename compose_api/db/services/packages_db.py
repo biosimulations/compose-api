@@ -6,12 +6,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from typing_extensions import override
 
 from compose_api.btools.bsander.bsandr_utils.input_types import ExperimentPrimaryDependencies
-from compose_api.db.tables_orm import (
+from compose_api.db.tables.package_tables import (
     BiGraphComputeTypeDB,
     ORMBiGraphCompute,
     ORMPackage,
-    ORMSimulatorToPackage,
     PackageTypeDB,
+)
+from compose_api.db.tables.simulator_tables import (
+    ORMSimulatorToPackage,
 )
 from compose_api.simulation.models import (
     BiGraphCompute,
@@ -25,7 +27,7 @@ from compose_api.simulation.models import (
 logger = logging.getLogger(__name__)
 
 
-class PackageDB(ABC):
+class PackageDatabaseService(ABC):
     @abstractmethod
     async def insert_package(self, package_outline: PackageOutline) -> RegisteredPackage:
         pass
@@ -69,7 +71,7 @@ class PackageDB(ABC):
         pass
 
 
-class PackageDBSQL(PackageDB):
+class PackageORMExecutor(PackageDatabaseService):
     async_session_maker: async_sessionmaker[AsyncSession]
 
     def __init__(self, async_engine_session_maker: async_sessionmaker[AsyncSession]) -> None:

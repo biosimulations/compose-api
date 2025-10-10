@@ -15,6 +15,7 @@ from compose_api.btools.bsander.bsandr_utils.input_types import (
 )
 from compose_api.btools.bsander.execution import execute_bsander
 from compose_api.btools.bsoil.introspect_package import introspect_package
+from compose_api.common.gateway.utils import allow_list
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.config import get_settings
@@ -24,7 +25,7 @@ from compose_api.simulation.hpc_utils import (
     get_experiment_id,
 )
 from compose_api.simulation.job_monitor import JobMonitor
-from compose_api.simulation.models import JobType, PBAllowList, SimulationRequest, SimulatorVersion
+from compose_api.simulation.models import JobStatus, JobType, PBAllowList, SimulationRequest, SimulatorVersion
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 from tests.fixtures import simulation_fixtures
 from tests.fixtures.mocks import TestBackgroundTask
@@ -46,7 +47,7 @@ async def test_build_simulator(
                 output_dir=temp_dir,
                 containerization_type=ContainerizationTypes.SINGLE,
                 containerization_engine=ContainerizationEngine.APPTAINER,
-                passlist_entries=["pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work"],
+                passlist_entries=allow_list,
             )
         )
 
@@ -56,18 +57,28 @@ async def test_build_simulator(
         packages.append(await database_service.get_package_db().insert_package(outline))
     simulator = await database_service.get_simulator_db().insert_simulator(singularity_def, packages)
     start_time = time.time()
-    slurm_job_id = await simulation_service_slurm.build_container(simulator)
+    random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
+    hpc_run = await simulation_service_slurm.build_container(simulator, random_str=random_string_7_hex)
 
     slurm_build_job: SlurmJob | None = None
     while start_time + (60 * 20) > time.time():  # No longer than twenty mins
-        slurm_build_job = await simulation_service_slurm.get_slurm_job(slurmjobid=slurm_job_id)
+        slurm_build_job = await simulation_service_slurm.get_slurm_job(slurmjobid=hpc_run.slurmjobid)
         if slurm_build_job is not None and slurm_build_job.is_done():
             break
         await asyncio.sleep(30)
 
+    db_view_of_run = await database_service.get_hpc_db().get_hpcrun(hpc_run.database_id)
+
     assert slurm_build_job is not None
     assert slurm_build_job.is_done()
     assert not slurm_build_job.is_failed()
+    assert db_view_of_run is not None
+    assert db_view_of_run.status == JobStatus.COMPLETED
+
+    for p in packages:
+        await database_service.get_package_db().delete_bigraph_package(p)
+    await database_service.get_hpc_db().delete_hpcrun(hpcrun_id=hpc_run.database_id)
+    await database_service.get_simulator_db().delete_simulator(simulator_id=simulator.database_id)
 
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
@@ -90,9 +101,7 @@ async def test_simulate(
         simulation_service_slurm=simulation_service_slurm,
         job_monitor=job_monitor,
         background_tasks=test_bg_tasks,
-        pb_allow_list=PBAllowList(
-            allow_list=["pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work"]
-        ),
+        pb_allow_list=PBAllowList(allow_list=allow_list),
     )
     assert sim_experiement is not None
     await test_bg_tasks.call_tasks()
@@ -158,6 +167,5 @@ async def test_simulator_not_in_allowlist(
         await test_bg_tasks.call_tasks()
         await simulation_service_slurm.submit_simulation_job(
             simulation=simulation,
-            database_service=database_service,
             experiment_id=experiement_id,
         )

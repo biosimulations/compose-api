@@ -8,7 +8,7 @@ from sqlalchemy.orm import InstrumentedAttribute
 from typing_extensions import override
 
 from compose_api.common.hpc.models import SlurmJob
-from compose_api.db.tables_orm import (
+from compose_api.db.tables.hpc_tables import (
     JobStatusDB,
     JobTypeDB,
     ORMHpcRun,
@@ -23,7 +23,7 @@ from compose_api.simulation.models import (
 logger = logging.getLogger(__name__)
 
 
-class HPCDatabase(ABC):
+class HPCDatabaseService(ABC):
     @abstractmethod
     async def insert_worker_event(self, worker_event: WorkerEvent, hpcrun_id: int) -> WorkerEvent:
         pass
@@ -81,7 +81,7 @@ class HPCDatabase(ABC):
         pass
 
 
-class HPCDatabaseSQL(HPCDatabase):
+class HPCORMExecutor(HPCDatabaseService):
     async_session_maker: async_sessionmaker[AsyncSession]
 
     def __init__(self, async_session_maker: async_sessionmaker[AsyncSession]):

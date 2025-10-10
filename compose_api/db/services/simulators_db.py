@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from typing_extensions import override
 
 from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr
-from compose_api.db.tables_orm import (
+from compose_api.db.tables.simulator_tables import (
     ORMSimulation,
     ORMSimulator,
     ORMSimulatorToPackage,
@@ -22,7 +22,7 @@ from compose_api.simulation.models import (
 logger = logging.getLogger(__name__)
 
 
-class SimulatorDB(ABC):
+class SimulatorDatabaseService(ABC):
     @abstractmethod
     async def insert_simulator(
         self, singularity_def_rep: ContainerizationFileRepr, packages_used: list[RegisteredPackage]
@@ -72,7 +72,7 @@ class SimulatorDB(ABC):
         pass
 
 
-class SimulatorDBSQL(SimulatorDB):
+class SimulatorORMExecutor(SimulatorDatabaseService):
     async_session_maker: async_sessionmaker[AsyncSession]
 
     def __init__(self, async_engine_session_maker: async_sessionmaker[AsyncSession]) -> None:
