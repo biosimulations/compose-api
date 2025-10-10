@@ -15,17 +15,10 @@ from compose_api.db.db_utils import create_db
 from compose_api.log_config import setup_logging
 from compose_api.simulation.data_service import DataService, DataServiceHpc
 from compose_api.simulation.job_monitor import JobMonitor
-from compose_api.simulation.simulation_service import SimulationService, SimulationServiceHpc
 from tests.fixtures.mocks import TestDataService
 
 logger = logging.getLogger(__name__)
 setup_logging(logger)
-
-
-def verify_service(service: DatabaseService | DataService | SimulationService | None) -> None:
-    if service is None:
-        logger.error(f"{service.__module__} is not initialized")
-        raise HTTPException(status_code=500, detail=f"{service.__module__} is not initialized")
 
 
 # ------- postgres database service (standalone or pytest) ------
@@ -66,6 +59,8 @@ def get_required_database_service() -> DatabaseService:
 
 
 # ------- simulation service (standalone or pytest) ------
+
+from compose_api.simulation.simulation_service import SimulationService, SimulationServiceHpc  # noqa: E402
 
 global_simulation_service: SimulationService | None = None
 
@@ -188,3 +183,9 @@ async def shutdown_standalone() -> None:
     if job_monitor:
         await job_monitor.close()
         set_job_monitor(None)
+
+
+def verify_service(service: DatabaseService | DataService | SimulationService | None) -> None:
+    if service is None:
+        logger.error(f"{service.__module__} is not initialized")
+        raise HTTPException(status_code=500, detail=f"{service.__module__} is not initialized")
