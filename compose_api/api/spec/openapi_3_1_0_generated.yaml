@@ -146,6 +146,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RegisteredSimulators'
+  /tools/copasi:
+    post:
+      tags:
+      - Simulators
+      summary: Use the tool copasi.
+      operationId: run-copasi
+      parameters:
+      - name: start_time
+        in: query
+        required: true
+        schema:
+          type: number
+          title: Start Time
+      - name: duration
+        in: query
+        required: true
+        schema:
+          type: number
+          title: Duration
+      - name: num_data_points
+        in: query
+        required: true
+        schema:
+          type: number
+          title: Num Data Points
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_run-copasi'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationExperiment'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /health:
     get:
       tags:
@@ -250,6 +294,16 @@ components:
       required:
       - uploaded_file
       title: Body_analyze-simulation-omex
+    Body_run-copasi:
+      properties:
+        sbml:
+          type: string
+          format: binary
+          title: Sbml
+      type: object
+      required:
+      - sbml
+      title: Body_run-copasi
     Body_run-simulation:
       properties:
         uploaded_file:

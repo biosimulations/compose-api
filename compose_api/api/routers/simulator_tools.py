@@ -1,4 +1,5 @@
 import logging
+import os
 import tempfile
 import zipfile
 from pathlib import Path
@@ -19,7 +20,6 @@ from compose_api.simulation.handlers import (
 )
 from compose_api.simulation.models import (
     PBAllowList,
-    RegisteredSimulators,
     SimulationExperiment,
     SimulationRequest,
 )
@@ -36,10 +36,10 @@ def get_server_url(dev: bool = True) -> ServerMode:
 config = RouterConfig(router=APIRouter(), prefix="/tools", dependencies=[])
 
 
-@config.router.get(
+@config.router.post(
     path="/copasi",
-    response_model=RegisteredSimulators,
-    operation_id="use-copasi",
+    response_model=SimulationExperiment,
+    operation_id="run-copasi",
     tags=["Simulators"],
     dependencies=[Depends(get_database_service)],
     summary="Use the tool copasi.",
@@ -55,7 +55,7 @@ async def run_copasi(
         logger.exception(msg="Failed to initialize Copasi run.", exc_info=e)
         raise HTTPException(status_code=500, detail=str(e))
 
-    with open("copasi.jinja") as f:
+    with open(os.path.dirname(__file__) + "/copasi.jinja") as f:
         template = Template(f.read())
         render = template.render(start_time=start_time, duration=duration, num_data_points=num_data_points)
 
@@ -63,7 +63,7 @@ async def run_copasi(
         with zipfile.ZipFile(tmp_dir + "/input.omex", "w") as omex:
             loaded_sbml = await get_file_from_uploaded_file(uploaded_file=sbml)
             omex.writestr(data=render, zinfo_or_arcname="copasi.pbif")
-            omex.write(loaded_sbml.name, arcname="interesting.sbml")
+            omex.write(loaded_sbml.absolute(), arcname="interesting.sbml")
         if omex.filename is None:
             raise HTTPException(500, "Can't create omex file.")
         copasi_request = SimulationRequest(omex_archive=Path(omex.filename))
