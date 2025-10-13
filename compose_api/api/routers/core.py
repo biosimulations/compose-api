@@ -1,6 +1,5 @@
 import logging
 import tempfile
-from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, UploadFile
 from starlette.responses import FileResponse, PlainTextResponse
@@ -12,7 +11,7 @@ from compose_api.btools.bsander.bsandr_utils.input_types import (
 )
 from compose_api.btools.bsander.execution import execute_bsander
 from compose_api.common.gateway.models import Namespace, RouterConfig, ServerMode
-from compose_api.common.gateway.utils import allow_list, get_hpc_run_status
+from compose_api.common.gateway.utils import allow_list, get_file_from_uploaded_file, get_hpc_run_status
 from compose_api.common.ssh.ssh_service import get_ssh_service
 from compose_api.config import get_settings
 from compose_api.dependencies import (
@@ -93,15 +92,8 @@ async def submit_simulation(background_tasks: BackgroundTasks, uploaded_file: Up
     logger.warning("NO VALIDATION YET")
     # Tmp file for future implementation
 
-    if uploaded_file is None or uploaded_file.filename is None or uploaded_file.size == 0:
-        raise HTTPException(status_code=400, detail="Empty uploaded file")
-
-    # TODO Make the suffix dynamic
-    with tempfile.NamedTemporaryFile(delete=False, suffix="." + uploaded_file.filename.rsplit(".", 1)[1]) as tmp_file:
-        contents = await uploaded_file.read()
-        tmp_file.write(contents)
-
-    simulation_request = SimulationRequest(omex_archive=Path(tmp_file.name))
+    up_file = await get_file_from_uploaded_file(uploaded_file=uploaded_file)
+    simulation_request = SimulationRequest(omex_archive=up_file)
 
     try:
         return await run_simulation(

@@ -1,6 +1,8 @@
 import logging
+import tempfile
+from pathlib import Path
 
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 
 from compose_api.db.database_service import DatabaseService
 from compose_api.simulation.models import HpcRun, JobType
@@ -44,6 +46,17 @@ async def get_hpc_run_status(db_service: DatabaseService, ref_id: int, job_type:
     if simulation_hpcrun is None:
         raise HTTPException(status_code=404, detail=f"{job_type} with id {ref_id} not found.")
     return simulation_hpcrun
+
+
+async def get_file_from_uploaded_file(uploaded_file: UploadFile) -> Path:
+    if uploaded_file is None or uploaded_file.filename is None or uploaded_file.size == 0:
+        raise HTTPException(status_code=400, detail="Empty uploaded file")
+
+    # TODO Make the suffix dynamic
+    with tempfile.NamedTemporaryFile(delete=False, suffix="." + uploaded_file.filename.rsplit(".", 1)[1]) as tmp_file:
+        contents = await uploaded_file.read()
+        tmp_file.write(contents)
+    return Path(tmp_file.name)
 
 
 allow_list = [
