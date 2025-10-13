@@ -75,6 +75,13 @@ def get_simulation_service() -> SimulationService | None:
     return global_simulation_service
 
 
+def get_required_simulation_service() -> SimulationService:
+    global global_simulation_service
+    if global_simulation_service is None:
+        raise ValueError("Simulation service is not initialized")
+    return global_simulation_service
+
+
 # ------ job monitor (standalone) -----------------------------
 
 global_job_monitor: JobMonitor | None = None
@@ -87,6 +94,13 @@ def set_job_monitor(job_monitor: JobMonitor | None) -> None:
 
 def get_job_monitor() -> JobMonitor | None:
     global global_job_monitor
+    return global_job_monitor
+
+
+def get_required_job_monitor() -> JobMonitor:
+    global global_job_monitor
+    if global_job_monitor is None:
+        raise ValueError("Job monitor is not initialized")
     return global_job_monitor
 
 
