@@ -55,6 +55,26 @@ async def get_simulator_list() -> RegisteredSimulators:
     return await get_simulator_versions()
 
 
+# @config.router.post(
+#     path="/simulator/register/bspil",
+#     response_model=list[RegisteredPackage],
+#     operation_id="regsiter-bspil",
+#     tags=["Simulators"],
+#     dependencies=[Depends(get_database_service)],
+#     summary="Register the package that contains Copasi and Tellurium.",
+# )
+# async def register_bspil() -> list[RegisteredPackage]:
+#     with open(os.path.dirname(__file__) + "/copasi.jinja") as f:
+#         dependencies, _ = determine_dependencies(f.read(), whitelist_entries=allow_list)
+#         dependencies = await get_required_database_service().get_package_db(
+#         ).dependencies_not_in_database(dependencies)
+#     package_outlines = introspect_package(dependencies)
+#     registered_packages = []
+#     for p in package_outlines:
+#         registered_packages.append(await get_required_database_service().get_package_db().insert_package(p))
+#     return registered_packages
+
+
 # @config.router.get(
 #     path="/simulator/process/list",
 #     response_model=RegisteredSimulators,
