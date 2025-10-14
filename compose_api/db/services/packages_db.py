@@ -17,6 +17,7 @@ from compose_api.db.tables.simulator_tables import (
 )
 from compose_api.simulation.models import (
     BiGraphCompute,
+    BiGraphComputeOutline,
     BiGraphComputeType,
     BiGraphProcess,
     BiGraphStep,
@@ -78,7 +79,9 @@ class PackageORMExecutor(PackageDatabaseService):
         self.async_session_maker = async_engine_session_maker
 
     @staticmethod
-    async def _insert_compute(session: AsyncSession, compute: BiGraphCompute, package: ORMPackage) -> ORMBiGraphCompute:
+    async def _insert_compute(
+        session: AsyncSession, compute: BiGraphComputeOutline, package: ORMPackage
+    ) -> ORMBiGraphCompute:
         new_orm_process = ORMBiGraphCompute(
             module=compute.module,
             name=compute.name,
@@ -92,19 +95,36 @@ class PackageORMExecutor(PackageDatabaseService):
 
     @override
     async def insert_package(self, package: PackageOutline) -> RegisteredPackage:
-        async with self.async_session_maker() as session:
+        """
+        Package name and origin type must be unique,
+        and not inserted in the table already otherwise an error will be raised.
+        Args:
+            package:
+
+        Returns: RegisteredPackage
+
+        """
+        async with self.async_session_maker() as session, session.begin():
             new_orm_package = ORMPackage(
                 package_type=PackageTypeDB.from_package_type(package.package_type),
                 name=package.name,
             )
             session.add(new_orm_package)
-            orm_processes: list[ORMBiGraphCompute] = []
+            processes: list[BiGraphProcess] = []
+            steps: list[BiGraphStep] = []
             await session.flush()
-            for process in package.processes:
-                orm_processes.append(await self._insert_compute(session, process, new_orm_package))
-            for step in package.steps:
-                orm_processes.append(await self._insert_compute(session, step, new_orm_package))
-            return new_orm_package.to_bigraph_package(package.processes, package.steps)
+            for compute in package.compute:
+                inserted_compute = await self._insert_compute(session, compute, new_orm_package)
+                await session.flush()
+                match inserted_compute.compute_type:
+                    case BiGraphComputeTypeDB.PROCESS:
+                        processes.append(inserted_compute.to_bigraph_process())
+                    case BiGraphComputeTypeDB.STEP:
+                        steps.append(inserted_compute.to_bigraph_step())
+                    case _:
+                        raise ValueError(f"Unknown compute type {inserted_compute.compute_type}")
+
+            return new_orm_package.to_bigraph_package(processes, steps)
 
     async def list_simulator_packages(self, simulator_id: int) -> list[RegisteredPackage]:
         async with self.async_session_maker() as session:

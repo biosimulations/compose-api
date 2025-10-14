@@ -80,13 +80,16 @@ class HpcRun(BaseModel):
     error_message: str | None = None  # Error message if the simulation failed
 
 
-class BiGraphCompute(BaseModel):
-    database_id: int
+class BiGraphComputeOutline(BaseModel):
     module: str
     name: str
     compute_type: BiGraphComputeType
     inputs: str
     outputs: str
+
+
+class BiGraphCompute(BiGraphComputeOutline):
+    database_id: int
 
 
 class BiGraphProcess(BiGraphCompute):
@@ -100,30 +103,27 @@ class BiGraphStep(BiGraphCompute):
 class PackageOutline(BaseModel):
     package_type: PackageType
     name: str
-    steps: list[BiGraphStep]
-    processes: list[BiGraphProcess]
+    compute: list[BiGraphComputeOutline]
 
     @staticmethod
     def from_pb_outline(pb_outline_json: dict[str, Any], name: str, package_type: PackageType) -> "PackageOutline":
-        processes = []
+        compute = []
         if "processes" in pb_outline_json:
             for process in pb_outline_json["processes"]:
-                processes.append(BiGraphProcess(compute_type=BiGraphComputeType.PROCESS, **process))
-        steps = []
+                compute.append(BiGraphComputeOutline(compute_type=BiGraphComputeType.PROCESS, **process))
         if "steps" in pb_outline_json:
             for step in pb_outline_json["steps"]:
-                steps.append(BiGraphStep(compute_type=BiGraphComputeType.STEP, **step))
+                compute.append(BiGraphComputeOutline(compute_type=BiGraphComputeType.STEP, **step))
 
-        return PackageOutline(
-            package_type=package_type,
-            name=name,
-            steps=steps,
-            processes=processes,
-        )
+        return PackageOutline(package_type=package_type, name=name, compute=compute)
 
 
-class RegisteredPackage(PackageOutline):
+class RegisteredPackage(BaseModel):
     database_id: int
+    package_type: PackageType
+    name: str
+    processes: list[BiGraphProcess]
+    steps: list[BiGraphStep]
 
 
 class Simulator(BaseModel):
