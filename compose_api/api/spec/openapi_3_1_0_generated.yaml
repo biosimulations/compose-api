@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: compose-api
-  version: 0.1.0
+  version: 0.2.0
 paths:
   /core/simulation/run:
     post:
@@ -230,9 +230,6 @@ components:
       title: BiGraphComputeType
     BiGraphProcess:
       properties:
-        database_id:
-          type: integer
-          title: Database Id
         module:
           type: string
           title: Module
@@ -247,20 +244,20 @@ components:
         outputs:
           type: string
           title: Outputs
+        database_id:
+          type: integer
+          title: Database Id
       type: object
       required:
-      - database_id
       - module
       - name
       - compute_type
       - inputs
       - outputs
+      - database_id
       title: BiGraphProcess
     BiGraphStep:
       properties:
-        database_id:
-          type: integer
-          title: Database Id
         module:
           type: string
           title: Module
@@ -275,14 +272,17 @@ components:
         outputs:
           type: string
           title: Outputs
+        database_id:
+          type: integer
+          title: Database Id
       type: object
       required:
-      - database_id
       - module
       - name
       - compute_type
       - inputs
       - outputs
+      - database_id
       title: BiGraphStep
     Body_analyze-simulation-omex:
       properties:
@@ -407,31 +407,31 @@ components:
       title: PackageType
     RegisteredPackage:
       properties:
+        database_id:
+          type: integer
+          title: Database Id
         package_type:
           $ref: '#/components/schemas/PackageType'
         name:
           type: string
           title: Name
-        steps:
-          items:
-            $ref: '#/components/schemas/BiGraphStep'
-          type: array
-          title: Steps
         processes:
           items:
             $ref: '#/components/schemas/BiGraphProcess'
           type: array
           title: Processes
-        database_id:
-          type: integer
-          title: Database Id
+        steps:
+          items:
+            $ref: '#/components/schemas/BiGraphStep'
+          type: array
+          title: Steps
       type: object
       required:
+      - database_id
       - package_type
       - name
-      - steps
       - processes
-      - database_id
+      - steps
       title: RegisteredPackage
     RegisteredSimulators:
       properties:

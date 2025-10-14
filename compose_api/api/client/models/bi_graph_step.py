@@ -16,25 +16,23 @@ T = TypeVar("T", bound="BiGraphStep")
 class BiGraphStep:
     """
     Attributes:
-        database_id (int):
         module (str):
         name (str):
         compute_type (BiGraphComputeType):
         inputs (str):
         outputs (str):
+        database_id (int):
     """
 
-    database_id: int
     module: str
     name: str
     compute_type: BiGraphComputeType
     inputs: str
     outputs: str
+    database_id: int
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        database_id = self.database_id
-
         module = self.module
 
         name = self.name
@@ -45,15 +43,17 @@ class BiGraphStep:
 
         outputs = self.outputs
 
+        database_id = self.database_id
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
-            "database_id": database_id,
             "module": module,
             "name": name,
             "compute_type": compute_type,
             "inputs": inputs,
             "outputs": outputs,
+            "database_id": database_id,
         })
 
         return field_dict
@@ -61,8 +61,6 @@ class BiGraphStep:
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        database_id = d.pop("database_id")
-
         module = d.pop("module")
 
         name = d.pop("name")
@@ -73,13 +71,15 @@ class BiGraphStep:
 
         outputs = d.pop("outputs")
 
+        database_id = d.pop("database_id")
+
         bi_graph_step = cls(
-            database_id=database_id,
             module=module,
             name=name,
             compute_type=compute_type,
             inputs=inputs,
             outputs=outputs,
+            database_id=database_id,
         )
 
         bi_graph_step.additional_properties = d
