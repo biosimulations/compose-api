@@ -2,7 +2,7 @@ import datetime
 import enum
 import logging
 
-from sqlalchemy import ForeignKey, func
+from sqlalchemy import ForeignKey, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from compose_api.db.db_utils import DeclarativeTableBase, package_table_name
@@ -48,7 +48,9 @@ class ORMPackage(DeclarativeTableBase):
     id: Mapped[int] = mapped_column(primary_key=True)
     created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
     package_type: Mapped[PackageTypeDB] = mapped_column(nullable=False)
-    name: Mapped[str] = mapped_column(nullable=False)
+    name: Mapped[str] = mapped_column(nullable=False, unique=True)
+
+    __table_args__ = (UniqueConstraint("name", "package_type", name="unique_package_name_and_type"),)
 
     @classmethod
     def from_bigraph_package(cls, package: RegisteredPackage) -> "ORMPackage":
