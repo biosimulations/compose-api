@@ -173,13 +173,31 @@ class PackageORMExecutor(PackageDatabaseService):
 
             return processes, steps
 
+    @staticmethod
+    async def _get_package_by_id(session: AsyncSession, package_id: int) -> ORMPackage | None:
+        stmt = select(ORMPackage).where(ORMPackage.id == package_id)
+        res: Result[tuple[ORMPackage]] = await session.execute(stmt)
+        return res.scalars().one_or_none()
+
+    @staticmethod
+    async def _get_compute_by_id(session: AsyncSession, package_id: int) -> ORMBiGraphCompute | None:
+        stmt = select(ORMBiGraphCompute).where(ORMBiGraphCompute.id == package_id)
+        res: Result[tuple[ORMBiGraphCompute]] = await session.execute(stmt)
+        return res.scalars().one_or_none()
+
     async def delete_bigraph_package(self, package: RegisteredPackage) -> None:
-        async with self.async_session_maker() as session:
-            await session.delete(ORMPackage.from_bigraph_package(package))
+        async with self.async_session_maker() as session, session.begin():
+            db_rep = await PackageORMExecutor._get_package_by_id(session, package.database_id)
+            if db_rep is None:
+                raise ValueError(f"Package id: {package.database_id} not found in database")
+            await session.delete(db_rep)
 
     async def delete_bigraph_compute(self, compute: BiGraphCompute) -> None:
-        async with self.async_session_maker() as session:
-            await session.delete(ORMBiGraphCompute.from_bigraph_compute(compute))
+        async with self.async_session_maker() as session, session.begin():
+            db_rep = await PackageORMExecutor._get_compute_by_id(session, compute.database_id)
+            if db_rep is None:
+                raise ValueError(f"Compute id: {compute.database_id} not found in database")
+            await session.delete(db_rep)
 
     async def dependencies_not_in_database(
         self, dependencies: ExperimentPrimaryDependencies
