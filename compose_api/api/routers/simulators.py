@@ -6,11 +6,15 @@ from compose_api.common.gateway.models import RouterConfig, ServerMode
 from compose_api.common.gateway.utils import get_hpc_run_status
 from compose_api.dependencies import (
     get_database_service,
+    get_required_database_service,
 )
 from compose_api.simulation.handlers import (
     get_simulator_versions,
 )
 from compose_api.simulation.models import (
+    BiGraphComputeType,
+    BiGraphProcess,
+    BiGraphStep,
     HpcRun,
     JobType,
     RegisteredSimulators,
@@ -53,6 +57,36 @@ async def get_simulator_build_status(simulator_id: int = Query(...)) -> HpcRun:
 )
 async def get_simulator_list() -> RegisteredSimulators:
     return await get_simulator_versions()
+
+
+@config.router.get(
+    path="/processes/list",
+    response_model=list[BiGraphProcess],
+    operation_id="get-processes-list",
+    tags=["Simulators"],
+    dependencies=[Depends(get_database_service)],
+    summary="Get the list of processes",
+)
+async def get_processes_list() -> list[BiGraphProcess]:
+    res: list[BiGraphProcess] = (
+        await get_required_database_service().get_package_db().list_all_computes(BiGraphComputeType.PROCESS)
+    )
+    return res
+
+
+@config.router.get(
+    path="/steps/list",
+    response_model=list[BiGraphStep],
+    operation_id="get-processes-list",
+    tags=["Simulators"],
+    dependencies=[Depends(get_database_service)],
+    summary="Get the list of processes",
+)
+async def get_steps_list() -> list[BiGraphStep]:
+    res: list[BiGraphStep] = (
+        await get_required_database_service().get_package_db().list_all_computes(BiGraphComputeType.STEP)
+    )
+    return res
 
 
 # @config.router.post(
