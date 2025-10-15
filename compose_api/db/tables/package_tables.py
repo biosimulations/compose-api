@@ -38,7 +38,9 @@ class BiGraphComputeTypeDB(enum.Enum):
         return BiGraphComputeType(self.value)
 
     @classmethod
-    def from_compute_type(cls, compute_type: BiGraphComputeType) -> "BiGraphComputeTypeDB":
+    def from_compute_type(cls, compute_type: BiGraphComputeType | None) -> "BiGraphComputeTypeDB":
+        if compute_type is None:
+            raise ValueError("No compute type specified")
         return BiGraphComputeTypeDB(compute_type.value)
 
 

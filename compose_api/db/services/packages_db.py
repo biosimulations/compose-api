@@ -1,5 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
+from typing import Any
 
 from sqlalchemy import Result, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -45,6 +46,10 @@ class PackageDatabaseService(ABC):
     async def list_computes_in_package(
         self, package_id: int, compute_type: BiGraphComputeType
     ) -> list[BiGraphProcess] | list[BiGraphStep]:
+        pass
+
+    @abstractmethod
+    async def list_all_computes(self, compute_type: BiGraphComputeType | None = None) -> Any:
         pass
 
     @abstractmethod
@@ -172,6 +177,23 @@ class PackageORMExecutor(PackageDatabaseService):
                     steps.append(compute.to_bigraph_step())
 
             return processes, steps
+
+    @override
+    async def list_all_computes(self, compute_type: BiGraphComputeType | None = None) -> Any:
+        async with self.async_session_maker() as session:
+            stmt = select(ORMBiGraphCompute)
+            if compute_type is not None:
+                stmt = stmt.where(
+                    ORMBiGraphCompute.compute_type == BiGraphComputeTypeDB.from_compute_type(compute_type)
+                )
+            result: Result[tuple[ORMBiGraphCompute]] = await session.execute(stmt)
+            match compute_type:
+                case BiGraphComputeType.PROCESS:
+                    return [k.to_bigraph_process() for k in result.scalars().all()]
+                case BiGraphComputeType.STEP:
+                    return [k.to_bigraph_step() for k in result.scalars().all()]
+                case _:
+                    return [k.to_bigraph_compute() for k in result.scalars().all()]
 
     @staticmethod
     async def _get_package_by_id(session: AsyncSession, package_id: int) -> ORMPackage | None:
