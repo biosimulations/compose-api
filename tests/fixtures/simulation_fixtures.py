@@ -103,15 +103,15 @@ async def simulator(database_service: DatabaseService) -> AsyncGenerator[Simulat
     simulator_packages = await database_service.get_package_db().list_simulator_packages(
         simulator_id=simulator.database_id
     )
+    await database_service.get_hpc_db().delete_hpcrun(fake_hpc_run.database_id)
+    await database_service.get_simulator_db().delete_simulator(simulator.database_id)
+
     for package in simulator_packages:
         for process in package.processes:
             await database_service.get_package_db().delete_bigraph_compute(process)
         for step in package.steps:
             await database_service.get_package_db().delete_bigraph_compute(step)
         await database_service.get_package_db().delete_bigraph_package(package)
-
-    await database_service.get_hpc_db().delete_hpcrun(fake_hpc_run.database_id)
-    await database_service.get_simulator_db().delete_simulator(simulator.database_id)
 
 
 def assert_test_sim_results(archive_results: Path, temp_dir: Path) -> None:

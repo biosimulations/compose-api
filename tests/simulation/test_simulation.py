@@ -75,10 +75,15 @@ async def test_build_simulator(
     assert db_view_of_run is not None
     assert db_view_of_run.status == JobStatus.COMPLETED
 
-    for p in packages:
-        await database_service.get_package_db().delete_bigraph_package(p)
     await database_service.get_hpc_db().delete_hpcrun(hpcrun_id=hpc_run.database_id)
     await database_service.get_simulator_db().delete_simulator(simulator_id=simulator.database_id)
+
+    for p in packages:
+        for s in p.steps:
+            await database_service.get_package_db().delete_bigraph_compute(s)
+        for process in p.processes:
+            await database_service.get_package_db().delete_bigraph_compute(process)
+        await database_service.get_package_db().delete_bigraph_package(p)
 
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
