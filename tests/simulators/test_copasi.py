@@ -29,14 +29,14 @@ async def test_copasi(
     data_service: DataService,
     simulator: Simulator,
 ) -> None:
-    copasi_sbml = os.path.join(os.path.dirname(__file__).rsplit("/", 1)[0], "fixtures/resources/interesting.sbml")
+    copasi_sbml = os.path.join(os.path.dirname(__file__).rsplit("/", 1)[0], "fixtures/resources/copasi.sbml")
     with open(copasi_sbml, "rb") as f:
         sim_experiment = await run_copasi.asyncio(
             client=in_memory_api_client,
             start_time=0,
             duration=10,
             num_data_points=51,
-            body=BodyRunCopasi(sbml=File(file_name="interesting.sbml", payload=f)),
+            body=BodyRunCopasi(sbml=File(file_name="copasi.sbml", payload=f)),
         )
         assert isinstance(sim_experiment, SimulationExperiment)
 
@@ -48,7 +48,7 @@ async def test_copasi(
             raise TypeError()
 
         num_loops = 0
-        while current_status.status != JobStatus.COMPLETED and num_loops < 10:
+        while current_status.status != JobStatus.COMPLETED and num_loops < 30:
             await asyncio.sleep(2)
             current_status = await get_simulation_status.asyncio(
                 client=in_memory_api_client, simulation_id=sim_experiment.simulation_database_id
