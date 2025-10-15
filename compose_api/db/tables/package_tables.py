@@ -88,9 +88,9 @@ class ORMBiGraphCompute(DeclarativeTableBase):
             id=compute.database_id,
             module=compute.module,
             name=compute.name,
-            compute_type=BiGraphComputeTypeDB(compute.compute_type),
-            input=compute.inputs,
-            output=compute.outputs,
+            compute_type=BiGraphComputeTypeDB.from_compute_type(compute.compute_type),
+            inputs=compute.inputs,
+            outputs=compute.outputs,
         )
 
     def to_bigraph_process(self) -> BiGraphProcess:
