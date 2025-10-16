@@ -47,30 +47,39 @@ config = RouterConfig(router=APIRouter(), prefix="/tools", dependencies=[])
 async def run_copasi(
     background_tasks: BackgroundTasks, sbml: UploadFile, start_time: float, duration: float, num_data_points: float
 ) -> SimulationExperiment:
+    with open(os.path.dirname(__file__) + "/copasi.jinja") as f:
+        template = Template(f.read())
+        render = template.render(start_time=start_time, duration=duration, num_data_points=num_data_points)
+
+    return await _run_simulator_in_pbif(
+        templated_pbif=render, simulator_name="Copasi", sbml_file=sbml, background_tasks=background_tasks
+    )
+
+
+async def _run_simulator_in_pbif(
+    templated_pbif: str, simulator_name: str, sbml_file: UploadFile, background_tasks: BackgroundTasks
+) -> SimulationExperiment:
+    # Create OMEX with all necessary files
+    with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
+        with zipfile.ZipFile(tmp_dir + "/input.omex", "w") as omex:
+            loaded_sbml = await get_file_from_uploaded_file(uploaded_file=sbml_file)
+            omex.writestr(data=templated_pbif, zinfo_or_arcname=f"{simulator_name}.pbif")
+            omex.write(loaded_sbml.absolute(), arcname="interesting.sbml")
+        if omex.filename is None:
+            raise HTTPException(500, "Can't create omex file.")
+        simulator_request = SimulationRequest(omex_archive=Path(omex.filename))
+
     try:
         sim_service = get_required_simulation_service()
         db_service = get_required_database_service()
         job_monitor = get_required_job_monitor()
     except ValueError as e:
-        logger.exception(msg="Failed to initialize Copasi run.", exc_info=e)
+        logger.exception(msg=f"Failed to initialize {simulator_name} run.", exc_info=e)
         raise HTTPException(status_code=500, detail=str(e))
-
-    with open(os.path.dirname(__file__) + "/copasi.jinja") as f:
-        template = Template(f.read())
-        render = template.render(start_time=start_time, duration=duration, num_data_points=num_data_points)
-
-    with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
-        with zipfile.ZipFile(tmp_dir + "/input.omex", "w") as omex:
-            loaded_sbml = await get_file_from_uploaded_file(uploaded_file=sbml)
-            omex.writestr(data=render, zinfo_or_arcname="copasi.pbif")
-            omex.write(loaded_sbml.absolute(), arcname="interesting.sbml")
-        if omex.filename is None:
-            raise HTTPException(500, "Can't create omex file.")
-        copasi_request = SimulationRequest(omex_archive=Path(omex.filename))
 
     try:
         return await run_simulation(
-            simulation_request=copasi_request,
+            simulation_request=simulator_request,
             database_service=db_service,
             simulation_service_slurm=sim_service,
             job_monitor=job_monitor,
@@ -78,5 +87,5 @@ async def run_copasi(
             background_tasks=background_tasks,
         )
     except Exception as e:
-        logger.exception(msg="Failed to start Copasi run", exc_info=e)
+        logger.exception(msg=f"Failed to start {simulator_name} run", exc_info=e)
         raise HTTPException(500)
