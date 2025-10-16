@@ -69,7 +69,7 @@ async def run_tellurium(
 ) -> SimulationExperiment:
     with open(os.path.dirname(__file__) + "/tellurium.jinja") as f:
         template = Template(f.read())
-        render = template.render(start_time=start_time, duration=end_time, num_data_points=num_data_points)
+        render = template.render(start_time=start_time, end_time=end_time, num_data_points=num_data_points)
     return await _run_simulator_in_pbif(
         templated_pbif=render, simulator_name="Tellurium", sbml_file=sbml, background_tasks=background_tasks
     )
