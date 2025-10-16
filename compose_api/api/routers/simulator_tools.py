@@ -56,6 +56,25 @@ async def run_copasi(
     )
 
 
+@config.router.post(
+    path="/tellurium",
+    response_model=SimulationExperiment,
+    operation_id="run-tellurium",
+    tags=["Simulators"],
+    dependencies=[Depends(get_database_service)],
+    summary="Use the tool tellurium.",
+)
+async def run_tellurium(
+    background_tasks: BackgroundTasks, sbml: UploadFile, start_time: float, end_time: float, num_data_points: float
+) -> SimulationExperiment:
+    with open(os.path.dirname(__file__) + "/tellurium.jinja") as f:
+        template = Template(f.read())
+        render = template.render(start_time=start_time, duration=end_time, num_data_points=num_data_points)
+    return await _run_simulator_in_pbif(
+        templated_pbif=render, simulator_name="Tellurium", sbml_file=sbml, background_tasks=background_tasks
+    )
+
+
 async def _run_simulator_in_pbif(
     templated_pbif: str, simulator_name: str, sbml_file: UploadFile, background_tasks: BackgroundTasks
 ) -> SimulationExperiment:
