@@ -77,7 +77,7 @@ async def get_processes_list() -> list[BiGraphProcess]:
 @config.router.get(
     path="/steps/list",
     response_model=list[BiGraphStep],
-    operation_id="get-processes-list",
+    operation_id="get-steps-list",
     tags=["Simulators"],
     dependencies=[Depends(get_database_service)],
     summary="Get the list of processes",
