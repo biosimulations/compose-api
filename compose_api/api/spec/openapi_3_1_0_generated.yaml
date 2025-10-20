@@ -107,6 +107,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /core/simulation/execute/sedml:
+    post:
+      tags:
+      - Simulations
+      summary: Execute sedml
+      operationId: execute-sedml
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_execute-sedml'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationExperiment'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /core/simulator/build/status:
     get:
       tags:
@@ -370,6 +395,16 @@ components:
       required:
       - uploaded_file
       title: Body_analyze-simulation-omex
+    Body_execute-sedml:
+      properties:
+        uploaded_file:
+          type: string
+          format: binary
+          title: Uploaded File
+      type: object
+      required:
+      - uploaded_file
+      title: Body_execute-sedml
     Body_run-copasi:
       properties:
         sbml:

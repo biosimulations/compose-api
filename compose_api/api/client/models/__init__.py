@@ -4,6 +4,7 @@ from .bi_graph_compute_type import BiGraphComputeType
 from .bi_graph_process import BiGraphProcess
 from .bi_graph_step import BiGraphStep
 from .body_analyze_simulation_omex import BodyAnalyzeSimulationOmex
+from .body_execute_sedml import BodyExecuteSedml
 from .body_run_copasi import BodyRunCopasi
 from .body_run_simulation import BodyRunSimulation
 from .body_run_tellurium import BodyRunTellurium
@@ -26,6 +27,7 @@ __all__ = (
     "BiGraphProcess",
     "BiGraphStep",
     "BodyAnalyzeSimulationOmex",
+    "BodyExecuteSedml",
     "BodyRunCopasi",
     "BodyRunSimulation",
     "BodyRunTellurium",
