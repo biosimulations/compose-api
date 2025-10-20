@@ -8,6 +8,7 @@ from biosimulators_utils.sedml.data_model import (  # type: ignore[import-untype
 )
 from biosimulators_utils.sedml.io import SedmlSimulationReader  # type: ignore[import-untyped]
 
+from compose_api.btools.sedml_compiler.sedml_representation_compiler import SimpleSedmlCompiler, ToolSuites
 from compose_api.btools.sedml_processor import SimpleSedmlRepresentation
 from tests.simulators.utils import test_dir
 
@@ -60,3 +61,50 @@ def test_simple_sedml_rep() -> None:
     sedml_path = f"{test_dir}/resources/BIOMD0000000012_url.sedml"
     simple_sed = SimpleSedmlRepresentation.sed_processor(sedml_path=Path(sedml_path))
     print(simple_sed)
+
+
+def test_sedml_compilation() -> None:
+    sedml_path = f"{test_dir}/resources/BIOMD0000000012_url.sedml"
+    simple_sed = SimpleSedmlRepresentation.sed_processor(sedml_path=Path(sedml_path))
+    pbif = SimpleSedmlCompiler.compile(simple_sed, ToolSuites.BASICO)
+    expected = """
+{
+    "composition": {
+        "sim_start_time": "float",
+        "sim_duration": "float",
+        "sim_num_data_points": "integer",
+        "time_course": {
+            "_type": "process",
+            "address": {"_type": "quote", "_default": "local:time_course"},
+            "_config": {
+                "sbml_file_path": "string",
+                "output_dir": "string"
+            },
+            "_inputs": {
+                "starting_time": "float",
+                "duration": "float",
+                "num_data_points": "integer"
+            },
+            "_outputs": {}
+        }
+    },
+    "state": {
+        "sim_start_time": 0.0,
+        "sim_duration": 10.0,
+        "sim_num_data_points": 1000,
+        "time_course": {
+            "_type" : "process",
+            "address": "python:pypi<git+https://github.com/biosimulators/bspil-basico.git@initial_work>@bspil_basico.legacy.run_basic_simulation.Legacy_RunBasicSBMLTimeCourseSimulation",
+            "config": {"sbml_file_path": "BIOMD0000000012_url.xml", "output_dir": "output}",
+            "interval": 1.0,
+            "inputs": {
+                "starting_time": ["sim_start_time"],
+                "duration": ["sim_duration"],
+                "num_data_points": ["sim_num_data_points"]
+            },
+            "outputs": {}
+        }
+    }
+}
+    """.strip()
+    assert expected == pbif

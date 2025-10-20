@@ -20,7 +20,7 @@ class SimpleSedmlRepresentation(BaseModel):
     num_points: int
 
     # Output
-    specie_ids: list[str]
+    species_ids: list[str]
     parameter_ids: list[str]
     compartments_ids: list[str]
     reactions_ids: list[str]
@@ -66,7 +66,7 @@ class SimpleSedmlRepresentation(BaseModel):
             start_time=time_course.output_start_time,
             end_time=time_course.output_end_time,
             num_points=time_course.number_of_points,
-            specie_ids=species,
+            species_ids=species,
             parameter_ids=parameters,
             compartments_ids=compartments,
             reactions_ids=reactions,
