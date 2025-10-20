@@ -290,7 +290,11 @@ async def get_results(experiment_id: str = Query()) -> FileResponse:
 
 
 @config.router.post(
-    path="/simulation/execute/sedml", operation_id="execute-sedml", tags=["Simulations"], summary="Execute sedml"
+    path="/simulation/execute/sedml",
+    response_model=SimulationExperiment,
+    operation_id="execute-sedml",
+    tags=["Simulations"],
+    summary="Execute sedml",
 )
 async def execute_sedml(uploaded_file: UploadFile, background_tasks: BackgroundTasks) -> SimulationExperiment:
     omex_archive: Path = await get_file_from_uploaded_file(uploaded_file=uploaded_file)
@@ -299,13 +303,14 @@ async def execute_sedml(uploaded_file: UploadFile, background_tasks: BackgroundT
             zip_ref.extractall(path=tmp_dir)
         for f in os.listdir(tmp_dir):
             if f.rsplit(".", 1)[-1] == "sedml":
-                rep = SimpleSedmlRepresentation.sed_processor(Path(f))
+                rep = SimpleSedmlRepresentation.sed_processor(Path(f"{tmp_dir}/{f}"))
                 pbif = SimpleSedmlCompiler.compile(sedml_repr=rep, tool_suite=ToolSuites.BASICO)
                 return await run_pbif(
                     templated_pbif=pbif,
                     simulator_name=rep.solver_kisao,
                     loaded_sbml=rep.sbml_path,
                     background_tasks=background_tasks,
+                    use_interesting=False,
                 )
 
     raise HTTPException(status_code=422, detail="Couldn't find any SedML file.")
