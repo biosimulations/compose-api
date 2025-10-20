@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: compose-api
-  version: 0.2.0
+  version: 0.2.2
 paths:
   /core/simulation/run:
     post:
