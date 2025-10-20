@@ -47,7 +47,7 @@ config = RouterConfig(router=APIRouter(), prefix="/tools", dependencies=[])
 async def run_copasi(
     background_tasks: BackgroundTasks, sbml: UploadFile, start_time: float, duration: float, num_data_points: float
 ) -> SimulationExperiment:
-    with open(os.path.dirname(__file__) + "/copasi.jinja") as f:
+    with open(os.path.dirname(__file__) + "/templates/copasi.jinja") as f:
         template = Template(f.read())
         render = template.render(start_time=start_time, duration=duration, num_data_points=num_data_points)
 
@@ -67,7 +67,7 @@ async def run_copasi(
 async def run_tellurium(
     background_tasks: BackgroundTasks, sbml: UploadFile, start_time: float, end_time: float, num_data_points: float
 ) -> SimulationExperiment:
-    with open(os.path.dirname(__file__) + "/tellurium.jinja") as f:
+    with open(os.path.dirname(__file__) + "/templates/tellurium.jinja") as f:
         template = Template(f.read())
         render = template.render(start_time=start_time, end_time=end_time, num_data_points=num_data_points)
     return await _run_simulator_in_pbif(
