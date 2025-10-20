@@ -115,13 +115,20 @@ async def run_simulation(
 
 
 async def run_pbif(
-    templated_pbif: str, simulator_name: str, loaded_sbml: Path, background_tasks: BackgroundTasks
+    templated_pbif: str,
+    simulator_name: str,
+    loaded_sbml: Path,
+    background_tasks: BackgroundTasks,
+    use_interesting: bool = True,
 ) -> SimulationExperiment:
     # Create OMEX with all necessary files
     with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
         with zipfile.ZipFile(tmp_dir + "/input.omex", "w") as omex:
             omex.writestr(data=templated_pbif, zinfo_or_arcname=f"{simulator_name}.pbif")
-            omex.write(loaded_sbml.absolute(), arcname="interesting.sbml")
+            if use_interesting:
+                omex.write(loaded_sbml.absolute(), arcname="interesting.sbml")
+            else:
+                omex.write(loaded_sbml.absolute(), arcname=loaded_sbml.name)
         if omex.filename is None:
             raise HTTPException(500, "Can't create omex file.")
         simulator_request = SimulationRequest(omex_archive=Path(omex.filename))
