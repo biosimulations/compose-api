@@ -24,6 +24,7 @@ class JobStatusDB(enum.Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    PENDING = "pending"
 
     def to_job_status(self) -> JobStatus:
         return JobStatus(self.value)

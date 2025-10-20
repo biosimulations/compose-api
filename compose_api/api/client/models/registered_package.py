@@ -21,48 +21,48 @@ T = TypeVar("T", bound="RegisteredPackage")
 class RegisteredPackage:
     """
     Attributes:
+        database_id (int):
         package_type (PackageType):
         name (str):
-        steps (list['BiGraphStep']):
         processes (list['BiGraphProcess']):
-        database_id (int):
+        steps (list['BiGraphStep']):
     """
 
+    database_id: int
     package_type: PackageType
     name: str
-    steps: list["BiGraphStep"]
     processes: list["BiGraphProcess"]
-    database_id: int
+    steps: list["BiGraphStep"]
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         from ..models.bi_graph_step import BiGraphStep
         from ..models.bi_graph_process import BiGraphProcess
 
+        database_id = self.database_id
+
         package_type = self.package_type.value
 
         name = self.name
-
-        steps = []
-        for steps_item_data in self.steps:
-            steps_item = steps_item_data.to_dict()
-            steps.append(steps_item)
 
         processes = []
         for processes_item_data in self.processes:
             processes_item = processes_item_data.to_dict()
             processes.append(processes_item)
 
-        database_id = self.database_id
+        steps = []
+        for steps_item_data in self.steps:
+            steps_item = steps_item_data.to_dict()
+            steps.append(steps_item)
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
+            "database_id": database_id,
             "package_type": package_type,
             "name": name,
-            "steps": steps,
             "processes": processes,
-            "database_id": database_id,
+            "steps": steps,
         })
 
         return field_dict
@@ -73,16 +73,11 @@ class RegisteredPackage:
         from ..models.bi_graph_process import BiGraphProcess
 
         d = dict(src_dict)
+        database_id = d.pop("database_id")
+
         package_type = PackageType(d.pop("package_type"))
 
         name = d.pop("name")
-
-        steps = []
-        _steps = d.pop("steps")
-        for steps_item_data in _steps:
-            steps_item = BiGraphStep.from_dict(steps_item_data)
-
-            steps.append(steps_item)
 
         processes = []
         _processes = d.pop("processes")
@@ -91,14 +86,19 @@ class RegisteredPackage:
 
             processes.append(processes_item)
 
-        database_id = d.pop("database_id")
+        steps = []
+        _steps = d.pop("steps")
+        for steps_item_data in _steps:
+            steps_item = BiGraphStep.from_dict(steps_item_data)
+
+            steps.append(steps_item)
 
         registered_package = cls(
+            database_id=database_id,
             package_type=package_type,
             name=name,
-            steps=steps,
             processes=processes,
-            database_id=database_id,
+            steps=steps,
         )
 
         registered_package.additional_properties = d

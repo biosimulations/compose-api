@@ -2,7 +2,7 @@ import datetime
 import enum
 import logging
 
-from sqlalchemy import ForeignKey, func
+from sqlalchemy import ForeignKey, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from compose_api.db.db_utils import DeclarativeTableBase, package_table_name
@@ -38,7 +38,9 @@ class BiGraphComputeTypeDB(enum.Enum):
         return BiGraphComputeType(self.value)
 
     @classmethod
-    def from_compute_type(cls, compute_type: BiGraphComputeType) -> "BiGraphComputeTypeDB":
+    def from_compute_type(cls, compute_type: BiGraphComputeType | None) -> "BiGraphComputeTypeDB":
+        if compute_type is None:
+            raise ValueError("No compute type specified")
         return BiGraphComputeTypeDB(compute_type.value)
 
 
@@ -48,7 +50,9 @@ class ORMPackage(DeclarativeTableBase):
     id: Mapped[int] = mapped_column(primary_key=True)
     created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
     package_type: Mapped[PackageTypeDB] = mapped_column(nullable=False)
-    name: Mapped[str] = mapped_column(nullable=False)
+    name: Mapped[str] = mapped_column(nullable=False, unique=True)
+
+    __table_args__ = (UniqueConstraint("name", "package_type", name="unique_package_name_and_type"),)
 
     @classmethod
     def from_bigraph_package(cls, package: RegisteredPackage) -> "ORMPackage":
@@ -86,9 +90,9 @@ class ORMBiGraphCompute(DeclarativeTableBase):
             id=compute.database_id,
             module=compute.module,
             name=compute.name,
-            compute_type=BiGraphComputeTypeDB(compute.compute_type),
-            input=compute.inputs,
-            output=compute.outputs,
+            compute_type=BiGraphComputeTypeDB.from_compute_type(compute.compute_type),
+            inputs=compute.inputs,
+            outputs=compute.outputs,
         )
 
     def to_bigraph_process(self) -> BiGraphProcess:

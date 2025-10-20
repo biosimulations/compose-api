@@ -1,5 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
+from typing import Any
 
 from sqlalchemy import Result, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -17,6 +18,7 @@ from compose_api.db.tables.simulator_tables import (
 )
 from compose_api.simulation.models import (
     BiGraphCompute,
+    BiGraphComputeOutline,
     BiGraphComputeType,
     BiGraphProcess,
     BiGraphStep,
@@ -44,6 +46,10 @@ class PackageDatabaseService(ABC):
     async def list_computes_in_package(
         self, package_id: int, compute_type: BiGraphComputeType
     ) -> list[BiGraphProcess] | list[BiGraphStep]:
+        pass
+
+    @abstractmethod
+    async def list_all_computes(self, compute_type: BiGraphComputeType | None = None) -> Any:
         pass
 
     @abstractmethod
@@ -78,7 +84,9 @@ class PackageORMExecutor(PackageDatabaseService):
         self.async_session_maker = async_engine_session_maker
 
     @staticmethod
-    async def _insert_compute(session: AsyncSession, compute: BiGraphCompute, package: ORMPackage) -> ORMBiGraphCompute:
+    async def _insert_compute(
+        session: AsyncSession, compute: BiGraphComputeOutline, package: ORMPackage
+    ) -> ORMBiGraphCompute:
         new_orm_process = ORMBiGraphCompute(
             module=compute.module,
             name=compute.name,
@@ -92,19 +100,36 @@ class PackageORMExecutor(PackageDatabaseService):
 
     @override
     async def insert_package(self, package: PackageOutline) -> RegisteredPackage:
-        async with self.async_session_maker() as session:
+        """
+        Package name and origin type must be unique,
+        and not inserted in the table already otherwise an error will be raised.
+        Args:
+            package:
+
+        Returns: RegisteredPackage
+
+        """
+        async with self.async_session_maker() as session, session.begin():
             new_orm_package = ORMPackage(
                 package_type=PackageTypeDB.from_package_type(package.package_type),
                 name=package.name,
             )
             session.add(new_orm_package)
-            orm_processes: list[ORMBiGraphCompute] = []
+            processes: list[BiGraphProcess] = []
+            steps: list[BiGraphStep] = []
             await session.flush()
-            for process in package.processes:
-                orm_processes.append(await self._insert_compute(session, process, new_orm_package))
-            for step in package.steps:
-                orm_processes.append(await self._insert_compute(session, step, new_orm_package))
-            return new_orm_package.to_bigraph_package(package.processes, package.steps)
+            for compute in package.compute:
+                inserted_compute = await self._insert_compute(session, compute, new_orm_package)
+                await session.flush()
+                match inserted_compute.compute_type:
+                    case BiGraphComputeTypeDB.PROCESS:
+                        processes.append(inserted_compute.to_bigraph_process())
+                    case BiGraphComputeTypeDB.STEP:
+                        steps.append(inserted_compute.to_bigraph_step())
+                    case _:
+                        raise ValueError(f"Unknown compute type {inserted_compute.compute_type}")
+
+            return new_orm_package.to_bigraph_package(processes, steps)
 
     async def list_simulator_packages(self, simulator_id: int) -> list[RegisteredPackage]:
         async with self.async_session_maker() as session:
@@ -153,13 +178,48 @@ class PackageORMExecutor(PackageDatabaseService):
 
             return processes, steps
 
-    async def delete_bigraph_package(self, package: RegisteredPackage) -> None:
+    @override
+    async def list_all_computes(self, compute_type: BiGraphComputeType | None = None) -> Any:
         async with self.async_session_maker() as session:
-            await session.delete(ORMPackage.from_bigraph_package(package))
+            stmt = select(ORMBiGraphCompute)
+            if compute_type is not None:
+                stmt = stmt.where(
+                    ORMBiGraphCompute.compute_type == BiGraphComputeTypeDB.from_compute_type(compute_type)
+                )
+            result: Result[tuple[ORMBiGraphCompute]] = await session.execute(stmt)
+            match compute_type:
+                case BiGraphComputeType.PROCESS:
+                    return [k.to_bigraph_process() for k in result.scalars().all()]
+                case BiGraphComputeType.STEP:
+                    return [k.to_bigraph_step() for k in result.scalars().all()]
+                case _:
+                    return [k.to_bigraph_compute() for k in result.scalars().all()]
+
+    @staticmethod
+    async def _get_package_by_id(session: AsyncSession, package_id: int) -> ORMPackage | None:
+        stmt = select(ORMPackage).where(ORMPackage.id == package_id)
+        res: Result[tuple[ORMPackage]] = await session.execute(stmt)
+        return res.scalars().one_or_none()
+
+    @staticmethod
+    async def _get_compute_by_id(session: AsyncSession, package_id: int) -> ORMBiGraphCompute | None:
+        stmt = select(ORMBiGraphCompute).where(ORMBiGraphCompute.id == package_id)
+        res: Result[tuple[ORMBiGraphCompute]] = await session.execute(stmt)
+        return res.scalars().one_or_none()
+
+    async def delete_bigraph_package(self, package: RegisteredPackage) -> None:
+        async with self.async_session_maker() as session, session.begin():
+            db_rep = await PackageORMExecutor._get_package_by_id(session, package.database_id)
+            if db_rep is None:
+                raise ValueError(f"Package id: {package.database_id} not found in database")
+            await session.delete(db_rep)
 
     async def delete_bigraph_compute(self, compute: BiGraphCompute) -> None:
-        async with self.async_session_maker() as session:
-            await session.delete(ORMBiGraphCompute.from_bigraph_compute(compute))
+        async with self.async_session_maker() as session, session.begin():
+            db_rep = await PackageORMExecutor._get_compute_by_id(session, compute.database_id)
+            if db_rep is None:
+                raise ValueError(f"Compute id: {compute.database_id} not found in database")
+            await session.delete(db_rep)
 
     async def dependencies_not_in_database(
         self, dependencies: ExperimentPrimaryDependencies

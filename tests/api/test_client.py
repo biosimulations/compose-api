@@ -1,4 +1,5 @@
 import asyncio
+import os
 import tempfile
 from pathlib import Path
 
@@ -17,7 +18,7 @@ from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import SimulationRequest, Simulator
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 from compose_api.version import __version__
-from tests.fixtures import simulation_fixtures
+from tests.simulators.utils import assert_test_sim_results, test_dir
 
 server_urls = [ServerMode.DEV, ServerMode.PROD]
 current_version = __version__
@@ -76,7 +77,8 @@ async def test_sim_run(
             experiment_results = temp_dir_path / Path("experiment_results.zip")
             with open(experiment_results, "wb") as results_file:
                 results_file.write(results.content)
-            simulation_fixtures.assert_test_sim_results(experiment_results, temp_dir_path)
+            report_csv_file = Path(os.path.join(test_dir, "fixtures/resources/report.csv"))
+            assert_test_sim_results(experiment_results, report_csv_file, temp_dir_path)
 
     # response = await httpx_client.get("/version")
     # assert response.status_code == 200

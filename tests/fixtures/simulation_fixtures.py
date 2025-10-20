@@ -1,11 +1,7 @@
-import math
 import os
 import tempfile
 from collections.abc import AsyncGenerator
-from pathlib import Path
-from zipfile import ZipFile
 
-import numpy
 import pytest_asyncio
 from nats.aio.client import Client as NATSClient
 
@@ -103,37 +99,15 @@ async def simulator(database_service: DatabaseService) -> AsyncGenerator[Simulat
     simulator_packages = await database_service.get_package_db().list_simulator_packages(
         simulator_id=simulator.database_id
     )
+    await database_service.get_hpc_db().delete_hpcrun(fake_hpc_run.database_id)
+    await database_service.get_simulator_db().delete_simulator(simulator.database_id)
+
     for package in simulator_packages:
         for process in package.processes:
             await database_service.get_package_db().delete_bigraph_compute(process)
         for step in package.steps:
             await database_service.get_package_db().delete_bigraph_compute(step)
         await database_service.get_package_db().delete_bigraph_package(package)
-
-    await database_service.get_hpc_db().delete_hpcrun(fake_hpc_run.database_id)
-    await database_service.get_simulator_db().delete_simulator(simulator.database_id)
-
-
-def assert_test_sim_results(archive_results: Path, temp_dir: Path) -> None:
-    experiment_result = temp_dir / "report.csv"
-    with ZipFile(archive_results) as zip_archive:
-        zip_archive.extractall(temp_dir)
-    test_dir = os.path.dirname(__file__).rsplit("/", 1)[0]
-    report_csv_file = Path(os.path.join(test_dir, "fixtures/resources/report.csv"))
-    experiment_numpy = numpy.genfromtxt(experiment_result, delimiter=",", dtype=object)
-    report_numpy = numpy.genfromtxt(report_csv_file, delimiter=",", dtype=object)
-    assert report_numpy.shape == experiment_numpy.shape
-    r, c = report_numpy.shape
-    for i in range(r):
-        for j in range(c):
-            report_val = report_numpy[i, j].decode("utf-8")
-            experiment_val = experiment_numpy[i, j].decode("utf-8")
-            try:
-                f_report = float(report_val)
-                f_exp = float(experiment_val)
-                assert math.isclose(f_report, f_exp, rel_tol=0, abs_tol=1e-9)
-            except ValueError:
-                assert report_val == experiment_val  # Must be string portion of report then (columns)
 
 
 # @pytest_asyncio.fixture

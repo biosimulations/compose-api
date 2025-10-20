@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: compose-api
-  version: 0.1.0
+  version: 0.2.0
 paths:
   /core/simulation/run:
     post:
@@ -146,6 +146,126 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RegisteredSimulators'
+  /core/processes/list:
+    get:
+      tags:
+      - Simulators
+      summary: Get the list of processes
+      operationId: get-processes-list
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/BiGraphProcess'
+                type: array
+                title: Response Get-Processes-List
+  /core/steps/list:
+    get:
+      tags:
+      - Simulators
+      summary: Get the list of processes
+      operationId: get-steps-list
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/BiGraphStep'
+                type: array
+                title: Response Get-Steps-List
+  /tools/copasi:
+    post:
+      tags:
+      - Simulators
+      summary: Use the tool copasi.
+      operationId: run-copasi
+      parameters:
+      - name: start_time
+        in: query
+        required: true
+        schema:
+          type: number
+          title: Start Time
+      - name: duration
+        in: query
+        required: true
+        schema:
+          type: number
+          title: Duration
+      - name: num_data_points
+        in: query
+        required: true
+        schema:
+          type: number
+          title: Num Data Points
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_run-copasi'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationExperiment'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /tools/tellurium:
+    post:
+      tags:
+      - Simulators
+      summary: Use the tool tellurium.
+      operationId: run-tellurium
+      parameters:
+      - name: start_time
+        in: query
+        required: true
+        schema:
+          type: number
+          title: Start Time
+      - name: end_time
+        in: query
+        required: true
+        schema:
+          type: number
+          title: End Time
+      - name: num_data_points
+        in: query
+        required: true
+        schema:
+          type: number
+          title: Num Data Points
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_run-tellurium'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationExperiment'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /health:
     get:
       tags:
@@ -186,9 +306,6 @@ components:
       title: BiGraphComputeType
     BiGraphProcess:
       properties:
-        database_id:
-          type: integer
-          title: Database Id
         module:
           type: string
           title: Module
@@ -203,20 +320,20 @@ components:
         outputs:
           type: string
           title: Outputs
+        database_id:
+          type: integer
+          title: Database Id
       type: object
       required:
-      - database_id
       - module
       - name
       - compute_type
       - inputs
       - outputs
+      - database_id
       title: BiGraphProcess
     BiGraphStep:
       properties:
-        database_id:
-          type: integer
-          title: Database Id
         module:
           type: string
           title: Module
@@ -231,14 +348,17 @@ components:
         outputs:
           type: string
           title: Outputs
+        database_id:
+          type: integer
+          title: Database Id
       type: object
       required:
-      - database_id
       - module
       - name
       - compute_type
       - inputs
       - outputs
+      - database_id
       title: BiGraphStep
     Body_analyze-simulation-omex:
       properties:
@@ -250,6 +370,16 @@ components:
       required:
       - uploaded_file
       title: Body_analyze-simulation-omex
+    Body_run-copasi:
+      properties:
+        sbml:
+          type: string
+          format: binary
+          title: Sbml
+      type: object
+      required:
+      - sbml
+      title: Body_run-copasi
     Body_run-simulation:
       properties:
         uploaded_file:
@@ -260,6 +390,16 @@ components:
       required:
       - uploaded_file
       title: Body_run-simulation
+    Body_run-tellurium:
+      properties:
+        sbml:
+          type: string
+          format: binary
+          title: Sbml
+      type: object
+      required:
+      - sbml
+      title: Body_run-tellurium
     ContainerizationFileRepr:
       properties:
         representation:
@@ -353,31 +493,31 @@ components:
       title: PackageType
     RegisteredPackage:
       properties:
+        database_id:
+          type: integer
+          title: Database Id
         package_type:
           $ref: '#/components/schemas/PackageType'
         name:
           type: string
           title: Name
-        steps:
-          items:
-            $ref: '#/components/schemas/BiGraphStep'
-          type: array
-          title: Steps
         processes:
           items:
             $ref: '#/components/schemas/BiGraphProcess'
           type: array
           title: Processes
-        database_id:
-          type: integer
-          title: Database Id
+        steps:
+          items:
+            $ref: '#/components/schemas/BiGraphStep'
+          type: array
+          title: Steps
       type: object
       required:
+      - database_id
       - package_type
       - name
-      - steps
       - processes
-      - database_id
+      - steps
       title: RegisteredPackage
     RegisteredSimulators:
       properties:

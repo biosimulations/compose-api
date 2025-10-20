@@ -27,8 +27,8 @@ from compose_api.simulation.hpc_utils import (
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import JobStatus, JobType, PBAllowList, SimulationRequest, SimulatorVersion
 from compose_api.simulation.simulation_service import SimulationServiceHpc
-from tests.fixtures import simulation_fixtures
 from tests.fixtures.mocks import TestBackgroundTask
+from tests.simulators.utils import assert_test_sim_results, test_dir
 
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
@@ -75,10 +75,15 @@ async def test_build_simulator(
     assert db_view_of_run is not None
     assert db_view_of_run.status == JobStatus.COMPLETED
 
-    for p in packages:
-        await database_service.get_package_db().delete_bigraph_package(p)
     await database_service.get_hpc_db().delete_hpcrun(hpcrun_id=hpc_run.database_id)
     await database_service.get_simulator_db().delete_simulator(simulator_id=simulator.database_id)
+
+    for p in packages:
+        for s in p.steps:
+            await database_service.get_package_db().delete_bigraph_compute(s)
+        for process in p.processes:
+            await database_service.get_package_db().delete_bigraph_compute(process)
+        await database_service.get_package_db().delete_bigraph_package(p)
 
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
@@ -135,7 +140,8 @@ async def test_simulate(
         archive_result = temp_dir_path / os.path.basename(remote_experiment_result)
         # SCP used because in test FS is not mounted
         await ssh_service.scp_download(archive_result, remote_experiment_result)
-        simulation_fixtures.assert_test_sim_results(archive_result, temp_dir_path)
+        report_csv_file = Path(os.path.join(test_dir, "fixtures/resources/report.csv"))
+        assert_test_sim_results(archive_result, report_csv_file, temp_dir_path)
 
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")

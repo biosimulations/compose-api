@@ -31,7 +31,8 @@ dependencies = [
     "tqdm>=4.67.1,<5",
     "seaborn>=0.13.2,<0.14",
     "python-dateutil>=2.9.0.post0,<3",
-    "spython"
+    "spython",
+    "jinja2>=3.1.6",
 ]
 
 [project.urls]

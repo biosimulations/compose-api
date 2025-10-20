@@ -96,6 +96,16 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
     async def insert_simulator(
         self, singularity_def_rep: ContainerizationFileRepr, packages_used: list[RegisteredPackage]
     ) -> SimulatorVersion:
+        """
+        Inserts a simulator into the database alongside
+        creating intermediate tables which correlate this simulator to its various packages.
+        Args:
+            singularity_def_rep:
+            packages_used:
+
+        Returns: SimulatorVersion
+
+        """
         async with self.async_session_maker() as session, session.begin():
             singularity_hash = get_singularity_hash(singularity_def_rep)
             stmt1 = (
@@ -151,10 +161,22 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
 
     @override
     async def delete_simulator(self, simulator_id: int) -> None:
+        """
+        Remove both the simulator and the intermediate links this simulator has to various packages in the DB.
+        Args:
+            simulator_id:
+
+        Returns:
+        """
         async with self.async_session_maker() as session, session.begin():
             orm_simulator: ORMSimulator | None = await self._get_orm_simulator(session, simulator_id=simulator_id)
             if orm_simulator is None:
                 raise Exception(f"Simulator with id {simulator_id} not found in the database")
+            stmt = select(ORMSimulatorToPackage).where(ORMSimulatorToPackage.simulator_id == simulator_id)
+            rst = (await session.execute(stmt)).scalars().all()
+            for k in rst:
+                await session.delete(k)
+            await session.flush()
             await session.delete(orm_simulator)
 
     @override
