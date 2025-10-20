@@ -95,7 +95,10 @@ def test_sedml_compilation() -> None:
         "time_course": {
             "_type" : "process",
             "address": "python:pypi<git+https://github.com/biosimulators/bspil-basico.git@initial_work>@bspil_basico.legacy.run_basic_simulation.Legacy_RunBasicSBMLTimeCourseSimulation",
-            "config": {"sbml_file_path": "BIOMD0000000012_url.xml", "output_dir": "output}",
+            "config": {
+                "sbml_file_path": "BIOMD0000000012_url.xml",
+                "output_dir": "output"
+            },
             "interval": 1.0,
             "inputs": {
                 "starting_time": ["sim_start_time"],
