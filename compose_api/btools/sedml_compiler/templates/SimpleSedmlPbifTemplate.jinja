@@ -25,7 +25,10 @@
         "time_course": {
             "_type" : "process",
             "address": "{{ simulator_address }}",
-            "config": {"sbml_file_path": "{{ sbml_file_path }}", "output_dir": "{{ output_dir }}}",
+            "config": {
+                "sbml_file_path": "{{ sbml_file_path }}",
+                "output_dir": "{{ output_dir }}"
+            },
             "interval": 1.0,
             "inputs": {
                 "starting_time": ["sim_start_time"],

@@ -67,7 +67,7 @@ class SimpleSedmlRepresentation(BaseModel):
                     reactions.append(id_value)
                 else:
                     raise ValueError("Unknown target type")
-        rel_path = sedml_path.name.rsplit("/", 1)[0]
+        rel_path = str(sedml_path.absolute()).rsplit("/", 1)[0]
         return SimpleSedmlRepresentation(
             solver_kisao=time_course.algorithm.kisao_id,
             sbml_path=Path(f"{rel_path}/{sed_doc.models[0].source}"),

@@ -31,7 +31,7 @@ class SimpleSedmlCompiler:
                 duration=duration,
                 num_data_points=sedml_repr.num_points,
                 simulator_address=simulator_address,
-                sbml_file_path=sedml_repr.sbml_path,
+                sbml_file_path=sedml_repr.sbml_path.name,
                 output_dir="output",
             )
 
