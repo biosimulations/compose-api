@@ -116,6 +116,5 @@ async def test_sedml_run(
             experiment_results = temp_dir_path / Path("experiment_results.zip")
             with open(experiment_results, "wb") as results_file:
                 results_file.write(results.content)
-            # report_csv_file = Path(os.path.join(test_dir, "fixtures/resources/report.csv"))
-            print(experiment_results)
-            # assert_test_sim_results(experiment_results, report_csv_file, temp_dir_path)
+            report_csv_file = Path(os.path.join(test_dir, "resources/BIOMD0000000012.csv"))
+            assert_test_sim_results(experiment_results, report_csv_file, temp_dir_path, difference_tolerance=1e-3)
