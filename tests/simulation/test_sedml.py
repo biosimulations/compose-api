@@ -73,6 +73,7 @@ def test_sedml_compilation() -> None:
         "sim_start_time": "float",
         "sim_duration": "float",
         "sim_num_data_points": "integer",
+        "sim_end_time": "float",
         "time_course": {
             "_type": "process",
             "address": {"_type": "quote", "_default": "local:time_course"},
@@ -91,6 +92,7 @@ def test_sedml_compilation() -> None:
     "state": {
         "sim_start_time": 0.0,
         "sim_duration": 10.0,
+        "sim_end_time": 10.0,
         "sim_num_data_points": 1000,
         "time_course": {
             "_type" : "process",
@@ -103,6 +105,7 @@ def test_sedml_compilation() -> None:
             "inputs": {
                 "starting_time": ["sim_start_time"],
                 "duration": ["sim_duration"],
+                "end_time": ["sim_end_time"],
                 "num_data_points": ["sim_num_data_points"]
             },
             "outputs": {}
