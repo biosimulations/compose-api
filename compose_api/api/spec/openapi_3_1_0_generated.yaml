@@ -113,12 +113,18 @@ paths:
       - Simulations
       summary: Execute sedml
       operationId: execute-sedml
+      parameters:
+      - name: tool_suite
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/ToolSuites'
       requestBody:
+        required: true
         content:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/Body_execute-sedml'
-        required: true
       responses:
         '200':
           description: Successful Response
@@ -626,6 +632,12 @@ components:
       - packages
       - database_id
       title: SimulatorVersion
+    ToolSuites:
+      type: string
+      enum:
+      - basico
+      - tellurium
+      title: ToolSuites
     ValidationError:
       properties:
         loc:

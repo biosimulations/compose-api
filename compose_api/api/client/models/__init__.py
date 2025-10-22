@@ -20,6 +20,7 @@ from .registered_simulators import RegisteredSimulators
 from .simulation_experiment import SimulationExperiment
 from .simulation_experiment_metadata import SimulationExperimentMetadata
 from .simulator_version import SimulatorVersion
+from .tool_suites import ToolSuites
 from .validation_error import ValidationError
 
 __all__ = (
@@ -43,5 +44,6 @@ __all__ = (
     "SimulationExperiment",
     "SimulationExperimentMetadata",
     "SimulatorVersion",
+    "ToolSuites",
     "ValidationError",
 )

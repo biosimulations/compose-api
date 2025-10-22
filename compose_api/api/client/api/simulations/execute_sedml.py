@@ -10,18 +10,28 @@ from ... import errors
 from ...models.body_execute_sedml import BodyExecuteSedml
 from ...models.http_validation_error import HTTPValidationError
 from ...models.simulation_experiment import SimulationExperiment
+from ...models.tool_suites import ToolSuites
 from typing import cast
 
 
 def _get_kwargs(
     *,
     body: BodyExecuteSedml,
+    tool_suite: ToolSuites,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
+
+    params: dict[str, Any] = {}
+
+    json_tool_suite = tool_suite.value
+    params["tool_suite"] = json_tool_suite
+
+    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
     _kwargs: dict[str, Any] = {
         "method": "post",
         "url": "/core/simulation/execute/sedml",
+        "params": params,
     }
 
     _kwargs["files"] = body.to_multipart()
@@ -62,10 +72,12 @@ def sync_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
     body: BodyExecuteSedml,
+    tool_suite: ToolSuites,
 ) -> Response[Union[HTTPValidationError, SimulationExperiment]]:
     """Execute sedml
 
     Args:
+        tool_suite (ToolSuites):
         body (BodyExecuteSedml):
 
     Raises:
@@ -78,6 +90,7 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         body=body,
+        tool_suite=tool_suite,
     )
 
     response = client.get_httpx_client().request(
@@ -91,10 +104,12 @@ def sync(
     *,
     client: Union[AuthenticatedClient, Client],
     body: BodyExecuteSedml,
+    tool_suite: ToolSuites,
 ) -> Optional[Union[HTTPValidationError, SimulationExperiment]]:
     """Execute sedml
 
     Args:
+        tool_suite (ToolSuites):
         body (BodyExecuteSedml):
 
     Raises:
@@ -108,6 +123,7 @@ def sync(
     return sync_detailed(
         client=client,
         body=body,
+        tool_suite=tool_suite,
     ).parsed
 
 
@@ -115,10 +131,12 @@ async def asyncio_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
     body: BodyExecuteSedml,
+    tool_suite: ToolSuites,
 ) -> Response[Union[HTTPValidationError, SimulationExperiment]]:
     """Execute sedml
 
     Args:
+        tool_suite (ToolSuites):
         body (BodyExecuteSedml):
 
     Raises:
@@ -131,6 +149,7 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         body=body,
+        tool_suite=tool_suite,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -142,10 +161,12 @@ async def asyncio(
     *,
     client: Union[AuthenticatedClient, Client],
     body: BodyExecuteSedml,
+    tool_suite: ToolSuites,
 ) -> Optional[Union[HTTPValidationError, SimulationExperiment]]:
     """Execute sedml
 
     Args:
+        tool_suite (ToolSuites):
         body (BodyExecuteSedml):
 
     Raises:
@@ -160,5 +181,6 @@ async def asyncio(
         await asyncio_detailed(
             client=client,
             body=body,
+            tool_suite=tool_suite,
         )
     ).parsed
