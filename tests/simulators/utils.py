@@ -64,7 +64,7 @@ def assert_test_sim_results(
     archive_results: os.PathLike[str],
     expected_csv_path: os.PathLike[str],
     temp_dir: os.PathLike[str],
-    difference_tolerance=1e-9,
+    difference_tolerance: float = 1e-9,
 ) -> None:
     with ZipFile(archive_results) as zip_archive:
         zip_archive.extractall(temp_dir)
