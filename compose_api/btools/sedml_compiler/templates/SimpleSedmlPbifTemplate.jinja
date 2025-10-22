@@ -3,6 +3,7 @@
         "sim_start_time": "float",
         "sim_duration": "float",
         "sim_num_data_points": "integer",
+        "sim_end_time": "float",
         "time_course": {
             "_type": "process",
             "address": {"_type": "quote", "_default": "local:time_course"},
@@ -21,6 +22,7 @@
     "state": {
         "sim_start_time": {{ start_time }},
         "sim_duration": {{ duration }},
+        "sim_end_time": {{ end_time }},
         "sim_num_data_points": {{ num_data_points }},
         "time_course": {
             "_type" : "process",
@@ -33,6 +35,7 @@
             "inputs": {
                 "starting_time": ["sim_start_time"],
                 "duration": ["sim_duration"],
+                "end_time": ["sim_end_time"],
                 "num_data_points": ["sim_num_data_points"]
             },
             "outputs": {}

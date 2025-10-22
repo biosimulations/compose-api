@@ -7,8 +7,8 @@ from compose_api.btools.sedml_processor import SimpleSedmlRepresentation
 
 
 class ToolSuites(Enum):
-    BASICO = 1
-    TELLURIUM = 2
+    BASICO = "basico"
+    TELLURIUM = "tellurium"
 
 
 class SimpleSedmlCompiler:
@@ -22,8 +22,10 @@ class SimpleSedmlCompiler:
         simulator_address: str
         if tool_suite == ToolSuites.BASICO:
             simulator_address = "python:pypi<git+https://github.com/biosimulators/bspil-basico.git@initial_work>@bspil_basico.legacy.run_basic_simulation.Legacy_RunBasicSBMLTimeCourseSimulation"
+        elif tool_suite == ToolSuites.TELLURIUM:
+            simulator_address = "python:pypi<git+https://github.com/biosimulators/bspil-basico.git@initial_work>@bspil_basico.legacy.tellerium.TelluriumTimeCourseStep"
         else:
-            raise NotImplementedError()
+            raise NotImplementedError(f"Unsupported tool suite: {tool_suite}")
         with open(os.path.dirname(__file__) + "/templates/SimpleSedmlPbifTemplate.jinja") as f:
             template = Template(f.read())
             return template.render(
@@ -33,6 +35,7 @@ class SimpleSedmlCompiler:
                 simulator_address=simulator_address,
                 sbml_file_path=sedml_repr.sbml_path.name,
                 output_dir="output",
+                end_time=sedml_repr.end_time,
             )
 
         # done!

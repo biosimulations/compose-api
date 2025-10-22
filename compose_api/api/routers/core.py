@@ -296,7 +296,9 @@ async def get_results(experiment_id: str = Query()) -> FileResponse:
     tags=["Simulations"],
     summary="Execute sedml",
 )
-async def execute_sedml(uploaded_file: UploadFile, background_tasks: BackgroundTasks) -> SimulationExperiment:
+async def execute_sedml(
+    uploaded_file: UploadFile, tool_suite: ToolSuites, background_tasks: BackgroundTasks
+) -> SimulationExperiment:
     omex_archive: Path = await get_file_from_uploaded_file(uploaded_file=uploaded_file)
     with tempfile.TemporaryDirectory() as tmp_dir:
         with zipfile.ZipFile(omex_archive, "r") as zip_ref:
@@ -304,7 +306,7 @@ async def execute_sedml(uploaded_file: UploadFile, background_tasks: BackgroundT
         for f in os.listdir(tmp_dir):
             if f.rsplit(".", 1)[-1] == "sedml":
                 rep = SimpleSedmlRepresentation.sed_processor(Path(f"{tmp_dir}/{f}"))
-                pbif = SimpleSedmlCompiler.compile(sedml_repr=rep, tool_suite=ToolSuites.BASICO)
+                pbif = SimpleSedmlCompiler.compile(sedml_repr=rep, tool_suite=tool_suite)
                 return await run_pbif(
                     templated_pbif=pbif,
                     simulator_name=rep.solver_kisao,
