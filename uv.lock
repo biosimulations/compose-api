@@ -391,7 +391,7 @@ requires-dist = [
 dev = [
     { name = "deptry", specifier = ">=0.23.0,<0.24" },
     { name = "mypy", specifier = ">=1.5.1,<2" },
-    { name = "openapi-python-client", specifier = ">=0.25.2,<0.26" },
+    { name = "openapi-python-client", specifier = ">=0.26.2,<0.27" },
     { name = "pre-commit", specifier = ">=3.4.0,<4" },
     { name = "pytest", specifier = ">=8.3.5,<9" },
     { name = "pytest-asyncio", specifier = ">=1.0.0,<2" },
@@ -1386,7 +1386,7 @@ wheels = [
 
 [[package]]
 name = "openapi-python-client"
-version = "0.25.3"
+version = "0.26.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
@@ -1401,9 +1401,9 @@ dependencies = [
     { name = "typer" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f9/af/df5579c9a3cf515501518634c9c2004fa0999a810a0ef1145fa3bc82beac/openapi_python_client-0.25.3.tar.gz", hash = "sha256:cafc6b5aebd0c55fe7be4d400b24d3b107f7ec64923b8117ef8aa7ceb2a918a4", size = 124703, upload-time = "2025-07-28T01:25:53.66Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a1/dd/eda1ecf8bec21dd92f4729a743adb1e496b2bb67e2b60ce6652d74efc477/openapi_python_client-0.26.2.tar.gz", hash = "sha256:99ed575573b49c322456052a344bcdb352edc520c3b7a7fed62347ab6a03c60b", size = 126186, upload-time = "2025-10-06T14:20:42.225Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5f/d2/539333a5cf2f14f5dd9aa8a3a73a4029464328e3f6ac4350577a28ea08ce/openapi_python_client-0.25.3-py3-none-any.whl", hash = "sha256:008e4c5f3079f312c135b55b142eb9616eafbd739ad6d5f8e95add726d1a02f2", size = 182159, upload-time = "2025-07-28T01:25:51.941Z" },
+    { url = "https://files.pythonhosted.org/packages/a5/97/5cbc4147d67bf4dbe428f4c41cfac808e2b61c2c1a71ce2ec52a4f604569/openapi_python_client-0.26.2-py3-none-any.whl", hash = "sha256:5b615bf359872a77c220797cce0214d02ab7552d9ef5bc2c11b24d8dda609ad4", size = 183641, upload-time = "2025-10-06T14:20:40.457Z" },
 ]
 
 [[package]]
