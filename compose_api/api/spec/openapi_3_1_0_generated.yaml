@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: compose-api
-  version: 0.2.0
+  version: 0.2.2
 paths:
   /core/simulation/run:
     post:
@@ -101,6 +101,37 @@ paths:
             application/octet-stream:
               schema:
                 format: binary
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /core/simulation/execute/sedml:
+    post:
+      tags:
+      - Simulations
+      summary: Execute sedml
+      operationId: execute-sedml
+      parameters:
+      - name: tool_suite
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/ToolSuites'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_execute-sedml'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationExperiment'
         '422':
           description: Validation Error
           content:
@@ -370,6 +401,16 @@ components:
       required:
       - uploaded_file
       title: Body_analyze-simulation-omex
+    Body_execute-sedml:
+      properties:
+        uploaded_file:
+          type: string
+          format: binary
+          title: Uploaded File
+      type: object
+      required:
+      - uploaded_file
+      title: Body_execute-sedml
     Body_run-copasi:
       properties:
         sbml:
@@ -591,6 +632,12 @@ components:
       - packages
       - database_id
       title: SimulatorVersion
+    ToolSuites:
+      type: string
+      enum:
+      - basico
+      - tellurium
+      title: ToolSuites
     ValidationError:
       properties:
         loc:

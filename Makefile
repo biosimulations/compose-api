@@ -4,6 +4,11 @@ install: ## Install the virtual environment and install the pre-commit hooks
 	@uv sync
 	@uv run pre-commit install
 
+.PHONY: run
+run: ##
+	@echo "🚀 Run local server."
+	@uvicorn compose_api.api.main:app --host 0.0.0.0 --port 8000 --reload
+
 .PHONY: check
 check: ## Run code quality tools.
 	@echo "🚀 Checking lock file consistency with 'pyproject.toml'"

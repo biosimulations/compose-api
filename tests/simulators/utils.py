@@ -61,7 +61,10 @@ async def check_experiment_run(sim_experiment: Any, in_memory_api_client: Client
 
 
 def assert_test_sim_results(
-    archive_results: os.PathLike[str], expected_csv_path: os.PathLike[str], temp_dir: os.PathLike[str]
+    archive_results: os.PathLike[str],
+    expected_csv_path: os.PathLike[str],
+    temp_dir: os.PathLike[str],
+    difference_tolerance: float = 1e-9,
 ) -> None:
     with ZipFile(archive_results) as zip_archive:
         zip_archive.extractall(temp_dir)
@@ -77,7 +80,7 @@ def assert_test_sim_results(
             try:
                 f_report = float(report_val)
                 f_exp = float(experiment_val)
-                assert math.isclose(f_report, f_exp, rel_tol=0, abs_tol=1e-9)
+                assert math.isclose(f_report, f_exp, rel_tol=0, abs_tol=difference_tolerance)
             except ValueError:
                 assert report_val == experiment_val  # Must be string portion of report then (columns)
 

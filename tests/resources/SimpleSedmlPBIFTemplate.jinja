@@ -1,0 +1,41 @@
+{
+    "composition": {
+        "sim_start_time": "float",
+        "sim_duration": "float",
+        "sim_num_data_points": "integer",
+        "time_course": {
+            "_type": "process",
+            "address": {"_type": "quote", "_default": "local:time_course"},
+            "_config": {
+                "sbml_file_path": "string",
+                "output_dir": "string"
+            },
+            "_inputs": {
+                "starting_time": "float",
+                "duration": "float",
+                "num_data_points": "integer"
+            },
+            "_outputs": {}
+        }
+    },
+    "state": {
+        "sim_start_time": {{ start_time }},
+        "sim_duration": {{ duration }},
+        "sim_num_data_points": {{ num_data_points }},
+        "time_course": {
+            "_type" : "process",
+            "address": "{{ simulator_address }}",
+            "config": {
+                "sbml_file_path": "{{ sbml_file_path }}",
+                "output_dir": "{{ output_dir }}"
+            },
+            "interval": 1.0,
+            "inputs": {
+                "starting_time": ["sim_start_time"],
+                "duration": ["sim_duration"],
+                "num_data_points": ["sim_num_data_points"]
+            },
+            "outputs": {}
+        }
+    }
+}
