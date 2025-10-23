@@ -75,7 +75,7 @@ config = RouterConfig(router=APIRouter(), prefix="/core", dependencies=[])
     path="/simulation/run",
     operation_id="run-simulation",
     response_model=SimulationExperiment,
-    tags=["Simulations"],
+    tags=["Execute"],
     dependencies=[Depends(get_simulation_service), Depends(get_database_service)],
     summary="Run a simulation",
 )
@@ -143,7 +143,7 @@ async def submit_simulation(background_tasks: BackgroundTasks, uploaded_file: Up
     response_class=PlainTextResponse,
     description="Resulting container definition file",
     operation_id="analyze-simulation-omex",
-    tags=["Simulations"],
+    tags=["Execute"],
     summary="""Analyze a process bi-graph,
     and determine the singularity definition file which would build an environment it can run in.""",
 )
@@ -169,7 +169,7 @@ async def analyze_simulation(uploaded_file: UploadFile) -> str:
     path="/simulation/run/status",
     response_model=HpcRun,
     operation_id="get-simulation-status",
-    tags=["Simulations"],
+    tags=["Results"],
     dependencies=[Depends(get_database_service)],
     summary="Get the simulation status record by its ID",
 )
@@ -270,7 +270,7 @@ async def get_simulation_status(simulation_id: int = Query(...)) -> HpcRun:
         }
     },
     operation_id="get-simulation-results-file",
-    tags=["Simulations"],
+    tags=["Results"],
     dependencies=[Depends(get_simulation_service), Depends(get_ssh_service)],
     summary="Get simulation results as a zip file",
 )
@@ -296,7 +296,7 @@ async def get_results(simulation_id: int = Query()) -> FileResponse:
     path="/simulation/execute/sedml",
     response_model=SimulationExperiment,
     operation_id="execute-sedml",
-    tags=["Simulations"],
+    tags=["Execute"],
     summary="Execute sedml",
 )
 async def execute_sedml(

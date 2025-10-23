@@ -36,7 +36,7 @@ config = RouterConfig(router=APIRouter(), prefix="/core", dependencies=[])
     path="/simulator/build/status",
     response_model=HpcRun,
     operation_id="get-simulator-build-status",
-    tags=["Simulators"],
+    tags=["Results"],
     dependencies=[Depends(get_database_service)],
     summary="Get the simulator build status record by its ID",
 )
@@ -51,7 +51,7 @@ async def get_simulator_build_status(simulator_id: int = Query(...)) -> HpcRun:
     path="/simulator/list",
     response_model=RegisteredSimulators,
     operation_id="get-simulator-list",
-    tags=["Simulators"],
+    tags=["Compute"],
     dependencies=[Depends(get_database_service)],
     summary="Get the list of simulators",
 )
@@ -63,7 +63,7 @@ async def get_simulator_list() -> RegisteredSimulators:
     path="/processes/list",
     response_model=list[BiGraphProcess],
     operation_id="get-processes-list",
-    tags=["Simulators"],
+    tags=["Compute"],
     dependencies=[Depends(get_database_service)],
     summary="Get the list of processes",
 )
@@ -78,7 +78,7 @@ async def get_processes_list() -> list[BiGraphProcess]:
     path="/steps/list",
     response_model=list[BiGraphStep],
     operation_id="get-steps-list",
-    tags=["Simulators"],
+    tags=["Compute"],
     dependencies=[Depends(get_database_service)],
     summary="Get the list of processes",
 )
