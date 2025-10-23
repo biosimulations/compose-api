@@ -114,7 +114,6 @@ async def run_simulation(
     background_tasks.add_task(remove_temp_dir)
 
     return SimulationExperiment(
-        experiment_id=experiment_id,
         simulation_database_id=simulation.database_id,
         simulator_database_id=simulator_version.database_id,
     )

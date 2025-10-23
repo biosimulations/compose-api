@@ -88,12 +88,12 @@ paths:
       summary: Get simulation results as a zip file
       operationId: get-simulation-results-file
       parameters:
-      - name: experiment_id
+      - name: simulation_id
         in: query
         required: true
         schema:
-          type: string
-          title: Experiment Id
+          type: integer
+          title: Simulation Id
       responses:
         '200':
           description: Simulation result zip file
@@ -579,9 +579,6 @@ components:
       title: RegisteredSimulators
     SimulationExperiment:
       properties:
-        experiment_id:
-          type: string
-          title: Experiment Id
         simulation_database_id:
           type: integer
           title: Simulation Database Id
@@ -598,7 +595,6 @@ components:
           title: Metadata
       type: object
       required:
-      - experiment_id
       - simulation_database_id
       - simulator_database_id
       title: SimulationExperiment
