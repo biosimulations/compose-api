@@ -56,6 +56,10 @@ class SimulatorDatabaseService(ABC):
         pass
 
     @abstractmethod
+    async def get_simulations_experiment_id(self, simulation_id: int) -> str:
+        pass
+
+    @abstractmethod
     async def list_simulations_that_use_simulator(self, simulator_id: int) -> list[Simulation]:
         pass
 
@@ -225,6 +229,14 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
                 simulator_version=orm_simulator.to_simulator_version(),
             )
             return simulation
+
+    @override
+    async def get_simulations_experiment_id(self, simulation_id: int) -> str:
+        async with self.async_session_maker() as session:
+            orm_simulation: ORMSimulation | None = await self._get_orm_simulation(session, simulation_id)
+            if orm_simulation is None:
+                raise LookupError(f"Simulation with id {simulation_id} does not exist")
+            return orm_simulation.experiment_id
 
     @override
     async def list_simulations_that_use_simulator(self, simulator_id: int) -> list[Simulation]:

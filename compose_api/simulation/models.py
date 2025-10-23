@@ -174,7 +174,6 @@ class PBAllowList(BaseModel):
 
 
 class SimulationExperiment(BaseModel):
-    experiment_id: str
     simulation_database_id: int
     simulator_database_id: int
     last_updated: str = Field(default_factory=lambda: str(datetime.datetime.now()))

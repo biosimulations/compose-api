@@ -23,6 +23,7 @@ from compose_api.dependencies import (
     get_data_service,
     get_database_service,
     get_job_monitor,
+    get_required_database_service,
     get_simulation_service,
 )
 from compose_api.simulation.handlers import (
@@ -273,12 +274,14 @@ async def get_simulation_status(simulation_id: int = Query(...)) -> HpcRun:
     dependencies=[Depends(get_simulation_service), Depends(get_ssh_service)],
     summary="Get simulation results as a zip file",
 )
-async def get_results(experiment_id: str = Query()) -> FileResponse:
+async def get_results(simulation_id: int = Query()) -> FileResponse:
     service = get_data_service()
+    db_service = get_required_database_service()
     if service is None:
         logger.error("Data service is not initialized")
         raise HTTPException(status_code=500, detail="Data service is not initialized")
     try:
+        experiment_id = await db_service.get_simulator_db().get_simulations_experiment_id(simulation_id=simulation_id)
         zip_path = await service.get_results_zip(experiment_id, Namespace(get_settings().namespace))
         file_response = FileResponse(
             path=zip_path, filename=f"{experiment_id}_results.zip", media_type="application/zip"
