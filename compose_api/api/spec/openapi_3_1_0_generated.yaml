@@ -3,216 +3,10 @@ info:
   title: compose-api
   version: 0.2.2
 paths:
-  /core/simulation/run:
+  /curated/copasi:
     post:
       tags:
-      - Simulations
-      summary: Run a simulation
-      operationId: run-simulation
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Body_run-simulation'
-        required: true
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SimulationExperiment'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /core/simulation/analyze:
-    post:
-      tags:
-      - Simulations
-      summary: "Analyze a process bi-graph,\n    and determine the singularity definition\
-        \ file which would build an environment it can run in."
-      description: Resulting container definition file
-      operationId: analyze-simulation-omex
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Body_analyze-simulation-omex'
-        required: true
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            text/plain:
-              schema:
-                type: string
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /core/simulation/run/status:
-    get:
-      tags:
-      - Simulations
-      summary: Get the simulation status record by its ID
-      operationId: get-simulation-status
-      parameters:
-      - name: simulation_id
-        in: query
-        required: true
-        schema:
-          type: integer
-          title: Simulation Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HpcRun'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /core/simulation/run/results/file:
-    get:
-      tags:
-      - Simulations
-      summary: Get simulation results as a zip file
-      operationId: get-simulation-results-file
-      parameters:
-      - name: simulation_id
-        in: query
-        required: true
-        schema:
-          type: integer
-          title: Simulation Id
-      responses:
-        '200':
-          description: Simulation result zip file
-          content:
-            application/octet-stream:
-              schema:
-                format: binary
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /core/simulation/execute/sedml:
-    post:
-      tags:
-      - Simulations
-      summary: Execute sedml
-      operationId: execute-sedml
-      parameters:
-      - name: tool_suite
-        in: query
-        required: true
-        schema:
-          $ref: '#/components/schemas/ToolSuites'
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Body_execute-sedml'
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SimulationExperiment'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /core/simulator/build/status:
-    get:
-      tags:
-      - Simulators
-      summary: Get the simulator build status record by its ID
-      operationId: get-simulator-build-status
-      parameters:
-      - name: simulator_id
-        in: query
-        required: true
-        schema:
-          type: integer
-          title: Simulator Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HpcRun'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /core/simulator/list:
-    get:
-      tags:
-      - Simulators
-      summary: Get the list of simulators
-      operationId: get-simulator-list
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RegisteredSimulators'
-  /core/processes/list:
-    get:
-      tags:
-      - Simulators
-      summary: Get the list of processes
-      operationId: get-processes-list
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                items:
-                  $ref: '#/components/schemas/BiGraphProcess'
-                type: array
-                title: Response Get-Processes-List
-  /core/steps/list:
-    get:
-      tags:
-      - Simulators
-      summary: Get the list of processes
-      operationId: get-steps-list
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                items:
-                  $ref: '#/components/schemas/BiGraphStep'
-                type: array
-                title: Response Get-Steps-List
-  /tools/copasi:
-    post:
-      tags:
-      - Simulators
+      - Curated
       summary: Use the tool copasi.
       operationId: run-copasi
       parameters:
@@ -253,10 +47,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /tools/tellurium:
+  /curated/tellurium:
     post:
       tags:
-      - Simulators
+      - Curated
       summary: Use the tool tellurium.
       operationId: run-tellurium
       parameters:
@@ -297,6 +91,212 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /simulation/run:
+    post:
+      tags:
+      - Simulation
+      summary: Run a simulation
+      operationId: run-simulation
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_run-simulation'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationExperiment'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /simulation/analyze:
+    post:
+      tags:
+      - Simulation
+      summary: "Analyze a process bi-graph,\n    and determine the singularity definition\
+        \ file which would build an environment it can run in."
+      description: Resulting container definition file
+      operationId: analyze-simulation-omex
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_analyze-simulation-omex'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/plain:
+              schema:
+                type: string
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /simulation/execute/sedml:
+    post:
+      tags:
+      - Simulation
+      summary: Execute sedml
+      operationId: execute-sedml
+      parameters:
+      - name: tool_suite
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/ToolSuites'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_execute-sedml'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationExperiment'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /results/simulation/status:
+    get:
+      tags:
+      - Results
+      summary: Get the simulation status record by its ID
+      operationId: get-simulation-status
+      parameters:
+      - name: simulation_id
+        in: query
+        required: true
+        schema:
+          type: integer
+          title: Simulation Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HpcRun'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /results/simulation/results/file:
+    get:
+      tags:
+      - Results
+      summary: Get simulation results as a zip file
+      operationId: get-simulation-results-file
+      parameters:
+      - name: simulation_id
+        in: query
+        required: true
+        schema:
+          type: integer
+          title: Simulation Id
+      responses:
+        '200':
+          description: Simulation result zip file
+          content:
+            application/octet-stream:
+              schema:
+                format: binary
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /results/simulator/build/status:
+    get:
+      tags:
+      - Results
+      summary: Get the simulator build status record by its ID
+      operationId: get-simulator-build-status
+      parameters:
+      - name: simulator_id
+        in: query
+        required: true
+        schema:
+          type: integer
+          title: Simulator Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HpcRun'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /core/simulator/list:
+    get:
+      tags:
+      - Compute
+      summary: Get the list of simulators
+      operationId: get-simulator-list
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisteredSimulators'
+  /core/processes/list:
+    get:
+      tags:
+      - Compute
+      summary: Get the list of processes
+      operationId: get-processes-list
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/BiGraphProcess'
+                type: array
+                title: Response Get-Processes-List
+  /core/steps/list:
+    get:
+      tags:
+      - Compute
+      summary: Get the list of processes
+      operationId: get-steps-list
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/BiGraphStep'
+                type: array
+                title: Response Get-Steps-List
   /health:
     get:
       tags:

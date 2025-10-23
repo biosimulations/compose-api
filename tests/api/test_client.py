@@ -5,10 +5,7 @@ from pathlib import Path
 import pytest
 
 from compose_api.api.client import Client
-from compose_api.api.client.api.simulations import (
-    execute_sedml,
-    run_simulation,
-)
+from compose_api.api.client.api.simulation import execute_sedml, run_simulation
 from compose_api.api.client.models import (
     BodyExecuteSedml,
     HTTPValidationError,

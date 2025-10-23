@@ -23,7 +23,7 @@ def _get_kwargs(
 
     _kwargs: dict[str, Any] = {
         "method": "get",
-        "url": "/core/simulation/run/results/file",
+        "url": "/results/simulation/results/file",
         "params": params,
     }
 

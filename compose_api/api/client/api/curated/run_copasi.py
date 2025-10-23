@@ -7,30 +7,34 @@ from ...client import AuthenticatedClient, Client
 from ...types import Response, UNSET
 from ... import errors
 
-from ...models.body_execute_sedml import BodyExecuteSedml
+from ...models.body_run_copasi import BodyRunCopasi
 from ...models.http_validation_error import HTTPValidationError
 from ...models.simulation_experiment import SimulationExperiment
-from ...models.tool_suites import ToolSuites
 from typing import cast
 
 
 def _get_kwargs(
     *,
-    body: BodyExecuteSedml,
-    tool_suite: ToolSuites,
+    body: BodyRunCopasi,
+    start_time: float,
+    duration: float,
+    num_data_points: float,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
 
     params: dict[str, Any] = {}
 
-    json_tool_suite = tool_suite.value
-    params["tool_suite"] = json_tool_suite
+    params["start_time"] = start_time
+
+    params["duration"] = duration
+
+    params["num_data_points"] = num_data_points
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
     _kwargs: dict[str, Any] = {
         "method": "post",
-        "url": "/core/simulation/execute/sedml",
+        "url": "/curated/copasi",
         "params": params,
     }
 
@@ -71,14 +75,18 @@ def _build_response(
 def sync_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: BodyExecuteSedml,
-    tool_suite: ToolSuites,
+    body: BodyRunCopasi,
+    start_time: float,
+    duration: float,
+    num_data_points: float,
 ) -> Response[Union[HTTPValidationError, SimulationExperiment]]:
-    """Execute sedml
+    """Use the tool copasi.
 
     Args:
-        tool_suite (ToolSuites):
-        body (BodyExecuteSedml):
+        start_time (float):
+        duration (float):
+        num_data_points (float):
+        body (BodyRunCopasi):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -90,7 +98,9 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         body=body,
-        tool_suite=tool_suite,
+        start_time=start_time,
+        duration=duration,
+        num_data_points=num_data_points,
     )
 
     response = client.get_httpx_client().request(
@@ -103,14 +113,18 @@ def sync_detailed(
 def sync(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: BodyExecuteSedml,
-    tool_suite: ToolSuites,
+    body: BodyRunCopasi,
+    start_time: float,
+    duration: float,
+    num_data_points: float,
 ) -> Optional[Union[HTTPValidationError, SimulationExperiment]]:
-    """Execute sedml
+    """Use the tool copasi.
 
     Args:
-        tool_suite (ToolSuites):
-        body (BodyExecuteSedml):
+        start_time (float):
+        duration (float):
+        num_data_points (float):
+        body (BodyRunCopasi):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -123,21 +137,27 @@ def sync(
     return sync_detailed(
         client=client,
         body=body,
-        tool_suite=tool_suite,
+        start_time=start_time,
+        duration=duration,
+        num_data_points=num_data_points,
     ).parsed
 
 
 async def asyncio_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: BodyExecuteSedml,
-    tool_suite: ToolSuites,
+    body: BodyRunCopasi,
+    start_time: float,
+    duration: float,
+    num_data_points: float,
 ) -> Response[Union[HTTPValidationError, SimulationExperiment]]:
-    """Execute sedml
+    """Use the tool copasi.
 
     Args:
-        tool_suite (ToolSuites):
-        body (BodyExecuteSedml):
+        start_time (float):
+        duration (float):
+        num_data_points (float):
+        body (BodyRunCopasi):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -149,7 +169,9 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         body=body,
-        tool_suite=tool_suite,
+        start_time=start_time,
+        duration=duration,
+        num_data_points=num_data_points,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -160,14 +182,18 @@ async def asyncio_detailed(
 async def asyncio(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: BodyExecuteSedml,
-    tool_suite: ToolSuites,
+    body: BodyRunCopasi,
+    start_time: float,
+    duration: float,
+    num_data_points: float,
 ) -> Optional[Union[HTTPValidationError, SimulationExperiment]]:
-    """Execute sedml
+    """Use the tool copasi.
 
     Args:
-        tool_suite (ToolSuites):
-        body (BodyExecuteSedml):
+        start_time (float):
+        duration (float):
+        num_data_points (float):
+        body (BodyRunCopasi):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -181,6 +207,8 @@ async def asyncio(
         await asyncio_detailed(
             client=client,
             body=body,
-            tool_suite=tool_suite,
+            start_time=start_time,
+            duration=duration,
+            num_data_points=num_data_points,
         )
     ).parsed
