@@ -54,7 +54,7 @@ async def check_experiment_run(sim_experiment: Any, in_memory_api_client: Client
     assert current_status.status == JobStatus.COMPLETED
 
     results: Response[HTTPValidationError] = await get_simulation_results_file.asyncio_detailed(
-        client=in_memory_api_client, experiment_id=sim_experiment.experiment_id
+        client=in_memory_api_client, simulation_id=sim_experiment.simulation_database_id
     )
     assert results.status_code == 200
     return results
