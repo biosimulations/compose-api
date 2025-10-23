@@ -1,5 +1,7 @@
+import asyncio
 import tempfile
 from pathlib import Path
+from types import CoroutineType, FunctionType
 from typing import Annotated, Any, Callable
 
 from fastapi import BackgroundTasks
@@ -48,5 +50,11 @@ class TestBackgroundTask(BackgroundTasks):
         self.tasks_to_execute.append(func)
 
     async def call_tasks(self) -> None:
-        for func in self.tasks_to_execute:
-            await func()
+        while len(self.tasks_to_execute) > 0:
+            func: FunctionType | CoroutineType[Any, Any, Any] = self.tasks_to_execute.pop(0)
+            if asyncio.iscoroutinefunction(func):
+                await func()
+            elif isinstance(func, FunctionType):
+                func()
+            else:
+                raise TypeError(f"Unexpected type {type(func)}")
