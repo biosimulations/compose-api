@@ -31,7 +31,7 @@ jobs:
 
       - name: Edit Software Version via Kustomize
         run: |
-          sed -i -e "s/version = .*/version = '${TAG_NAME}'/" pyproject.toml
+          sed -i -e "s/^version = .*/version = '${TAG_NAME}'/" pyproject.toml
 
           pushd compose_api
           sed -i -e "s/__version__ = .*/__version__ = '${TAG_NAME}'/" version.py
@@ -43,7 +43,7 @@ jobs:
           author_name: Ezequiel-Valencia
           author_email: ezq.valencia@gmail.com
           branch: main
-          message: 'Changed version tag to ${TAG_NAME}'
+          message: 'Changed version tag to ${{ env.TAG_NAME }}'
           signoff: true
         env:
           # This is necessary in order to push a commit to the repo

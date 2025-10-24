@@ -107,7 +107,7 @@ exclude = [".venv/*"]
 ignore = ["DEP002", "DEP003", "DEP004"]
 
 [tool.ruff]
-target-version = '0.2.3'
+target-version = 'py39'
 line-length = 120
 fix = true
 
