@@ -1,11 +1,12 @@
 import asyncio
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from types import CoroutineType, FunctionType
-from typing import Annotated, Any, Callable
+from typing import Annotated, Any, ParamSpec
 
 from fastapi import BackgroundTasks
-from typing_extensions import Doc, ParamSpec
+from typing_extensions import Doc
 
 from compose_api.common.gateway.models import Namespace
 from compose_api.config import get_settings

@@ -1,5 +1,4 @@
 import pprint
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -11,10 +10,10 @@ class SlurmJob(BaseModel):
     account: str  #                      %a          account
     user_name: str  #                    %u          user
     job_state: str  #                    %T          state
-    start_time: Optional[str] = None  #              start
-    end_time: Optional[str] = None  #                end
-    elapsed: Optional[str] = None  #                elapsed
-    exit_code: Optional[str] = None  #                exitcode
+    start_time: str | None = None  #              start
+    end_time: str | None = None  #                end
+    elapsed: str | None = None  #                elapsed
+    exit_code: str | None = None  #                exitcode
 
     model_config = ConfigDict(
         populate_by_name=True,

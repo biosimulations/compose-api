@@ -36,14 +36,14 @@ from tests.simulators.utils import assert_test_sim_results, test_dir
 async def test_build_simulator(
     simulation_service_slurm: SimulationServiceHpc,
     database_service: DatabaseServiceSQL,
-    simulation_request: SimulationRequest,
+    simulation_request_pypi: SimulationRequest,
     ssh_service: SSHService,
     job_monitor: JobMonitor,
 ) -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
         singularity_def, experiment_dep = execute_bsander(
             ProgramArguments(
-                input_file_path=str(simulation_request.omex_archive),
+                input_file_path=str(simulation_request_pypi.omex_archive),
                 output_dir=temp_dir,
                 containerization_type=ContainerizationTypes.SINGLE,
                 containerization_engine=ContainerizationEngine.APPTAINER,
@@ -88,10 +88,10 @@ async def test_build_simulator(
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
 @pytest.mark.asyncio
-async def test_simulate(
+async def test_simulate_pypi(
     simulation_service_slurm: SimulationServiceHpc,
     database_service: DatabaseServiceSQL,
-    simulation_request: SimulationRequest,
+    simulation_request_pypi: SimulationRequest,
     ssh_service: SSHService,
     job_monitor: JobMonitor,
     simulator: SimulatorVersion,
@@ -101,7 +101,7 @@ async def test_simulate(
     test_bg_tasks = TestBackgroundTask()
 
     sim_experiement = await handlers.run_simulation(
-        simulation_request=simulation_request,
+        simulation_request=simulation_request_pypi,
         database_service=database_service,
         simulation_service_slurm=simulation_service_slurm,
         job_monitor=job_monitor,
@@ -146,10 +146,68 @@ async def test_simulate(
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
 @pytest.mark.asyncio
+async def test_simulate_conda(
+    simulation_service_slurm: SimulationServiceHpc,
+    database_service: DatabaseServiceSQL,
+    simulation_request_conda: SimulationRequest,
+    ssh_service: SSHService,
+    job_monitor: JobMonitor,
+    simulator: SimulatorVersion,
+) -> None:
+    # insert the latest commit into the database
+
+    test_bg_tasks = TestBackgroundTask()
+
+    sim_experiement = await handlers.run_simulation(
+        simulation_request=simulation_request_conda,
+        database_service=database_service,
+        simulation_service_slurm=simulation_service_slurm,
+        job_monitor=job_monitor,
+        background_tasks=test_bg_tasks,
+        pb_allow_list=PBAllowList(allow_list=["conda::git+https://github.com/CodeByDrescher/multiscale-actin.git"]),
+    )
+    assert sim_experiement is not None
+    await test_bg_tasks.call_tasks()
+
+    hpcrun = await database_service.get_hpc_db().get_hpcrun_by_ref(
+        sim_experiement.simulation_database_id, JobType.SIMULATION
+    )
+    assert hpcrun is not None
+    assert hpcrun.job_type == JobType.SIMULATION
+    assert hpcrun.sim_id == sim_experiement.simulation_database_id
+
+    start_time = time.time()
+    sim_slurmjob: SlurmJob | None = None
+    while start_time + 60 > time.time():
+        sim_slurmjob = await simulation_service_slurm.get_slurm_job(slurmjobid=hpcrun.slurmjobid)
+        if sim_slurmjob is not None and sim_slurmjob.is_done():
+            break
+        await asyncio.sleep(5)
+
+    assert sim_slurmjob is not None
+    assert sim_slurmjob.is_done()
+    if sim_slurmjob.is_failed():
+        raise AssertionError(
+            f"Slurm job {sim_slurmjob.job_id} failed with status: {sim_slurmjob.job_state}[ exit code: {sim_slurmjob.exit_code} ]"  # noqa: E501
+        )
+    assert sim_slurmjob.job_id == hpcrun.slurmjobid
+
+    remote_experiment_result = await simulation_service_slurm.get_slurm_job_result_path(slurmjobid=sim_slurmjob.job_id)
+    with tempfile.TemporaryDirectory(delete=False) as temp_dir:
+        temp_dir_path = Path(temp_dir)
+        archive_result = temp_dir_path / os.path.basename(remote_experiment_result)
+        # SCP used because in test FS is not mounted
+        await ssh_service.scp_download(archive_result, remote_experiment_result)
+        report_csv_file = Path(os.path.join(test_dir, "fixtures/resources/report.csv"))
+        assert_test_sim_results(archive_result, report_csv_file, temp_dir_path)
+
+
+@pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
+@pytest.mark.asyncio
 async def test_simulator_not_in_allowlist(
     simulation_service_slurm: SimulationServiceHpc,
     database_service: DatabaseServiceSQL,
-    simulation_request: SimulationRequest,
+    simulation_request_pypi: SimulationRequest,
     job_monitor: JobMonitor,
     simulator: SimulatorVersion,
 ) -> None:
@@ -158,12 +216,12 @@ async def test_simulator_not_in_allowlist(
     experiement_id = get_experiment_id(simulator, "".join(random.choices(string.hexdigits, k=7)))  # noqa: S311 doesn't need to be secure
 
     simulation = await database_service.get_simulator_db().insert_simulation(
-        sim_request=simulation_request, experiment_id=experiement_id, simulator_version=simulator
+        sim_request=simulation_request_pypi, experiment_id=experiement_id, simulator_version=simulator
     )
 
     with pytest.raises(ValueError):
         await handlers.run_simulation(
-            simulation_request,
+            simulation_request_pypi,
             database_service,
             simulation_service_slurm,
             job_monitor=job_monitor,

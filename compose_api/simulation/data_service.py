@@ -1,10 +1,10 @@
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import override
 
 import numpy
 from pydantic import BaseModel
-from typing_extensions import override
 
 from compose_api.common.gateway.models import Namespace
 from compose_api.common.ssh.ssh_service import SSHService, get_ssh_service

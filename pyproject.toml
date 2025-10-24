@@ -36,6 +36,7 @@ dependencies = [
     "python-libsedml>=2.0.33",
     "biosimulators-utils>=0.2.3",
     "python-libsbml>=5.20.5",
+    "process-bigraph>=0.0.45",
 ]
 
 [project.urls]
@@ -107,7 +108,7 @@ exclude = [".venv/*"]
 ignore = ["DEP002", "DEP003", "DEP004"]
 
 [tool.ruff]
-target-version = 'py39'
+target-version = 'py313'
 line-length = 120
 fix = true
 

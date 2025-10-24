@@ -5,8 +5,7 @@ import tempfile
 from abc import ABC, abstractmethod
 from pathlib import Path
 from textwrap import dedent
-
-from typing_extensions import override
+from typing import override
 
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService

@@ -1,7 +1,6 @@
 import datetime
 import enum
 import logging
-from typing import Optional
 
 from sqlalchemy import ForeignKey, func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -51,13 +50,13 @@ class ORMHpcRun(DeclarativeTableBase):
     job_type: Mapped[JobTypeDB] = mapped_column(nullable=False)
     correlation_id: Mapped[str] = mapped_column(nullable=False, index=True, unique=True)
     slurmjobid: Mapped[int] = mapped_column(nullable=True)
-    start_time: Mapped[Optional[datetime.datetime]] = mapped_column(nullable=True)
-    end_time: Mapped[Optional[datetime.datetime]] = mapped_column(nullable=True)
+    start_time: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
+    end_time: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
     status: Mapped[JobStatusDB] = mapped_column(nullable=False)
-    error_message: Mapped[Optional[str]] = mapped_column(nullable=True)
+    error_message: Mapped[str | None] = mapped_column(nullable=True)
 
-    simulation_id: Mapped[Optional[int]] = mapped_column(ForeignKey("simulation.id"), nullable=True, index=True)
-    simulator_id: Mapped[Optional[int]] = mapped_column(ForeignKey("simulator.id"), nullable=True, index=True)
+    simulation_id: Mapped[int | None] = mapped_column(ForeignKey("simulation.id"), nullable=True, index=True)
+    simulator_id: Mapped[int | None] = mapped_column(ForeignKey("simulator.id"), nullable=True, index=True)
 
     def to_hpc_run(self) -> HpcRun:
         if self.simulation_id is None and self.simulator_id is None:
