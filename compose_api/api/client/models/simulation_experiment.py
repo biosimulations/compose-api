@@ -21,14 +21,12 @@ T = TypeVar("T", bound="SimulationExperiment")
 class SimulationExperiment:
     """
     Attributes:
-        experiment_id (str):
         simulation_database_id (int):
         simulator_database_id (int):
         last_updated (Union[Unset, str]):
         metadata (Union[Unset, SimulationExperimentMetadata]):
     """
 
-    experiment_id: str
     simulation_database_id: int
     simulator_database_id: int
     last_updated: Union[Unset, str] = UNSET
@@ -37,8 +35,6 @@ class SimulationExperiment:
 
     def to_dict(self) -> dict[str, Any]:
         from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
-
-        experiment_id = self.experiment_id
 
         simulation_database_id = self.simulation_database_id
 
@@ -53,7 +49,6 @@ class SimulationExperiment:
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
-            "experiment_id": experiment_id,
             "simulation_database_id": simulation_database_id,
             "simulator_database_id": simulator_database_id,
         })
@@ -69,8 +64,6 @@ class SimulationExperiment:
         from ..models.simulation_experiment_metadata import SimulationExperimentMetadata
 
         d = dict(src_dict)
-        experiment_id = d.pop("experiment_id")
-
         simulation_database_id = d.pop("simulation_database_id")
 
         simulator_database_id = d.pop("simulator_database_id")
@@ -85,7 +78,6 @@ class SimulationExperiment:
             metadata = SimulationExperimentMetadata.from_dict(_metadata)
 
         simulation_experiment = cls(
-            experiment_id=experiment_id,
             simulation_database_id=simulation_database_id,
             simulator_database_id=simulator_database_id,
             last_updated=last_updated,

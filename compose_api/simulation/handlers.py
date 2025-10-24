@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os.path
 import random
+import shutil
 import string
 import tempfile
 import zipfile
@@ -105,10 +106,14 @@ async def run_simulation(
             experiment_id=experiment_id,
         )
 
+    def remove_temp_dir() -> None:
+        shutil.rmtree(tmp_dir)
+
+    # Tasks are executed in order, https://www.starlette.dev/background/
     background_tasks.add_task(perform_job)
+    background_tasks.add_task(remove_temp_dir)
 
     return SimulationExperiment(
-        experiment_id=experiment_id,
         simulation_database_id=simulation.database_id,
         simulator_database_id=simulator_version.database_id,
     )
@@ -122,7 +127,7 @@ async def run_pbif(
     use_interesting: bool = True,
 ) -> SimulationExperiment:
     # Create OMEX with all necessary files
-    with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
+    with tempfile.TemporaryDirectory() as tmp_dir:
         with zipfile.ZipFile(tmp_dir + "/input.omex", "w") as omex:
             omex.writestr(data=templated_pbif, zinfo_or_arcname=f"{simulator_name}.pbif")
             if use_interesting:
@@ -133,26 +138,26 @@ async def run_pbif(
             raise HTTPException(500, "Can't create omex file.")
         simulator_request = SimulationRequest(omex_archive=Path(omex.filename))
 
-    try:
-        sim_service = get_required_simulation_service()
-        db_service = get_required_database_service()
-        job_monitor = get_required_job_monitor()
-    except ValueError as e:
-        logger.exception(msg=f"Failed to initialize {simulator_name} run.", exc_info=e)
-        raise HTTPException(status_code=500, detail=str(e))
+        try:
+            sim_service = get_required_simulation_service()
+            db_service = get_required_database_service()
+            job_monitor = get_required_job_monitor()
+        except ValueError as e:
+            logger.exception(msg=f"Failed to initialize {simulator_name} run.", exc_info=e)
+            raise HTTPException(status_code=500, detail=str(e))
 
-    try:
-        return await run_simulation(
-            simulation_request=simulator_request,
-            database_service=db_service,
-            simulation_service_slurm=sim_service,
-            job_monitor=job_monitor,
-            pb_allow_list=PBAllowList(allow_list=allow_list),
-            background_tasks=background_tasks,
-        )
-    except Exception as e:
-        logger.exception(msg=f"Failed to start {simulator_name} run", exc_info=e)
-        raise HTTPException(500)
+        try:
+            return await run_simulation(
+                simulation_request=simulator_request,
+                database_service=db_service,
+                simulation_service_slurm=sim_service,
+                job_monitor=job_monitor,
+                pb_allow_list=PBAllowList(allow_list=allow_list),
+                background_tasks=background_tasks,
+            )
+        except Exception as e:
+            logger.exception(msg=f"Failed to start {simulator_name} run", exc_info=e)
+            raise HTTPException(500)
 
 
 async def _dispatch_job(

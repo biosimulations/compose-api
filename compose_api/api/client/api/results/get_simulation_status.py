@@ -7,44 +7,35 @@ from ...client import AuthenticatedClient, Client
 from ...types import Response, UNSET
 from ... import errors
 
-from ...models.body_execute_sedml import BodyExecuteSedml
+from ...models.hpc_run import HpcRun
 from ...models.http_validation_error import HTTPValidationError
-from ...models.simulation_experiment import SimulationExperiment
-from ...models.tool_suites import ToolSuites
 from typing import cast
 
 
 def _get_kwargs(
     *,
-    body: BodyExecuteSedml,
-    tool_suite: ToolSuites,
+    simulation_id: int,
 ) -> dict[str, Any]:
-    headers: dict[str, Any] = {}
-
     params: dict[str, Any] = {}
 
-    json_tool_suite = tool_suite.value
-    params["tool_suite"] = json_tool_suite
+    params["simulation_id"] = simulation_id
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
     _kwargs: dict[str, Any] = {
-        "method": "post",
-        "url": "/core/simulation/execute/sedml",
+        "method": "get",
+        "url": "/results/simulation/status",
         "params": params,
     }
 
-    _kwargs["files"] = body.to_multipart()
-
-    _kwargs["headers"] = headers
     return _kwargs
 
 
 def _parse_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Optional[Union[HTTPValidationError, SimulationExperiment]]:
+) -> Optional[Union[HTTPValidationError, HpcRun]]:
     if response.status_code == 200:
-        response_200 = SimulationExperiment.from_dict(response.json())
+        response_200 = HpcRun.from_dict(response.json())
 
         return response_200
     if response.status_code == 422:
@@ -59,7 +50,7 @@ def _parse_response(
 
 def _build_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Response[Union[HTTPValidationError, SimulationExperiment]]:
+) -> Response[Union[HTTPValidationError, HpcRun]]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -71,26 +62,23 @@ def _build_response(
 def sync_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: BodyExecuteSedml,
-    tool_suite: ToolSuites,
-) -> Response[Union[HTTPValidationError, SimulationExperiment]]:
-    """Execute sedml
+    simulation_id: int,
+) -> Response[Union[HTTPValidationError, HpcRun]]:
+    """Get the simulation status record by its ID
 
     Args:
-        tool_suite (ToolSuites):
-        body (BodyExecuteSedml):
+        simulation_id (int):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[HTTPValidationError, SimulationExperiment]]
+        Response[Union[HTTPValidationError, HpcRun]]
     """
 
     kwargs = _get_kwargs(
-        body=body,
-        tool_suite=tool_suite,
+        simulation_id=simulation_id,
     )
 
     response = client.get_httpx_client().request(
@@ -103,53 +91,47 @@ def sync_detailed(
 def sync(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: BodyExecuteSedml,
-    tool_suite: ToolSuites,
-) -> Optional[Union[HTTPValidationError, SimulationExperiment]]:
-    """Execute sedml
+    simulation_id: int,
+) -> Optional[Union[HTTPValidationError, HpcRun]]:
+    """Get the simulation status record by its ID
 
     Args:
-        tool_suite (ToolSuites):
-        body (BodyExecuteSedml):
+        simulation_id (int):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[HTTPValidationError, SimulationExperiment]
+        Union[HTTPValidationError, HpcRun]
     """
 
     return sync_detailed(
         client=client,
-        body=body,
-        tool_suite=tool_suite,
+        simulation_id=simulation_id,
     ).parsed
 
 
 async def asyncio_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: BodyExecuteSedml,
-    tool_suite: ToolSuites,
-) -> Response[Union[HTTPValidationError, SimulationExperiment]]:
-    """Execute sedml
+    simulation_id: int,
+) -> Response[Union[HTTPValidationError, HpcRun]]:
+    """Get the simulation status record by its ID
 
     Args:
-        tool_suite (ToolSuites):
-        body (BodyExecuteSedml):
+        simulation_id (int):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[HTTPValidationError, SimulationExperiment]]
+        Response[Union[HTTPValidationError, HpcRun]]
     """
 
     kwargs = _get_kwargs(
-        body=body,
-        tool_suite=tool_suite,
+        simulation_id=simulation_id,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -160,27 +142,24 @@ async def asyncio_detailed(
 async def asyncio(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: BodyExecuteSedml,
-    tool_suite: ToolSuites,
-) -> Optional[Union[HTTPValidationError, SimulationExperiment]]:
-    """Execute sedml
+    simulation_id: int,
+) -> Optional[Union[HTTPValidationError, HpcRun]]:
+    """Get the simulation status record by its ID
 
     Args:
-        tool_suite (ToolSuites):
-        body (BodyExecuteSedml):
+        simulation_id (int):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[HTTPValidationError, SimulationExperiment]
+        Union[HTTPValidationError, HpcRun]
     """
 
     return (
         await asyncio_detailed(
             client=client,
-            body=body,
-            tool_suite=tool_suite,
+            simulation_id=simulation_id,
         )
     ).parsed

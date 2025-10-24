@@ -25,14 +25,14 @@ def get_server_url(dev: bool = True) -> ServerMode:
 
 # -- app components -- #
 
-config = RouterConfig(router=APIRouter(), prefix="/tools", dependencies=[])
+config = RouterConfig(router=APIRouter(), prefix="/curated", dependencies=[])
 
 
 @config.router.post(
     path="/copasi",
     response_model=SimulationExperiment,
     operation_id="run-copasi",
-    tags=["Simulators"],
+    tags=["Curated"],
     dependencies=[Depends(get_database_service)],
     summary="Use the tool copasi.",
 )
@@ -52,7 +52,7 @@ async def run_copasi(
     path="/tellurium",
     response_model=SimulationExperiment,
     operation_id="run-tellurium",
-    tags=["Simulators"],
+    tags=["Curated"],
     dependencies=[Depends(get_database_service)],
     summary="Use the tool tellurium.",
 )

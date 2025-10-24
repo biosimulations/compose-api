@@ -1,9 +1,8 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends
 
 from compose_api.common.gateway.models import RouterConfig, ServerMode
-from compose_api.common.gateway.utils import get_hpc_run_status
 from compose_api.dependencies import (
     get_database_service,
     get_required_database_service,
@@ -15,8 +14,6 @@ from compose_api.simulation.models import (
     BiGraphComputeType,
     BiGraphProcess,
     BiGraphStep,
-    HpcRun,
-    JobType,
     RegisteredSimulators,
 )
 
@@ -33,25 +30,10 @@ config = RouterConfig(router=APIRouter(), prefix="/core", dependencies=[])
 
 
 @config.router.get(
-    path="/simulator/build/status",
-    response_model=HpcRun,
-    operation_id="get-simulator-build-status",
-    tags=["Simulators"],
-    dependencies=[Depends(get_database_service)],
-    summary="Get the simulator build status record by its ID",
-)
-async def get_simulator_build_status(simulator_id: int = Query(...)) -> HpcRun:
-    db_service = get_database_service()
-    if db_service is None:
-        raise HTTPException(status_code=500, detail="Database service is not initialized")
-    return await get_hpc_run_status(db_service=db_service, ref_id=simulator_id, job_type=JobType.BUILD_CONTAINER)
-
-
-@config.router.get(
     path="/simulator/list",
     response_model=RegisteredSimulators,
     operation_id="get-simulator-list",
-    tags=["Simulators"],
+    tags=["Compute"],
     dependencies=[Depends(get_database_service)],
     summary="Get the list of simulators",
 )
@@ -63,7 +45,7 @@ async def get_simulator_list() -> RegisteredSimulators:
     path="/processes/list",
     response_model=list[BiGraphProcess],
     operation_id="get-processes-list",
-    tags=["Simulators"],
+    tags=["Compute"],
     dependencies=[Depends(get_database_service)],
     summary="Get the list of processes",
 )
@@ -78,7 +60,7 @@ async def get_processes_list() -> list[BiGraphProcess]:
     path="/steps/list",
     response_model=list[BiGraphStep],
     operation_id="get-steps-list",
-    tags=["Simulators"],
+    tags=["Compute"],
     dependencies=[Depends(get_database_service)],
     summary="Get the list of processes",
 )
@@ -119,3 +101,24 @@ async def get_steps_list() -> list[BiGraphStep]:
 # )
 # async def get_process_list() -> RegisteredProcesses:
 #     pass
+
+
+# @config.router.get(
+#     path="/simulator/versions",
+#     response_model=RegisteredSimulators,
+#     operation_id="get-simulator-versions",
+#     tags=["Simulators"],
+#     dependencies=[Depends(get_database_service), Depends(get_postgres_engine)],
+#     summary="get the list of available simulator versions",
+# )
+# async def get_simulator_versions() -> RegisteredSimulators:
+#     sim_db_service = get_database_service()
+#     if sim_db_service is None:
+#         logger.error("Simulation database service is not initialized")
+#         raise HTTPException(status_code=500, detail="Simulation database service is not initialized")
+#     try:
+#         simulators = await sim_db_service.list_simulators()
+#         return RegisteredSimulators(versions=simulators)
+#     except Exception as e:
+#         logger.exception("Error getting list of simulation versions")
+#         raise HTTPException(status_code=500, detail=str(e)) from e
