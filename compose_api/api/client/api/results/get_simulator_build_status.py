@@ -7,48 +7,35 @@ from ...client import AuthenticatedClient, Client
 from ...types import Response, UNSET
 from ... import errors
 
-from ...models.body_run_tellurium import BodyRunTellurium
+from ...models.hpc_run import HpcRun
 from ...models.http_validation_error import HTTPValidationError
-from ...models.simulation_experiment import SimulationExperiment
 from typing import cast
 
 
 def _get_kwargs(
     *,
-    body: BodyRunTellurium,
-    start_time: float,
-    end_time: float,
-    num_data_points: float,
+    simulator_id: int,
 ) -> dict[str, Any]:
-    headers: dict[str, Any] = {}
-
     params: dict[str, Any] = {}
 
-    params["start_time"] = start_time
-
-    params["end_time"] = end_time
-
-    params["num_data_points"] = num_data_points
+    params["simulator_id"] = simulator_id
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
     _kwargs: dict[str, Any] = {
-        "method": "post",
-        "url": "/tools/tellurium",
+        "method": "get",
+        "url": "/results/simulator/build/status",
         "params": params,
     }
 
-    _kwargs["files"] = body.to_multipart()
-
-    _kwargs["headers"] = headers
     return _kwargs
 
 
 def _parse_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Optional[Union[HTTPValidationError, SimulationExperiment]]:
+) -> Optional[Union[HTTPValidationError, HpcRun]]:
     if response.status_code == 200:
-        response_200 = SimulationExperiment.from_dict(response.json())
+        response_200 = HpcRun.from_dict(response.json())
 
         return response_200
     if response.status_code == 422:
@@ -63,7 +50,7 @@ def _parse_response(
 
 def _build_response(
     *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Response[Union[HTTPValidationError, SimulationExperiment]]:
+) -> Response[Union[HTTPValidationError, HpcRun]]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -75,32 +62,23 @@ def _build_response(
 def sync_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: BodyRunTellurium,
-    start_time: float,
-    end_time: float,
-    num_data_points: float,
-) -> Response[Union[HTTPValidationError, SimulationExperiment]]:
-    """Use the tool tellurium.
+    simulator_id: int,
+) -> Response[Union[HTTPValidationError, HpcRun]]:
+    """Get the simulator build status record by its ID
 
     Args:
-        start_time (float):
-        end_time (float):
-        num_data_points (float):
-        body (BodyRunTellurium):
+        simulator_id (int):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[HTTPValidationError, SimulationExperiment]]
+        Response[Union[HTTPValidationError, HpcRun]]
     """
 
     kwargs = _get_kwargs(
-        body=body,
-        start_time=start_time,
-        end_time=end_time,
-        num_data_points=num_data_points,
+        simulator_id=simulator_id,
     )
 
     response = client.get_httpx_client().request(
@@ -113,65 +91,47 @@ def sync_detailed(
 def sync(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: BodyRunTellurium,
-    start_time: float,
-    end_time: float,
-    num_data_points: float,
-) -> Optional[Union[HTTPValidationError, SimulationExperiment]]:
-    """Use the tool tellurium.
+    simulator_id: int,
+) -> Optional[Union[HTTPValidationError, HpcRun]]:
+    """Get the simulator build status record by its ID
 
     Args:
-        start_time (float):
-        end_time (float):
-        num_data_points (float):
-        body (BodyRunTellurium):
+        simulator_id (int):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[HTTPValidationError, SimulationExperiment]
+        Union[HTTPValidationError, HpcRun]
     """
 
     return sync_detailed(
         client=client,
-        body=body,
-        start_time=start_time,
-        end_time=end_time,
-        num_data_points=num_data_points,
+        simulator_id=simulator_id,
     ).parsed
 
 
 async def asyncio_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: BodyRunTellurium,
-    start_time: float,
-    end_time: float,
-    num_data_points: float,
-) -> Response[Union[HTTPValidationError, SimulationExperiment]]:
-    """Use the tool tellurium.
+    simulator_id: int,
+) -> Response[Union[HTTPValidationError, HpcRun]]:
+    """Get the simulator build status record by its ID
 
     Args:
-        start_time (float):
-        end_time (float):
-        num_data_points (float):
-        body (BodyRunTellurium):
+        simulator_id (int):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[HTTPValidationError, SimulationExperiment]]
+        Response[Union[HTTPValidationError, HpcRun]]
     """
 
     kwargs = _get_kwargs(
-        body=body,
-        start_time=start_time,
-        end_time=end_time,
-        num_data_points=num_data_points,
+        simulator_id=simulator_id,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -182,33 +142,24 @@ async def asyncio_detailed(
 async def asyncio(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: BodyRunTellurium,
-    start_time: float,
-    end_time: float,
-    num_data_points: float,
-) -> Optional[Union[HTTPValidationError, SimulationExperiment]]:
-    """Use the tool tellurium.
+    simulator_id: int,
+) -> Optional[Union[HTTPValidationError, HpcRun]]:
+    """Get the simulator build status record by its ID
 
     Args:
-        start_time (float):
-        end_time (float):
-        num_data_points (float):
-        body (BodyRunTellurium):
+        simulator_id (int):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[HTTPValidationError, SimulationExperiment]
+        Union[HTTPValidationError, HpcRun]
     """
 
     return (
         await asyncio_detailed(
             client=client,
-            body=body,
-            start_time=start_time,
-            end_time=end_time,
-            num_data_points=num_data_points,
+            simulator_id=simulator_id,
         )
     ).parsed

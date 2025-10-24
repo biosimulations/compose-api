@@ -7,7 +7,7 @@ from zipfile import ZipFile
 import numpy
 
 from compose_api.api.client import Client
-from compose_api.api.client.api.simulations import get_simulation_results_file, get_simulation_status
+from compose_api.api.client.api.results import get_simulation_results_file, get_simulation_status
 from compose_api.api.client.models import HpcRun, HTTPValidationError, JobStatus, SimulationExperiment
 from compose_api.api.client.types import Response
 
@@ -54,7 +54,7 @@ async def check_experiment_run(sim_experiment: Any, in_memory_api_client: Client
     assert current_status.status == JobStatus.COMPLETED
 
     results: Response[HTTPValidationError] = await get_simulation_results_file.asyncio_detailed(
-        client=in_memory_api_client, experiment_id=sim_experiment.experiment_id
+        client=in_memory_api_client, simulation_id=sim_experiment.simulation_database_id
     )
     assert results.status_code == 200
     return results

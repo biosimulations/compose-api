@@ -7,7 +7,7 @@ from ...client import AuthenticatedClient, Client
 from ...types import Response, UNSET
 from ... import errors
 
-from ...models.body_run_simulation import BodyRunSimulation
+from ...models.body_run_tellurium import BodyRunTellurium
 from ...models.http_validation_error import HTTPValidationError
 from ...models.simulation_experiment import SimulationExperiment
 from typing import cast
@@ -15,13 +15,27 @@ from typing import cast
 
 def _get_kwargs(
     *,
-    body: BodyRunSimulation,
+    body: BodyRunTellurium,
+    start_time: float,
+    end_time: float,
+    num_data_points: float,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
 
+    params: dict[str, Any] = {}
+
+    params["start_time"] = start_time
+
+    params["end_time"] = end_time
+
+    params["num_data_points"] = num_data_points
+
+    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
+
     _kwargs: dict[str, Any] = {
         "method": "post",
-        "url": "/core/simulation/run",
+        "url": "/curated/tellurium",
+        "params": params,
     }
 
     _kwargs["files"] = body.to_multipart()
@@ -61,12 +75,18 @@ def _build_response(
 def sync_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: BodyRunSimulation,
+    body: BodyRunTellurium,
+    start_time: float,
+    end_time: float,
+    num_data_points: float,
 ) -> Response[Union[HTTPValidationError, SimulationExperiment]]:
-    """Run a simulation
+    """Use the tool tellurium.
 
     Args:
-        body (BodyRunSimulation):
+        start_time (float):
+        end_time (float):
+        num_data_points (float):
+        body (BodyRunTellurium):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -78,6 +98,9 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         body=body,
+        start_time=start_time,
+        end_time=end_time,
+        num_data_points=num_data_points,
     )
 
     response = client.get_httpx_client().request(
@@ -90,12 +113,18 @@ def sync_detailed(
 def sync(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: BodyRunSimulation,
+    body: BodyRunTellurium,
+    start_time: float,
+    end_time: float,
+    num_data_points: float,
 ) -> Optional[Union[HTTPValidationError, SimulationExperiment]]:
-    """Run a simulation
+    """Use the tool tellurium.
 
     Args:
-        body (BodyRunSimulation):
+        start_time (float):
+        end_time (float):
+        num_data_points (float):
+        body (BodyRunTellurium):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -108,18 +137,27 @@ def sync(
     return sync_detailed(
         client=client,
         body=body,
+        start_time=start_time,
+        end_time=end_time,
+        num_data_points=num_data_points,
     ).parsed
 
 
 async def asyncio_detailed(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: BodyRunSimulation,
+    body: BodyRunTellurium,
+    start_time: float,
+    end_time: float,
+    num_data_points: float,
 ) -> Response[Union[HTTPValidationError, SimulationExperiment]]:
-    """Run a simulation
+    """Use the tool tellurium.
 
     Args:
-        body (BodyRunSimulation):
+        start_time (float):
+        end_time (float):
+        num_data_points (float):
+        body (BodyRunTellurium):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -131,6 +169,9 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         body=body,
+        start_time=start_time,
+        end_time=end_time,
+        num_data_points=num_data_points,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -141,12 +182,18 @@ async def asyncio_detailed(
 async def asyncio(
     *,
     client: Union[AuthenticatedClient, Client],
-    body: BodyRunSimulation,
+    body: BodyRunTellurium,
+    start_time: float,
+    end_time: float,
+    num_data_points: float,
 ) -> Optional[Union[HTTPValidationError, SimulationExperiment]]:
-    """Run a simulation
+    """Use the tool tellurium.
 
     Args:
-        body (BodyRunSimulation):
+        start_time (float):
+        end_time (float):
+        num_data_points (float):
+        body (BodyRunTellurium):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -160,5 +207,8 @@ async def asyncio(
         await asyncio_detailed(
             client=client,
             body=body,
+            start_time=start_time,
+            end_time=end_time,
+            num_data_points=num_data_points,
         )
     ).parsed

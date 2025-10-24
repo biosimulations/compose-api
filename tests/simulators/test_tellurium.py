@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from compose_api.api.client import Client
-from compose_api.api.client.api.simulators import run_tellurium
+from compose_api.api.client.api.curated import run_tellurium
 from compose_api.api.client.models import BodyRunTellurium
 from compose_api.api.client.types import File
 from compose_api.config import get_settings
