@@ -1,6 +1,6 @@
 [project]
 name = "compose-api"
-version = "0.0.1"
+version = '0.2.3'
 description = "An API server for reproducible biological workflows and cosimulations."
 authors = [{ name = "Jim Schaff", email = "schaff@uchc.edu" }]
 requires-python = ">=3.13.2,<4.0"
@@ -107,7 +107,7 @@ exclude = [".venv/*"]
 ignore = ["DEP002", "DEP003", "DEP004"]
 
 [tool.ruff]
-target-version = "py39"
+target-version = '0.2.3'
 line-length = 120
 fix = true
 
