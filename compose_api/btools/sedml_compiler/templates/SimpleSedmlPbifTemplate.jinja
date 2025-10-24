@@ -1,29 +1,61 @@
 {
     "composition": {
+        "model_changes": "list[tuple[string,string]]",
         "sim_start_time": "float",
         "sim_duration": "float",
         "sim_num_data_points": "integer",
         "sim_end_time": "float",
+        "altered_sbml_file_path" : "string",
+        "apply_model_changes": {
+            "_type": "step",
+            "address": {"_type": "quote", "_default": "local:apply_model_changes"},
+            "_config": {
+                "sbml_file_path": "string",
+            },
+            "_inputs": {
+                "requested_changes": "list[tuple[string,string]]",
+            },
+            "_outputs": {
+                "new_sbml_file_path": "string",
+            }
+        },
         "time_course": {
-            "_type": "process",
+            "_type": "step",
             "address": {"_type": "quote", "_default": "local:time_course"},
             "_config": {
                 "sbml_file_path": "string",
                 "output_dir": "string"
             },
             "_inputs": {
+                "sbml_file_path" : "string",
                 "starting_time": "float",
                 "duration": "float",
+                "end_time": "float",
                 "num_data_points": "integer"
             },
             "_outputs": {}
         }
     },
     "state": {
+        "model_changes": {{ model_changes }},
         "sim_start_time": {{ start_time }},
         "sim_duration": {{ duration }},
         "sim_end_time": {{ end_time }},
         "sim_num_data_points": {{ num_data_points }},
+        "altered_sbml_file_path" : "",
+        "apply_model_changes": {
+            "_type" : "step",
+            "address": "{{ simulator_address }}",
+            "config": {
+                "sbml_file_path": "{{ sbml_file_path }}",
+            },
+            "inputs": {
+                "requested_changes": ["model_changes"],
+            },
+            "outputs": {
+                "new_sbml_file_path": ["altered_sbml_file_path"],
+            }
+        },
         "time_course": {
             "_type" : "process",
             "address": "{{ simulator_address }}",
@@ -33,6 +65,7 @@
             },
             "interval": 1.0,
             "inputs": {
+                "sbml_file_path": ["altered_sbml_file_path"]
                 "starting_time": ["sim_start_time"],
                 "duration": ["sim_duration"],
                 "end_time": ["sim_end_time"],

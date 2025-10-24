@@ -60,7 +60,19 @@ def test_simple_parsing() -> None:
 def test_simple_sedml_rep() -> None:
     sedml_path = f"{test_dir}/resources/BIOMD0000000012_url.sedml"
     simple_sed = SimpleSedmlRepresentation.sed_processor(sedml_path=Path(sedml_path))
-    print(simple_sed)
+    expected = ("SimpleSedmlRepresentation(solver_kisao='KISAO_0000694', "
+                "sbml_path=PosixPath('/Users/logandrescher/Development/BioSim/ComposeAPI/repo/tests/resources/BIOMD0000000012_url.xml'), "
+                "changes=[], "
+                "start_time=0.0, "
+                "end_time=10.0, "
+                "num_points=1000, "
+                "species_ids=['PX', 'PY', 'PZ', 'X', 'Y', 'Z'], "
+                "parameter_ids=['beta', 'alpha0', 'alpha', 'eff', 'n', 'KM', 'tau_mRNA', 'tau_prot', 't_ave', 'kd_mRNA', 'kd_prot', 'k_tl', 'a_tr', 'ps_a', 'ps_0', 'a0_tr'], "
+                "compartments_ids=['cell'], "
+                "reactions_ids=['Reaction1', 'Reaction2', 'Reaction3', 'Reaction4', 'Reaction5', 'Reaction6', 'Reaction7', 'Reaction8', 'Reaction9', 'Reaction10', 'Reaction11', 'Reaction12'])"
+    )
+    actual = repr(simple_sed)
+    assert actual == expected
 
 
 def test_sedml_compilation() -> None:
