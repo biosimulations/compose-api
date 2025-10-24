@@ -36,7 +36,7 @@ async def test_sim_run(
     simulation_service_slurm: SimulationServiceHpc,
     job_monitor: JobMonitor,
     data_service: DataService,
-    simulator: Simulator,
+        interesting_test_simulator: Simulator,
 ) -> None:
     assert simulation_request_pypi.omex_archive is not None
     with open(simulation_request_pypi.omex_archive, "rb") as f:
@@ -70,7 +70,7 @@ async def test_sedml_run(
     simulation_service_slurm: SimulationServiceHpc,
     job_monitor: JobMonitor,
     data_service: DataService,
-    simulator: Simulator,
+        interesting_test_simulator: Simulator,
 ) -> None:
     omex_path = f"{test_dir}/resources/MODEL6615351360.3.omex"
     with open(omex_path, "rb") as f:

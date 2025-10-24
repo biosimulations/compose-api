@@ -25,7 +25,7 @@ async def test_copasi(
     simulation_service_slurm: SimulationServiceHpc,
     job_monitor: JobMonitor,
     data_service: DataService,
-    simulator: Simulator,
+        interesting_test_simulator: Simulator,
 ) -> None:
     copasi_sbml = os.path.join(os.path.dirname(__file__).rsplit("/", 1)[0], "fixtures/resources/copasi.sbml")
     with open(copasi_sbml, "rb") as f:

@@ -94,7 +94,7 @@ async def test_simulate_pypi(
     simulation_request_pypi: SimulationRequest,
     ssh_service: SSHService,
     job_monitor: JobMonitor,
-    simulator: SimulatorVersion,
+    interesting_test_simulator: SimulatorVersion,
 ) -> None:
     # insert the latest commit into the database
 
@@ -152,7 +152,7 @@ async def test_simulate_conda(
     simulation_request_conda: SimulationRequest,
     ssh_service: SSHService,
     job_monitor: JobMonitor,
-    simulator: SimulatorVersion,
+    sasco_readdy_reference_model_simulator: SimulatorVersion,
 ) -> None:
     # insert the latest commit into the database
 
@@ -164,7 +164,7 @@ async def test_simulate_conda(
         simulation_service_slurm=simulation_service_slurm,
         job_monitor=job_monitor,
         background_tasks=test_bg_tasks,
-        pb_allow_list=PBAllowList(allow_list=["conda::git+https://github.com/CodeByDrescher/multiscale-actin.git"]),
+        pb_allow_list=PBAllowList(allow_list=allow_list),
     )
     assert sim_experiement is not None
     await test_bg_tasks.call_tasks()
@@ -209,14 +209,14 @@ async def test_simulator_not_in_allowlist(
     database_service: DatabaseServiceSQL,
     simulation_request_pypi: SimulationRequest,
     job_monitor: JobMonitor,
-    simulator: SimulatorVersion,
+    interesting_test_simulator: SimulatorVersion,
 ) -> None:
     # insert the latest commit into the database
     test_bg_tasks = TestBackgroundTask()
-    experiement_id = get_experiment_id(simulator, "".join(random.choices(string.hexdigits, k=7)))  # noqa: S311 doesn't need to be secure
+    experiement_id = get_experiment_id(interesting_test_simulator, "".join(random.choices(string.hexdigits, k=7)))  # noqa: S311 doesn't need to be secure
 
     simulation = await database_service.get_simulator_db().insert_simulation(
-        sim_request=simulation_request_pypi, experiment_id=experiement_id, simulator_version=simulator
+        sim_request=simulation_request_pypi, experiment_id=experiement_id, simulator_version=interesting_test_simulator
     )
 
     with pytest.raises(ValueError):

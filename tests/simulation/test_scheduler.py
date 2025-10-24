@@ -62,7 +62,7 @@ async def test_messaging(
     nats_producer_client: NATSClient,
     database_service: DatabaseServiceSQL,
     slurm_service: SlurmService,
-    simulator: SimulatorVersion,
+        interesting_test_simulator: SimulatorVersion,
 ) -> None:
     monitor = JobMonitor(
         nats_client=nats_subscriber_client, database_service=database_service, slurm_service=slurm_service
@@ -71,7 +71,7 @@ async def test_messaging(
 
     # Simulate a job submission and worker event handling
     simulation, slurm_job, hpc_run = await insert_job(
-        database_service=database_service, slurmjobid=1, simulator=simulator
+        database_service=database_service, slurmjobid=1, simulator=interesting_test_simulator
     )
 
     # get the initial state of a job
@@ -103,7 +103,7 @@ async def test_job_monitor(
     database_service: DatabaseServiceSQL,
     slurm_service: SlurmService,
     slurm_template_hello_10s: str,
-    simulator: SimulatorVersion,
+        interesting_test_simulator: SimulatorVersion,
 ) -> None:
     monitor = JobMonitor(
         nats_client=nats_subscriber_client, database_service=database_service, slurm_service=slurm_service
@@ -130,7 +130,7 @@ async def test_job_monitor(
 
     # Simulate job submission
     simulation, slurm_job, hpc_run = await insert_job(
-        database_service=database_service, slurmjobid=job_id, simulator=simulator
+        database_service=database_service, slurmjobid=job_id, simulator=interesting_test_simulator
     )
     assert hpc_run.status == JobStatus.RUNNING
 

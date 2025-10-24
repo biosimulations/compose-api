@@ -61,6 +61,7 @@ async def get_file_from_uploaded_file(uploaded_file: UploadFile) -> Path:
 
 allow_list = [
     "pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work",
+    "conda::git+https://github.com/CodeByDrescher/multiscale-actin.git",
     "pypi::cobra",
     "pypi::tellurium",
     "pypi::copasi-basico",

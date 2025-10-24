@@ -60,8 +60,16 @@ async def job_monitor(
 
 
 @pytest_asyncio.fixture(scope="function")
-async def simulator(database_service: DatabaseService) -> AsyncGenerator[SimulatorVersion]:
+async def interesting_test_simulator(database_service: DatabaseService) -> AsyncGenerator[SimulatorVersion]:
     omex_path = os.path.join(os.path.dirname(__file__), "resources/interesting-test.omex")
+    return _simulator(database_service, omex_path)
+
+@pytest_asyncio.fixture(scope="function")
+async def sasco_readdy_reference_model_simulator(database_service: DatabaseService) -> AsyncGenerator[SimulatorVersion]:
+    omex_path = os.path.join(os.path.dirname(__file__), "resources/allen_msa_experiment.omex")
+    return _simulator(database_service, omex_path)
+
+async def _simulator(database_service: DatabaseService, omex_path: str) -> AsyncGenerator[SimulatorVersion]:
     with tempfile.TemporaryDirectory() as temp_dir:
         singularity_def, experiment_dep = execute_bsander(
             ProgramArguments(
@@ -108,8 +116,6 @@ async def simulator(database_service: DatabaseService) -> AsyncGenerator[Simulat
         for step in package.steps:
             await database_service.get_package_db().delete_bigraph_compute(step)
         await database_service.get_package_db().delete_bigraph_package(package)
-
-
 # @pytest_asyncio.fixture
 # async def experiment_file() -> File:
 #     omex_path = Path(os.path.join(os.path.dirname(__file__), "resources/interesting-test.omex"))
