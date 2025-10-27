@@ -25,7 +25,7 @@ async def test_tellurium(
     simulation_service_slurm: SimulationServiceHpc,
     job_monitor: JobMonitor,
     data_service: DataService,
-        interesting_test_simulator: Simulator,
+    interesting_test_simulator: Simulator,
 ) -> None:
     tellurium_sbml = os.path.join(test_dir, "resources/simulators/tellurium.sbml")
     with open(tellurium_sbml, "rb") as f:

@@ -62,7 +62,7 @@ async def test_messaging(
     nats_producer_client: NATSClient,
     database_service: DatabaseServiceSQL,
     slurm_service: SlurmService,
-        interesting_test_simulator: SimulatorVersion,
+    interesting_test_simulator: SimulatorVersion,
 ) -> None:
     monitor = JobMonitor(
         nats_client=nats_subscriber_client, database_service=database_service, slurm_service=slurm_service
@@ -103,7 +103,7 @@ async def test_job_monitor(
     database_service: DatabaseServiceSQL,
     slurm_service: SlurmService,
     slurm_template_hello_10s: str,
-        interesting_test_simulator: SimulatorVersion,
+    interesting_test_simulator: SimulatorVersion,
 ) -> None:
     monitor = JobMonitor(
         nats_client=nats_subscriber_client, database_service=database_service, slurm_service=slurm_service
