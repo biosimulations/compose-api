@@ -20,9 +20,9 @@ $${#PYPI_DEPENDENCIES}
 RUN mkdir /runtime
 WORKDIR /runtime
 RUN git clone https://github.com/biosimulators/bsew.git  /runtime
-RUN python3 -m pip install -e /runtime
+RUN $${#PYTHON_STR} -m pip install -e /runtime
 
-ENTRYPOINT ["python3", "/runtime/main.py"]
+$${#ENTRYPOINT_STR}
 """.strip()
 
 

@@ -1,5 +1,7 @@
 import re
 
+from mypy.typevars import has_no_typevars
+
 from compose_api.btools.bsander.bsandr_utils.input_types import (
     ContainerizationFileRepr,
     ExperimentPrimaryDependencies,
@@ -27,6 +29,7 @@ def formulate_dockerfile_for_necessary_env(
 
 
 def generate_dockerfile(experiment_deps: ExperimentPrimaryDependencies) -> str:
+    has_no_conda: bool = False
     docker_template: str = get_generic_dockerfile_template()
     for desired_field in generate_necessary_values():
         match_target: str = "$${#" + desired_field + "}"
@@ -34,44 +37,47 @@ def generate_dockerfile(experiment_deps: ExperimentPrimaryDependencies) -> str:
             if len(experiment_deps.get_pypi_dependencies()) == 0:
                 docker_template = docker_template.replace(match_target, "# No PyPI dependencies!")
                 continue
-            pypi_section = "RUN python3 -m pip install $${#DEPENDENCIES}"
+            pypi_section = "RUN $${#PYTHON_STR} -m pip install $${#DEPENDENCIES}"
             dependency_str = convert_dependencies_to_installation_string_representation(
                 experiment_deps.get_pypi_dependencies()
             )
             filled_section = pypi_section.replace("$${#DEPENDENCIES}", dependency_str)
             docker_template = docker_template.replace(match_target, filled_section)
         elif desired_field == "CONDA_FORGE_DEPENDENCIES":
-            if len(experiment_deps.get_conda_dependencies()) == 0:
+            if has_no_conda := len(experiment_deps.get_conda_dependencies()) == 0:
                 docker_template = docker_template.replace(match_target, "# No conda dependencies!")
                 continue
-            git_dependencies: list[str] = []
+            conda_git_dependencies: list[str] = []
             conda_forge_dependencies: list[str] = []
             for dep in experiment_deps.get_conda_dependencies():
-                (git_dependencies if dep.startswith("git+") else conda_forge_dependencies).append(dep)
+                (conda_git_dependencies if dep.startswith("git+") else conda_forge_dependencies).append(dep)
 
             micromamba_setup = """
 WORKDIR /usr/local/bin
 RUN curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba --strip-components=1
 WORKDIR /
-RUN micromamba create -n runtime_env python=3.12
-RUN eval "$(micromamba shell hook --shell posix)" && micromamba activate runtime_env
+RUN mkdir /micromamba_env
+RUN micromamba create -p /micromamba_env/runtime_env python=3.12
+RUN eval "$(micromamba shell hook --shell posix)" && micromamba activate /micromamba_env/runtime_env
 RUN mkdir -p /code
 WORKDIR /code
+
+$${#DEPENDENCIES}
             """.strip()  # Micromamba is an alternative to conda/miniconda; 100% statically linked, and written in C++
             micromamba_git_setup = """
 RUN git clone $${#DEPENDENCY}
-RUN micromamba update -n runtime_env -f /code/$${#BASE_PATH}/env.yml
-RUN pip install /code/$${#BASE_PATH}
+RUN micromamba update -p /micromamba_env/runtime_env -f /code/$${#BASE_PATH}/env.yml
+RUN micromamba run python3 -m pip install /code/$${#BASE_PATH}
                 """.strip()  # We need to insert this section for *every* git+conda dependency
             micromamba_conda_forge_setup = """
-RUN micromamba update -c conda-forge -n runtime_env $${#DEPENDENCIES}
+RUN micromamba update -c conda-forge -p /micromamba_env/runtime_env $${#DEPENDENCIES}
                 """.strip()  # We need to insert this only once, but with all the conda-forge dependencies
 
             git_dependency_str: str = ""
             conda_forge_dependency_str: str = ""
-            if len(git_dependencies) > 0:
+            if len(conda_git_dependencies) > 0:
                 subsections: list[str] = []
-                for dep in git_dependencies:
+                for dep in conda_git_dependencies:
                     dependency_str = dep[4:]
                     base_str = dep.split("/")[-1][:-4]  # get the base name, and remove the ".git" at the end
                     filled_subsection = micromamba_git_setup.replace("$${#DEPENDENCY}", dependency_str)
@@ -90,10 +96,15 @@ RUN micromamba update -c conda-forge -n runtime_env $${#DEPENDENCIES}
             docker_template = docker_template.replace(
                 match_target, filled_section
             )  # insert the full complete conda section
+        elif desired_field == "ENTRYPOINT_STR" or desired_field == "PYTHON_STR":
+            continue # these are filled last
         else:
             raise ValueError(f"unknown field in template dockerfile: {desired_field}")
 
-    return docker_template
+    python_string = "python3" if has_no_conda else "micromamba run python3"
+    entrypoint_str = 'ENTRYPOINT ["python3", "/runtime/main.py"]' if has_no_conda else 'ENTRYPOINT ["micromamba", "run", "-p", "/micromamba_env/runtime_env", "python3", "/runtime/main.py"]'
+    final_docker_template = docker_template.replace("$${#ENTRYPOINT_STR}", entrypoint_str).replace("$${#PYTHON_STR}", python_string)
+    return final_docker_template
 
 
 def generate_necessary_values() -> list[str]:
