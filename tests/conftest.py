@@ -19,8 +19,12 @@ from tests.fixtures.nats_fixtures import (  # noqa: F401
     nats_subscriber_client,
 )
 from tests.fixtures.postgres_fixtures import async_postgres_engine, database_service, postgres_url  # noqa: F401
-from tests.fixtures.simulation_fixtures import (job_monitor, simulation_service_slurm,
-                                                interesting_test_simulator, sasco_readdy_reference_model_simulator)  # noqa: F401
+from tests.fixtures.simulation_fixtures import (  # noqa: F401
+    interesting_test_simulator,
+    job_monitor,
+    sasco_readdy_reference_model_simulator,
+    simulation_service_slurm,
+)
 from tests.fixtures.slurm_fixtures import (  # noqa: F401
     data_service,
     simulation_request_conda,
