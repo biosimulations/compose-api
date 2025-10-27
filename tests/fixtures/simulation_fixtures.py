@@ -1,6 +1,7 @@
 import os
 import tempfile
 from collections.abc import AsyncGenerator
+from typing import Any
 
 import pytest_asyncio
 from nats.aio.client import Client as NATSClient
@@ -23,7 +24,7 @@ from compose_api.dependencies import (
     set_simulation_service,
 )
 from compose_api.simulation.job_monitor import JobMonitor
-from compose_api.simulation.models import JobStatus, JobType, SimulatorVersion
+from compose_api.simulation.models import HpcRun, JobStatus, JobType, SimulatorVersion
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 
 
@@ -62,60 +63,85 @@ async def job_monitor(
 @pytest_asyncio.fixture(scope="function")
 async def interesting_test_simulator(database_service: DatabaseService) -> AsyncGenerator[SimulatorVersion]:
     omex_path = os.path.join(os.path.dirname(__file__), "resources/interesting-test.omex")
-    return _simulator(database_service, omex_path)
+    async with TestSimulator(omex_path=omex_path, database_service=database_service) as test_simulator:
+        yield test_simulator.simulator
+
 
 @pytest_asyncio.fixture(scope="function")
 async def sasco_readdy_reference_model_simulator(database_service: DatabaseService) -> AsyncGenerator[SimulatorVersion]:
     omex_path = os.path.join(os.path.dirname(__file__), "resources/allen_msa_experiment.omex")
-    return _simulator(database_service, omex_path)
+    async with TestSimulator(omex_path=omex_path, database_service=database_service) as test_simulator:
+        yield test_simulator.simulator
 
-async def _simulator(database_service: DatabaseService, omex_path: str) -> AsyncGenerator[SimulatorVersion]:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        singularity_def, experiment_dep = execute_bsander(
-            ProgramArguments(
-                input_file_path=omex_path,
-                output_dir=temp_dir,
-                containerization_type=ContainerizationTypes.SINGLE,
-                containerization_engine=ContainerizationEngine.APPTAINER,
-                passlist_entries=allow_list,
+
+class TestSimulator:
+    database_service: DatabaseService
+    omex_path: str
+
+    simulator: SimulatorVersion
+    fake_hpc_run: HpcRun
+
+    def __init__(self, omex_path: str, database_service: DatabaseService):
+        self.omex_path = omex_path
+        self.database_service = database_service
+
+    async def insert_simulator_in_db(self, omex_path: str, database_service: DatabaseService) -> "TestSimulator":
+        with tempfile.TemporaryDirectory() as temp_dir:
+            singularity_def, experiment_dep = execute_bsander(
+                ProgramArguments(
+                    input_file_path=omex_path,
+                    output_dir=temp_dir,
+                    containerization_type=ContainerizationTypes.SINGLE,
+                    containerization_engine=ContainerizationEngine.APPTAINER,
+                    passlist_entries=allow_list,
+                )
             )
+
+        package_outlines = introspect_package(experiment_dep)
+        packages = []
+        for outline in package_outlines:
+            packages.append(await database_service.get_package_db().insert_package(outline))
+
+        self.simulator = await database_service.get_simulator_db().insert_simulator(singularity_def, packages)
+        self.fake_hpc_run = await database_service.get_hpc_db().insert_hpcrun(
+            40, JobType.BUILD_CONTAINER, self.simulator.database_id, "jfldsjaljl"
         )
+        await database_service.get_hpc_db().update_hpcrun_status(
+            self.fake_hpc_run.database_id,
+            SlurmJob(job_id=123, name="fds", account="foo", user_name="foo", job_state=JobStatus.COMPLETED),
+        )
+        return self
 
-    package_outlines = introspect_package(experiment_dep)
-    packages = []
-    for outline in package_outlines:
-        packages.append(await database_service.get_package_db().insert_package(outline))
+    async def cleanup(self) -> None:
+        simulations = await self.database_service.get_simulator_db().list_simulations_that_use_simulator(
+            simulator_id=self.simulator.database_id
+        )
+        for sim in simulations:
+            hpc_run = await self.database_service.get_hpc_db().get_hpcrun_by_ref(sim.database_id, JobType.SIMULATION)
+            if hpc_run is not None:
+                await self.database_service.get_hpc_db().delete_hpcrun(hpcrun_id=hpc_run.database_id)
+            await self.database_service.get_simulator_db().delete_simulation(simulation_id=sim.database_id)
 
-    simulator = await database_service.get_simulator_db().insert_simulator(singularity_def, packages)
-    fake_hpc_run = await database_service.get_hpc_db().insert_hpcrun(
-        40, JobType.BUILD_CONTAINER, simulator.database_id, "jfldsjaljl"
-    )
-    await database_service.get_hpc_db().update_hpcrun_status(
-        fake_hpc_run.database_id,
-        SlurmJob(job_id=123, name="fds", account="foo", user_name="foo", job_state=JobStatus.COMPLETED),
-    )
-    yield simulator
-    simulations = await database_service.get_simulator_db().list_simulations_that_use_simulator(
-        simulator_id=simulator.database_id
-    )
-    for sim in simulations:
-        hpc_run = await database_service.get_hpc_db().get_hpcrun_by_ref(sim.database_id, JobType.SIMULATION)
-        if hpc_run is not None:
-            await database_service.get_hpc_db().delete_hpcrun(hpcrun_id=hpc_run.database_id)
-        await database_service.get_simulator_db().delete_simulation(simulation_id=sim.database_id)
+        simulator_packages = await self.database_service.get_package_db().list_simulator_packages(
+            simulator_id=self.simulator.database_id
+        )
+        await self.database_service.get_hpc_db().delete_hpcrun(self.fake_hpc_run.database_id)
+        await self.database_service.get_simulator_db().delete_simulator(self.simulator.database_id)
 
-    simulator_packages = await database_service.get_package_db().list_simulator_packages(
-        simulator_id=simulator.database_id
-    )
-    await database_service.get_hpc_db().delete_hpcrun(fake_hpc_run.database_id)
-    await database_service.get_simulator_db().delete_simulator(simulator.database_id)
+        for package in simulator_packages:
+            for process in package.processes:
+                await self.database_service.get_package_db().delete_bigraph_compute(process)
+            for step in package.steps:
+                await self.database_service.get_package_db().delete_bigraph_compute(step)
+            await self.database_service.get_package_db().delete_bigraph_package(package)
 
-    for package in simulator_packages:
-        for process in package.processes:
-            await database_service.get_package_db().delete_bigraph_compute(process)
-        for step in package.steps:
-            await database_service.get_package_db().delete_bigraph_compute(step)
-        await database_service.get_package_db().delete_bigraph_package(package)
+    async def __aenter__(self) -> "TestSimulator":
+        return await self.insert_simulator_in_db(self.omex_path, self.database_service)
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        await self.cleanup()
+
+
 # @pytest_asyncio.fixture
 # async def experiment_file() -> File:
 #     omex_path = Path(os.path.join(os.path.dirname(__file__), "resources/interesting-test.omex"))
