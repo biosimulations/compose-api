@@ -391,7 +391,7 @@ requires-dist = [
 dev = [
     { name = "deptry", specifier = ">=0.23.0,<0.24" },
     { name = "mypy", specifier = ">=1.5.1,<2" },
-    { name = "openapi-python-client", specifier = ">=0.25.2,<0.26" },
+    { name = "openapi-python-client", specifier = ">=0.27,<0.28" },
     { name = "pre-commit", specifier = ">=3.4.0,<4" },
     { name = "pytest", specifier = ">=8.3.5,<9" },
     { name = "pytest-asyncio", specifier = ">=1.0.0,<2" },
@@ -1386,7 +1386,7 @@ wheels = [
 
 [[package]]
 name = "openapi-python-client"
-version = "0.25.3"
+version = "0.27.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
@@ -1399,11 +1399,10 @@ dependencies = [
     { name = "ruff" },
     { name = "shellingham" },
     { name = "typer" },
-    { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f9/af/df5579c9a3cf515501518634c9c2004fa0999a810a0ef1145fa3bc82beac/openapi_python_client-0.25.3.tar.gz", hash = "sha256:cafc6b5aebd0c55fe7be4d400b24d3b107f7ec64923b8117ef8aa7ceb2a918a4", size = 124703, upload-time = "2025-07-28T01:25:53.66Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ed/1e/da78394146017aa4eac1490b76cddc6d3c2cc52add2901fb23bde0e256fc/openapi_python_client-0.27.0.tar.gz", hash = "sha256:407029afc96694e2a7b49991f88d2d95e74a24b2cc8ccb955c3e70fad433531d", size = 125539, upload-time = "2025-10-28T00:43:29.379Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5f/d2/539333a5cf2f14f5dd9aa8a3a73a4029464328e3f6ac4350577a28ea08ce/openapi_python_client-0.25.3-py3-none-any.whl", hash = "sha256:008e4c5f3079f312c135b55b142eb9616eafbd739ad6d5f8e95add726d1a02f2", size = 182159, upload-time = "2025-07-28T01:25:51.941Z" },
+    { url = "https://files.pythonhosted.org/packages/52/c7/1c3bf6d584c45424e421e793af8334b6e069c9a8de58b6c4f1337f3e1ce8/openapi_python_client-0.27.0-py3-none-any.whl", hash = "sha256:a06bd80a3b958ff7c7f34fda8aace61f3b55d22990e0c1e2328f5254d26f9a0a", size = 182659, upload-time = "2025-10-28T00:43:27.671Z" },
 ]
 
 [[package]]
@@ -2523,7 +2522,7 @@ wheels = [
 
 [[package]]
 name = "typer"
-version = "0.16.0"
+version = "0.20.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -2531,9 +2530,9 @@ dependencies = [
     { name = "shellingham" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c5/8c/7d682431efca5fd290017663ea4588bf6f2c6aad085c7f108c5dbc316e70/typer-0.16.0.tar.gz", hash = "sha256:af377ffaee1dbe37ae9440cb4e8f11686ea5ce4e9bae01b84ae7c63b87f1dd3b", size = 102625, upload-time = "2025-05-26T14:30:31.824Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8f/28/7c85c8032b91dbe79725b6f17d2fffc595dff06a35c7a30a37bef73a1ab4/typer-0.20.0.tar.gz", hash = "sha256:1aaf6494031793e4876fb0bacfa6a912b551cf43c1e63c800df8b1a866720c37", size = 106492, upload-time = "2025-10-20T17:03:49.445Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/76/42/3efaf858001d2c2913de7f354563e3a3a2f0decae3efe98427125a8f441e/typer-0.16.0-py3-none-any.whl", hash = "sha256:1f79bed11d4d02d4310e3c1b7ba594183bcedb0ac73b27a9e5f28f6fb5b98855", size = 46317, upload-time = "2025-05-26T14:30:30.523Z" },
+    { url = "https://files.pythonhosted.org/packages/78/64/7713ffe4b5983314e9d436a90d5bd4f63b6054e2aca783a3cfc44cb95bbf/typer-0.20.0-py3-none-any.whl", hash = "sha256:5b463df6793ec1dca6213a3cf4c0f03bc6e322ac5e16e13ddd622a889489784a", size = 47028, upload-time = "2025-10-20T17:03:47.617Z" },
 ]
 
 [[package]]
