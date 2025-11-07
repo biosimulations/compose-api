@@ -2,11 +2,11 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any
 
+from bsedic.utils.input_types import ExperimentPrimaryDependencies
 from sqlalchemy import Result, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from typing_extensions import override
 
-from compose_api.btools.bsander.bsandr_utils.input_types import ExperimentPrimaryDependencies
 from compose_api.db.tables.package_tables import (
     BiGraphComputeTypeDB,
     ORMBiGraphCompute,

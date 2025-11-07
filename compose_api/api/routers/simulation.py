@@ -4,15 +4,15 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
-from starlette.responses import PlainTextResponse
-
-from compose_api.btools.bsander.bsandr_utils.input_types import (
+from bsedic.execution import execute_bsedic
+from bsedic.utils.input_types import (
     ContainerizationEngine,
     ContainerizationTypes,
     ProgramArguments,
 )
-from compose_api.btools.bsander.execution import execute_bsander
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
+from starlette.responses import PlainTextResponse
+
 from compose_api.btools.sedml_compiler.sedml_representation_compiler import SimpleSedmlCompiler, ToolSuites
 from compose_api.btools.sedml_processor import SimpleSedmlRepresentation
 from compose_api.common.gateway.models import RouterConfig
@@ -101,7 +101,7 @@ async def analyze_simulation(uploaded_file: UploadFile) -> str:
         uploaded_file_path = f"{tmp_dir}/{uploaded_file.filename}"
         with open(uploaded_file_path, "wb") as fh:
             fh.write(contents)
-        singularity_rep, experiment_dep = execute_bsander(
+        singularity_rep, experiment_dep = execute_bsedic(
             ProgramArguments(
                 input_file_path=uploaded_file_path,
                 output_dir=tmp_dir,

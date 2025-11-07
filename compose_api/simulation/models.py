@@ -7,10 +7,9 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from bsedic.utils.input_types import ContainerizationFileRepr
 from pydantic import BaseModel as _BaseModel
 from pydantic import Field
-
-from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr
 
 
 @dataclass
