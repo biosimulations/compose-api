@@ -1,10 +1,10 @@
 import datetime
 import logging
 
+from bsedic.utils.input_types import ContainerizationFileRepr
 from sqlalchemy import ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr
 from compose_api.db.db_utils import DeclarativeTableBase, package_table_name
 from compose_api.simulation.models import (
     SimulatorVersion,

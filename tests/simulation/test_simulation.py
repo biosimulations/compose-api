@@ -7,13 +7,13 @@ import time
 from pathlib import Path
 
 import pytest
-
-from compose_api.btools.bsander.bsandr_utils.input_types import (
+from bsedic.execution import execute_bsedic
+from bsedic.utils.input_types import (
     ContainerizationEngine,
     ContainerizationTypes,
     ProgramArguments,
 )
-from compose_api.btools.bsander.execution import execute_bsander
+
 from compose_api.btools.bsoil.introspect_package import introspect_package
 from compose_api.common.gateway.utils import allow_list
 from compose_api.common.hpc.models import SlurmJob
@@ -41,7 +41,7 @@ async def test_build_simulator(
     job_monitor: JobMonitor,
 ) -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
-        singularity_def, experiment_dep = execute_bsander(
+        singularity_def, experiment_dep = execute_bsedic(
             ProgramArguments(
                 input_file_path=str(simulation_request.omex_archive),
                 output_dir=temp_dir,

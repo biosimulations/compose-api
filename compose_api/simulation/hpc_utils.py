@@ -1,7 +1,8 @@
 import hashlib
 from pathlib import Path
 
-from compose_api.btools.bsander.bsandr_utils.input_types import ContainerizationFileRepr
+from bsedic.utils.input_types import ContainerizationFileRepr
+
 from compose_api.common.gateway.models import Namespace
 from compose_api.config import get_settings
 from compose_api.simulation.models import (

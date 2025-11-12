@@ -3,14 +3,14 @@ import tempfile
 from collections.abc import AsyncGenerator
 
 import pytest_asyncio
-from nats.aio.client import Client as NATSClient
-
-from compose_api.btools.bsander.bsandr_utils.input_types import (
+from bsedic.execution import execute_bsedic
+from bsedic.utils.input_types import (
     ContainerizationEngine,
     ContainerizationTypes,
     ProgramArguments,
 )
-from compose_api.btools.bsander.execution import execute_bsander
+from nats.aio.client import Client as NATSClient
+
 from compose_api.btools.bsoil.introspect_package import introspect_package
 from compose_api.common.gateway.utils import allow_list
 from compose_api.common.hpc.models import SlurmJob
@@ -63,7 +63,7 @@ async def job_monitor(
 async def simulator(database_service: DatabaseService) -> AsyncGenerator[SimulatorVersion, None]:
     omex_path = os.path.join(os.path.dirname(__file__), "resources/interesting-test.omex")
     with tempfile.TemporaryDirectory() as temp_dir:
-        singularity_def, experiment_dep = execute_bsander(
+        singularity_def, experiment_dep = execute_bsedic(
             ProgramArguments(
                 input_file_path=omex_path,
                 output_dir=temp_dir,

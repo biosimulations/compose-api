@@ -8,14 +8,14 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-from fastapi import BackgroundTasks, HTTPException
-
-from compose_api.btools.bsander.bsandr_utils.input_types import (
+from bsedic.execution import execute_bsedic
+from bsedic.utils.input_types import (
     ContainerizationEngine,
     ContainerizationTypes,
     ProgramArguments,
 )
-from compose_api.btools.bsander.execution import execute_bsander
+from fastapi import BackgroundTasks, HTTPException
+
 from compose_api.common.gateway.utils import allow_list
 from compose_api.db.database_service import DatabaseService
 from compose_api.dependencies import (
@@ -68,7 +68,7 @@ async def run_simulation(
     allow_list = pb_allow_list.allow_list
 
     with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
-        singularity_rep, experiment_dep = execute_bsander(
+        singularity_rep, experiment_dep = execute_bsedic(
             ProgramArguments(
                 input_file_path=str(simulation_request.omex_archive),
                 output_dir=tmp_dir,
