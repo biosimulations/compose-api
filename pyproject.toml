@@ -36,7 +36,7 @@ dependencies = [
     "python-libsedml>=2.0.33",
     "biosimulators-utils>=0.2.3",
     "python-libsbml>=5.20.5",
-    "bsedic",
+    "pbest",
 ]
 
 [project.urls]
@@ -77,7 +77,6 @@ default-groups = [
 
 [tool.uv.sources]
 bsander = { git = "https://github.com/biosimulators/bsander.git" }
-bsedic = { git = "https://github.com/biosimulators/bsedic.git" }
 
 [tool.hatch.build.targets.sdist]
 include = [
