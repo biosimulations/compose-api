@@ -3,7 +3,7 @@ import urllib
 from urllib.parse import ParseResult
 
 import requests
-from bsedic.utils.input_types import ExperimentPrimaryDependencies
+from pbest.utils.input_types import ExperimentPrimaryDependencies
 
 from compose_api.simulation.models import PackageOutline, PackageType
 

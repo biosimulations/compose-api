@@ -7,7 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from bsedic.utils.input_types import ContainerizationFileRepr
+from pbest.utils.input_types import ContainerizationFileRepr
 from pydantic import BaseModel as _BaseModel
 from pydantic import Field
 

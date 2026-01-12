@@ -7,11 +7,12 @@ import time
 from pathlib import Path
 
 import pytest
-from bsedic.execution import execute_bsedic
-from bsedic.utils.input_types import (
+from pbest.containerization import formulate_dockerfile_for_necessary_env
+from pbest.containerization.container_constructor import get_experiment_deps
+from pbest.utils.input_types import (
     ContainerizationEngine,
+    ContainerizationProgramArguments,
     ContainerizationTypes,
-    ProgramArguments,
 )
 
 from compose_api.btools.bsoil.introspect_package import introspect_package
@@ -41,14 +42,15 @@ async def test_build_simulator(
     job_monitor: JobMonitor,
 ) -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
-        singularity_def, experiment_dep = execute_bsedic(
-            ProgramArguments(
+        experiment_dep = get_experiment_deps()
+        singularity_def = formulate_dockerfile_for_necessary_env(
+            ContainerizationProgramArguments(
                 input_file_path=str(simulation_request.omex_archive),
-                output_dir=temp_dir,
+                working_directory=Path(temp_dir),
                 containerization_type=ContainerizationTypes.SINGLE,
                 containerization_engine=ContainerizationEngine.APPTAINER,
-                passlist_entries=allow_list,
-            )
+            ),
+            experiment_dep,
         )
 
     package_outlines = introspect_package(experiment_dep)

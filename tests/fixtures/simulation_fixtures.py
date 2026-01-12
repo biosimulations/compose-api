@@ -1,18 +1,19 @@
 import os
 import tempfile
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
 import pytest_asyncio
-from bsedic.execution import execute_bsedic
-from bsedic.utils.input_types import (
-    ContainerizationEngine,
-    ContainerizationTypes,
-    ProgramArguments,
-)
 from nats.aio.client import Client as NATSClient
+from pbest.containerization import formulate_dockerfile_for_necessary_env
+from pbest.containerization.container_constructor import get_experiment_deps
+from pbest.utils.input_types import (
+    ContainerizationEngine,
+    ContainerizationProgramArguments,
+    ContainerizationTypes,
+)
 
 from compose_api.btools.bsoil.introspect_package import introspect_package
-from compose_api.common.gateway.utils import allow_list
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.db.database_service import DatabaseService
@@ -63,14 +64,15 @@ async def job_monitor(
 async def simulator(database_service: DatabaseService) -> AsyncGenerator[SimulatorVersion, None]:
     omex_path = os.path.join(os.path.dirname(__file__), "resources/interesting-test.omex")
     with tempfile.TemporaryDirectory() as temp_dir:
-        singularity_def, experiment_dep = execute_bsedic(
-            ProgramArguments(
+        experiment_dep = get_experiment_deps()
+        singularity_def = formulate_dockerfile_for_necessary_env(
+            ContainerizationProgramArguments(
                 input_file_path=omex_path,
-                output_dir=temp_dir,
+                working_directory=Path(temp_dir),
                 containerization_type=ContainerizationTypes.SINGLE,
                 containerization_engine=ContainerizationEngine.APPTAINER,
-                passlist_entries=allow_list,
-            )
+            ),
+            experiment_dep,
         )
 
     package_outlines = introspect_package(experiment_dep)

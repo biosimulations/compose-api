@@ -77,6 +77,8 @@ default-groups = [
 
 [tool.uv.sources]
 bsander = { git = "https://github.com/biosimulators/bsander.git" }
+pbest = { git = "https://github.com/biosimulations/biosim-registry", rev = "publish-repository" }
+
 
 [tool.hatch.build.targets.sdist]
 include = [

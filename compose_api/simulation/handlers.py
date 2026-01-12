@@ -8,13 +8,14 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-from bsedic.execution import execute_bsedic
-from bsedic.utils.input_types import (
-    ContainerizationEngine,
-    ContainerizationTypes,
-    ProgramArguments,
-)
 from fastapi import BackgroundTasks, HTTPException
+from pbest.containerization import formulate_dockerfile_for_necessary_env
+from pbest.containerization.container_constructor import get_experiment_deps
+from pbest.utils.input_types import (
+    ContainerizationEngine,
+    ContainerizationProgramArguments,
+    ContainerizationTypes,
+)
 
 from compose_api.common.gateway.utils import allow_list
 from compose_api.db.database_service import DatabaseService
@@ -65,17 +66,16 @@ async def run_simulation(
     pb_allow_list: PBAllowList,
     background_tasks: BackgroundTasks,
 ) -> SimulationExperiment:
-    allow_list = pb_allow_list.allow_list
-
     with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
-        singularity_rep, experiment_dep = execute_bsedic(
-            ProgramArguments(
+        experiment_dep = get_experiment_deps()
+        singularity_rep = formulate_dockerfile_for_necessary_env(
+            ContainerizationProgramArguments(
                 input_file_path=str(simulation_request.omex_archive),
-                output_dir=tmp_dir,
+                working_directory=Path(tmp_dir),
                 containerization_type=ContainerizationTypes.SINGLE,
                 containerization_engine=ContainerizationEngine.APPTAINER,
-                passlist_entries=allow_list,
-            )
+            ),
+            experiment_dep,
         )
         simulation_request.omex_archive = Path(tmp_dir + f"/{os.path.basename(simulation_request.omex_archive.name)}")
 
