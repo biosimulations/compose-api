@@ -4,14 +4,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-from bsedic.execution import execute_bsedic
-from bsedic.utils.input_types import (
-    ContainerizationEngine,
-    ContainerizationTypes,
-    ProgramArguments,
-)
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
-from starlette.responses import PlainTextResponse
 
 from compose_api.btools.sedml_compiler.sedml_representation_compiler import SimpleSedmlCompiler, ToolSuites
 from compose_api.btools.sedml_processor import SimpleSedmlRepresentation
@@ -86,31 +79,30 @@ async def submit_simulation(background_tasks: BackgroundTasks, uploaded_file: Up
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@config.router.post(
-    path="/analyze",
-    response_class=PlainTextResponse,
-    description="Resulting container definition file",
-    operation_id="analyze-simulation-omex",
-    tags=["Simulation"],
-    summary="""Analyze a process bi-graph,
-    and determine the singularity definition file which would build an environment it can run in.""",
-)
-async def analyze_simulation(uploaded_file: UploadFile) -> str:
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        contents = await uploaded_file.read()
-        uploaded_file_path = f"{tmp_dir}/{uploaded_file.filename}"
-        with open(uploaded_file_path, "wb") as fh:
-            fh.write(contents)
-        singularity_rep, experiment_dep = execute_bsedic(
-            ProgramArguments(
-                input_file_path=uploaded_file_path,
-                output_dir=tmp_dir,
-                containerization_type=ContainerizationTypes.SINGLE,
-                containerization_engine=ContainerizationEngine.APPTAINER,
-                passlist_entries=allow_list,
-            )
-        )
-    return singularity_rep.representation
+# @config.router.post(
+#     path="/analyze",
+#     response_class=PlainTextResponse,
+#     description="Resulting container definition file",
+#     operation_id="analyze-simulation-omex",
+#     tags=["Simulation"],
+#     summary="""Analyze a process bi-graph,
+#     and determine the singularity definition file which would build an environment it can run in.""",
+# )
+# async def analyze_simulation(uploaded_file: UploadFile) -> str:
+#     with tempfile.TemporaryDirectory() as tmp_dir:
+#         contents = await uploaded_file.read()
+#         uploaded_file_path = f"{tmp_dir}/{uploaded_file.filename}"
+#         with open(uploaded_file_path, "wb") as fh:
+#             fh.write(contents)
+#         singularity_rep, experiment_dep = formulate_dockerfile_for_necessary_env(
+#             ContainerizationProgramArguments(
+#                 input_file_path=uploaded_file_path,
+#                 working_directory=Path(tmp_dir),
+#                 containerization_type=ContainerizationTypes.SINGLE,
+#                 containerization_engine=ContainerizationEngine.APPTAINER,
+#             )
+#         )
+#     return singularity_rep.representation
 
 
 @config.router.post(
