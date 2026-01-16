@@ -15,7 +15,7 @@ from pbest.utils.input_types import (
     ContainerizationTypes,
 )
 
-from compose_api.btools.bsoil.introspect_package import introspect_package
+from compose_api.api.introspect_package import introspect_package
 from compose_api.common.gateway.utils import allow_list
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.ssh.ssh_service import SSHService

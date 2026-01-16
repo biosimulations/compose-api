@@ -2,7 +2,6 @@ import logging
 import urllib
 from urllib.parse import ParseResult
 
-import requests
 from pbest.utils.input_types import ExperimentPrimaryDependencies
 
 from compose_api.simulation.models import PackageOutline, PackageType
@@ -11,22 +10,12 @@ logger = logging.getLogger(__name__)
 
 
 def introspect_package(dependencies: ExperimentPrimaryDependencies) -> list[PackageOutline]:
-    packages = []
-    for dep in dependencies.pypi_dependencies:
-        github_url = _get_package_github_origin(dep)
-        try:
-            response = requests.get(github_url.geturl(), timeout=10)
-            response.raise_for_status()
-            packages.append(
-                PackageOutline.from_pb_outline(pb_outline_json=response.json(), name=dep, package_type=PackageType.PYPI)
-            )
-        except Exception as e:
-            logger.exception("Failed to parse package info from github %s", github_url.geturl(), exc_info=e)
-    # for dep in dependencies.conda_dependencies:
-    #     # Still need to implement
-    #     pass
-
-    return packages
+    package_outlines = []
+    for dep in dependencies.get_pypi_dependencies():
+        package_outlines.append(PackageOutline(package_type=PackageType.PYPI, name=dep, compute=[]))
+    for dep in dependencies.get_conda_dependencies():
+        package_outlines.append(PackageOutline(package_type=PackageType.CONDA, name=dep, compute=[]))
+    return package_outlines
 
 
 def _get_package_github_origin(pypi_package: str) -> ParseResult:

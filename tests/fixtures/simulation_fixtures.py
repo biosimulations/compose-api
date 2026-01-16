@@ -13,7 +13,7 @@ from pbest.utils.input_types import (
     ContainerizationTypes,
 )
 
-from compose_api.btools.bsoil.introspect_package import introspect_package
+from compose_api.api.introspect_package import introspect_package
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.db.database_service import DatabaseService
