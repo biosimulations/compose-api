@@ -7,8 +7,7 @@ import time
 from pathlib import Path
 
 import pytest
-from pbest.containerization import formulate_dockerfile_for_necessary_env
-from pbest.containerization.container_constructor import get_experiment_deps
+from pbest.containerization.container_constructor import generate_container_def_file, get_experiment_deps
 from pbest.utils.input_types import (
     ContainerizationEngine,
     ContainerizationProgramArguments,
@@ -42,17 +41,16 @@ async def test_build_simulator(
     job_monitor: JobMonitor,
 ) -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
-        experiment_dep = get_experiment_deps()
-        singularity_def = formulate_dockerfile_for_necessary_env(
+        singularity_def = generate_container_def_file(
             ContainerizationProgramArguments(
                 input_file_path=str(simulation_request.omex_archive),
                 working_directory=Path(temp_dir),
                 containerization_type=ContainerizationTypes.SINGLE,
                 containerization_engine=ContainerizationEngine.APPTAINER,
-            ),
-            experiment_dep,
+            )
         )
 
+    experiment_dep = get_experiment_deps()
     package_outlines = introspect_package(experiment_dep)
     packages = []
     for outline in package_outlines:
