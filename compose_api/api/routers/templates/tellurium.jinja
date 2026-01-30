@@ -1,38 +1,17 @@
 {
-    "composition": {
-        "sim_start_time": "float",
-        "sim_duration": "float",
-        "sim_num_data_points": "integer",
+    "state": {
         "time_course": {
             "_type": "step",
-            "address": {"_type": "quote", "_default": "local:time_course"},
-            "_config": {
-                "sbml_file_path": "string",
-                "sedml_file_path": "string",
-                "output_dir": "string"
+            "address": "local:pbest.registry.simulators.tellurium_process.TelluriumUTCStep",
+            "config": {
+                "model_source": "interesting.sbml",
+                "sim_start_time": {{ start_time }},
+                "time": {{ end_time }},
+                "n_points": {{ num_data_points }},
+                "output_dir": ""
             },
-            "_inputs": {
-                "starting_time": "float",
-                "end_time": "float",
-                "num_data_points": "integer"
-            },
-            "_outputs": {}
-        }
-    },
-    "state": {
-        "sim_start_time": {{ start_time }},
-        "sim_end_time": {{ end_time }},
-        "sim_num_data_points": {{ num_data_points }},
-        "time_course": {
-            "_type" : "step",
-            "address": "python:pypi<git+https://github.com/biosimulators/bspil-basico.git@initial_work>@bspil_basico.legacy.tellerium.TelluriumTimeCourseStep",
-            "config": {"sbml_file_path": "interesting.sbml", "output_dir": "output"},
             "interval": 1.0,
-            "inputs": {
-                "starting_time": ["sim_start_time"],
-                "end_time": ["sim_end_time"],
-                "num_data_points": ["sim_num_data_points"]
-            },
+            "inputs": {},
             "outputs": {}
         }
     }
