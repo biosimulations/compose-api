@@ -68,4 +68,6 @@ allow_list = [
     "pypi::numpy",
     "pypi::matplotlib",
     "pypi::scipy",
+    "pypi::pb_multiscale_actin",
+    "conda::readdy",
 ]
