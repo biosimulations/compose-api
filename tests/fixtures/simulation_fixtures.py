@@ -61,7 +61,7 @@ async def job_monitor(
 
 @pytest_asyncio.fixture(scope="function")
 async def simulator(database_service: DatabaseService) -> AsyncGenerator[SimulatorVersion, None]:
-    omex_path = os.path.join(os.path.dirname(__file__), "resources/interesting-test.omex")
+    omex_path = os.path.join(os.path.dirname(__file__), "resources/phase_cycle.omex")
     with tempfile.TemporaryDirectory() as temp_dir:
         experiment_dep = get_experiment_deps()
         singularity_def = generate_container_def_file(
