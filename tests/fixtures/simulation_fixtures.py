@@ -5,8 +5,7 @@ from pathlib import Path
 
 import pytest_asyncio
 from nats.aio.client import Client as NATSClient
-from pbest.containerization import formulate_dockerfile_for_necessary_env
-from pbest.containerization.container_constructor import get_experiment_deps
+from pbest.containerization.container_constructor import generate_container_def_file, get_experiment_deps
 from pbest.utils.input_types import (
     ContainerizationEngine,
     ContainerizationProgramArguments,
@@ -65,14 +64,13 @@ async def simulator(database_service: DatabaseService) -> AsyncGenerator[Simulat
     omex_path = os.path.join(os.path.dirname(__file__), "resources/interesting-test.omex")
     with tempfile.TemporaryDirectory() as temp_dir:
         experiment_dep = get_experiment_deps()
-        singularity_def = formulate_dockerfile_for_necessary_env(
+        singularity_def = generate_container_def_file(
             ContainerizationProgramArguments(
                 input_file_path=omex_path,
                 working_directory=Path(temp_dir),
                 containerization_type=ContainerizationTypes.SINGLE,
                 containerization_engine=ContainerizationEngine.APPTAINER,
-            ),
-            experiment_dep,
+            )
         )
 
     package_outlines = introspect_package(experiment_dep)
