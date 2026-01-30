@@ -44,7 +44,11 @@ async def run_copasi(
         render = template.render(start_time=start_time, duration=duration, num_data_points=num_data_points)
     loaded_sbml = await get_file_from_uploaded_file(sbml)
     return await run_pbif(
-        templated_pbif=render, simulator_name="Copasi", loaded_sbml=loaded_sbml, background_tasks=background_tasks
+        templated_pbif=render,
+        simulator_name="Copasi",
+        loaded_sbml=loaded_sbml,
+        background_tasks=background_tasks,
+        use_interesting=True,
     )
 
 
