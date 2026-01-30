@@ -245,13 +245,15 @@ class PackageORMExecutor(PackageDatabaseService):
         self, dependencies: ExperimentPrimaryDependencies
     ) -> list[RegisteredPackage]:
         async with self.async_session_maker() as session:
-            stmt = select(ORMPackage).where(ORMPackage.name.in_(dependencies.pypi_dependencies))
-            result: Result[tuple[ORMPackage]] = await session.execute(stmt)
-            orm_packages = result.scalars().all()
             packages: list[RegisteredPackage] = []
-            for row in orm_packages:
-                processes, steps = await self._list_computes_in_package(package_id=row.id)
-                packages.append(row.to_bigraph_package(processes=processes, steps=steps))
+            for dep_type in (dependencies.pypi_dependencies, dependencies.conda_dependencies):
+                stmt = select(ORMPackage).where(ORMPackage.name.in_(dep_type))
+                result: Result[tuple[ORMPackage]] = await session.execute(stmt)
+                orm_packages = result.scalars().all()
+                for row in orm_packages:
+                    processes, steps = await self._list_computes_in_package(package_id=row.id)
+                    packages.append(row.to_bigraph_package(processes=processes, steps=steps))
+
             return packages
 
     @override
