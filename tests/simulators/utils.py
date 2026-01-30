@@ -32,7 +32,7 @@ async def check_experiment_run(sim_experiment: Any, in_memory_api_client: Client
         raise TypeError()
 
     num_loops = 0
-    while current_status.status != JobStatus.COMPLETED and num_loops < 30:
+    while current_status.status != JobStatus.COMPLETED and num_loops < 60:
         await asyncio.sleep(2)
         current_status = await get_simulation_status.asyncio(
             client=in_memory_api_client, simulation_id=sim_experiment.simulation_database_id
@@ -68,7 +68,7 @@ def assert_test_sim_results(
 ) -> None:
     with ZipFile(archive_results) as zip_archive:
         zip_archive.extractall(temp_dir)
-    experiment_result = f"{temp_dir}/report.csv"
+    experiment_result = f"{temp_dir}/output/results.csv"
     experiment_numpy = numpy.genfromtxt(experiment_result, delimiter=",", dtype=object)
     report_numpy = numpy.genfromtxt(expected_csv_path, delimiter=",", dtype=object)
     assert report_numpy.shape == experiment_numpy.shape

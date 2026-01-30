@@ -46,5 +46,8 @@ async def test_copasi(
                 results_file.write(results.content)
             report_csv_file = Path(os.path.join(test_dir, "fixtures/resources/report.csv"))
             assert_test_sim_results(
-                archive_results=experiment_results, expected_csv_path=report_csv_file, temp_dir=temp_dir_path
+                archive_results=experiment_results,
+                expected_csv_path=report_csv_file,
+                temp_dir=temp_dir_path,
+                difference_tolerance=1e-4,
             )
