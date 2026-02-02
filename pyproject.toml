@@ -1,6 +1,6 @@
 [project]
 name = "compose-api"
-version = '0.2.4'
+version = "0.3.2"
 description = "An API server for reproducible biological workflows and cosimulations."
 authors = [{ name = "Jim Schaff", email = "schaff@uchc.edu" }]
 requires-python = ">=3.13.2,<4.0"
