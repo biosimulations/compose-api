@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os.path
 import random
 import shutil
 import string
@@ -8,13 +7,13 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-from bsedic.execution import execute_bsedic
-from bsedic.utils.input_types import (
-    ContainerizationEngine,
-    ContainerizationTypes,
-    ProgramArguments,
-)
 from fastapi import BackgroundTasks, HTTPException
+from pbest.containerization.container_constructor import generate_container_def_file, get_experiment_deps
+from pbest.utils.input_types import (
+    ContainerizationEngine,
+    ContainerizationProgramArguments,
+    ContainerizationTypes,
+)
 
 from compose_api.common.gateway.utils import allow_list
 from compose_api.db.database_service import DatabaseService
@@ -65,19 +64,17 @@ async def run_simulation(
     pb_allow_list: PBAllowList,
     background_tasks: BackgroundTasks,
 ) -> SimulationExperiment:
-    allow_list = pb_allow_list.allow_list
-
     with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
-        singularity_rep, experiment_dep = execute_bsedic(
-            ProgramArguments(
+        experiment_dep = get_experiment_deps()
+        singularity_rep = generate_container_def_file(
+            ContainerizationProgramArguments(
                 input_file_path=str(simulation_request.omex_archive),
-                output_dir=tmp_dir,
+                working_directory=Path(tmp_dir),
                 containerization_type=ContainerizationTypes.SINGLE,
                 containerization_engine=ContainerizationEngine.APPTAINER,
-                passlist_entries=allow_list,
-            )
+            ),
         )
-        simulation_request.omex_archive = Path(tmp_dir + f"/{os.path.basename(simulation_request.omex_archive.name)}")
+        # simulation_request.omex_archive = Path(tmp_dir + f"/{os.path.basename(simulation_request.omex_archive.name)}")
 
     simulator_db = database_service.get_simulator_db()
     simulator_version = await simulator_db.get_simulator_by_def_hash(get_singularity_hash(singularity_rep))
@@ -122,12 +119,12 @@ async def run_simulation(
 async def run_pbif(
     templated_pbif: str,
     simulator_name: str,
-    loaded_sbml: Path,
     background_tasks: BackgroundTasks,
+    loaded_sbml: Path,
     use_interesting: bool = True,
 ) -> SimulationExperiment:
     # Create OMEX with all necessary files
-    with tempfile.TemporaryDirectory() as tmp_dir:
+    with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
         with zipfile.ZipFile(tmp_dir + "/input.omex", "w") as omex:
             omex.writestr(data=templated_pbif, zinfo_or_arcname=f"{simulator_name}.pbif")
             if use_interesting:

@@ -1,7 +1,7 @@
 import hashlib
 from pathlib import Path
 
-from bsedic.utils.input_types import ContainerizationFileRepr
+from pbest.utils.input_types import ContainerizationFileRepr
 
 from compose_api.common.gateway.models import Namespace
 from compose_api.config import get_settings

@@ -1,7 +1,7 @@
 import datetime
 import logging
 
-from bsedic.utils.input_types import ContainerizationFileRepr
+from pbest.utils.input_types import ContainerizationFileRepr
 from sqlalchemy import ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column
 

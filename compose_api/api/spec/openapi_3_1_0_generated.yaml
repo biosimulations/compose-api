@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: compose-api
-  version: 0.2.2
+  version: 0.2.4
 paths:
   /curated/copasi:
     post:
@@ -103,64 +103,6 @@ paths:
             schema:
               $ref: '#/components/schemas/Body_run-simulation'
         required: true
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SimulationExperiment'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /simulation/analyze:
-    post:
-      tags:
-      - Simulation
-      summary: "Analyze a process bi-graph,\n    and determine the singularity definition\
-        \ file which would build an environment it can run in."
-      description: Resulting container definition file
-      operationId: analyze-simulation-omex
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Body_analyze-simulation-omex'
-        required: true
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            text/plain:
-              schema:
-                type: string
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /simulation/execute/sedml:
-    post:
-      tags:
-      - Simulation
-      summary: Execute sedml
-      operationId: execute-sedml
-      parameters:
-      - name: tool_suite
-        in: query
-        required: true
-        schema:
-          $ref: '#/components/schemas/ToolSuites'
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Body_execute-sedml'
       responses:
         '200':
           description: Successful Response
@@ -391,26 +333,6 @@ components:
       - outputs
       - database_id
       title: BiGraphStep
-    Body_analyze-simulation-omex:
-      properties:
-        uploaded_file:
-          type: string
-          format: binary
-          title: Uploaded File
-      type: object
-      required:
-      - uploaded_file
-      title: Body_analyze-simulation-omex
-    Body_execute-sedml:
-      properties:
-        uploaded_file:
-          type: string
-          format: binary
-          title: Uploaded File
-      type: object
-      required:
-      - uploaded_file
-      title: Body_execute-sedml
     Body_run-copasi:
       properties:
         sbml:
@@ -628,12 +550,6 @@ components:
       - packages
       - database_id
       title: SimulatorVersion
-    ToolSuites:
-      type: string
-      enum:
-      - basico
-      - tellurium
-      title: ToolSuites
     ValidationError:
       properties:
         loc:

@@ -93,14 +93,17 @@ class SimulationServiceHpc(SimulationService):
 
                     set -e
 
+                    mkdir {experiment_path}/output
                     echo "Simulation {slurm_job_name} running."
-                    singularity exec \
+                    singularity run \
                         --compat \
                         --bind {experiment_path}:/experiment \
                         {singularity_container_path} \
-                         python3 /runtime/main.py /experiment/{slurm_job_name}.omex
-                    pushd {experiment_path}/output/
-                    zip -r {experiment_path}/results.zip ./*
+                        /experiment/{slurm_job_name}.omex \
+                        -o "/experiment/output"
+
+                    pushd {experiment_path}
+                    zip -r results.zip ./output/*
                     popd
                     echo "Simulation run completed. data saved to {experiment_path!s}."
                     """)
