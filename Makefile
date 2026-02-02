@@ -37,6 +37,12 @@ build: clean-build ## Build wheel file
 	@echo "🚀 Creating wheel file"
 	@uvx --from build pyproject-build --installer uv
 
+.PHONY: tag
+tag:
+	@echo "🚀 Setting Version of ComposeAPI"
+	@./tag.sh
+
+
 .PHONY: clean-build
 clean-build: ## Clean build artifacts
 	@echo "🚀 Removing build artifacts"
