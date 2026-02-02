@@ -12,13 +12,15 @@ from compose_api.api.client.models import HpcRun, HTTPValidationError, JobStatus
 from compose_api.api.client.types import Response
 
 
-async def check_experiment_run(sim_experiment: Any, in_memory_api_client: Client) -> Response[HTTPValidationError]:
+async def check_experiment_run(
+    sim_experiment: Any, in_memory_api_client: Client, seconds_to_wait: int = 120
+) -> Response[HTTPValidationError]:
     """
     Checks that the simulation is running, asserts that it does not fail, and returns its results.
     Args:
         sim_experiment:
         in_memory_api_client:
-
+        seconds_to_wait:
     Returns:
 
     """
@@ -32,7 +34,7 @@ async def check_experiment_run(sim_experiment: Any, in_memory_api_client: Client
         raise TypeError()
 
     num_loops = 0
-    while current_status.status != JobStatus.COMPLETED and num_loops < 60:
+    while current_status.status != JobStatus.COMPLETED and num_loops < (seconds_to_wait / 2):
         await asyncio.sleep(2)
         current_status = await get_simulation_status.asyncio(
             client=in_memory_api_client, simulation_id=sim_experiment.simulation_database_id
