@@ -246,8 +246,8 @@ class PackageORMExecutor(PackageDatabaseService):
     ) -> list[RegisteredPackage]:
         async with self.async_session_maker() as session:
             packages: list[RegisteredPackage] = []
-            for dep_type in (dependencies.pypi_dependencies, dependencies.conda_dependencies):
-                stmt = select(ORMPackage).where(ORMPackage.name.in_(dep_type))
+            for package in dependencies.get_pypi_dependencies() + dependencies.get_conda_dependencies():
+                stmt = select(ORMPackage).where(ORMPackage.name.in_(package.get_name()))
                 result: Result[tuple[ORMPackage]] = await session.execute(stmt)
                 orm_packages = result.scalars().all()
                 for row in orm_packages:

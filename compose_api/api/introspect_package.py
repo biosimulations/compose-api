@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 def introspect_package(dependencies: ExperimentPrimaryDependencies) -> list[PackageOutline]:
     package_outlines = []
     for dep in dependencies.get_pypi_dependencies():
-        package_outlines.append(PackageOutline(package_type=PackageType.PYPI, name=dep, compute=[]))
+        package_outlines.append(PackageOutline(package_type=PackageType.PYPI, name=dep.get_name(), compute=[]))
     for dep in dependencies.get_conda_dependencies():
-        package_outlines.append(PackageOutline(package_type=PackageType.CONDA, name=dep, compute=[]))
+        package_outlines.append(PackageOutline(package_type=PackageType.CONDA, name=dep.get_name(), compute=[]))
     return package_outlines
 
 
@@ -38,13 +38,3 @@ def _get_package_github_origin(pypi_package: str) -> ParseResult:
 
 # def _live_pypi_introspection(pypi_package: str) -> BiGraphPackage:
 #     return BiGraphPackage()
-
-
-if __name__ == "__main__":
-    packages = introspect_package(
-        ExperimentPrimaryDependencies(
-            pypi_dependencies=["git+https://github.com/biosimulators/bspil-basico.git@initial_work"],
-            conda_dependencies=[],
-        )
-    )
-    print(packages)
