@@ -1,5 +1,5 @@
 # Use the official Python image from the Docker Hub
-FROM python:3.13.2-slim-bookworm AS base
+FROM python:3.14.3-slim-bookworm AS base
 
 ARG APP_GID=10000
 ARG APP_UID=16997
