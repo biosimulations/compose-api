@@ -7,7 +7,7 @@ images:
   - name: ghcr.io/biosimulations/compose-api
     newTag: 0.0.1
   - name: docker.io/library/mongo
-    newTag: 8.0.12
+    newTag: 8.2.5
 
 replicas:
   - count: 1
