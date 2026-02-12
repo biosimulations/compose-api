@@ -57,7 +57,7 @@ dev = [
     "pytest-asyncio>=1.0.0,<2",
     "testcontainers[nats, postgres]>=4.10.0,<5",
     "types-tqdm>=4.67.0.20250516,<5",
-    "openapi-python-client>=0.25.2,<0.26",
+    "openapi-python-client>=0.28.2,<0.29",
     "types-python-dateutil>=2.9.0.20250708,<3"
 ]
 docs = [
