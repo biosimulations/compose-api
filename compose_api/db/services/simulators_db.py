@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 class SimulatorDatabaseService(ABC):
     @abstractmethod
     async def insert_simulator(
-        self, singularity_def_rep: ContainerizationFileRepr, packages_used: list[RegisteredPackage]
+        self, singularity_def_rep: ContainerizationFileRepr, packages_used: list[RegisteredPackage] | None = None
     ) -> SimulatorVersion:
         pass
 
@@ -98,11 +98,12 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
 
     @override
     async def insert_simulator(
-        self, singularity_def_rep: ContainerizationFileRepr, packages_used: list[RegisteredPackage]
+        self, singularity_def_rep: ContainerizationFileRepr, packages_used: list[RegisteredPackage] | None = None
     ) -> SimulatorVersion:
         """
         Inserts a simulator into the database alongside
-        creating intermediate tables which correlate this simulator to its various packages.
+        creating intermediate tables which correlate this simulator to its various packages. If packages_used is None,
+        then the simulator will have no reference to what's inside it.
         Args:
             singularity_def_rep:
             packages_used:
@@ -138,9 +139,12 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
             session.add(new_orm_simulator)
 
             await session.flush()
-            for package in packages_used:
-                relationship = ORMSimulatorToPackage(simulator_id=new_orm_simulator.id, package_id=package.database_id)
-                session.add(relationship)
+            if packages_used is not None:
+                for package in packages_used:
+                    relationship = ORMSimulatorToPackage(
+                        simulator_id=new_orm_simulator.id, package_id=package.database_id
+                    )
+                    session.add(relationship)
 
             # Ensure the ORM object is inserted and has an ID
             return new_orm_simulator.to_simulator_version()
