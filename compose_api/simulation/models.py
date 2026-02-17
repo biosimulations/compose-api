@@ -158,11 +158,11 @@ class SimulationFileType(enum.Enum):
     @staticmethod
     def get_file_type(suffix: str) -> "SimulationFileType":
         match suffix:
-            case "omex":
+            case ".omex":
                 return SimulationFileType.OMEX
-            case "pbg":
+            case ".pbg":
                 return SimulationFileType.PBG
-            case "sbml":
+            case ".sbml":
                 return SimulationFileType.SBML
             case _:
                 raise ValueError(f"Unknown simulation file type: {suffix}")
@@ -177,21 +177,36 @@ class SimulationRequest(BaseModel):
     simulation_file_type: SimulationFileType
 
 
+class SimulationResults(BaseModel):
+    """
+    Simulation has been sent to HPC, and can be in any of the SLURM job allowed states including finished.
+    The content in the users request is saved on the servers distributed file system.
+    """
+
+    path_on_server: Path
+
+
 class Simulation(BaseModel):
     """
     Everything required to execute the simulation and produce the same results.
     Input file contains all the files required to run the simulation (process-bigraph.json, sbml, etc...).
     pb_cache_hash is the hash affiliated with the specific process bi-graph and it's dependencies.
     Args:
-        database_id: SimulatorVersion
+        database_id: int
         sim_request: SimulationRequest
-        slurmjob_id: int | None
+        simulator_version: SimulatorVersion
     """
 
     database_id: int
     sim_request: SimulationRequest
     simulator_version: SimulatorVersion
-    slurmjob_id: int | None = None
+
+
+class SubmittedSimulation(BaseModel):
+    database_id: int
+    sim_content: SimulationResults
+    simulator_version: SimulatorVersion
+    hpc_run: HpcRun | None
 
 
 class PBAllowList(BaseModel):
