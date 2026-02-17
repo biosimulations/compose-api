@@ -147,8 +147,34 @@ class RegisteredProcesses(BaseModel):
     timestamp: datetime.datetime | None = Field(default_factory=datetime.datetime.now)
 
 
+class SimulationFileType(enum.Enum):
+    OMEX = "omex"
+    PBG = "pbg"
+    SBML = "sbml"
+
+    def get_files_suffix(self) -> str:
+        return self.value
+
+    @staticmethod
+    def get_file_type(suffix: str) -> "SimulationFileType":
+        match suffix:
+            case "omex":
+                return SimulationFileType.OMEX
+            case "pbg":
+                return SimulationFileType.PBG
+            case "sbml":
+                return SimulationFileType.SBML
+            case _:
+                raise ValueError(f"Unknown simulation file type: {suffix}")
+
+
 class SimulationRequest(BaseModel):
-    omex_archive: Path
+    """
+    Files to kick off a simulation.
+    """
+
+    request_file_path: Path
+    simulation_file_type: SimulationFileType
 
 
 class Simulation(BaseModel):

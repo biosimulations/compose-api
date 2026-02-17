@@ -63,7 +63,7 @@ class SimulationServiceHpc(SimulationService):
         simulation: Simulation,
         experiment_id: str,
     ) -> int:
-        if simulation.sim_request.omex_archive is None:
+        if simulation.sim_request.request_file_path is None:
             raise RuntimeError("Simulation.sim_request.omex_archive is not available. Cannot submit Simulation job.")
         slurm_service, ssh_service, settings = self._get_services()
         slurm_job_name = get_slurm_job_name(experiment_id=experiment_id)
@@ -99,7 +99,7 @@ class SimulationServiceHpc(SimulationService):
                         --compat \
                         --bind {experiment_path}:/experiment \
                         {singularity_container_path} \
-                        /experiment/{slurm_job_name}.omex \
+                        /experiment/{slurm_job_name}.{simulation.sim_request.simulation_file_type.get_files_suffix()} \
                         -o "/experiment/output"
 
                     pushd {experiment_path}
@@ -114,7 +114,7 @@ class SimulationServiceHpc(SimulationService):
             slurm_jobid = await slurm_service.submit_job(
                 local_sbatch_file=local_submit_file,
                 remote_sbatch_file=get_slurm_submit_file(slurm_job_name=slurm_job_name),
-                local_input_file=simulation.sim_request.omex_archive,
+                local_input_file=simulation.sim_request.request_file_path,
                 remote_input_file=get_slurm_sim_input_file_path(experiment_id=slurm_job_name),
             )
             return slurm_jobid

@@ -15,7 +15,6 @@ from compose_api.simulation.handlers import (
 from compose_api.simulation.models import (
     PBAllowList,
     SimulationExperiment,
-    SimulationRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,8 +53,7 @@ async def submit_simulation(background_tasks: BackgroundTasks, uploaded_file: Up
     logger.warning("NO VALIDATION YET")
     # Tmp file for future implementation
 
-    up_file = await get_file_from_uploaded_file(uploaded_file=uploaded_file)
-    simulation_request = SimulationRequest(omex_archive=up_file)
+    simulation_request = await get_file_from_uploaded_file(uploaded_file=uploaded_file)
 
     try:
         return await run_simulation(

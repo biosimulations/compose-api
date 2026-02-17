@@ -33,6 +33,7 @@ from compose_api.simulation.models import (
     RegisteredSimulators,
     Simulation,
     SimulationExperiment,
+    SimulationFileType,
     SimulationRequest,
 )
 from compose_api.simulation.simulation_service import SimulationService
@@ -67,7 +68,7 @@ async def run_simulation(
     with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
         singularity_rep = generate_container_def_file(
             ContainerizationProgramArguments(
-                input_file_path=str(simulation_request.omex_archive),
+                input_file_path=str(simulation_request.request_file_path),
                 working_directory=Path(tmp_dir),
                 containerization_type=ContainerizationTypes.SINGLE,
                 containerization_engine=ContainerizationEngine.APPTAINER,
@@ -115,7 +116,7 @@ async def run_simulation(
     )
 
 
-async def run_pbif(
+async def run_curated_pbif(
     templated_pbif: str,
     simulator_name: str,
     background_tasks: BackgroundTasks,
@@ -132,7 +133,9 @@ async def run_pbif(
                 omex.write(loaded_sbml.absolute(), arcname=loaded_sbml.name)
         if omex.filename is None:
             raise HTTPException(500, "Can't create omex file.")
-        simulator_request = SimulationRequest(omex_archive=Path(omex.filename))
+        simulator_request = SimulationRequest(
+            request_file_path=Path(omex.filename), simulation_file_type=SimulationFileType.OMEX
+        )
 
         try:
             sim_service = get_required_simulation_service()

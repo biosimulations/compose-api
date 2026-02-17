@@ -18,24 +18,21 @@ from compose_api.simulation.models import (
     HpcRun,
     JobStatus,
     JobType,
-    Simulation,
+    SimulationFileType,
     SimulationRequest,
     SimulatorVersion,
     WorkerEvent,
 )
 
 
-async def insert_job(
-    database_service: DatabaseServiceSQL, slurmjobid: int, simulator: SimulatorVersion
-) -> tuple[Simulation, SlurmJob, HpcRun]:
-    simulation_request = SimulationRequest(omex_archive=Path(""))
+async def insert_job(database_service: DatabaseServiceSQL, slurmjobid: int, simulator: SimulatorVersion) -> HpcRun:
+    simulation_request = SimulationRequest(request_file_path=Path(""), simulation_file_type=SimulationFileType.OMEX)
     random_string = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
     experiement_id = get_experiment_id(simulator, random_string)
 
     simulation = await database_service.get_simulator_db().insert_simulation(
         sim_request=simulation_request, experiment_id=experiement_id, simulator_version=simulator
     )
-    simulation.slurmjob_id = slurmjobid
     slurm_job = SlurmJob(
         job_id=slurmjobid,
         name="name",
@@ -52,7 +49,7 @@ async def insert_job(
         correlation_id=correlation_id,
     )
 
-    return simulation, slurm_job, hpcrun
+    return hpcrun
 
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
@@ -70,9 +67,7 @@ async def test_messaging(
     await monitor.subscribe_nats()
 
     # Simulate a job submission and worker event handling
-    simulation, slurm_job, hpc_run = await insert_job(
-        database_service=database_service, slurmjobid=1, simulator=simulator
-    )
+    hpc_run = await insert_job(database_service=database_service, slurmjobid=1, simulator=simulator)
 
     # get the initial state of a job
     sequence_number = 1
@@ -129,9 +124,7 @@ async def test_job_monitor(
         )
 
     # Simulate job submission
-    simulation, slurm_job, hpc_run = await insert_job(
-        database_service=database_service, slurmjobid=job_id, simulator=simulator
-    )
+    hpc_run = await insert_job(database_service=database_service, slurmjobid=job_id, simulator=simulator)
     assert hpc_run.status == JobStatus.RUNNING
 
     # Wait for the job to receive a RUNNING status
