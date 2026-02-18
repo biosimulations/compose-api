@@ -1,12 +1,19 @@
 #!/bin/bash
 
+LIB_DIR="${LIB_DIR:-NOT_SET}"
+
+if [ "$LIB_DIR" == "NOT_SET" ]; then
+  echo "Need to specify where the clients will be generated."
+  exit 1
+fi
+
+
 ROOT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && cd .. && pwd )"
 
 #generatorCliImage=openapitools/openapi-generator-cli:v7.1.0
 
 # make a clean ROOT_DIR without .. (hint, use dirname or something like that)
 SPEC_DIR="${ROOT_DIR}/compose_api/api/spec"
-LIB_DIR="${ROOT_DIR}/compose_api/api/client"
 
 # Generate simdata-api client
 # TODO: improve Python typing for Mypy
