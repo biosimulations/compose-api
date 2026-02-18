@@ -175,6 +175,7 @@ class SimulationRequest(BaseModel):
 
     request_file_path: Path
     simulation_file_type: SimulationFileType
+    end_time_point: float = 1.0
 
 
 class SimulationResults(BaseModel):
