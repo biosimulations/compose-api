@@ -97,12 +97,20 @@ paths:
       - Simulation
       summary: Run a simulation
       operationId: run-simulation
+      parameters:
+      - name: interval_time
+        in: query
+        required: false
+        schema:
+          type: number
+          default: 1.0
+          title: Interval Time
       requestBody:
+        required: true
         content:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/Body_run-simulation'
-        required: true
       responses:
         '200':
           description: Successful Response
