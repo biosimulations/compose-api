@@ -36,8 +36,8 @@ async def test_sim_run(
     data_service: DataService,
     simulator: Simulator,
 ) -> None:
-    assert simulation_request.omex_archive is not None
-    with open(simulation_request.omex_archive, "rb") as f:
+    assert simulation_request.request_file_path is not None
+    with open(simulation_request.request_file_path, "rb") as f:
         sim_experiment = await run_simulation.asyncio(
             client=in_memory_api_client, body=BodyRunSimulation(uploaded_file=File(file_name=f.name, payload=f))
         )

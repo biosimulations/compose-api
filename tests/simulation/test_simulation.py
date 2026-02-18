@@ -40,7 +40,7 @@ async def test_build_simulator(
     with tempfile.TemporaryDirectory() as temp_dir:
         singularity_def = generate_container_def_file(
             ContainerizationProgramArguments(
-                input_file_path=str(simulation_request.omex_archive),
+                input_file_path=str(simulation_request.request_file_path),
                 working_directory=Path(temp_dir),
                 containerization_type=ContainerizationTypes.SINGLE,
                 containerization_engine=ContainerizationEngine.APPTAINER,

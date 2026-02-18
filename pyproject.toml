@@ -1,6 +1,6 @@
 [project]
 name = "compose-api"
-version = "0.3.2"
+version = "0.3.3"
 description = "An API server for reproducible biological workflows and cosimulations."
 authors = [{ name = "Jim Schaff", email = "schaff@uchc.edu" }]
 requires-python = ">=3.13.2,<4.0"
@@ -36,7 +36,7 @@ dependencies = [
     "python-libsedml>=2.0.33",
     "biosimulators-utils>=0.2.3",
     "python-libsbml>=5.20.5",
-    "pbest==0.2.5",
+    "pbest==0.2.7",
 ]
 
 [project.urls]

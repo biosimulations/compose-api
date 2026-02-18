@@ -8,7 +8,7 @@ import zipfile
 from pathlib import Path
 
 from fastapi import BackgroundTasks, HTTPException
-from pbest.containerization.container_constructor import generate_container_def_file, get_experiment_deps
+from pbest.containerization.container_constructor import generate_container_def_file
 from pbest.utils.input_types import (
     ContainerizationEngine,
     ContainerizationProgramArguments,
@@ -33,6 +33,7 @@ from compose_api.simulation.models import (
     RegisteredSimulators,
     Simulation,
     SimulationExperiment,
+    SimulationFileType,
     SimulationRequest,
 )
 from compose_api.simulation.simulation_service import SimulationService
@@ -65,10 +66,9 @@ async def run_simulation(
     background_tasks: BackgroundTasks,
 ) -> SimulationExperiment:
     with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
-        experiment_dep = get_experiment_deps()
         singularity_rep = generate_container_def_file(
             ContainerizationProgramArguments(
-                input_file_path=str(simulation_request.omex_archive),
+                input_file_path=str(simulation_request.request_file_path),
                 working_directory=Path(tmp_dir),
                 containerization_type=ContainerizationTypes.SINGLE,
                 containerization_engine=ContainerizationEngine.APPTAINER,
@@ -79,13 +79,13 @@ async def run_simulation(
     simulator_db = database_service.get_simulator_db()
     simulator_version = await simulator_db.get_simulator_by_def_hash(get_singularity_hash(singularity_rep))
     if simulator_version is None:
-        bi_graph_packages = await database_service.get_package_db().list_packages_from_dependencies(
-            dependencies=experiment_dep
-        )
-        if len(bi_graph_packages) != (len(experiment_dep.pypi_dependencies) + len(experiment_dep.conda_dependencies)):
-            raise LookupError(f"Not all dependencies are in database: {experiment_dep}, {bi_graph_packages}")
+        # bi_graph_packages = await database_service.get_package_db().list_packages_from_dependencies(
+        #     dependencies=pbest_dependencies
+        # )
+        # if len(bi_graph_packages) != (len(experiment_dep.pypi_dependencies) + len(experiment_dep.conda_dependencies)):
+        #     raise LookupError(f"Not all dependencies are in database: {experiment_dep}, {bi_graph_packages}")
 
-        simulator_version = await simulator_db.insert_simulator(singularity_rep, bi_graph_packages)
+        simulator_version = await simulator_db.insert_simulator(singularity_rep)
 
     random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
     experiment_id = get_experiment_id(simulator=simulator_version, random_str=random_string_7_hex)
@@ -116,7 +116,7 @@ async def run_simulation(
     )
 
 
-async def run_pbif(
+async def run_curated_pbif(
     templated_pbif: str,
     simulator_name: str,
     background_tasks: BackgroundTasks,
@@ -133,7 +133,9 @@ async def run_pbif(
                 omex.write(loaded_sbml.absolute(), arcname=loaded_sbml.name)
         if omex.filename is None:
             raise HTTPException(500, "Can't create omex file.")
-        simulator_request = SimulationRequest(omex_archive=Path(omex.filename))
+        simulator_request = SimulationRequest(
+            request_file_path=Path(omex.filename), simulation_file_type=SimulationFileType.OMEX
+        )
 
         try:
             sim_service = get_required_simulation_service()

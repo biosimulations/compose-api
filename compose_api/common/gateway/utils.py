@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import HTTPException, UploadFile
 
 from compose_api.db.database_service import DatabaseService
-from compose_api.simulation.models import HpcRun, JobType
+from compose_api.simulation.models import HpcRun, JobType, SimulationFileType, SimulationRequest
 
 logger = logging.getLogger(__name__)
 
@@ -48,15 +48,17 @@ async def get_hpc_run_status(db_service: DatabaseService, ref_id: int, job_type:
     return simulation_hpcrun
 
 
-async def get_file_from_uploaded_file(uploaded_file: UploadFile) -> Path:
+async def get_file_from_uploaded_file(uploaded_file: UploadFile) -> SimulationRequest:
     if uploaded_file is None or uploaded_file.filename is None or uploaded_file.size == 0:
         raise HTTPException(status_code=400, detail="Empty uploaded file")
 
-    # TODO Make the suffix dynamic
-    with tempfile.NamedTemporaryFile(delete=False, suffix="." + uploaded_file.filename.rsplit(".", 1)[1]) as tmp_file:
+    suffix = Path(uploaded_file.filename).suffix
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
         contents = await uploaded_file.read()
         tmp_file.write(contents)
-    return Path(tmp_file.name)
+    return SimulationRequest(
+        request_file_path=Path(tmp_file.name), simulation_file_type=SimulationFileType.get_file_type(suffix)
+    )
 
 
 allow_list = [

@@ -12,7 +12,7 @@ from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.dependencies import get_data_service, set_data_service
 from compose_api.simulation.data_service import DataService
-from compose_api.simulation.models import SimulationRequest
+from compose_api.simulation.models import SimulationFileType, SimulationRequest
 from tests.fixtures.mocks import TestDataService
 
 
@@ -83,7 +83,7 @@ def slurm_template_hello_1s(slurm_template_hello_TEMPLATE: str) -> str:
 @pytest_asyncio.fixture
 async def simulation_request(database_service: DatabaseServiceSQL) -> SimulationRequest:
     omex_path = Path(os.path.join(os.path.dirname(__file__), "resources/phase_cycle.omex"))
-    return SimulationRequest(omex_archive=omex_path)
+    return SimulationRequest(request_file_path=omex_path, simulation_file_type=SimulationFileType.OMEX)
 
 
 @pytest.fixture(scope="session")

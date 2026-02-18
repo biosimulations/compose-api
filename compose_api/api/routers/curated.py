@@ -1,7 +1,7 @@
 import logging
 import os
 
-from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 from jinja2 import Template
 
 from compose_api.common.gateway.models import RouterConfig, ServerMode
@@ -10,10 +10,11 @@ from compose_api.dependencies import (
     get_database_service,
 )
 from compose_api.simulation.handlers import (
-    run_pbif,
+    run_curated_pbif,
 )
 from compose_api.simulation.models import (
     SimulationExperiment,
+    SimulationFileType,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,11 +43,13 @@ async def run_copasi(
     with open(os.path.dirname(__file__) + "/templates/copasi.jinja") as f:
         template = Template(f.read())
         render = template.render(start_time=start_time, duration=duration, num_data_points=num_data_points)
-    loaded_sbml = await get_file_from_uploaded_file(sbml)
-    return await run_pbif(
+    request = await get_file_from_uploaded_file(sbml)
+    if request.simulation_file_type is not SimulationFileType.SBML:
+        raise HTTPException(status_code=400, detail="Expected a SBML file.")
+    return await run_curated_pbif(
         templated_pbif=render,
         simulator_name="Copasi",
-        loaded_sbml=loaded_sbml,
+        loaded_sbml=request.request_file_path,
         background_tasks=background_tasks,
         use_interesting=True,
     )
@@ -66,7 +69,12 @@ async def run_tellurium(
     with open(os.path.dirname(__file__) + "/templates/tellurium.jinja") as f:
         template = Template(f.read())
         render = template.render(start_time=start_time, end_time=end_time, num_data_points=num_data_points)
-    loaded_sbml = await get_file_from_uploaded_file(sbml)
-    return await run_pbif(
-        templated_pbif=render, simulator_name="Tellurium", loaded_sbml=loaded_sbml, background_tasks=background_tasks
+    request = await get_file_from_uploaded_file(sbml)
+    if request.simulation_file_type is not SimulationFileType.SBML:
+        raise HTTPException(status_code=400, detail="Expected a SBML file.")
+    return await run_curated_pbif(
+        templated_pbif=render,
+        simulator_name="Tellurium",
+        loaded_sbml=request.request_file_path,
+        background_tasks=background_tasks,
     )
