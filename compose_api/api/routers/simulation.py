@@ -33,7 +33,9 @@ config = RouterConfig(router=APIRouter(), prefix="/simulation", dependencies=[])
     dependencies=[Depends(get_simulation_service), Depends(get_database_service)],
     summary="Run a simulation",
 )
-async def submit_simulation(background_tasks: BackgroundTasks, uploaded_file: UploadFile) -> SimulationExperiment:
+async def submit_simulation(
+    background_tasks: BackgroundTasks, uploaded_file: UploadFile, interval_time: float = 1.0
+) -> SimulationExperiment:
     sim_service = get_simulation_service()
     if sim_service is None:
         logger.error("Simulation service is not initialized")
@@ -52,8 +54,11 @@ async def submit_simulation(background_tasks: BackgroundTasks, uploaded_file: Up
     #######################################################################################
     logger.warning("NO VALIDATION YET")
     # Tmp file for future implementation
+    if interval_time < 0 or interval_time > 1000:
+        raise HTTPException(status_code=400, detail="Invalid interval time, it has to be between 0 and 1000")
 
     simulation_request = await get_file_from_uploaded_file(uploaded_file=uploaded_file)
+    simulation_request.end_time_point = interval_time
 
     try:
         return await run_simulation(

@@ -29,6 +29,7 @@ async def test_readdy(
     with open(copasi_sbml, "rb") as f:
         sim_experiment = await run_simulation.asyncio(
             client=in_memory_api_client,
+            interval_time=3.0,
             body=BodyRunSimulation(uploaded_file=File(file_name="readdy.omex", payload=f)),
         )
 
