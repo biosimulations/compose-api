@@ -36,7 +36,7 @@ dependencies = [
     "python-libsedml>=2.0.33",
     "biosimulators-utils>=0.2.3",
     "python-libsbml>=5.20.5",
-    "pbest==0.2.7",
+    "pbest==0.2.8",
 ]
 
 [project.urls]
