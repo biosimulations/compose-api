@@ -126,7 +126,7 @@ async def run_curated_pbif(
     # Create OMEX with all necessary files
     with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
         with zipfile.ZipFile(tmp_dir + "/input.omex", "w") as omex:
-            omex.writestr(data=templated_pbif, zinfo_or_arcname=f"{simulator_name}.pbif")
+            omex.writestr(data=templated_pbif, zinfo_or_arcname=f"{simulator_name}.pbg")
             if use_interesting:
                 omex.write(loaded_sbml.absolute(), arcname="interesting.sbml")
             else:
