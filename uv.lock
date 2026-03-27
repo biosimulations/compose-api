@@ -584,7 +584,7 @@ requires-dist = [
     { name = "nats-py", specifier = ">=2.10.0,<3" },
     { name = "nbformat", specifier = ">=5.10.4,<6" },
     { name = "numpy", specifier = ">=2.3.1,<3" },
-    { name = "pbest", specifier = "==0.3.0" },
+    { name = "pbest", specifier = "==0.4.0" },
     { name = "polars-lts-cpu", extras = ["pyarrow"], specifier = ">=1.31.0,<2" },
     { name = "pydantic", specifier = ">=2.11.5,<3" },
     { name = "pydantic-settings", specifier = ">=2.9.1,<3" },
@@ -631,16 +631,16 @@ docs = [
 
 [[package]]
 name = "compose-api-client"
-version = "0.1.4"
+version = "0.1.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "httpx" },
     { name = "python-dateutil" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4f/fc/dadbab72abd60c7d955443f4206fb9d98b50b5daad3a11ec378d3a58e393/compose_api_client-0.1.4.tar.gz", hash = "sha256:14ed7f909c7a0bcebae82bbc30b95d4a862e86b1d015d3d19412dff454cc31c1", size = 13848, upload-time = "2026-02-20T17:12:33.677Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ba/c6/1a3537f83a5a364ef02f3d191651386d8d912f61aec5a84cf2e8db807cc3/compose_api_client-0.1.8.tar.gz", hash = "sha256:2a7069889676334191a31341f51b982d4c3a365aec76ddded4b6aa5258ebcbbb", size = 13891, upload-time = "2026-03-27T17:25:21.035Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/82/92/656be31b33d9e1eb9783302447e3446d390b27f53f625b7a7eb64e01456f/compose_api_client-0.1.4-py3-none-any.whl", hash = "sha256:344b4d9d98767c27020305a1d3420907414c958261353749ab04db4a4ec33456", size = 36192, upload-time = "2026-02-20T17:12:32.282Z" },
+    { url = "https://files.pythonhosted.org/packages/27/fc/6459378ec43f41aadb608130f77efcc235ea7fa954d495cef0040aea9628/compose_api_client-0.1.8-py3-none-any.whl", hash = "sha256:8013acbbb59d3a6c3fc46d6dfea865a7bdbe2bde5139258ad0d3dc0c687e5e86", size = 36248, upload-time = "2026-03-27T17:25:19.961Z" },
 ]
 
 [[package]]
@@ -2660,7 +2660,7 @@ wheels = [
 
 [[package]]
 name = "pbest"
-version = "0.3.0"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bigraph-schema" },
@@ -2672,9 +2672,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "spython" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f3/d8/10fbb4f620ed924a18a67bd4b57f55613a3f7213de7295993d569263442e/pbest-0.3.0.tar.gz", hash = "sha256:e3b59827c693188bd12ba19e68d7949afdb6262a648bb3eef046d20adce6be28", size = 136547, upload-time = "2026-03-16T17:05:13.996Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fe/12/69eec44629c0e92314243c6ec5b4ca69b294c92c1351ef2a14850abfc10f/pbest-0.4.0.tar.gz", hash = "sha256:aeb52b26341c69ef9ad2ea6e4487234210393d4d6b9fe27af016e211b7bc91bd", size = 136116, upload-time = "2026-03-27T18:05:40.094Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d9/f4/2500a22d02d971671fd6a61ea359bcacddbb5813a8a6465b433063153ec8/pbest-0.3.0-py3-none-any.whl", hash = "sha256:14e0302e3b6a4783631dbe98440242c14dabf6e1cb48b3b084d84a44cfee5301", size = 19470, upload-time = "2026-03-16T17:05:12.976Z" },
+    { url = "https://files.pythonhosted.org/packages/16/e2/97647dc70715f974296800d0391996cbaccafb9b6aebaafb3621292cbf9c/pbest-0.4.0-py3-none-any.whl", hash = "sha256:5ff73dc0432a2d0e6518e8419645ae8e1dd38299e302a47894cfd5c0eda91757", size = 19643, upload-time = "2026-03-27T18:05:41.172Z" },
 ]
 
 [[package]]
