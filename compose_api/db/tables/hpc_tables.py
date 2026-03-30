@@ -25,6 +25,11 @@ class JobStatusDB(enum.Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     PENDING = "pending"
+    CANCELLED = "cancelled"
+    OUT_OF_MEMORY = "out_of_memory"
+    SUSPENDED = "suspended"
+    TIMEOUT = "timeout"
+    UNKNOWN = "unknown"
 
     def to_job_status(self) -> JobStatus:
         return JobStatus(self.value)

@@ -100,15 +100,26 @@ class JobMonitor:
             slurm_job = slurm_job_map.get(hpc_run.slurmjobid)
             if not slurm_job or not slurm_job.job_state:
                 continue
-            new_status = JobStatus(slurm_job.job_state.lower())
-            if new_status == hpc_run.status:
-                logger.debug(f"HpcRun {hpc_run.database_id} is still running with status {new_status}")
-                continue
-            if hpc_run.status != new_status:
+            try:
+                new_status = JobStatus(slurm_job.job_state.lower())
+                if new_status == hpc_run.status:
+                    logger.debug(f"HpcRun {hpc_run.database_id} is still running with status {new_status}")
+                    continue
+                if hpc_run.status != new_status:
+                    await self.database_service.get_hpc_db().update_hpcrun_status(
+                        hpcrun_id=hpc_run.database_id, new_slurm_job=slurm_job
+                    )
+                    logger.info(f"Updated HpcRun {hpc_run.database_id} status to {new_status}")
+            except ValueError as e:
+                logger.exception(
+                    f"Error updating HpcRun {hpc_run.database_id} to status {slurm_job.job_state.lower()}."
+                    f" Setting status to UNKNOWN.",
+                    exc_info=e,
+                )
+                slurm_job.job_state = JobStatus.UNKNOWN.upper()
                 await self.database_service.get_hpc_db().update_hpcrun_status(
                     hpcrun_id=hpc_run.database_id, new_slurm_job=slurm_job
                 )
-                logger.info(f"Updated HpcRun {hpc_run.database_id} status to {new_status}")
 
             if slurm_job.job_id in self.internal_listeners:
                 self.internal_listeners[slurm_job.job_id].put_nowait(hpc_run)

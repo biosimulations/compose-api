@@ -49,13 +49,16 @@ class SlurmJob(BaseModel):
     def from_sacct_formatted_output(cls, line: str) -> "SlurmJob":
         # Split the line by delimiter
         fields = line.strip().split("|")
+        job_state = fields[4]
+        if "cancelled" in job_state.lower():  # Has 'cancelled by <User-ID>' which trips up mappings from string to Enum
+            job_state = "CANCELLED"  # so just set it to 'canceled'
         # Map fields to model attributes
         return cls(
             job_id=int(fields[0]),
             name=fields[1],
             account=fields[2],
             user_name=fields[3],
-            job_state=fields[4],
+            job_state=job_state,
             start_time=fields[5],
             end_time=fields[6],
             elapsed=fields[7],
