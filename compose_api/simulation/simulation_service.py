@@ -163,8 +163,8 @@ class SimulationServiceHpc(SimulationService):
                     #SBATCH --cpus-per-task 1
                     #SBATCH --mem=4GB
                     #SBATCH --nodelist={settings.slurm_build_node}
-                    #SBATCH --partition=general
-                    #SBATCH --qos=general
+                    #SBATCH --partition={settings.slurm_partition}
+                    #SBATCH --qos={settings.slurm_qos}
                     #SBATCH --output={get_slurm_log_file(slurm_job_name=slurm_job_name)}
 
                     set -e

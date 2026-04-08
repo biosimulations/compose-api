@@ -32,9 +32,7 @@ class SlurmService:
         return slurm_jobs
 
     async def get_job_status_sacct(self, job_ids: list[int] | None = None) -> list[SlurmJob]:
-        command = (
-            f'sacct -u $USER --parsable --delimiter="|" --noheader --format="{SlurmJob.get_sacct_format_string()}"'
-        )
+        command = f'sacct -u $USER --parsable --allocations --delimiter="|" --noheader --format="{SlurmJob.get_sacct_format_string()}"'  # noqa: E501
         if job_ids is not None:
             job_ids_str = ",".join(map(str, job_ids)) if len(job_ids) > 1 else str(job_ids[0])
             command = command + f" -j {job_ids_str}"
