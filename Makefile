@@ -61,4 +61,10 @@ help:
 	@uv run python -c "import re; \
 	[[print(f'\033[36m{m[0]:<20}\033[0m {m[1]}') for m in re.findall(r'^([a-zA-Z_-]+):.*?## (.*)$$', open(makefile).read(), re.M)] for makefile in ('$(MAKEFILE_LIST)').strip().split()]"
 
+.PHONY: deploy
+deploy: ## Deploy to site
+	@echo "🚀 Deploying ComposeAPI to Site"
+	@kubectl kustomize kustomize/overlays/compose-api-rke | kubectl apply -f -
+
+
 .DEFAULT_GOAL := help
