@@ -26,6 +26,25 @@ config = RouterConfig(router=APIRouter(), prefix="/results", dependencies=[])
 
 
 @config.router.get(
+    path="/simulations/status/batch",
+    response_model=list[HpcRun],
+    operation_id="get-simulations-status-batch",
+    tags=["Results"],
+    dependencies=[Depends(get_database_service)],
+    summary="Get simulation status records for a list of IDs",
+)
+async def get_simulations_status_batch(ids: list[int]) -> list[HpcRun]:
+    db_service = get_database_service()
+    if db_service is None:
+        raise HTTPException(status_code=500, detail="Database service is not initialized")
+    try:
+        return await db_service.get_hpc_db().get_hpcruns_by_refs(ref_ids=ids, job_type=JobType.SIMULATION)
+    except Exception as e:
+        logger.exception(f"Error fetching batch simulation statuses for ids: {ids}.")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@config.router.get(
     path="/simulation/status",
     response_model=HpcRun,
     operation_id="get-simulation-status",
