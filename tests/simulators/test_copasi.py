@@ -1,6 +1,4 @@
 import os
-import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -14,7 +12,10 @@ from compose_api.simulation.data_service import DataService
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import Simulator
 from compose_api.simulation.simulation_service import SimulationServiceHpc
-from tests.simulators.utils import assert_test_sim_results, check_experiment_run, test_dir
+from tests.simulators.utils import (
+    check_experiment_run,
+    get_results_and_compare_copasi,
+)
 
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
@@ -38,16 +39,4 @@ async def test_copasi(
         )
 
         results = await check_experiment_run(sim_experiment=sim_experiment, in_memory_api_client=in_memory_api_client)
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_dir_path = Path(temp_dir)
-            experiment_results = temp_dir_path / Path("experiment_results.zip")
-            with open(experiment_results, "wb") as results_file:
-                results_file.write(results.content)
-            report_csv_file = Path(os.path.join(test_dir, "fixtures/resources/report.csv"))
-            assert_test_sim_results(
-                archive_results=experiment_results,
-                expected_csv_path=report_csv_file,
-                temp_dir=temp_dir_path,
-                difference_tolerance=1e-4,
-            )
+        await get_results_and_compare_copasi(api_client=in_memory_api_client, file_result=results)
