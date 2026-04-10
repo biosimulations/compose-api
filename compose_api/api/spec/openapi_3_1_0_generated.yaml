@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: compose-api
-  version: 0.3.3
+  version: 0.3.8
 paths:
   /curated/copasi:
     post:
@@ -118,6 +118,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SimulationExperiment'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /results/simulations/status/batch:
+    get:
+      tags:
+      - Results
+      summary: Get simulation status records for a list of IDs
+      operationId: get-simulations-status-batch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              items:
+                type: integer
+              type: array
+              title: Ids
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/HpcRun'
+                type: array
+                title: Response Get-Simulations-Status-Batch
         '422':
           description: Validation Error
           content:
@@ -449,6 +480,11 @@ components:
       - completed
       - failed
       - pending
+      - cancelled
+      - out_of_memory
+      - suspended
+      - timeout
+      - unknown
       title: JobStatus
     JobType:
       type: string

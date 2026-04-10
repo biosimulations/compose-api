@@ -1,6 +1,8 @@
 import asyncio
 import math
 import os
+import tempfile
+from pathlib import Path
 from typing import Any
 from zipfile import ZipFile
 
@@ -85,6 +87,24 @@ def assert_test_sim_results(
                 assert math.isclose(f_report, f_exp, rel_tol=0, abs_tol=difference_tolerance)
             except ValueError:
                 assert report_val == experiment_val  # Must be string portion of report then (columns)
+
+
+async def get_results_and_compare_copasi(api_client: Client, sim_id: int = 0, file_result: Any = None) -> None:
+    if file_result is None:
+        file_result = await get_simulation_results_file.asyncio_detailed(client=api_client, simulation_id=sim_id)
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_dir_path = Path(temp_dir)
+        experiment_results = temp_dir_path / Path("experiment_results.zip")
+        with open(experiment_results, "wb") as results_file:
+            results_file.write(file_result.content)
+        report_csv_file = Path(os.path.join(test_dir, "fixtures/resources/report.csv"))
+        assert_test_sim_results(
+            archive_results=experiment_results,
+            expected_csv_path=report_csv_file,
+            temp_dir=temp_dir_path,
+            difference_tolerance=1e-4,
+        )
 
 
 test_dir = os.path.dirname(__file__).rsplit("/", 1)[0]

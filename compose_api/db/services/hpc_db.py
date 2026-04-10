@@ -47,6 +47,10 @@ class HPCDatabaseService(ABC):
         pass
 
     @abstractmethod
+    async def get_hpcruns_by_refs(self, ref_ids: list[int], job_type: JobType) -> list[HpcRun]:
+        pass
+
+    @abstractmethod
     async def get_hpcrun_by_slurmjobid(self, slurmjobid: int) -> HpcRun | None:
         pass
 
@@ -134,6 +138,15 @@ class HPCORMExecutor(HPCDatabaseService):
             session.add(orm_hpc_run)
             await session.flush()
             return orm_hpc_run.to_hpc_run()
+
+    @override
+    async def get_hpcruns_by_refs(self, ref_ids: list[int], job_type: JobType) -> list[HpcRun]:
+        async with self.async_session_maker() as session, session.begin():
+            run_type = self._get_job_type_ref(job_type)
+            stmt = select(ORMHpcRun).where(run_type.in_(ref_ids))
+            result: Result[tuple[ORMHpcRun]] = await session.execute(stmt)
+            orm_hpcruns = result.scalars().all()
+            return [orm_hpcrun.to_hpc_run() for orm_hpcrun in orm_hpcruns]
 
     @override
     async def get_hpcrun_by_slurmjobid(self, slurmjobid: int) -> HpcRun | None:
