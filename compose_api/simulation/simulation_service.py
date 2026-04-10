@@ -104,7 +104,10 @@ class SimulationServiceHpc(SimulationService):
                         -n {simulation.sim_request.end_time_point}
 
                     pushd {experiment_path}
-                    zip -r results.zip ./output/*
+                    cd output
+                    zip -r ../results.zip ./*
+                    cd ..
+                    rm -r output
                     popd
                     echo "Simulation run completed. data saved to {experiment_path!s}."
                     """)
