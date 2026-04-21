@@ -19,7 +19,7 @@ async def test_save_request_to_mongo(database_service: DatabaseServiceSQL, simul
     # When the server first receives the Omex file it's placed in a temp dir for further processing
     local_path = Path("/tmp/fjdsljkl")  # noqa: S108
     sim_request: SimulationRequest = SimulationRequest(
-        request_file_path=local_path, simulation_file_type=SimulationFileType.OMEX
+        request_file_path=local_path, simulation_file_type=SimulationFileType.OMEX, is_batch=False
     )
 
     experiment_id = get_experiment_id(simulator, "".join(random.choices(string.hexdigits, k=7)))  # noqa: S311 doesn't need to be secure

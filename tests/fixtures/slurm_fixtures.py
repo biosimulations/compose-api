@@ -83,7 +83,7 @@ def slurm_template_hello_1s(slurm_template_hello_TEMPLATE: str) -> str:
 @pytest_asyncio.fixture
 async def simulation_request(database_service: DatabaseServiceSQL) -> SimulationRequest:
     omex_path = Path(os.path.join(os.path.dirname(__file__), "resources/phase_cycle.omex"))
-    return SimulationRequest(request_file_path=omex_path, simulation_file_type=SimulationFileType.OMEX)
+    return SimulationRequest(request_file_path=omex_path, simulation_file_type=SimulationFileType.OMEX, is_batch=False)
 
 
 @pytest.fixture(scope="session")
