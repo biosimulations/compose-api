@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 import logging
 import random
 import string
@@ -87,8 +88,8 @@ class SimulationServiceHpc(SimulationService):
                     #SBATCH --time=30:00
                     #SBATCH --cpus-per-task 2
                     #SBATCH --mem=8GB
-                    #SBATCH --partition={settings.slurm_partition}
-                    #SBATCH --qos={settings.slurm_qos}
+                    #SBATCH --partition={settings.batch_slurm_partition if simulation.sim_request.is_batch else settings.slurm_partition}
+                    #SBATCH --qos={settings.batch_slurm_qos if simulation.sim_request.is_batch else settings.slurm_qos}
                     #SBATCH --output={get_slurm_log_file(slurm_job_name=slurm_job_name)}
 
                     set -e
