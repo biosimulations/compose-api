@@ -19,12 +19,15 @@ def _get_kwargs(
     *,
     body: BodyRunSimulation,
     interval_time: Union[Unset, float] = 1.0,
+    batch_submission: Union[Unset, bool] = False,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
 
     params: dict[str, Any] = {}
 
     params["interval_time"] = interval_time
+
+    params["batch_submission"] = batch_submission
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -73,11 +76,13 @@ def sync_detailed(
     client: Union[AuthenticatedClient, Client],
     body: BodyRunSimulation,
     interval_time: Union[Unset, float] = 1.0,
+    batch_submission: Union[Unset, bool] = False,
 ) -> Response[Union[HTTPValidationError, SimulationExperiment]]:
     """Run a simulation
 
     Args:
         interval_time (Union[Unset, float]):  Default: 1.0.
+        batch_submission (Union[Unset, bool]):  Default: False.
         body (BodyRunSimulation):
 
     Raises:
@@ -91,6 +96,7 @@ def sync_detailed(
     kwargs = _get_kwargs(
         body=body,
         interval_time=interval_time,
+        batch_submission=batch_submission,
     )
 
     response = client.get_httpx_client().request(
@@ -105,11 +111,13 @@ def sync(
     client: Union[AuthenticatedClient, Client],
     body: BodyRunSimulation,
     interval_time: Union[Unset, float] = 1.0,
+    batch_submission: Union[Unset, bool] = False,
 ) -> Optional[Union[HTTPValidationError, SimulationExperiment]]:
     """Run a simulation
 
     Args:
         interval_time (Union[Unset, float]):  Default: 1.0.
+        batch_submission (Union[Unset, bool]):  Default: False.
         body (BodyRunSimulation):
 
     Raises:
@@ -124,6 +132,7 @@ def sync(
         client=client,
         body=body,
         interval_time=interval_time,
+        batch_submission=batch_submission,
     ).parsed
 
 
@@ -132,11 +141,13 @@ async def asyncio_detailed(
     client: Union[AuthenticatedClient, Client],
     body: BodyRunSimulation,
     interval_time: Union[Unset, float] = 1.0,
+    batch_submission: Union[Unset, bool] = False,
 ) -> Response[Union[HTTPValidationError, SimulationExperiment]]:
     """Run a simulation
 
     Args:
         interval_time (Union[Unset, float]):  Default: 1.0.
+        batch_submission (Union[Unset, bool]):  Default: False.
         body (BodyRunSimulation):
 
     Raises:
@@ -150,6 +161,7 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         body=body,
         interval_time=interval_time,
+        batch_submission=batch_submission,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -162,11 +174,13 @@ async def asyncio(
     client: Union[AuthenticatedClient, Client],
     body: BodyRunSimulation,
     interval_time: Union[Unset, float] = 1.0,
+    batch_submission: Union[Unset, bool] = False,
 ) -> Optional[Union[HTTPValidationError, SimulationExperiment]]:
     """Run a simulation
 
     Args:
         interval_time (Union[Unset, float]):  Default: 1.0.
+        batch_submission (Union[Unset, bool]):  Default: False.
         body (BodyRunSimulation):
 
     Raises:
@@ -182,5 +196,6 @@ async def asyncio(
             client=client,
             body=body,
             interval_time=interval_time,
+            batch_submission=batch_submission,
         )
     ).parsed

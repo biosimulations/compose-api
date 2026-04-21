@@ -10,8 +10,8 @@ from ..models.package_type import PackageType
 from typing import cast
 
 if TYPE_CHECKING:
-    from ..models.bi_graph_step import BiGraphStep
     from ..models.bi_graph_process import BiGraphProcess
+    from ..models.bi_graph_step import BiGraphStep
 
 
 T = TypeVar("T", bound="RegisteredPackage")
@@ -36,8 +36,8 @@ class RegisteredPackage:
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.bi_graph_step import BiGraphStep
         from ..models.bi_graph_process import BiGraphProcess
+        from ..models.bi_graph_step import BiGraphStep
 
         database_id = self.database_id
 
@@ -69,8 +69,8 @@ class RegisteredPackage:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.bi_graph_step import BiGraphStep
         from ..models.bi_graph_process import BiGraphProcess
+        from ..models.bi_graph_step import BiGraphStep
 
         d = dict(src_dict)
         database_id = d.pop("database_id")
