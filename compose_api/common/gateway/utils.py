@@ -48,7 +48,9 @@ async def get_hpc_run_status(db_service: DatabaseService, ref_id: int, job_type:
     return simulation_hpcrun
 
 
-async def get_file_from_uploaded_file(uploaded_file: UploadFile) -> SimulationRequest:
+async def get_simulation_request_from_uploaded_file(
+    uploaded_file: UploadFile, batch_submission: bool = False
+) -> SimulationRequest:
     if uploaded_file is None or uploaded_file.filename is None or uploaded_file.size == 0:
         raise HTTPException(status_code=400, detail="Empty uploaded file")
 
@@ -57,7 +59,9 @@ async def get_file_from_uploaded_file(uploaded_file: UploadFile) -> SimulationRe
         contents = await uploaded_file.read()
         tmp_file.write(contents)
     return SimulationRequest(
-        request_file_path=Path(tmp_file.name), simulation_file_type=SimulationFileType.get_file_type(suffix)
+        request_file_path=Path(tmp_file.name),
+        simulation_file_type=SimulationFileType.get_file_type(suffix),
+        is_batch=batch_submission,
     )
 
 

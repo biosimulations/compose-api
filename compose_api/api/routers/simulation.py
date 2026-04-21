@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 
 from compose_api.common.gateway.models import RouterConfig
-from compose_api.common.gateway.utils import allow_list, get_file_from_uploaded_file
+from compose_api.common.gateway.utils import allow_list, get_simulation_request_from_uploaded_file
 from compose_api.dependencies import (
     get_database_service,
     get_job_monitor,
@@ -34,7 +34,10 @@ config = RouterConfig(router=APIRouter(), prefix="/simulation", dependencies=[])
     summary="Run a simulation",
 )
 async def submit_simulation(
-    background_tasks: BackgroundTasks, uploaded_file: UploadFile, interval_time: float = 1.0
+    background_tasks: BackgroundTasks,
+    uploaded_file: UploadFile,
+    interval_time: float = 1.0,
+    batch_submission: bool = False,
 ) -> SimulationExperiment:
     sim_service = get_simulation_service()
     if sim_service is None:
@@ -57,7 +60,9 @@ async def submit_simulation(
     if interval_time < 0 or interval_time > 1000:
         raise HTTPException(status_code=400, detail="Invalid interval time, it has to be between 0 and 1000")
 
-    simulation_request = await get_file_from_uploaded_file(uploaded_file=uploaded_file)
+    simulation_request = await get_simulation_request_from_uploaded_file(
+        uploaded_file=uploaded_file, batch_submission=batch_submission
+    )
     simulation_request.end_time_point = interval_time
 
     try:
