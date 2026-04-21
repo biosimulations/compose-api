@@ -72,7 +72,7 @@ def assert_test_sim_results(
 ) -> None:
     with ZipFile(archive_results) as zip_archive:
         zip_archive.extractall(temp_dir)
-    experiment_result = f"{temp_dir}/output/results.csv"
+    experiment_result = f"{temp_dir}/results.csv"
     experiment_numpy = numpy.genfromtxt(experiment_result, delimiter=",", dtype=object)
     report_numpy = numpy.genfromtxt(expected_csv_path, delimiter=",", dtype=object)
     assert report_numpy.shape == experiment_numpy.shape

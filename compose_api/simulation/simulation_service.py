@@ -100,7 +100,7 @@ class SimulationServiceHpc(SimulationService):
                         --bind {experiment_path}:/experiment \
                         {singularity_container_path} \
                         /experiment/{slurm_job_name}.{simulation.sim_request.simulation_file_type.get_files_suffix()} \
-                        -o "/experiment/output" \
+                        -o "{get_settings().containers_output_dir}" \
                         -n {simulation.sim_request.end_time_point}
 
                     pushd {experiment_path}
