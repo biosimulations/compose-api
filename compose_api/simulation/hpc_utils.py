@@ -67,12 +67,6 @@ def get_correlation_id(random_string: str, job_type: JobType) -> str:
     return f"{job_type.value}-{random_string}"
 
 
-def get_apptainer_image_file(simulator_version: SimulatorVersion) -> Path:
-    settings = get_settings()
-    hpc_image_remote_path = Path(settings.hpc_image_base_path)
-    return hpc_image_remote_path / f"simulator-{simulator_version.singularity_def_hash}.sif"
-
-
 def format_experiment_path(experiment_dirname: str, namespace: Namespace = Namespace.TEST) -> Path:
     base_path = f"/home/FCAM/crbmapi/compose_api/{namespace}/sims"
     return Path(base_path) / experiment_dirname

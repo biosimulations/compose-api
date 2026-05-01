@@ -7,6 +7,7 @@ import pytest
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.config import get_settings
+from compose_api.simulation.hpc_utils import _namespace_path
 
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
@@ -39,8 +40,7 @@ async def test_slurm_job_query_sacct(slurm_service: SlurmService) -> None:
 @pytest.mark.asyncio
 async def test_slurm_job_submit(slurm_service: SlurmService, slurm_template_hello_1s: str) -> None:
     _all_jobs_before_submit: list[SlurmJob] = await slurm_service.get_job_status_squeue()
-    settings = get_settings()
-    remote_path = Path(settings.slurm_log_base_path)
+    remote_path = _namespace_path() / "htclogs"
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_dir = Path(tmpdir)
         # write slurm_template_hello_1s to a temp file

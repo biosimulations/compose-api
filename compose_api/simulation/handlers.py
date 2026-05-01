@@ -202,7 +202,7 @@ async def _build_container_and_wait(
     hpc_db: HPCDatabaseService,
     job_monitor: JobMonitor,
     random_prefix: str,
-):
+) -> None:
     hpc_run = await simulation_service_slurm.build_container(
         simulator_version=simulator_version, random_str=random_prefix
     )
