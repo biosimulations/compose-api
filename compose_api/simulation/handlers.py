@@ -134,7 +134,7 @@ async def run_curated_pbif(
         if omex.filename is None:
             raise HTTPException(500, "Can't create omex file.")
         simulator_request = SimulationRequest(
-            request_file_path=Path(omex.filename), simulation_file_type=SimulationFileType.OMEX
+            request_file_path=Path(omex.filename), simulation_file_type=SimulationFileType.OMEX, is_batch=False
         )
 
         try:

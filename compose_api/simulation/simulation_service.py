@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 import logging
 import random
 import string
@@ -85,10 +86,10 @@ class SimulationServiceHpc(SimulationService):
                     #!/bin/bash
                     #SBATCH --job-name={slurm_job_name}
                     #SBATCH --time=30:00
-                    #SBATCH --cpus-per-task 2
-                    #SBATCH --mem=8GB
-                    #SBATCH --partition={settings.slurm_partition}
-                    #SBATCH --qos={settings.slurm_qos}
+                    #SBATCH --cpus-per-task {"1" if simulation.sim_request.is_batch else "2"}
+                    #SBATCH --mem={"4GB" if simulation.sim_request.is_batch else "8GB"}
+                    #SBATCH --partition={settings.batch_slurm_partition if simulation.sim_request.is_batch else settings.slurm_partition}
+                    #SBATCH --qos={settings.batch_slurm_qos if simulation.sim_request.is_batch else settings.slurm_qos}
                     #SBATCH --output={get_slurm_log_file(slurm_job_name=slurm_job_name)}
 
                     set -e
@@ -100,7 +101,7 @@ class SimulationServiceHpc(SimulationService):
                         --bind {experiment_path}:/experiment \
                         {singularity_container_path} \
                         /experiment/{slurm_job_name}.{simulation.sim_request.simulation_file_type.get_files_suffix()} \
-                        -o "/experiment/output" \
+                        -o "{get_settings().containers_output_dir}" \
                         -n {simulation.sim_request.end_time_point}
 
                     pushd {experiment_path}

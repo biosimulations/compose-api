@@ -5,7 +5,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFi
 from jinja2 import Template
 
 from compose_api.common.gateway.models import RouterConfig, ServerMode
-from compose_api.common.gateway.utils import get_file_from_uploaded_file
+from compose_api.common.gateway.utils import get_simulation_request_from_uploaded_file
+from compose_api.config import get_settings
 from compose_api.dependencies import (
     get_database_service,
 )
@@ -42,8 +43,13 @@ async def run_copasi(
 ) -> SimulationExperiment:
     with open(os.path.dirname(__file__) + "/templates/copasi.jinja") as f:
         template = Template(f.read())
-        render = template.render(start_time=start_time, duration=duration, num_data_points=num_data_points)
-    request = await get_file_from_uploaded_file(sbml)
+        render = template.render(
+            start_time=start_time,
+            duration=duration,
+            num_data_points=num_data_points,
+            output_dir=get_settings().containers_output_dir,
+        )
+    request = await get_simulation_request_from_uploaded_file(sbml)
     if request.simulation_file_type is not SimulationFileType.SBML:
         raise HTTPException(status_code=400, detail="Expected a SBML file.")
     return await run_curated_pbif(
@@ -68,8 +74,13 @@ async def run_tellurium(
 ) -> SimulationExperiment:
     with open(os.path.dirname(__file__) + "/templates/tellurium.jinja") as f:
         template = Template(f.read())
-        render = template.render(start_time=start_time, end_time=end_time, num_data_points=num_data_points)
-    request = await get_file_from_uploaded_file(sbml)
+        render = template.render(
+            start_time=start_time,
+            end_time=end_time,
+            num_data_points=num_data_points,
+            output_dir=get_settings().containers_output_dir,
+        )
+    request = await get_simulation_request_from_uploaded_file(sbml)
     if request.simulation_file_type is not SimulationFileType.SBML:
         raise HTTPException(status_code=400, detail="Expected a SBML file.")
     return await run_curated_pbif(

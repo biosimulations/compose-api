@@ -64,6 +64,8 @@ class Settings(BaseSettings):
     slurm_log_base_path: str = ""
     slurm_base_path: str = ""
     slurm_sbatch_base_path: str = ""
+    batch_slurm_partition: str = ""
+    batch_slurm_qos: str = ""
 
     hpc_image_base_path: str = ""
     hpc_repo_base_path: str = ""
@@ -85,6 +87,7 @@ class Settings(BaseSettings):
     # Should mount to /home/FCAM/crbmapi/compose_api externally
     internal_mount_dir: str = "/mnt/crpbmapi"
     namespace: str = "test"
+    containers_output_dir: str = "/experiment/output"
 
 
 @lru_cache

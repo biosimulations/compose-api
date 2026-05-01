@@ -26,7 +26,9 @@ from compose_api.simulation.models import (
 
 
 async def insert_job(database_service: DatabaseServiceSQL, slurmjobid: int, simulator: SimulatorVersion) -> HpcRun:
-    simulation_request = SimulationRequest(request_file_path=Path(""), simulation_file_type=SimulationFileType.OMEX)
+    simulation_request = SimulationRequest(
+        request_file_path=Path(""), simulation_file_type=SimulationFileType.OMEX, is_batch=False
+    )
     random_string = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
     experiement_id = get_experiment_id(simulator, random_string)
 

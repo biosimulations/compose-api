@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: compose-api
-  version: 0.3.8
+  version: 0.4.0
 paths:
   /curated/copasi:
     post:
@@ -105,6 +105,13 @@ paths:
           type: number
           default: 1.0
           title: Interval Time
+      - name: batch_submission
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Batch Submission
       requestBody:
         required: true
         content:
