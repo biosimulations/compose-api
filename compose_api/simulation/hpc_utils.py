@@ -11,24 +11,25 @@ from compose_api.simulation.models import (
 )
 
 
-def get_slurm_log_file(slurm_job_name: str) -> Path:
+def _namespace_path() -> Path:
     settings = get_settings()
-    return Path(settings.slurm_log_base_path) / f"{slurm_job_name}.out"
+    return Path(settings.simulation_store_base_path) / settings.namespace
+
+
+def get_slurm_log_file(slurm_job_name: str) -> Path:
+    return _namespace_path() / "htclogs" / f"{slurm_job_name}.out"
 
 
 def get_slurm_submit_file(slurm_job_name: str) -> Path:
-    settings = get_settings()
-    return Path(settings.slurm_sbatch_base_path) / f"{slurm_job_name}.sbatch"
+    return _namespace_path() / "slurm_sbatch" / f"{slurm_job_name}.sbatch"
 
 
 def get_slurm_singularity_def_file(singularity_hash: str) -> Path:
-    settings = get_settings()
-    return Path(settings.hpc_image_base_path) / f"{singularity_hash}.def"
+    return _namespace_path() / "images" / f"{singularity_hash}.def"
 
 
 def get_slurm_singularity_container_file(singularity_hash: str) -> Path:
-    settings = get_settings()
-    return Path(settings.hpc_image_base_path) / f"{singularity_hash}.sif"
+    return _namespace_path() / "images" / f"{singularity_hash}.sif"
 
 
 def get_slurm_sim_input_file_path(experiment_id: str) -> Path:
@@ -44,8 +45,7 @@ def get_slurm_sim_results_file_path(experiment_id: str) -> Path:
 
 
 def get_slurm_sim_experiment_dir(experiment_id: str) -> Path:
-    settings = get_settings()
-    return Path(settings.hpc_sim_base_path) / f"experiment-{experiment_id}"
+    return _namespace_path() / "sims" / f"experiment-{experiment_id}"
 
 
 def get_internal_experiment_dir(experiment_id: str, namespace: Namespace) -> Path:

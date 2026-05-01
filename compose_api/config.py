@@ -61,15 +61,10 @@ class Settings(BaseSettings):
     slurm_node_list: str = ""  # comma-separated list of nodes, e.g., "node1,node2"
     slurm_build_node: str = ""
     slurm_qos: str = ""
-    slurm_log_base_path: str = ""
-    slurm_base_path: str = ""
-    slurm_sbatch_base_path: str = ""
-    batch_slurm_partition: str = ""
     batch_slurm_qos: str = ""
+    batch_slurm_partition: str = ""
 
-    hpc_image_base_path: str = ""
-    hpc_repo_base_path: str = ""
-    hpc_sim_base_path: str = ""
+    simulation_store_base_path: str = ""
     hpc_sim_config_file: str = "publish.json"
     hpc_has_messaging: bool = False
 
