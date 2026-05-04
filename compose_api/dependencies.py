@@ -11,7 +11,7 @@ from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService, DatabaseServiceSQL
-from compose_api.db.db_utils import create_db
+from compose_api.db.db_utils import create_db, upgrade_db
 from compose_api.log_config import setup_logging
 from compose_api.simulation.data_service import DataService, DataServiceHpc
 from compose_api.simulation.job_monitor import JobMonitor
@@ -159,6 +159,10 @@ async def init_standalone(enable_ssl: bool = True) -> None:
         pool_timeout=PG_POOL_TIMEOUT,
         pool_recycle=PG_POOL_RECYCLE,
     )
+    # upgrade_db runs first but order doesn't matter — both require the postgres database to exist,
+    # and upgrade_db operates on an empty database just as well as create_db does.
+    logging.warning("running alembic upgrade to apply any pending migrations")
+    await upgrade_db()
     logging.warning("calling create_db() to initialize the database tables")
     await create_db(engine)
     set_postgres_engine(engine)
