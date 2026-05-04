@@ -109,13 +109,14 @@ testpaths = ["tests"]
 addopts = "--cov-report=html"
 
 [tool.deptry]
-exclude = [".venv/*"]
+exclude = [".venv/*", "alembic/*"]
 ignore = ["DEP002", "DEP003", "DEP004"]
 
 [tool.ruff]
 target-version = 'py39'
 line-length = 120
 fix = true
+exclude = ["alembic/"]
 
 [tool.ruff.lint]
 select = [
@@ -220,7 +221,7 @@ ignore = [
 #    # UP035 `typing.Dict` is deprecated, use `dict` instead
 #    "UP035",
 ]
-exclude = [".venv/*", "compose_api/api/client/*", "documentation/*"]
+exclude = [".venv/*", "compose_api/api/client/*", "documentation/*", "alembic/*"]
 
 [tool.ruff.format]
 preview = true
