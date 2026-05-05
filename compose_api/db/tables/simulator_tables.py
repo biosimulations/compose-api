@@ -1,7 +1,7 @@
 import datetime
 import logging
 
-from pbest.utils.input_types import ContainerizationFileRepr
+from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
 from sqlalchemy import ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -34,7 +34,9 @@ class ORMSimulator(DeclarativeTableBase):
         return SimulatorVersion(
             database_id=self.id,
             created_at=self.created_at,
-            singularity_def=ContainerizationFileRepr(representation=self.singularity_def),
+            singularity_def=ContainerizationFileRepr(
+                representation=self.singularity_def, containerization_engine=ContainerizationEngine.APPTAINER
+            ),
             singularity_def_hash=self.singularity_def_hash,
             packages=None,
         )

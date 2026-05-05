@@ -7,11 +7,9 @@ import time
 from pathlib import Path
 
 import pytest
-from pbest.containerization.container_constructor import generate_container_def_file, get_experiment_deps
+from pbest.containerization.container_constructor import _default_experiment_deps, generate_container_def_file
 from pbest.utils.input_types import (
     ContainerizationEngine,
-    ContainerizationProgramArguments,
-    ContainerizationTypes,
 )
 
 from compose_api.api.introspect_package import introspect_package
@@ -37,17 +35,8 @@ async def test_build_simulator(
     ssh_service: SSHService,
     job_monitor: JobMonitor,
 ) -> None:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        singularity_def = generate_container_def_file(
-            ContainerizationProgramArguments(
-                input_file_path=str(simulation_request.request_file_path),
-                working_directory=Path(temp_dir),
-                containerization_type=ContainerizationTypes.SINGLE,
-                containerization_engine=ContainerizationEngine.APPTAINER,
-            )
-        )
-
-    experiment_dep = get_experiment_deps()
+    singularity_def = generate_container_def_file(_default_experiment_deps(), ContainerizationEngine.APPTAINER)
+    experiment_dep = _default_experiment_deps()
     package_outlines = introspect_package(experiment_dep)
     packages = []
     for outline in package_outlines:

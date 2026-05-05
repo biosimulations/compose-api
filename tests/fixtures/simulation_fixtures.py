@@ -1,15 +1,10 @@
-import os
-import tempfile
 from collections.abc import AsyncGenerator
-from pathlib import Path
 
 import pytest_asyncio
 from nats.aio.client import Client as NATSClient
-from pbest.containerization.container_constructor import generate_container_def_file, get_experiment_deps
+from pbest.containerization.container_constructor import _default_experiment_deps, generate_container_def_file
 from pbest.utils.input_types import (
     ContainerizationEngine,
-    ContainerizationProgramArguments,
-    ContainerizationTypes,
 )
 
 from compose_api.api.introspect_package import introspect_package
@@ -61,17 +56,8 @@ async def job_monitor(
 
 @pytest_asyncio.fixture(scope="function")
 async def simulator(database_service: DatabaseService) -> AsyncGenerator[SimulatorVersion, None]:
-    omex_path = os.path.join(os.path.dirname(__file__), "resources/phase_cycle.omex")
-    with tempfile.TemporaryDirectory() as temp_dir:
-        experiment_dep = get_experiment_deps()
-        singularity_def = generate_container_def_file(
-            ContainerizationProgramArguments(
-                input_file_path=omex_path,
-                working_directory=Path(temp_dir),
-                containerization_type=ContainerizationTypes.SINGLE,
-                containerization_engine=ContainerizationEngine.APPTAINER,
-            )
-        )
+    experiment_dep = _default_experiment_deps()
+    singularity_def = generate_container_def_file(_default_experiment_deps(), ContainerizationEngine.APPTAINER)
 
     package_outlines = introspect_package(experiment_dep)
     packages = []
