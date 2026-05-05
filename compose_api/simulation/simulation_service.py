@@ -25,7 +25,7 @@ from compose_api.simulation.hpc_utils import (
     get_slurm_singularity_def_file,
     get_slurm_submit_file,
 )
-from compose_api.simulation.models import HpcRun, JobType, Simulation, SimulatorVersion
+from compose_api.simulation.models import HpcRun, JobType, RemoteContainerImage, Simulation, SimulatorVersion
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -42,6 +42,10 @@ class SimulationService(ABC):
 
     @abstractmethod
     async def build_container(self, simulator_version: SimulatorVersion, random_str: str) -> HpcRun:
+        pass
+
+    @abstractmethod
+    async def download_container(self, remote_container_image: RemoteContainerImage) -> None:
         pass
 
     @abstractmethod
@@ -203,6 +207,10 @@ class SimulationServiceHpc(SimulationService):
             )
 
             return hpc_run
+
+    @override
+    async def download_container(self, remote_container_image: RemoteContainerImage) -> None:
+        await get_ssh_service().download_container(remote_container_image=remote_container_image)
 
     async def get_slurm_job_result_path(self, slurmjobid: int) -> Path:
         slurm_job = await self.get_slurm_job(slurmjobid)

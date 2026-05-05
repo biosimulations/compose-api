@@ -3,8 +3,10 @@ from pathlib import Path
 
 import asyncssh
 from asyncssh import SSHCompletedProcess
+from pbest.utils.input_types import ContainerizationEngine
 
 from compose_api.config import get_settings
+from compose_api.simulation.models import RemoteContainerImage
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -73,6 +75,20 @@ class SSHService:
 
     async def close(self) -> None:
         pass  # nothing to do here because we don't yet keep the connection around.
+
+    async def download_container(self, remote_container_image: RemoteContainerImage) -> None:
+        engine: ContainerizationEngine = ContainerizationEngine[get_settings().container_service]
+        match engine:
+            case ContainerizationEngine.APPTAINER:
+                await self.run_command(f"singularity docker://{remote_container_image.image_name_and_tag}")
+            case ContainerizationEngine.DOCKER:
+                await self.run_command(f"docker image pull {remote_container_image.image_name_and_tag}")
+            case _:
+                err = (
+                    f"Unsupported container service: {get_settings().container_service}. "
+                    f"Can not download container: {remote_container_image}"
+                )
+                raise ValueError(err)
 
 
 def get_ssh_service() -> SSHService:
