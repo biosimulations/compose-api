@@ -13,6 +13,15 @@ from compose_api.simulation.models import (
 logger = logging.getLogger(__name__)
 
 
+class ORMDownloadedContainers(DeclarativeTableBase):
+    __tablename__ = "downloaded_containers"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    downloaded_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
+    source_url: Mapped[str] = mapped_column(nullable=False)
+    image_name_and_tag: Mapped[str] = mapped_column(nullable=False)
+    simulator_id: Mapped[int] = mapped_column(ForeignKey("simulator.id"), nullable=False, index=True)
+
+
 class ORMSimulator(DeclarativeTableBase):
     __tablename__ = "simulator"
 

@@ -137,6 +137,11 @@ class Simulator(BaseModel):
     # primary_processes: str
 
 
+class RemoteContainerImage(Simulator):
+    source_url: str
+    image_name_and_tag: str
+
+
 class SimulatorVersion(Simulator):
     database_id: int  # Unique identifier for the simulator version
     created_at: datetime.datetime | None = None

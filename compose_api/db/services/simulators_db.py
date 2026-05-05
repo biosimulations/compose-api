@@ -8,6 +8,7 @@ from typing_extensions import override
 
 from compose_api.db.tables.hpc_tables import ORMHpcRun
 from compose_api.db.tables.simulator_tables import (
+    ORMDownloadedContainers,
     ORMSimulation,
     ORMSimulator,
     ORMSimulatorToPackage,
@@ -16,6 +17,7 @@ from compose_api.simulation.hpc_utils import get_singularity_hash, get_slurm_sim
 from compose_api.simulation.models import (
     HpcRun,
     RegisteredPackage,
+    RemoteContainerImage,
     Simulation,
     SimulationRequest,
     SimulationResults,
@@ -31,6 +33,10 @@ class SimulatorDatabaseService(ABC):
     async def insert_simulator(
         self, singularity_def_rep: ContainerizationFileRepr, packages_used: list[RegisteredPackage] | None = None
     ) -> SimulatorVersion:
+        pass
+
+    @abstractmethod
+    async def insert_downloaded_simulator(self, remote_container_image: RemoteContainerImage) -> SimulatorVersion:
         pass
 
     @abstractmethod
@@ -160,6 +166,25 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
 
             # Ensure the ORM object is inserted and has an ID
             return new_orm_simulator.to_simulator_version()
+
+    async def insert_downloaded_simulator(self, remote_container_image: RemoteContainerImage) -> SimulatorVersion:
+        async with self.async_session_maker() as session, session.begin():
+            new_simulator = ORMSimulator(
+                singularity_def=remote_container_image.singularity_def.representation,
+                singularity_def_hash=remote_container_image.singularity_def_hash,
+            )
+            session.add(new_simulator)
+
+            await session.flush()
+            session.add(
+                ORMDownloadedContainers(
+                    simulator_id=new_simulator.id,
+                    source_url=remote_container_image.source_url,
+                    image_name_and_tag=remote_container_image.image_name_and_tag,
+                )
+            )
+
+            return new_simulator.to_simulator_version()
 
     @override
     async def get_simulator(self, simulator_id: int) -> SimulatorVersion | None:
