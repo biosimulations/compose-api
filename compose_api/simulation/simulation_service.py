@@ -87,7 +87,7 @@ class SimulationServiceHpc(SimulationService):
                     #SBATCH --job-name={slurm_job_name}
                     #SBATCH --time=30:00
                     #SBATCH --cpus-per-task {"1" if simulation.sim_request.is_batch else "2"}
-                    #SBATCH --mem={"4GB" if simulation.sim_request.is_batch else "8GB"}
+                    #SBATCH --mem={"1GB" if simulation.sim_request.is_batch else "8GB"}
                     #SBATCH --partition={settings.batch_slurm_partition if simulation.sim_request.is_batch else settings.slurm_partition}
                     #SBATCH --qos={settings.batch_slurm_qos if simulation.sim_request.is_batch else settings.slurm_qos}
                     #SBATCH --output={get_slurm_log_file(slurm_job_name=slurm_job_name)}
