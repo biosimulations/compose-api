@@ -146,6 +146,20 @@ class RemoteContainerImage(Simulator):
     source_url: str
     image_name_and_tag: str
 
+    @staticmethod
+    def from_container_version(
+        simulator_version: "SimulatorVersion", source_url: str | None = None
+    ) -> "RemoteContainerImage":
+        if source_url is None:
+            source_url = f"docker://ezqvalencia/registry_env:{simulator_version.container_def_hash}"
+        return RemoteContainerImage(
+            source_url=source_url,
+            image_name_and_tag=f"ezqvalencia/registry_env:{simulator_version.container_def_hash}",
+            container_def=simulator_version.container_def,
+            container_def_hash=simulator_version.container_def_hash,
+            packages=simulator_version.packages,
+        )
+
 
 class DownloadedContainerImage(RemoteContainerImage):
     database_id: int

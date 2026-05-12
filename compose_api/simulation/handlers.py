@@ -30,6 +30,7 @@ from compose_api.simulation.models import (
     JobType,
     PBAllowList,
     RegisteredSimulators,
+    RemoteContainerImage,
     Simulation,
     SimulationExperiment,
     SimulationFileType,
@@ -161,16 +162,22 @@ async def _dispatch_job(
 ) -> None:
     simulator_version = simulation.simulator_version
     hpc_db = database_service.get_hpc_db()
-    simulator_hpc_id = await hpc_db.get_hpcrun_id_by_simulator_id(simulator_id=simulator_version.database_id)
+    simulator_download_id = await database_service.get_simulator_db().get_downloaded_simulator(
+        simulator_id=simulator_version.database_id
+    )
     random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
 
-    if simulator_hpc_id is None:
-        await _build_container_and_wait(
+    if simulator_download_id is None:
+        logger.info(
+            f"Simulator {simulator_version.database_id} is being downloaded from "
+            f"{RemoteContainerImage.from_container_version(simulator_version)}."
+        )
+        await _download_or_build_container(
             simulation_service_slurm=simulation_service_slurm,
             simulator_version=simulator_version,
             hpc_db=hpc_db,
             job_monitor=job_monitor,
-            random_prefix=random_string_7_hex,
+            random_string=random_string_7_hex,
         )
 
     sim_slurmjobid = await simulation_service_slurm.submit_simulation_job(
@@ -185,6 +192,39 @@ async def _dispatch_job(
         ref_id=simulation.database_id,
         correlation_id=correlation_id,
     )
+
+
+async def _download_or_build_container(
+    simulation_service_slurm: SimulationService,
+    simulator_version: SimulatorVersion,
+    hpc_db: HPCDatabaseService,
+    job_monitor: JobMonitor,
+    random_string: str,
+) -> None:
+    download_succeeded = False
+    try:
+        await simulation_service_slurm.download_container(
+            RemoteContainerImage.from_container_version(simulator_version)
+        )
+        download_succeeded = True
+    except Exception as e:
+        logger.exception("Failed to download simulator slurm container, will attempt to build container.", exc_info=e)
+
+    if download_succeeded:
+        return
+    built_simulator = await hpc_db.get_hpcrun_id_by_simulator_id(simulator_id=simulator_version.database_id)
+    if built_simulator is None:
+        try:
+            await _build_container_and_wait(
+                simulation_service_slurm=simulation_service_slurm,
+                simulator_version=simulator_version,
+                hpc_db=hpc_db,
+                job_monitor=job_monitor,
+                random_prefix=random_string,
+            )
+        except Exception as e:
+            logger.exception("Failed to build simulator container, will attempt to build container.", exc_info=e)
+            raise e
 
 
 async def _build_container_and_wait(
@@ -211,7 +251,7 @@ async def _build_container_and_wait(
             latest_hpc = await hpc_db.get_hpcrun_by_slurmjobid(hpc_run.slurmjobid)
             if latest_hpc is None:
                 raise Exception(
-                    f"Can't get HPC Run with jobID {hpc_run} for container build {simulator_version.singularity_def_hash}"  # NOQA: E501
+                    f"Can't get HPC Run with jobID {hpc_run} for container build {simulator_version.container_def_hash}"
                 )
             current_status = latest_hpc.status
 
