@@ -19,11 +19,50 @@ from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation import handlers
+from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.job_monitor import JobMonitor
-from compose_api.simulation.models import JobStatus, JobType, PBAllowList, SimulationRequest, SimulatorVersion
+from compose_api.simulation.models import (
+    JobStatus,
+    JobType,
+    PBAllowList,
+    RemoteContainerImage,
+    SimulationRequest,
+    SimulatorVersion,
+)
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 from tests.fixtures.mocks import TestBackgroundTask
 from tests.simulators.utils import assert_test_sim_results, test_dir
+
+
+@pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
+@pytest.mark.asyncio
+async def test_download_simulator(
+    simulation_service_slurm: SimulationServiceHpc, database_service: DatabaseServiceSQL
+) -> None:
+    container_rep = generate_container_def_file(_default_experiment_deps(), ContainerizationEngine.APPTAINER)
+    image = RemoteContainerImage(
+        source_url=f"docker://ezqvalencia/registry_env:{get_singularity_hash(container_rep)}",
+        image_name_and_tag="ezqvalencia/registry_env",
+        singularity_def=container_rep,
+        singularity_def_hash=get_singularity_hash(container_rep),
+        packages=None,
+    )
+    simulator_version = await simulation_service_slurm.download_container(image)
+    assert simulator_version is not None
+    saved_simulator_version = await database_service.get_simulator_db().get_simulator(
+        simulator_id=simulator_version.database_id
+    )
+    assert saved_simulator_version is not None
+    assert saved_simulator_version.singularity_def_hash == get_singularity_hash(container_rep)
+    assert saved_simulator_version.singularity_def.representation == container_rep.representation
+
+    downloaded_image = await database_service.get_simulator_db().get_downloaded_simulator(
+        simulator_id=simulator_version.database_id
+    )
+    assert downloaded_image is not None
+    assert downloaded_image.image_name_and_tag == image.image_name_and_tag
+    assert downloaded_image.singularity_def_hash == get_singularity_hash(container_rep)
+    assert downloaded_image.source_url == image.source_url
 
 
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")

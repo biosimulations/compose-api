@@ -147,6 +147,11 @@ class RemoteContainerImage(Simulator):
     image_name_and_tag: str
 
 
+class DownloadedContainerImage(RemoteContainerImage):
+    database_id: int
+    downloaded_at: datetime.datetime | None = None
+
+
 class SimulatorVersion(Simulator):
     database_id: int  # Unique identifier for the simulator version
     created_at: datetime.datetime | None = None

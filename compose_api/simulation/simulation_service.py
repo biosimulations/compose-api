@@ -45,7 +45,7 @@ class SimulationService(ABC):
         pass
 
     @abstractmethod
-    async def download_container(self, remote_container_image: RemoteContainerImage) -> None:
+    async def download_container(self, remote_container_image: RemoteContainerImage) -> SimulatorVersion:
         pass
 
     @abstractmethod
@@ -209,8 +209,13 @@ class SimulationServiceHpc(SimulationService):
             return hpc_run
 
     @override
-    async def download_container(self, remote_container_image: RemoteContainerImage) -> None:
+    async def download_container(self, remote_container_image: RemoteContainerImage) -> SimulatorVersion:
         await get_ssh_service().download_container(remote_container_image=remote_container_image)
+        return (
+            await get_required_database_service()
+            .get_simulator_db()
+            .insert_downloaded_simulator(remote_container_image=remote_container_image)
+        )
 
     async def get_slurm_job_result_path(self, slurmjobid: int) -> Path:
         slurm_job = await self.get_slurm_job(slurmjobid)
