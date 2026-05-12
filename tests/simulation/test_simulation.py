@@ -43,8 +43,8 @@ async def test_download_simulator(
     image = RemoteContainerImage(
         source_url=f"docker://ezqvalencia/registry_env:{get_singularity_hash(container_rep)}",
         image_name_and_tag="ezqvalencia/registry_env",
-        singularity_def=container_rep,
-        singularity_def_hash=get_singularity_hash(container_rep),
+        container_def=container_rep,
+        container_def_hash=get_singularity_hash(container_rep),
         packages=None,
     )
     simulator_version = await simulation_service_slurm.download_container(image)
@@ -53,15 +53,15 @@ async def test_download_simulator(
         simulator_id=simulator_version.database_id
     )
     assert saved_simulator_version is not None
-    assert saved_simulator_version.singularity_def_hash == get_singularity_hash(container_rep)
-    assert saved_simulator_version.singularity_def.representation == container_rep.representation
+    assert saved_simulator_version.container_def_hash == get_singularity_hash(container_rep)
+    assert saved_simulator_version.container_def.representation == container_rep.representation
 
     downloaded_image = await database_service.get_simulator_db().get_downloaded_simulator(
         simulator_id=simulator_version.database_id
     )
     assert downloaded_image is not None
     assert downloaded_image.image_name_and_tag == image.image_name_and_tag
-    assert downloaded_image.singularity_def_hash == get_singularity_hash(container_rep)
+    assert downloaded_image.container_def_hash == get_singularity_hash(container_rep)
     assert downloaded_image.source_url == image.source_url
 
 

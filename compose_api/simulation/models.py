@@ -136,8 +136,8 @@ class ContainerEngine(enum.Enum):
 
 
 class Simulator(BaseModel):
-    singularity_def: ContainerizationFileRepr
-    singularity_def_hash: str
+    container_def: ContainerizationFileRepr
+    container_def_hash: str
     packages: list[RegisteredPackage] | None
     # primary_processes: str
 

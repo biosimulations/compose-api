@@ -177,9 +177,9 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
     async def insert_downloaded_simulator(self, remote_container_image: RemoteContainerImage) -> SimulatorVersion:
         async with self.async_session_maker() as session, session.begin():
             new_simulator = ORMSimulator(
-                container_def=remote_container_image.singularity_def.representation,
-                container_def_hash=remote_container_image.singularity_def_hash,
-                container_engine=ContainerEngine[remote_container_image.singularity_def.containerization_engine.name],
+                container_def=remote_container_image.container_def.representation,
+                container_def_hash=remote_container_image.container_def_hash,
+                container_engine=ContainerEngine[remote_container_image.container_def.containerization_engine.name],
             )
             session.add(new_simulator)
 

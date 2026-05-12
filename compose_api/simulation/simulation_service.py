@@ -73,7 +73,7 @@ class SimulationServiceHpc(SimulationService):
         slurm_service, ssh_service, settings = self._get_services()
         slurm_job_name = get_slurm_job_name(experiment_id=experiment_id)
         singularity_container_path = get_slurm_singularity_container_file(
-            singularity_hash=simulation.simulator_version.singularity_def_hash
+            singularity_hash=simulation.simulator_version.container_def_hash
         )
         experiment_path = get_slurm_sim_experiment_dir(experiment_id=slurm_job_name)
 
@@ -81,7 +81,7 @@ class SimulationServiceHpc(SimulationService):
         with tempfile.TemporaryDirectory() as tmpdir:
             local_singularity_file = tmpdir + "/singularity.def"
             with open(local_singularity_file, "w") as f:
-                f.write(simulation.simulator_version.singularity_def.representation)
+                f.write(simulation.simulator_version.container_def.representation)
 
             local_submit_file = Path(tmpdir) / f"{slurm_job_name}.sbatch"
             # --compat forces isolation similar to docker, https://docs.sylabs.io/guides/latest/user-guide/cli/singularity_exec.html
@@ -148,19 +148,17 @@ class SimulationServiceHpc(SimulationService):
         with tempfile.TemporaryDirectory() as tmpdir:
             local_singularity_file = Path(tmpdir + "/singularity.def")
             rand_string = "".join(random.choices(string.hexdigits, k=5))  # noqa: S311
-            slurm_job_name = f"singularity_build_{simulator_version.singularity_def_hash[:5]}_{rand_string}"
+            slurm_job_name = f"singularity_build_{simulator_version.container_def_hash[:5]}_{rand_string}"
             singularity_container_path = get_slurm_singularity_container_file(
-                singularity_hash=simulator_version.singularity_def_hash
+                singularity_hash=simulator_version.container_def_hash
             )
 
-            singularity_def_file = get_slurm_singularity_def_file(
-                singularity_hash=simulator_version.singularity_def_hash
-            )
+            singularity_def_file = get_slurm_singularity_def_file(singularity_hash=simulator_version.container_def_hash)
             def_file_name = singularity_def_file.name.split("/")[-1]
             container_file_name = singularity_container_path.name.split("/")[-1]
 
             with open(local_singularity_file, "w") as f:
-                f.write(simulator_version.singularity_def.representation)
+                f.write(simulator_version.container_def.representation)
 
             local_submit_file = Path(tmpdir) / f"{slurm_job_name}.sbatch"
             with open(local_submit_file, "w") as f:

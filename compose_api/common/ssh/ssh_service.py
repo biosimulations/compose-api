@@ -89,11 +89,11 @@ class SSHService:
                 with tempfile.TemporaryDirectory() as tmpdir:
                     def_path: Path = Path(tmpdir) / "singularity.def"
                     with open(def_path, "w") as f:
-                        f.write(remote_container_image.singularity_def.representation)
+                        f.write(remote_container_image.container_def.representation)
                     await self.scp_upload(
-                        def_path, get_slurm_singularity_def_file(remote_container_image.singularity_def_hash)
+                        def_path, get_slurm_singularity_def_file(remote_container_image.container_def_hash)
                     )
-                    sif_name = get_slurm_singularity_container_file(remote_container_image.singularity_def_hash).name
+                    sif_name = get_slurm_singularity_container_file(remote_container_image.container_def_hash).name
                     # --force overwrites existing file
                     await self.run_command(
                         f"cd {_namespace_path() / 'images'} && singularity pull --force {sif_name} {remote_container_image.source_url}"  # NOQA: E501

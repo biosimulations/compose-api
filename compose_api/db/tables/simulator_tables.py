@@ -25,8 +25,8 @@ class ORMDownloadedContainers(DeclarativeTableBase):
 
     def to_downloaded_container_image(self, simulator: SimulatorVersion) -> DownloadedContainerImage:
         return DownloadedContainerImage(
-            singularity_def=simulator.singularity_def,
-            singularity_def_hash=simulator.singularity_def_hash,
+            container_def=simulator.container_def,
+            container_def_hash=simulator.container_def_hash,
             database_id=self.id,
             downloaded_at=self.downloaded_at,
             source_url=self.source_url,
@@ -48,11 +48,11 @@ class ORMSimulator(DeclarativeTableBase):
         return SimulatorVersion(
             database_id=self.id,
             created_at=self.created_at,
-            singularity_def=ContainerizationFileRepr(
+            container_def=ContainerizationFileRepr(
                 representation=self.container_def,
                 containerization_engine=ContainerizationEngine[self.container_engine.name],
             ),
-            singularity_def_hash=self.container_def_hash,
+            container_def_hash=self.container_def_hash,
             packages=None,
         )
 

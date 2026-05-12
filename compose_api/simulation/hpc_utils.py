@@ -73,7 +73,7 @@ def format_experiment_path(experiment_dirname: str, namespace: Namespace = Names
 
 
 def get_experiment_id(simulator: SimulatorVersion, random_str: str) -> str:
-    return f"{simulator.singularity_def_hash}_{random_str}"
+    return f"{simulator.container_def_hash}_{random_str}"
 
 
 def get_singularity_hash(singularity_def_rep: ContainerizationFileRepr) -> str:
