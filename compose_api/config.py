@@ -83,7 +83,7 @@ class Settings(BaseSettings):
     internal_mount_dir: str = "/mnt/crpbmapi"
     namespace: str = "test"
     containers_output_dir: str = "/experiment/output"
-    container_service: str = "apptainer"
+    container_service: str = "APPTAINER"
 
 
 @lru_cache

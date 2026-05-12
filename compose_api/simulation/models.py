@@ -130,6 +130,11 @@ class RegisteredPackage(BaseModel):
     steps: list[BiGraphStep]
 
 
+class ContainerEngine(enum.Enum):
+    DOCKER = "docker"
+    APPTAINER = "apptaier"
+
+
 class Simulator(BaseModel):
     singularity_def: ContainerizationFileRepr
     singularity_def_hash: str
