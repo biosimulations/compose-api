@@ -25,7 +25,9 @@ def upgrade() -> None:
     container_engine_enum.create(op.get_bind())
     op.alter_column('simulator','singularity_def', new_column_name='container_def')
     op.alter_column('simulator', 'singularity_def_hash', new_column_name='container_def_hash')
-    op.add_column('simulator', sa.Column('container_engine', container_engine_enum, nullable=False))
+    op.add_column('simulator', sa.Column('container_engine', container_engine_enum, nullable=True))
+    op.execute("UPDATE simulator SET container_engine='APPTAINER'")
+    op.alter_column('simulator', 'container_engine', nullable=False)
     # ### end Alembic commands ###
 
 
