@@ -1,4 +1,3 @@
-import asyncio
 import pathlib
 
 from sqlalchemy import Connection
@@ -12,11 +11,13 @@ class DeclarativeTableBase(AsyncAttrs, DeclarativeBase):
     pass
 
 
-def _do_upgrade() -> None:
+def _do_upgrade(sync_conn: Connection) -> None:
     from alembic import command
     from alembic.config import Config
 
-    command.upgrade(Config(str(_ALEMBIC_INI)), "head")
+    cfg = Config(str(_ALEMBIC_INI))
+    cfg.attributes["connection"] = sync_conn
+    command.upgrade(cfg, "head")
 
 
 def _stamp_head(sync_conn: Connection) -> None:
@@ -38,9 +39,9 @@ def _stamp_head(sync_conn: Connection) -> None:
     ctx.stamp(script, head)
 
 
-async def upgrade_db() -> None:
-    loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, _do_upgrade)
+async def upgrade_db(connection_engine: AsyncEngine) -> None:
+    async with connection_engine.connect() as conn:
+        await conn.run_sync(_do_upgrade)
 
 
 async def create_db(async_engine: AsyncEngine) -> None:
