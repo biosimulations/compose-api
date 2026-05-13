@@ -2,20 +2,24 @@ import logging
 from abc import ABC, abstractmethod
 
 from pbest.utils.input_types import ContainerizationFileRepr
-from sqlalchemy import Result, and_, select
+from sqlalchemy import Result, Row, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from typing_extensions import override
 
 from compose_api.db.tables.hpc_tables import ORMHpcRun
 from compose_api.db.tables.simulator_tables import (
+    ORMDownloadedContainers,
     ORMSimulation,
     ORMSimulator,
     ORMSimulatorToPackage,
 )
 from compose_api.simulation.hpc_utils import get_singularity_hash, get_slurm_sim_experiment_dir
 from compose_api.simulation.models import (
+    ContainerEngine,
+    DownloadedContainerImage,
     HpcRun,
     RegisteredPackage,
+    RemoteContainerImage,
     Simulation,
     SimulationRequest,
     SimulationResults,
@@ -34,7 +38,15 @@ class SimulatorDatabaseService(ABC):
         pass
 
     @abstractmethod
+    async def insert_downloaded_simulator(self, remote_container_image: RemoteContainerImage) -> SimulatorVersion:
+        pass
+
+    @abstractmethod
     async def get_simulator(self, simulator_id: int) -> SimulatorVersion | None:
+        pass
+
+    @abstractmethod
+    async def get_downloaded_simulator(self, simulator_id: int) -> DownloadedContainerImage | None:
         pass
 
     @abstractmethod
@@ -129,7 +141,7 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
                 select(ORMSimulator)
                 .where(
                     and_(
-                        ORMSimulator.singularity_def_hash == singularity_hash,
+                        ORMSimulator.container_def_hash == singularity_hash,
                     )
                 )
                 .limit(1)
@@ -145,8 +157,9 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
 
             # did not find the simulator, so insert it
             new_orm_simulator = ORMSimulator(
-                singularity_def=singularity_def_rep.representation,
-                singularity_def_hash=singularity_hash,
+                container_def=singularity_def_rep.representation,
+                container_def_hash=singularity_hash,
+                container_engine=ContainerEngine[singularity_def_rep.containerization_engine.name],
             )
             session.add(new_orm_simulator)
 
@@ -161,6 +174,43 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
             # Ensure the ORM object is inserted and has an ID
             return new_orm_simulator.to_simulator_version()
 
+    async def insert_downloaded_simulator(self, remote_container_image: RemoteContainerImage) -> SimulatorVersion:
+        async with self.async_session_maker() as session, session.begin():
+            new_simulator = ORMSimulator(
+                container_def=remote_container_image.container_def.representation,
+                container_def_hash=remote_container_image.container_def_hash,
+                container_engine=ContainerEngine[remote_container_image.container_def.containerization_engine.name],
+            )
+            session.add(new_simulator)
+
+            await session.flush()
+            session.add(
+                ORMDownloadedContainers(
+                    simulator_id=new_simulator.id,
+                    source_url=remote_container_image.source_url,
+                    image_name_and_tag=remote_container_image.image_name_and_tag,
+                )
+            )
+
+            return new_simulator.to_simulator_version()
+
+    async def get_downloaded_simulator(self, simulator_id: int) -> DownloadedContainerImage | None:
+        async with self.async_session_maker() as session, session.begin():
+            stmt1 = (
+                select(ORMDownloadedContainers, ORMSimulator)
+                .join(ORMSimulator, onclause=ORMSimulator.id == ORMDownloadedContainers.simulator_id)
+                .where(ORMDownloadedContainers.simulator_id == simulator_id)
+                .limit(1)
+            )
+            result1: Result[tuple[ORMDownloadedContainers, ORMSimulator]] = await session.execute(stmt1)
+            orm_downloaded: Row[tuple[ORMDownloadedContainers, ORMSimulator]] | None = result1.one_or_none()
+            if orm_downloaded is None:
+                return None
+            downloaded_container: DownloadedContainerImage = orm_downloaded[0].to_downloaded_container_image(
+                orm_downloaded[1].to_simulator_version()
+            )
+            return downloaded_container
+
     @override
     async def get_simulator(self, simulator_id: int) -> SimulatorVersion | None:
         async with self.async_session_maker() as session, session.begin():
@@ -172,7 +222,7 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
     @override
     async def get_simulator_by_def_hash(self, singularity_def_hash: str) -> SimulatorVersion | None:
         async with self.async_session_maker() as session, session.begin():
-            stmt1 = select(ORMSimulator).where(ORMSimulator.singularity_def_hash == singularity_def_hash).limit(1)
+            stmt1 = select(ORMSimulator).where(ORMSimulator.container_def_hash == singularity_def_hash).limit(1)
             result1: Result[tuple[ORMSimulator]] = await session.execute(stmt1)
             orm_simulator: ORMSimulator | None = result1.scalars().one_or_none()
             if orm_simulator is None:

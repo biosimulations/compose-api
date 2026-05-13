@@ -25,7 +25,7 @@ from compose_api.simulation.hpc_utils import (
     get_slurm_singularity_def_file,
     get_slurm_submit_file,
 )
-from compose_api.simulation.models import HpcRun, JobType, Simulation, SimulatorVersion
+from compose_api.simulation.models import HpcRun, JobType, RemoteContainerImage, Simulation, SimulatorVersion
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -42,6 +42,10 @@ class SimulationService(ABC):
 
     @abstractmethod
     async def build_container(self, simulator_version: SimulatorVersion, random_str: str) -> HpcRun:
+        pass
+
+    @abstractmethod
+    async def download_container(self, remote_container_image: RemoteContainerImage) -> SimulatorVersion:
         pass
 
     @abstractmethod
@@ -69,7 +73,7 @@ class SimulationServiceHpc(SimulationService):
         slurm_service, ssh_service, settings = self._get_services()
         slurm_job_name = get_slurm_job_name(experiment_id=experiment_id)
         singularity_container_path = get_slurm_singularity_container_file(
-            singularity_hash=simulation.simulator_version.singularity_def_hash
+            singularity_hash=simulation.simulator_version.container_def_hash
         )
         experiment_path = get_slurm_sim_experiment_dir(experiment_id=slurm_job_name)
 
@@ -77,7 +81,7 @@ class SimulationServiceHpc(SimulationService):
         with tempfile.TemporaryDirectory() as tmpdir:
             local_singularity_file = tmpdir + "/singularity.def"
             with open(local_singularity_file, "w") as f:
-                f.write(simulation.simulator_version.singularity_def.representation)
+                f.write(simulation.simulator_version.container_def.representation)
 
             local_submit_file = Path(tmpdir) / f"{slurm_job_name}.sbatch"
             # --compat forces isolation similar to docker, https://docs.sylabs.io/guides/latest/user-guide/cli/singularity_exec.html
@@ -101,6 +105,7 @@ class SimulationServiceHpc(SimulationService):
                         --compat \
                         --bind {experiment_path}:/experiment \
                         {singularity_container_path} \
+                        run \
                         /experiment/{slurm_job_name}.{simulation.sim_request.simulation_file_type.get_files_suffix()} \
                         -o "{get_settings().containers_output_dir}" \
                         -n {simulation.sim_request.end_time_point}
@@ -145,19 +150,17 @@ class SimulationServiceHpc(SimulationService):
         with tempfile.TemporaryDirectory() as tmpdir:
             local_singularity_file = Path(tmpdir + "/singularity.def")
             rand_string = "".join(random.choices(string.hexdigits, k=5))  # noqa: S311
-            slurm_job_name = f"singularity_build_{simulator_version.singularity_def_hash[:5]}_{rand_string}"
+            slurm_job_name = f"singularity_build_{simulator_version.container_def_hash[:5]}_{rand_string}"
             singularity_container_path = get_slurm_singularity_container_file(
-                singularity_hash=simulator_version.singularity_def_hash
+                singularity_hash=simulator_version.container_def_hash
             )
 
-            singularity_def_file = get_slurm_singularity_def_file(
-                singularity_hash=simulator_version.singularity_def_hash
-            )
+            singularity_def_file = get_slurm_singularity_def_file(singularity_hash=simulator_version.container_def_hash)
             def_file_name = singularity_def_file.name.split("/")[-1]
             container_file_name = singularity_container_path.name.split("/")[-1]
 
             with open(local_singularity_file, "w") as f:
-                f.write(simulator_version.singularity_def.representation)
+                f.write(simulator_version.container_def.representation)
 
             local_submit_file = Path(tmpdir) / f"{slurm_job_name}.sbatch"
             with open(local_submit_file, "w") as f:
@@ -204,6 +207,15 @@ class SimulationServiceHpc(SimulationService):
             )
 
             return hpc_run
+
+    @override
+    async def download_container(self, remote_container_image: RemoteContainerImage) -> SimulatorVersion:
+        await get_ssh_service().download_container(remote_container_image=remote_container_image)
+        return (
+            await get_required_database_service()
+            .get_simulator_db()
+            .insert_downloaded_simulator(remote_container_image=remote_container_image)
+        )
 
     async def get_slurm_job_result_path(self, slurmjobid: int) -> Path:
         slurm_job = await self.get_slurm_job(slurmjobid)

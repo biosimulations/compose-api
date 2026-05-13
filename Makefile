@@ -61,6 +61,22 @@ help:
 	@uv run python -c "import re; \
 	[[print(f'\033[36m{m[0]:<20}\033[0m {m[1]}') for m in re.findall(r'^([a-zA-Z_-]+):.*?## (.*)$$', open(makefile).read(), re.M)] for makefile in ('$(MAKEFILE_LIST)').strip().split()]"
 
+.PHONY: db-migrate
+db-migrate: ## Auto-generate migration from model changes (usage: make db-migrate msg="description")
+	@test -n "$(msg)" || (echo "Usage: make db-migrate msg=\"your message\"" && exit 1)
+	@echo "🚀 Generating migration: $(msg)"
+	@uv run alembic revision --autogenerate -m "$(msg)"
+
+.PHONY: db-upgrade
+db-upgrade: ## Apply all pending migrations to the database
+	@echo "🚀 Applying migrations"
+	@uv run alembic upgrade head
+
+.PHONY: db-stamp
+db-stamp: ## Mark existing database as current without running migrations
+	@echo "🚀 Stamping database as current head"
+	@uv run alembic stamp head
+
 .PHONY: deploy
 deploy: ## Deploy to site
 	@echo "🚀 Deploying ComposeAPI to Site"

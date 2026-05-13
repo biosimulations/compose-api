@@ -130,11 +130,40 @@ class RegisteredPackage(BaseModel):
     steps: list[BiGraphStep]
 
 
+class ContainerEngine(enum.Enum):
+    DOCKER = "docker"
+    APPTAINER = "apptaier"
+
+
 class Simulator(BaseModel):
-    singularity_def: ContainerizationFileRepr
-    singularity_def_hash: str
+    container_def: ContainerizationFileRepr
+    container_def_hash: str
     packages: list[RegisteredPackage] | None
     # primary_processes: str
+
+
+class RemoteContainerImage(Simulator):
+    source_url: str
+    image_name_and_tag: str
+
+    @staticmethod
+    def from_container_version(
+        simulator_version: "SimulatorVersion", source_url: str | None = None
+    ) -> "RemoteContainerImage":
+        if source_url is None:
+            source_url = f"docker://ezqvalencia/registry_env:{simulator_version.container_def_hash}"
+        return RemoteContainerImage(
+            source_url=source_url,
+            image_name_and_tag=f"ezqvalencia/registry_env:{simulator_version.container_def_hash}",
+            container_def=simulator_version.container_def,
+            container_def_hash=simulator_version.container_def_hash,
+            packages=simulator_version.packages,
+        )
+
+
+class DownloadedContainerImage(RemoteContainerImage):
+    database_id: int
+    downloaded_at: datetime.datetime | None = None
 
 
 class SimulatorVersion(Simulator):

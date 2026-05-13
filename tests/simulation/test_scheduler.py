@@ -12,7 +12,7 @@ from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
-from compose_api.simulation.hpc_utils import get_correlation_id, get_experiment_id
+from compose_api.simulation.hpc_utils import _namespace_path, get_correlation_id, get_experiment_id
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import (
     HpcRun,
@@ -110,8 +110,7 @@ async def test_job_monitor(
 
     # Submit a toy slurm job which takes 10 seconds to run
     _all_jobs_before_submit: list[SlurmJob] = await slurm_service.get_job_status_squeue()
-    settings = get_settings()
-    remote_path = Path(settings.slurm_sbatch_base_path)
+    remote_path = _namespace_path() / "slurm_sbatch"
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_dir = Path(tmpdir)
         # write slurm_template_hello_1s to a temp file

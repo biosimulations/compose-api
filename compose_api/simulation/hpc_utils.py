@@ -11,24 +11,25 @@ from compose_api.simulation.models import (
 )
 
 
-def get_slurm_log_file(slurm_job_name: str) -> Path:
+def _namespace_path() -> Path:
     settings = get_settings()
-    return Path(settings.slurm_log_base_path) / f"{slurm_job_name}.out"
+    return Path(settings.simulation_store_base_path) / settings.namespace
+
+
+def get_slurm_log_file(slurm_job_name: str) -> Path:
+    return _namespace_path() / "htclogs" / f"{slurm_job_name}.out"
 
 
 def get_slurm_submit_file(slurm_job_name: str) -> Path:
-    settings = get_settings()
-    return Path(settings.slurm_sbatch_base_path) / f"{slurm_job_name}.sbatch"
+    return _namespace_path() / "slurm_sbatch" / f"{slurm_job_name}.sbatch"
 
 
 def get_slurm_singularity_def_file(singularity_hash: str) -> Path:
-    settings = get_settings()
-    return Path(settings.hpc_image_base_path) / f"{singularity_hash}.def"
+    return _namespace_path() / "images" / f"{singularity_hash}.def"
 
 
 def get_slurm_singularity_container_file(singularity_hash: str) -> Path:
-    settings = get_settings()
-    return Path(settings.hpc_image_base_path) / f"{singularity_hash}.sif"
+    return _namespace_path() / "images" / f"{singularity_hash}.sif"
 
 
 def get_slurm_sim_input_file_path(experiment_id: str) -> Path:
@@ -44,8 +45,7 @@ def get_slurm_sim_results_file_path(experiment_id: str) -> Path:
 
 
 def get_slurm_sim_experiment_dir(experiment_id: str) -> Path:
-    settings = get_settings()
-    return Path(settings.hpc_sim_base_path) / f"experiment-{experiment_id}"
+    return _namespace_path() / "sims" / f"experiment-{experiment_id}"
 
 
 def get_internal_experiment_dir(experiment_id: str, namespace: Namespace) -> Path:
@@ -67,19 +67,13 @@ def get_correlation_id(random_string: str, job_type: JobType) -> str:
     return f"{job_type.value}-{random_string}"
 
 
-def get_apptainer_image_file(simulator_version: SimulatorVersion) -> Path:
-    settings = get_settings()
-    hpc_image_remote_path = Path(settings.hpc_image_base_path)
-    return hpc_image_remote_path / f"simulator-{simulator_version.singularity_def_hash}.sif"
-
-
 def format_experiment_path(experiment_dirname: str, namespace: Namespace = Namespace.TEST) -> Path:
     base_path = f"/home/FCAM/crbmapi/compose_api/{namespace}/sims"
     return Path(base_path) / experiment_dirname
 
 
 def get_experiment_id(simulator: SimulatorVersion, random_str: str) -> str:
-    return f"{simulator.singularity_def_hash}_{random_str}"
+    return f"{simulator.container_def_hash}_{random_str}"
 
 
 def get_singularity_hash(singularity_def_rep: ContainerizationFileRepr) -> str:

@@ -1,10 +1,18 @@
 import logging
+import tempfile
 from pathlib import Path
 
 import asyncssh
 from asyncssh import SSHCompletedProcess
+from pbest.utils.input_types import ContainerizationEngine
 
 from compose_api.config import get_settings
+from compose_api.simulation.hpc_utils import (
+    _namespace_path,
+    get_slurm_singularity_container_file,
+    get_slurm_singularity_def_file,
+)
+from compose_api.simulation.models import RemoteContainerImage
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -73,6 +81,31 @@ class SSHService:
 
     async def close(self) -> None:
         pass  # nothing to do here because we don't yet keep the connection around.
+
+    async def download_container(self, remote_container_image: RemoteContainerImage) -> None:
+        engine: ContainerizationEngine = ContainerizationEngine[get_settings().container_service]
+        match engine:
+            case ContainerizationEngine.APPTAINER:
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    def_path: Path = Path(tmpdir) / "singularity.def"
+                    with open(def_path, "w") as f:
+                        f.write(remote_container_image.container_def.representation)
+                    await self.scp_upload(
+                        def_path, get_slurm_singularity_def_file(remote_container_image.container_def_hash)
+                    )
+                    sif_name = get_slurm_singularity_container_file(remote_container_image.container_def_hash).name
+                    # --force overwrites existing file
+                    await self.run_command(
+                        f"cd {_namespace_path() / 'images'} && singularity pull --force {sif_name} {remote_container_image.source_url}"  # NOQA: E501
+                    )
+            case ContainerizationEngine.DOCKER:
+                await self.run_command(f"docker image pull {remote_container_image.image_name_and_tag}")
+            case _:
+                err = (
+                    f"Unsupported container service: {get_settings().container_service}. "
+                    f"Can not download container: {remote_container_image}"
+                )
+                raise ValueError(err)
 
 
 def get_ssh_service() -> SSHService:
