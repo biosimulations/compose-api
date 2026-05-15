@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 import pytest
-from pbest.containerization.container_constructor import _default_experiment_deps, generate_container_def_file
+from pbest.containerization.container_constructor import _default_registry_deps, generate_container_def_file
 from pbest.utils.input_types import (
     ContainerizationEngine,
 )
@@ -39,7 +39,7 @@ from tests.simulators.utils import assert_test_sim_results, test_dir
 async def test_download_simulator(
     simulation_service_slurm: SimulationServiceHpc, database_service: DatabaseServiceSQL
 ) -> None:
-    container_rep = generate_container_def_file(_default_experiment_deps(), ContainerizationEngine.APPTAINER)
+    container_rep = generate_container_def_file(_default_registry_deps(), ContainerizationEngine.APPTAINER)
     image = RemoteContainerImage(
         source_url=f"docker://ezqvalencia/registry_env:{get_singularity_hash(container_rep)}",
         image_name_and_tag="ezqvalencia/registry_env",
@@ -74,8 +74,8 @@ async def test_build_simulator(
     ssh_service: SSHService,
     job_monitor: JobMonitor,
 ) -> None:
-    singularity_def = generate_container_def_file(_default_experiment_deps(), ContainerizationEngine.APPTAINER)
-    experiment_dep = _default_experiment_deps()
+    singularity_def = generate_container_def_file(_default_registry_deps(), ContainerizationEngine.APPTAINER)
+    experiment_dep = _default_registry_deps()
     package_outlines = introspect_package(experiment_dep)
     packages = []
     for outline in package_outlines:

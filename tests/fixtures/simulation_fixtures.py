@@ -2,7 +2,7 @@ from collections.abc import AsyncGenerator
 
 import pytest_asyncio
 from nats.aio.client import Client as NATSClient
-from pbest.containerization.container_constructor import _default_experiment_deps, generate_container_def_file
+from pbest.containerization.container_constructor import _default_registry_deps, generate_container_def_file
 from pbest.utils.input_types import (
     ContainerizationEngine,
 )
@@ -56,8 +56,8 @@ async def job_monitor(
 
 @pytest_asyncio.fixture(scope="function")
 async def simulator(database_service: DatabaseService) -> AsyncGenerator[SimulatorVersion, None]:
-    experiment_dep = _default_experiment_deps()
-    singularity_def = generate_container_def_file(_default_experiment_deps(), ContainerizationEngine.APPTAINER)
+    experiment_dep = _default_registry_deps()
+    singularity_def = generate_container_def_file(_default_registry_deps(), ContainerizationEngine.APPTAINER)
 
     package_outlines = introspect_package(experiment_dep)
     packages = []
