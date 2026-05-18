@@ -52,17 +52,21 @@ class SlurmJob(BaseModel):
         job_state = fields[4]
         if "cancelled" in job_state.lower():  # Has 'cancelled by <User-ID>' which trips up mappings from string to Enum
             job_state = "CANCELLED"  # so just set it to 'canceled'
-        # Map fields to model attributes
+
+        # sacct emits "Unknown" / "N/A" / "" for fields that don't apply yet (e.g. start/end on PENDING jobs)
+        def _nullable(value: str) -> Optional[str]:
+            return None if value in ("", "Unknown", "N/A") else value
+
         return cls(
             job_id=int(fields[0]),
             name=fields[1],
             account=fields[2],
             user_name=fields[3],
             job_state=job_state,
-            start_time=fields[5],
-            end_time=fields[6],
-            elapsed=fields[7],
-            exit_code=fields[8],
+            start_time=_nullable(fields[5]),
+            end_time=_nullable(fields[6]),
+            elapsed=_nullable(fields[7]),
+            exit_code=_nullable(fields[8]),
         )
 
     @staticmethod
