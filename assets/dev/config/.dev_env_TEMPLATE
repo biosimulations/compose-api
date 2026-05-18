@@ -27,8 +27,8 @@ BATCH_SLURM_PARTITION=
 BATCH_SLURM_QOS=
 
 
-# The home compose_api dir for crbmapi
-INTERNAL_MOUNT_DIR=/mnt/crbmapi
+# The home compose_api dir for svc_compose
+INTERNAL_MOUNT_DIR=/mnt/svc_compose
 NAMESPACE=test
-SIMULATION_STORE_BASE_PATH=/home/crpbmapi
+SIMULATION_STORE_BASE_PATH=/projects/CRBM
 CONTAINER_SERVICE=APPTAINER

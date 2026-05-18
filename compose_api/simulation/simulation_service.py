@@ -13,7 +13,6 @@ from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.common.ssh.ssh_service import SSHService, get_ssh_service
 from compose_api.config import Settings, get_settings
-from compose_api.dependencies import get_required_database_service
 from compose_api.simulation.hpc_utils import (
     get_correlation_id,
     get_slurm_job_name,
@@ -195,6 +194,8 @@ class SimulationServiceHpc(SimulationService):
                 remote_singularity_file=singularity_def_file,
             )
 
+            from compose_api.dependencies import get_required_database_service
+
             hpc_run = (
                 await get_required_database_service()
                 .get_hpc_db()
@@ -210,6 +211,8 @@ class SimulationServiceHpc(SimulationService):
 
     @override
     async def download_container(self, remote_container_image: RemoteContainerImage) -> SimulatorVersion:
+        from compose_api.dependencies import get_required_database_service
+
         await get_ssh_service().download_container(remote_container_image=remote_container_image)
         return (
             await get_required_database_service()
