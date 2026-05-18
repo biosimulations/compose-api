@@ -79,8 +79,8 @@ class Settings(BaseSettings):
     assets_dir: str = f"{REPO_ROOT}/assets"
     marimo_api_server: str = ""
 
-    # Should mount to /home/FCAM/crbmapi/compose_api externally
-    internal_mount_dir: str = "/mnt/crpbmapi"
+    # Should mount to /projects/CRBM/compose_api externally
+    internal_mount_dir: str = "/mnt/projects/CRBM/compose_api"
     namespace: str = "test"
     containers_output_dir: str = "/experiment/output"
     container_service: str = "APPTAINER"

@@ -61,7 +61,7 @@ spec:
             - name: api-cache-pvc
               mountPath: /app/scratch
             - name: compose-api-home-pvc
-              mountPath: /home/FCAM/crbmapi
+              mountPath: /projects/CRBM
             - name: slurm-submit-key-file
               mountPath: /run/secrets/slurm_submit_key_file
             - name: ssh-known-hosts

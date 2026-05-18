@@ -68,7 +68,7 @@ def get_correlation_id(random_string: str, job_type: JobType) -> str:
 
 
 def format_experiment_path(experiment_dirname: str, namespace: Namespace = Namespace.TEST) -> Path:
-    base_path = f"/home/FCAM/crbmapi/compose_api/{namespace}/sims"
+    base_path = f"/projects/CRBM/compose_api/{namespace}/sims"
     return Path(base_path) / experiment_dirname
 
 
