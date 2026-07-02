@@ -1,0 +1,27 @@
+{
+  "upload_type": "software",
+  "title": "compose-api",
+  "license": "mit",
+  "creators": [
+    {
+      "name": "Valencia, Ezequiel",
+      "affiliation": "University of Connecticut School of Medicine"
+    },
+    {
+      "name": "Schaff, James C.",
+      "affiliation": "University of Connecticut School of Medicine",
+      "orcid": "0000-0003-3286-7736"
+    },
+    {
+      "name": "Drescher, Logan",
+      "affiliation": "University of Connecticut School of Medicine"
+    },
+    {
+      "name": "Moraru, Ion I.",
+      "affiliation": "University of Connecticut School of Medicine",
+      "orcid": "0000-0002-3746-9676"
+    }
+  ],
+  "description": "<p>compose-api is an API server for reproducible biological workflows and co-simulations, part of the BioSimulations platform.</p>",
+  "related_identifiers": []
+}
