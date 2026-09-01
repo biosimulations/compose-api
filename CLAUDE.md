@@ -131,8 +131,9 @@ This service is one side of a three-package loop. `../pbest` is checked out next
   destinations — the in-repo `compose_api/api/client/` and `$LIB_DIR` (the separate compose-api-client repo, not in
   this workspace) — and the published package additionally carries a hand-written `utils/run_simulation_and_wait.py`
   that the generator does not produce and must not clobber.
-- The deployed ingress host is `compose.cam.uchc.edu` (`kustomize/overlays/compose-api-rke/ingress.yaml`), which is
-  what pbest targets; `ServerMode.PROD` and `APP_ORIGINS` in `api/main.py` still say `compose_api.cam.uchc.edu`.
+- The production host is `compose.cam.uchc.edu` in all three places that must agree: the RKE ingress
+  (`kustomize/overlays/compose-api-rke/ingress.yaml`), `ServerMode.PROD` plus `APP_ORIGINS` here, and pbest's default
+  client base URL. Changing it means changing all three.
 
 ## Conventions
 

@@ -40,7 +40,7 @@ class Namespace(StrEnum):
 
 class ServerMode(StrEnum):
     DEV = "http://localhost:8000"
-    PROD = "https://compose_api.cam.uchc.edu"
+    PROD = "https://compose.cam.uchc.edu"
     PORT_FORWARD_DEV = "http://localhost:8888"
 
     @classmethod
