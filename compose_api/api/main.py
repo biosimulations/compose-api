@@ -37,7 +37,7 @@ APP_ORIGINS = [
     "http://localhost:8888",
     "http://localhost:8000",
     "http://localhost:3001",
-    "https://compose_api.cam.uchc.edu",
+    "https://compose.cam.uchc.edu",
 ]
 
 # APP_SERVERS: list[dict[str, str]] = [
