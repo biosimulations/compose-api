@@ -5,8 +5,8 @@ contract: the intent is to deliver the majority of items, and where we deviate, 
 [DEVIATIONS.md](DEVIATIONS.md). Grant text lives in `../` (git-ignored); quotes below are taken from
 `TR&D3 - Research Strategy.md` unless noted.
 
-**Grant clock.** Year 1 began mid-2024. Y1 = Jul 2024–Jun 2025 · Y2 = Jul 2025–Jun 2026 · **Y3 = Jul 2026–Jun 2027
-(now)** · Y4 = Jul 2027–Jun 2028 · Y5 = Jul 2028–Jun 2029.
+**Grant clock.** Project period 03/01/2024 – 02/28/2029. Y1 = Mar 2024–Feb 2025 · Y2 = Mar 2025–Feb 2026 ·
+**Y3 = Mar 2026–Feb 2027 (now)** · Y4 = Mar 2027–Feb 2028 · Y5 = Mar 2028–Feb 2029.
 
 **Status legend.** `not-started` · `in-progress` · `delivered` · `in-spirit` (delivered in a different form, see
 DEVIATIONS) · `deviated` (consciously replaced or descoped, see DEVIATIONS) · `dropped` (see DEVIATIONS) ·
