@@ -27,7 +27,7 @@ class SimpleSedmlCompiler:
         else:
             raise NotImplementedError(f"Unsupported tool suite: {tool_suite}")
         with open(os.path.dirname(__file__) + "/templates/SimpleSedmlPbifTemplate.jinja") as f:
-            template = Template(f.read())
+            template: Template = Template(f.read())
             return template.render(
                 start_time=sedml_repr.start_time,
                 duration=duration,
