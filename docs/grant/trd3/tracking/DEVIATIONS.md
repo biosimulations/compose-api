@@ -5,8 +5,9 @@ it. Every `in-spirit`, `deviated`, or `dropped` row in [TRACKER.md](TRACKER.md) 
 grant's own "Pitfalls and Alternatives" paragraphs pre-authorize several of these rationales; cite them when they
 apply.
 
-Entries marked **PROPOSED** were drafted from repository evidence and have not been accepted by a person. Edit the
-text or delete the entry; do not leave it marked PROPOSED once reviewed.
+A new entry may be drafted from repository evidence and marked **PROPOSED** in its heading; it is not in force until
+a person reviews it and fills in `Agreed by`. Do not leave an entry marked PROPOSED once reviewed. D1–D3 below were
+accepted on 2026-09-09.
 
 ## Entry template
 
@@ -23,7 +24,7 @@ text or delete the entry; do not leave it marked PROPOSED once reviewed.
 
 ---
 
-## D1. The Composition Interface Protocol exists as code, not as a written specification — **PROPOSED**
+## D1. The Composition Interface Protocol exists as code, not as a written specification
 - Date: 2026-09-09
 - Commitments: A2.1a, A2.1b, A2.1c, A2.2, A2.spec
 - Grant said: Aim 2 delivers "a standardized interface for sub-models", "a composite specification 'wiring diagram'",
@@ -42,9 +43,9 @@ text or delete the entry; do not leave it marked PROPOSED once reviewed.
 - Still owed: a `CIP-spec` document (versioned, derived from the code: type system, process interface contract,
   composite document schema, orchestration semantics) and one COMBINE/HARMONY presentation of it. With those, the
   five rows above become `delivered`.
-- Agreed by: —
+- Agreed by: Jim Schaff, 2026-09-09
 
-## D2. Online composite execution runs on compose-api and viva-api, not inside runBioSimulations — **PROPOSED**
+## D2. Online composite execution runs on compose-api and viva-api, not inside runBioSimulations
 - Date: 2026-09-09
 - Commitments: A3.2.hosted, A1.4
 - Grant said: "Vivarium 2.0 will be integrated with runBioSimulations as its underlying orchestration engine, to
@@ -61,9 +62,9 @@ text or delete the entry; do not leave it marked PROPOSED once reviewed.
 - Still owed: either (a) expose composite runs and results through `biosimulations/platform` so they sit next to
   single-simulator studies, or (b) formally declare the workbench + compose-api/viva-api pair as "BioSimulations 2.0
   composition" and cross-link from biosimulations.org. Either closes A1.4 and A3.2.hosted.
-- Agreed by: —
+- Agreed by: Jim Schaff, 2026-09-09
 
-## D3. New simulators are wrapped as process-bigraph processes, not as BioSimulators-compliant containers — **PROPOSED**
+## D3. New simulators are wrapped as process-bigraph processes, not as BioSimulators-compliant containers
 - Date: 2026-09-09
 - Commitments: A1.2.*, A3.1, A1.4.onboard
 - Grant said: Task 1.2 would "containerize and validate more simulators" into the BioSimulators registry, and Task 3.1
@@ -79,6 +80,9 @@ text or delete the entry; do not leave it marked PROPOSED once reviewed.
   "many simulators were not designed to be called repeatedly in quick succession"). Auto-wrapping proved less useful
   than hand-written wrappers because port types have to be chosen per simulator.
 - Still owed: nothing for the interface itself. For the registry promise, make sure every `viva-*` simulator is listed
-  in `viva-catalog` and, where a cycle-1 BioSimulators entry exists, cross-referenced from it. Cytosim and the
-  Cahn-Hilliard solver remain genuinely not started and need their own decision (drop, or substitute).
-- Agreed by: —
+  in `viva-catalog` and, where a cycle-1 BioSimulators entry exists, cross-referenced from it. Cytosim remains
+  genuinely not started and needs its own decision (drop, or substitute with MEDYAN + ReaDDy). A Cahn-Hilliard
+  composite does exist in `meta-modelers-guide` (found in the 2026-09-09 verification pass), so that one needs
+  promoting to a named artifact rather than starting from scratch. Two wrappers that exist are not yet trustworthy:
+  `viva-mem3dg` has no validation case and no CI, and `viva-compucell3d` has smoke tests only.
+- Agreed by: Jim Schaff, 2026-09-09
