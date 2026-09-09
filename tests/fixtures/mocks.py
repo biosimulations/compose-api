@@ -1,4 +1,4 @@
-import asyncio
+import inspect
 import tempfile
 from pathlib import Path
 from types import CoroutineType, FunctionType
@@ -52,7 +52,7 @@ class TestBackgroundTask(BackgroundTasks):
     async def call_tasks(self) -> None:
         while len(self.tasks_to_execute) > 0:
             func: FunctionType | CoroutineType[Any, Any, Any] = self.tasks_to_execute.pop(0)
-            if asyncio.iscoroutinefunction(func):
+            if inspect.iscoroutinefunction(func):
                 await func()
             elif isinstance(func, FunctionType):
                 func()
