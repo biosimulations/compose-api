@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from collections.abc import Mapping
-from typing import Any, TypeVar, Optional, BinaryIO, TextIO, TYPE_CHECKING, Generator
+from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
@@ -7,10 +9,7 @@ from attrs import field as _attrs_field
 from ..types import UNSET, Unset
 
 from ..types import UNSET, Unset
-from dateutil.parser import isoparse
 from typing import cast
-from typing import cast, Union
-from typing import Union
 import datetime
 
 if TYPE_CHECKING:
@@ -25,29 +24,29 @@ T = TypeVar("T", bound="SimulatorVersion")
 class SimulatorVersion:
     """
     Attributes:
-        singularity_def (ContainerizationFileRepr):
-        singularity_def_hash (str):
-        packages (Union[None, list['RegisteredPackage']]):
+        container_def (ContainerizationFileRepr):
+        container_def_hash (str):
+        packages (list[RegisteredPackage] | None):
         database_id (int):
-        created_at (Union[None, Unset, datetime.datetime]):
+        created_at (datetime.datetime | None | Unset):
     """
 
-    singularity_def: "ContainerizationFileRepr"
-    singularity_def_hash: str
-    packages: Union[None, list["RegisteredPackage"]]
+    container_def: ContainerizationFileRepr
+    container_def_hash: str
+    packages: list[RegisteredPackage] | None
     database_id: int
-    created_at: Union[None, Unset, datetime.datetime] = UNSET
+    created_at: datetime.datetime | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.containerization_file_repr import ContainerizationFileRepr
-        from ..models.registered_package import RegisteredPackage
+        from ..models.containerization_file_repr import ContainerizationFileRepr  # noqa: PLC0415
+        from ..models.registered_package import RegisteredPackage  # noqa: PLC0415
 
-        singularity_def = self.singularity_def.to_dict()
+        container_def = self.container_def.to_dict()
 
-        singularity_def_hash = self.singularity_def_hash
+        container_def_hash = self.container_def_hash
 
-        packages: Union[None, list[dict[str, Any]]]
+        packages: list[dict[str, Any]] | None
         if isinstance(self.packages, list):
             packages = []
             for packages_type_0_item_data in self.packages:
@@ -59,7 +58,7 @@ class SimulatorVersion:
 
         database_id = self.database_id
 
-        created_at: Union[None, Unset, str]
+        created_at: None | str | Unset
         if isinstance(self.created_at, Unset):
             created_at = UNSET
         elif isinstance(self.created_at, datetime.datetime):
@@ -70,8 +69,8 @@ class SimulatorVersion:
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
-            "singularity_def": singularity_def,
-            "singularity_def_hash": singularity_def_hash,
+            "container_def": container_def,
+            "container_def_hash": container_def_hash,
             "packages": packages,
             "database_id": database_id,
         })
@@ -82,15 +81,15 @@ class SimulatorVersion:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.containerization_file_repr import ContainerizationFileRepr
-        from ..models.registered_package import RegisteredPackage
+        from ..models.containerization_file_repr import ContainerizationFileRepr  # noqa: PLC0415
+        from ..models.registered_package import RegisteredPackage  # noqa: PLC0415
 
         d = dict(src_dict)
-        singularity_def = ContainerizationFileRepr.from_dict(d.pop("singularity_def"))
+        container_def = ContainerizationFileRepr.from_dict(d.pop("container_def"))
 
-        singularity_def_hash = d.pop("singularity_def_hash")
+        container_def_hash = d.pop("container_def_hash")
 
-        def _parse_packages(data: object) -> Union[None, list["RegisteredPackage"]]:
+        def _parse_packages(data: object) -> list[RegisteredPackage] | None:
             if data is None:
                 return data
             try:
@@ -104,15 +103,15 @@ class SimulatorVersion:
                     packages_type_0.append(packages_type_0_item)
 
                 return packages_type_0
-            except:  # noqa: E722
+            except (TypeError, ValueError, AttributeError, KeyError):
                 pass
-            return cast(Union[None, list["RegisteredPackage"]], data)
+            return cast(list[RegisteredPackage] | None, data)
 
         packages = _parse_packages(d.pop("packages"))
 
         database_id = d.pop("database_id")
 
-        def _parse_created_at(data: object) -> Union[None, Unset, datetime.datetime]:
+        def _parse_created_at(data: object) -> datetime.datetime | None | Unset:
             if data is None:
                 return data
             if isinstance(data, Unset):
@@ -120,18 +119,18 @@ class SimulatorVersion:
             try:
                 if not isinstance(data, str):
                     raise TypeError()
-                created_at_type_0 = isoparse(data)
+                created_at_type_0 = datetime.datetime.fromisoformat(data)
 
                 return created_at_type_0
-            except:  # noqa: E722
+            except (TypeError, ValueError, AttributeError, KeyError):
                 pass
-            return cast(Union[None, Unset, datetime.datetime], data)
+            return cast(datetime.datetime | None | Unset, data)
 
         created_at = _parse_created_at(d.pop("created_at", UNSET))
 
         simulator_version = cls(
-            singularity_def=singularity_def,
-            singularity_def_hash=singularity_def_hash,
+            container_def=container_def,
+            container_def_hash=container_def_hash,
             packages=packages,
             database_id=database_id,
             created_at=created_at,

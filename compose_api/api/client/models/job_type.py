@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class JobType(str, Enum):
+class JobType(StrEnum):
     BUILD_CONTAINER = "build_container"
     SIMULATION = "simulation"
 

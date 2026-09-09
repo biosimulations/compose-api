@@ -1,0 +1,12 @@
+{
+  "database_id": 0,
+  "slurmjobid": 424242,
+  "correlation_id": "hpc-run-round-trip-fixture",
+  "job_type": "simulation",
+  "sim_id": 0,
+  "simulator_id": null,
+  "status": "completed",
+  "start_time": "2026-01-02 03:04:05",
+  "end_time": "2026-01-02 03:14:05",
+  "error_message": null
+}

@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from collections.abc import Mapping
-from typing import Any, TypeVar, Optional, BinaryIO, TextIO, TYPE_CHECKING, Generator
+from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
@@ -9,8 +11,7 @@ from ..types import UNSET, Unset
 from ..models.job_status import JobStatus
 from ..models.job_type import JobType
 from ..types import UNSET, Unset
-from typing import cast, Union
-from typing import Union
+from typing import cast
 
 
 T = TypeVar("T", bound="HpcRun")
@@ -24,24 +25,24 @@ class HpcRun:
         slurmjobid (int):
         correlation_id (str):
         job_type (JobType):
-        sim_id (Union[None, int]):
-        simulator_id (Union[None, int]):
-        status (Union[JobStatus, None, Unset]):
-        start_time (Union[None, Unset, str]):
-        end_time (Union[None, Unset, str]):
-        error_message (Union[None, Unset, str]):
+        sim_id (int | None):
+        simulator_id (int | None):
+        status (JobStatus | None | Unset):
+        start_time (None | str | Unset):
+        end_time (None | str | Unset):
+        error_message (None | str | Unset):
     """
 
     database_id: int
     slurmjobid: int
     correlation_id: str
     job_type: JobType
-    sim_id: Union[None, int]
-    simulator_id: Union[None, int]
-    status: Union[JobStatus, None, Unset] = UNSET
-    start_time: Union[None, Unset, str] = UNSET
-    end_time: Union[None, Unset, str] = UNSET
-    error_message: Union[None, Unset, str] = UNSET
+    sim_id: int | None
+    simulator_id: int | None
+    status: JobStatus | None | Unset = UNSET
+    start_time: None | str | Unset = UNSET
+    end_time: None | str | Unset = UNSET
+    error_message: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -53,13 +54,13 @@ class HpcRun:
 
         job_type = self.job_type.value
 
-        sim_id: Union[None, int]
+        sim_id: int | None
         sim_id = self.sim_id
 
-        simulator_id: Union[None, int]
+        simulator_id: int | None
         simulator_id = self.simulator_id
 
-        status: Union[None, Unset, str]
+        status: None | str | Unset
         if isinstance(self.status, Unset):
             status = UNSET
         elif isinstance(self.status, JobStatus):
@@ -67,19 +68,19 @@ class HpcRun:
         else:
             status = self.status
 
-        start_time: Union[None, Unset, str]
+        start_time: None | str | Unset
         if isinstance(self.start_time, Unset):
             start_time = UNSET
         else:
             start_time = self.start_time
 
-        end_time: Union[None, Unset, str]
+        end_time: None | str | Unset
         if isinstance(self.end_time, Unset):
             end_time = UNSET
         else:
             end_time = self.end_time
 
-        error_message: Union[None, Unset, str]
+        error_message: None | str | Unset
         if isinstance(self.error_message, Unset):
             error_message = UNSET
         else:
@@ -117,21 +118,21 @@ class HpcRun:
 
         job_type = JobType(d.pop("job_type"))
 
-        def _parse_sim_id(data: object) -> Union[None, int]:
+        def _parse_sim_id(data: object) -> int | None:
             if data is None:
                 return data
-            return cast(Union[None, int], data)
+            return cast(int | None, data)
 
         sim_id = _parse_sim_id(d.pop("sim_id"))
 
-        def _parse_simulator_id(data: object) -> Union[None, int]:
+        def _parse_simulator_id(data: object) -> int | None:
             if data is None:
                 return data
-            return cast(Union[None, int], data)
+            return cast(int | None, data)
 
         simulator_id = _parse_simulator_id(d.pop("simulator_id"))
 
-        def _parse_status(data: object) -> Union[JobStatus, None, Unset]:
+        def _parse_status(data: object) -> JobStatus | None | Unset:
             if data is None:
                 return data
             if isinstance(data, Unset):
@@ -142,36 +143,36 @@ class HpcRun:
                 status_type_0 = JobStatus(data)
 
                 return status_type_0
-            except:  # noqa: E722
+            except (TypeError, ValueError, AttributeError, KeyError):
                 pass
-            return cast(Union[JobStatus, None, Unset], data)
+            return cast(JobStatus | None | Unset, data)
 
         status = _parse_status(d.pop("status", UNSET))
 
-        def _parse_start_time(data: object) -> Union[None, Unset, str]:
+        def _parse_start_time(data: object) -> None | str | Unset:
             if data is None:
                 return data
             if isinstance(data, Unset):
                 return data
-            return cast(Union[None, Unset, str], data)
+            return cast(None | str | Unset, data)
 
         start_time = _parse_start_time(d.pop("start_time", UNSET))
 
-        def _parse_end_time(data: object) -> Union[None, Unset, str]:
+        def _parse_end_time(data: object) -> None | str | Unset:
             if data is None:
                 return data
             if isinstance(data, Unset):
                 return data
-            return cast(Union[None, Unset, str], data)
+            return cast(None | str | Unset, data)
 
         end_time = _parse_end_time(d.pop("end_time", UNSET))
 
-        def _parse_error_message(data: object) -> Union[None, Unset, str]:
+        def _parse_error_message(data: object) -> None | str | Unset:
             if data is None:
                 return data
             if isinstance(data, Unset):
                 return data
-            return cast(Union[None, Unset, str], data)
+            return cast(None | str | Unset, data)
 
         error_message = _parse_error_message(d.pop("error_message", UNSET))
 

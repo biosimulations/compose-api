@@ -1,5 +1,6 @@
 from http import HTTPStatus
-from typing import Any, Optional, Union, cast
+from typing import Any, cast
+from urllib.parse import quote
 
 import httpx
 
@@ -20,9 +21,7 @@ def _get_kwargs() -> dict[str, Any]:
     return _kwargs
 
 
-def _parse_response(
-    *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Optional[list["BiGraphProcess"]]:
+def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> list[BiGraphProcess] | None:
     if response.status_code == 200:
         response_200 = []
         _response_200 = response.json()
@@ -32,6 +31,7 @@ def _parse_response(
             response_200.append(response_200_item)
 
         return response_200
+
     if client.raise_on_unexpected_status:
         raise errors.UnexpectedStatus(response.status_code, response.content)
     else:
@@ -39,8 +39,8 @@ def _parse_response(
 
 
 def _build_response(
-    *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Response[list["BiGraphProcess"]]:
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> Response[list[BiGraphProcess]]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -51,8 +51,8 @@ def _build_response(
 
 def sync_detailed(
     *,
-    client: Union[AuthenticatedClient, Client],
-) -> Response[list["BiGraphProcess"]]:
+    client: AuthenticatedClient | Client,
+) -> Response[list[BiGraphProcess]]:
     """Get the list of processes
 
     Raises:
@@ -60,7 +60,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[list['BiGraphProcess']]
+        Response[list[BiGraphProcess]]
     """
 
     kwargs = _get_kwargs()
@@ -74,8 +74,8 @@ def sync_detailed(
 
 def sync(
     *,
-    client: Union[AuthenticatedClient, Client],
-) -> Optional[list["BiGraphProcess"]]:
+    client: AuthenticatedClient | Client,
+) -> list[BiGraphProcess] | None:
     """Get the list of processes
 
     Raises:
@@ -83,7 +83,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        list['BiGraphProcess']
+        list[BiGraphProcess]
     """
 
     return sync_detailed(
@@ -93,8 +93,8 @@ def sync(
 
 async def asyncio_detailed(
     *,
-    client: Union[AuthenticatedClient, Client],
-) -> Response[list["BiGraphProcess"]]:
+    client: AuthenticatedClient | Client,
+) -> Response[list[BiGraphProcess]]:
     """Get the list of processes
 
     Raises:
@@ -102,7 +102,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[list['BiGraphProcess']]
+        Response[list[BiGraphProcess]]
     """
 
     kwargs = _get_kwargs()
@@ -114,8 +114,8 @@ async def asyncio_detailed(
 
 async def asyncio(
     *,
-    client: Union[AuthenticatedClient, Client],
-) -> Optional[list["BiGraphProcess"]]:
+    client: AuthenticatedClient | Client,
+) -> list[BiGraphProcess] | None:
     """Get the list of processes
 
     Raises:
@@ -123,7 +123,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        list['BiGraphProcess']
+        list[BiGraphProcess]
     """
 
     return (

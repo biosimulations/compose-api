@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: compose-api
-  version: 0.4.0
+  version: 0.5.0
 paths:
   /curated/copasi:
     post:
@@ -383,8 +383,8 @@ components:
       properties:
         sbml:
           type: string
-          format: binary
           title: Sbml
+          format: binary
       type: object
       required:
       - sbml
@@ -393,8 +393,8 @@ components:
       properties:
         uploaded_file:
           type: string
-          format: binary
           title: Uploaded File
+          format: binary
       type: object
       required:
       - uploaded_file
@@ -403,20 +403,31 @@ components:
       properties:
         sbml:
           type: string
-          format: binary
           title: Sbml
+          format: binary
       type: object
       required:
       - sbml
       title: Body_run-tellurium
+    ContainerizationEngine:
+      type: integer
+      enum:
+      - 0
+      - 1
+      - 2
+      - 3
+      title: ContainerizationEngine
     ContainerizationFileRepr:
       properties:
         representation:
           type: string
           title: Representation
+        containerization_engine:
+          $ref: '#/components/schemas/ContainerizationEngine'
       type: object
       required:
       - representation
+      - containerization_engine
       title: ContainerizationFileRepr
     HTTPValidationError:
       properties:
@@ -573,11 +584,11 @@ components:
       title: SimulationExperiment
     SimulatorVersion:
       properties:
-        singularity_def:
+        container_def:
           $ref: '#/components/schemas/ContainerizationFileRepr'
-        singularity_def_hash:
+        container_def_hash:
           type: string
-          title: Singularity Def Hash
+          title: Container Def Hash
         packages:
           anyOf:
           - items:
@@ -596,8 +607,8 @@ components:
           title: Created At
       type: object
       required:
-      - singularity_def
-      - singularity_def_hash
+      - container_def
+      - container_def_hash
       - packages
       - database_id
       title: SimulatorVersion
@@ -616,6 +627,11 @@ components:
         type:
           type: string
           title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
       type: object
       required:
       - loc

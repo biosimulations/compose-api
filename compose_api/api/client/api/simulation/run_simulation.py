@@ -1,5 +1,6 @@
 from http import HTTPStatus
-from typing import Any, Optional, Union, cast
+from typing import Any, cast
+from urllib.parse import quote
 
 import httpx
 
@@ -12,14 +13,13 @@ from ...models.http_validation_error import HTTPValidationError
 from ...models.simulation_experiment import SimulationExperiment
 from ...types import UNSET, Unset
 from typing import cast
-from typing import Union
 
 
 def _get_kwargs(
     *,
     body: BodyRunSimulation,
-    interval_time: Union[Unset, float] = 1.0,
-    batch_submission: Union[Unset, bool] = False,
+    interval_time: float | Unset = 1.0,
+    batch_submission: bool | Unset = False,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
 
@@ -39,21 +39,25 @@ def _get_kwargs(
 
     _kwargs["files"] = body.to_multipart()
 
+    headers["Content-Type"] = "multipart/form-data; boundary=+++"
+
     _kwargs["headers"] = headers
     return _kwargs
 
 
 def _parse_response(
-    *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Optional[Union[HTTPValidationError, SimulationExperiment]]:
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> HTTPValidationError | SimulationExperiment | None:
     if response.status_code == 200:
         response_200 = SimulationExperiment.from_dict(response.json())
 
         return response_200
+
     if response.status_code == 422:
         response_422 = HTTPValidationError.from_dict(response.json())
 
         return response_422
+
     if client.raise_on_unexpected_status:
         raise errors.UnexpectedStatus(response.status_code, response.content)
     else:
@@ -61,8 +65,8 @@ def _parse_response(
 
 
 def _build_response(
-    *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Response[Union[HTTPValidationError, SimulationExperiment]]:
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> Response[HTTPValidationError | SimulationExperiment]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -73,16 +77,16 @@ def _build_response(
 
 def sync_detailed(
     *,
-    client: Union[AuthenticatedClient, Client],
+    client: AuthenticatedClient | Client,
     body: BodyRunSimulation,
-    interval_time: Union[Unset, float] = 1.0,
-    batch_submission: Union[Unset, bool] = False,
-) -> Response[Union[HTTPValidationError, SimulationExperiment]]:
+    interval_time: float | Unset = 1.0,
+    batch_submission: bool | Unset = False,
+) -> Response[HTTPValidationError | SimulationExperiment]:
     """Run a simulation
 
     Args:
-        interval_time (Union[Unset, float]):  Default: 1.0.
-        batch_submission (Union[Unset, bool]):  Default: False.
+        interval_time (float | Unset):  Default: 1.0.
+        batch_submission (bool | Unset):  Default: False.
         body (BodyRunSimulation):
 
     Raises:
@@ -90,7 +94,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[HTTPValidationError, SimulationExperiment]]
+        Response[HTTPValidationError | SimulationExperiment]
     """
 
     kwargs = _get_kwargs(
@@ -108,16 +112,16 @@ def sync_detailed(
 
 def sync(
     *,
-    client: Union[AuthenticatedClient, Client],
+    client: AuthenticatedClient | Client,
     body: BodyRunSimulation,
-    interval_time: Union[Unset, float] = 1.0,
-    batch_submission: Union[Unset, bool] = False,
-) -> Optional[Union[HTTPValidationError, SimulationExperiment]]:
+    interval_time: float | Unset = 1.0,
+    batch_submission: bool | Unset = False,
+) -> HTTPValidationError | SimulationExperiment | None:
     """Run a simulation
 
     Args:
-        interval_time (Union[Unset, float]):  Default: 1.0.
-        batch_submission (Union[Unset, bool]):  Default: False.
+        interval_time (float | Unset):  Default: 1.0.
+        batch_submission (bool | Unset):  Default: False.
         body (BodyRunSimulation):
 
     Raises:
@@ -125,7 +129,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[HTTPValidationError, SimulationExperiment]
+        HTTPValidationError | SimulationExperiment
     """
 
     return sync_detailed(
@@ -138,16 +142,16 @@ def sync(
 
 async def asyncio_detailed(
     *,
-    client: Union[AuthenticatedClient, Client],
+    client: AuthenticatedClient | Client,
     body: BodyRunSimulation,
-    interval_time: Union[Unset, float] = 1.0,
-    batch_submission: Union[Unset, bool] = False,
-) -> Response[Union[HTTPValidationError, SimulationExperiment]]:
+    interval_time: float | Unset = 1.0,
+    batch_submission: bool | Unset = False,
+) -> Response[HTTPValidationError | SimulationExperiment]:
     """Run a simulation
 
     Args:
-        interval_time (Union[Unset, float]):  Default: 1.0.
-        batch_submission (Union[Unset, bool]):  Default: False.
+        interval_time (float | Unset):  Default: 1.0.
+        batch_submission (bool | Unset):  Default: False.
         body (BodyRunSimulation):
 
     Raises:
@@ -155,7 +159,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[HTTPValidationError, SimulationExperiment]]
+        Response[HTTPValidationError | SimulationExperiment]
     """
 
     kwargs = _get_kwargs(
@@ -171,16 +175,16 @@ async def asyncio_detailed(
 
 async def asyncio(
     *,
-    client: Union[AuthenticatedClient, Client],
+    client: AuthenticatedClient | Client,
     body: BodyRunSimulation,
-    interval_time: Union[Unset, float] = 1.0,
-    batch_submission: Union[Unset, bool] = False,
-) -> Optional[Union[HTTPValidationError, SimulationExperiment]]:
+    interval_time: float | Unset = 1.0,
+    batch_submission: bool | Unset = False,
+) -> HTTPValidationError | SimulationExperiment | None:
     """Run a simulation
 
     Args:
-        interval_time (Union[Unset, float]):  Default: 1.0.
-        batch_submission (Union[Unset, bool]):  Default: False.
+        interval_time (float | Unset):  Default: 1.0.
+        batch_submission (bool | Unset):  Default: False.
         body (BodyRunSimulation):
 
     Raises:
@@ -188,7 +192,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[HTTPValidationError, SimulationExperiment]
+        HTTPValidationError | SimulationExperiment
     """
 
     return (

@@ -5,60 +5,30 @@ from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
-import json
-from .. import types
 
 from ..types import UNSET, Unset
 
-from ..types import File, FileTypes
-from io import BytesIO
 
-
-T = TypeVar("T", bound="BodyRunCopasi")
+T = TypeVar("T", bound="ValidationErrorContext")
 
 
 @_attrs_define
-class BodyRunCopasi:
-    """
-    Attributes:
-        sbml (File):
-    """
-
-    sbml: File
+class ValidationErrorContext:
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        sbml = self.sbml.to_tuple()
-
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({
-            "sbml": sbml,
-        })
 
         return field_dict
-
-    def to_multipart(self) -> types.RequestFiles:
-        files: types.RequestFiles = []
-
-        files.append(("sbml", self.sbml.to_tuple()))
-
-        for prop_name, prop in self.additional_properties.items():
-            files.append((prop_name, (None, str(prop).encode(), "text/plain")))
-
-        return files
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        sbml = File(payload=BytesIO(d.pop("sbml")))
+        validation_error_context = cls()
 
-        body_run_copasi = cls(
-            sbml=sbml,
-        )
-
-        body_run_copasi.additional_properties = d
-        return body_run_copasi
+        validation_error_context.additional_properties = d
+        return validation_error_context
 
     @property
     def additional_keys(self) -> list[str]:
