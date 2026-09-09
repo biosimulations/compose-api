@@ -224,3 +224,8 @@ __marimo__/
 assets/dev/config/.dev_env
 
 assets/dev/config/compose_known_hosts
+# Grant text stays private; the tracker under trd3/tracking/ is versioned.
+/docs/grant/**
+!/docs/grant/trd3/
+!/docs/grant/trd3/tracking/
+!/docs/grant/trd3/tracking/**
