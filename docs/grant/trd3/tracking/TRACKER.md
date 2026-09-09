@@ -19,24 +19,35 @@ evidence on 2026-09-09 and has not been confirmed by a person.
 **Evidence sources.** GitHub orgs `biosimulations`, `biosimulators`, `vivarium-collective` (plus `cam-center` and
 `virtualcell` where a named simulator lives there). Repo names are `org/repo`; dates are last push as of 2026-09-09.
 
-## Roll-up (2026-09-09)
+## Roll-up (2026-09-09, statuses verified against GitHub)
 
 | Status | Rows | of which `?` (inferred, unconfirmed) |
 |---|---|---|
-| delivered | 9 | 3 |
+| delivered | 7 | 0 |
 | in-spirit | 6 | 0 |
-| in-progress | 23 | 5 |
+| in-progress | 24 | 1 |
 | deviated | 1 | 0 |
-| not-started | 4 | 0 |
+| not-started | 6 | 0 |
 | blocked-external | 1 | 0 |
-| unknown (`?` only, needs a person) | 6 | 6 |
-| **total** | **50** | **14** |
+| unknown (`?` only, needs a person) | 5 | 5 |
+| **total** | **50** | **6** |
 
-**Overdue or due now (Y1–Y2 promises not yet `delivered`/`in-spirit`):** A2.spec (Y1) · A3.3a (Y1) · A3.3e (begin Y1)
-· A4.1.ode-ssa (Y2) · A4.1.fba-bool (Y2) · A1.4 (Y2–3) · A1.2.cytosim, A1.2.cahn (Y1–3).
+The six remaining `?` cannot be settled from code: A3.x.steer, and the five community/collaboration rows
+(A4.3.imag, A4.3.combine, CP1, CP7, CP10). A GitHub search cannot disprove an unrecorded collaboration, so those
+need email, subaward, or progress-report evidence.
 
-**Not started anywhere:** A1.2.cytosim · A1.2.cahn · A4.1.ode-ssa · A4.1.fba-bool. A2.spec (the consolidated
-protocol specification) is the item that makes Aim 2 a *standard* rather than a codebase; it is partially written.
+**Overdue or due now (Y1–Y2 promises not yet `delivered`/`in-spirit`):** A2.spec (Y1) · A3.2.engines (Y1) ·
+A3.3a (Y1) · A3.3e (begin Y1) · A4.1.ode-ssa (Y2) · A4.1.fba-bool (Y2) · A1.4 (Y2–3) · A1.2.cytosim,
+A1.2.cahn, A1.2.springsalad (Y1–3).
+
+**Not started anywhere:** A1.2.cytosim · A3.2.engines · A4.1.ode-ssa · A4.1.fba-bool · A4.3.syncell · CP6.
+A2.spec (the consolidated protocol specification) is the item that makes Aim 2 a *standard* rather than a codebase;
+it is partially written.
+
+**Cheapest high-value moves**, from the verification pass: the two missing Y2 templates (ODE/SSA, FBA/Boolean) both
+have all their component processes already wrapped, so each is a wiring exercise plus the counts↔concentrations
+adapter that A3.3e needs anyway. One composite with processes in two containers closes A3.4.docker. One `viva-tellurium`
+to `viva-fenics` wiring closes A4.1.ode-pde.
 
 ---
 
@@ -70,11 +81,11 @@ the more useful form for Aims 3–4 and is recorded as [D3](DEVIATIONS.md#d3) ra
 | A1.2.springsalad | SpringSaLaD (particle-based mesoscopic dynamics) | infra + collab | Y1–3 | in-progress | `cam-center/SpringSaLaD` and `cam-center/LangevinNoVis01` active (Aug 2026); no `viva-springsalad` or BioSimulators container found | Wrap the headless Langevin solver as a process |
 | A1.2.cytosim | Cytosim (mesoscale actin) | infra + collab (CP4) | Y1–3 | not-started | only `vivarium-collective/vivarium-cytosim` (2022, Vivarium 1) | Decide: port to process-bigraph, or drop in favour of MEDYAN + ReaDDy (see D3) |
 | A1.2.medyan | MEDYAN (mesoscale actin) | infra + collab (CP4) | Y1–3 | in-progress | `vivarium-collective/viva-medyan` (Jul 2026; pure-Python re-implementation + subprocess bridge) | Validate against upstream MEDYAN output |
-| A1.2.mem3dg | Mem3DG (deformable membranes) | infra + collab | Y1–3 | delivered? | `vivarium-collective/viva-mem3dg` (Aug 2026) · used in `viva-membrane-actin-composite` | Confirm a validation case |
+| A1.2.mem3dg | Mem3DG (deformable membranes) | infra + collab | Y1–3 | in-progress | real `pymem3dg` bridge (`pbg_mem3dg/processes.py` drives `dg.System`/`dg.Euler`), but smoke tests only and no CI; `viva-membrane-actin-composite` grades itself "WORKFLOW-READY, NOT YET VALIDATED" and its per-vertex force coupling is blocked by a pymem3dg segfault | Add a validation case against a Mem3DG reference; chase the upstream applied-force segfault |
 | A1.2.cellpack | cellPACK (molecular structures) | infra + collab (CP4) | Y1–3 | in-progress | `vivarium-collective/viva-cellpack` (May 2026) · alternative packing engine `parsimony` / `viva-parsimony` / `3d-ecoli` (Aug 2026) | Decide whether parsimony supersedes cellPACK (in-spirit candidate) |
 | A1.2.readdy | ReaDDy (nanometer-scale filaments, motors) | infra + collab (CP4) | Y1–3 | delivered | `vivarium-collective/viva-readdy` (Aug 2026) · runs on HPC via this repo, `tests/simulators/test_readdy.py` | — |
-| A1.2.cpm | A cellular Potts model (CC3D, Morpheus, Artistoo, or compatible) | infra + collab | Y1–3 | delivered? | `viva-cpm` (native, Rust core) · `viva-artistoo` · `viva-compucell3d` · `compucell-tissueforge` (2024) | Confirm one is validated against a published CPM result; Morpheus not wrapped |
-| A1.2.cahn | A Cahn-Hilliard PDE solver | infra | Y1–3 | not-started | none; adjacent PDE processes: `viva-vcell-fvsolver`, `virtualcell/vcell-mbsolver`, `viva-fenics` | Decide whether FEniCS/VCell PDE covers the need (in-spirit candidate) |
+| A1.2.cpm | A cellular Potts model (CC3D, Morpheus, Artistoo, or compatible) | infra + collab | Y1–3 | delivered | `viva-cpm` (own Rust engine) reproduces Glazier & Graner 1993 across 11 completed studies and benchmarks at parity with CompuCell3D 4.10 · `viva-artistoo` drives real Artistoo with sorting/checkerboard behaviour tests (Node-gated) · `viva-compucell3d` is a real CC3D wrapper, smoke tests only | Morpheus not wrapped; optional |
+| A1.2.cahn | A Cahn-Hilliard PDE solver | infra | Y1–3 | in-progress | `meta-modelers-guide` ships `composites/condensate-cahn-hilliard.composite.json` with `tests/test_cahn_hilliard.py` · adjacent PDE processes: `viva-fenics` (real dolfinx), `viva-vcell-fvsolver`, `virtualcell/vcell-mbsolver` | Promote the condensate composite into a named solver/template, or record FEniCS as the substitute |
 
 <details><summary>Grant wording</summary>
 
@@ -163,7 +174,7 @@ XML and JSON-based formats for declaring a composite simulator with the CIP (yea
 |---|---|---|---|---|---|---|
 | A3.2 | Vivarium 2.0 ingests the exchange format and returns an executable composite; multi-timestep + workflow orchestration | infra | Y1 | delivered | `process-bigraph` v1.8.4 (Sep 2026) · `pbest run file.pbg` · `vivarium-interface` | — |
 | A3.2.hosted | "Integrated with runBioSimulations as its underlying orchestration engine, to support running composite simulations online" | infra | Y1 | deviated | online execution exists via this repo (`compose.cam.uchc.edu`, SLURM) and `viva-api` (`sms.cam.uchc.edu`), not via runBioSimulations | See [D2](DEVIATIONS.md#d2) |
-| A3.2.engines | "Work with collaborators to build additional execution engines that support the standard" | collab | Y1+ | in-progress? | `viva-compiler` (semantic → executable handlers) · language bridges `julia-process`, `cpp-process` | Name a second engine or record as descoped |
+| A3.2.engines | "Work with collaborators to build additional execution engines that support the standard" | collab | Y1+ | not-started | no second orchestrator exists: `viva-compiler`, `SimpleProcessBigraphRuntime`, `pbest` and `bsew` all delegate to `process_bigraph.Composite`; the `*-process` repos are single-process language bridges, not orchestrators | Name a collaborator engine or record as descoped in DEVIATIONS |
 
 ### Task 3.3 Methods for composite specification
 
@@ -180,8 +191,8 @@ XML and JSON-based formats for declaring a composite simulator with the CIP (yea
 | Id | Commitment | Kind | Promised | Status | Evidence | Next |
 |---|---|---|---|---|---|---|
 | A3.4.pypi | Biosimulators released as PyPI packages usable from notebooks | infra | unspecified | delivered | `process-bigraph`, `bigraph-schema`, `vivarium-interface`, `pbest`, `biosimulator-processes`, and the `viva-*` family on PyPI; `ecoli-notebooks` | — |
-| A3.4.docker | Docker API for composition: each simulator in its own container exposing the Process Interface with repeated-call comms | infra | unspecified | delivered? | `pbest containerize` (Docker/Apptainer) · `bsew` docker wrapper · `docker-process`, `rest-process`, `python-process` socket/REST bridges · `biosimulator-processes` GHCR image | Confirm one cross-container composite runs end to end |
-| A3.4.mixed | Mixed local / cloud / HPC processes in one composite | infra | unspecified | in-progress | local (`pbest run`) + HPC (this repo) + cloud (`viva-api`, `sms-cdk`) exist as separate paths | Demonstrate one composite spanning two of them |
+| A3.4.docker | Docker API for composition: each simulator in its own container exposing the Process Interface with repeated-call comms | infra | unspecified | in-progress | `docker-process` runs **one** containerized process from a host orchestrator (`test_docker_process`), no CI · repeated-call protocol is CI-verified only over REST (`rest-process` `test_rest_protocol_drives_grow_process`) · `pbest containerize` and `bsew` put the **whole** composite in one container · upstream `process_bigraph/protocols/` has ray/rest/pool/session, no docker | Build one composite with processes in separate containers |
+| A3.4.mixed | Mixed local / cloud / HPC processes in one composite | infra | unspecified | in-progress | `process_bigraph/protocols/` ships `ray.py`, `pool.py`, `session.py`, `clusters/ec2_ssm.py` with `docs/distributed_lifecycles.md` · local (`pbest run`) + HPC (this repo) + cloud (`viva-api`, `sms-cdk`) exist as separate paths | Demonstrate one composite spanning two backends |
 | A3.x.steer | Semi-automation: simulation steering module | exploratory | — | in-progress? | `viva-basic-processes` Intervention process | Optional |
 
 <details><summary>Grant wording (milestones)</summary>
@@ -205,9 +216,9 @@ types (begin year 1, and gradually add more adapters)."
 | A4.1.ode-fba | ODE/FBA (fluxes constrain FBA) | infra + science | **Y2** | delivered | `spatio-flux` (spatial dFBA) · `cdFBA` · `CRM-FBA` · `viva-comets` · `bio-bundles/dfba` | Publish one as the canonical template in `viva-template` |
 | A4.1.fba-bool | FBA/Boolean (Boolean network gates FBA reactions) | infra + science | **Y2** | not-started | none | Needs a Boolean process (BoolNet/GINsim were cycle-1 Biosimulators) |
 | A4.1.particle-pde | Particle-based/PDE (Smoldyn + VCell PDE coupling) | infra + science | Y1–5 | in-progress | `viva-smoldyn` and `viva-vcell-fvsolver` exist separately; `viva-membrane-actin-composite` couples particles to mechanics | Compose the two; reproduce ref [4] |
-| A4.1.ode-pde | ODE/PDE region variables on membranes/volumes | infra + science | Y1–5 | in-progress? | `viva-vcell-fvsolver` + ODE processes; `spatio-flux` fields | Confirm a composite exists |
+| A4.1.ode-pde | ODE/PDE region variables on membranes/volumes | infra + science | Y1–5 | in-progress | `viva-fenics` couples a reaction process to real dolfinx PDEs via shared stores in `composites/reaction_diffusion.py` (Fisher–KPP) and `composites/turing_patterns.py`, both unit-tested; its studies are still `planned`. The reaction side is hand-written, not a wrapped ODE simulator | Wire `viva-tellurium`/`viva-copasi` to fenics or fvsolver; no simulator-to-simulator ODE/PDE composite exists |
 | A4.1.rbm-ode | RBM/ODE (NFSim observables feed ODEs) | infra + science | Y1–5 | in-progress | `viva-nfsim` (Jul 2026) · `viva-composite-nfsim-caspule` couples NFSim to MD instead of ODE | Add the ODE pairing |
-| A4.1.compartment | Compartment models with permeability, volume/shape, motility (with CP6) | science + collab (CP6) | Y1–5 | in-progress? | `viva-autopoiesis` (self-bounding network) · `3d-ecoli` / `viva-parsimony` | Check CP6 involvement |
+| A4.1.compartment | Compartment models with permeability, volume/shape, motility (with CP6) | science + collab (CP6) | Y1–5 | in-progress | `viva-autopoiesis` covers all three properties at toy fidelity: `processes_spatial.py::SpatialContainment` (permeability-gated transport), `Boundary` (volume derived from membrane lipids), `Chemotaxis` (motility); five completed studies including adversarial probes | CP6 involvement: none found, this is solo work. Raise fidelity beyond the self-described "toy metabolism" |
 
 ### Task 4.2 Multi-cell templates (Table 2)
 
@@ -222,7 +233,7 @@ types (begin year 1, and gradually add more adapters)."
 |---|---|---|---|---|---|---|
 | A4.3.imag | Present at IMAG | community | ongoing | ? | not assessable from code | User to fill |
 | A4.3.combine | COMBINE subgroup on multi-cell/multi-scale; HARMONY hackathons with Morpheus/CC3D/PhysiCell | community | ongoing | ? | `hra-hackathon` (Mar 2026) is the only hackathon repo; `vivarium-guide`, `meta-modelers-guide` are outreach artifacts | User to fill; this is also where A2.2's "integrate into community standards" lands |
-| A4.3.syncell | Synthetic-cell modeling hackathon with CP6 and CP10 | community + collab | ongoing | ? | none found | User to fill |
+| A4.3.syncell | Synthetic-cell modeling hackathon with CP6 and CP10 | community + collab | ongoing | not-started | no hackathon artifact in any of the three orgs | Confirm from non-GitHub records, or schedule |
 
 <details><summary>Grant wording (milestones)</summary>
 
@@ -239,7 +250,7 @@ simulators will require more advanced tooling, which will only be available a fe
 |---|---|---|---|---|---|---|
 | CP1 | Cell Collective | protocol + annotation-based composition | gene regulation, signaling, metabolism, intercellular methods | ? | none found | User to fill |
 | CP4 | Simularium | 3D outputs | Cytosim, MEDYAN, ReaDDy, cellPACK | in-progress | push: `viva-simularium`, `Biosimulators_simularium` (2024) · pull: MEDYAN ✓ ReaDDy ✓ cellPACK ~ Cytosim ✗ | Close Cytosim decision (A1.2.cytosim) |
-| CP6 | Synthetic Cells & Organelles | protocol | compartment-model specification | in-progress? | `viva-autopoiesis`; no CP6-named artifact | User to confirm |
+| CP6 | Synthetic Cells & Organelles | protocol | compartment-model specification | not-started | code/issue/PR search across the three orgs for CP6, synthetic cell, protocell, vesicle, JCVI, syn3A finds nothing; `viva-autopoiesis` is in-spirit but names no external collaborator | Confirm from non-GitHub records (email, subaward, progress report); GitHub cannot rule out an unrecorded collaboration |
 | CP7 | SASCO (stress-adapted cancer organelles) | protocol for reaction-diffusion + regulation | condensate reaction methods | ? | none found | User to fill |
 | CP9 | Digital twins for synthetic biology | protocol + ensemble/inference processes | inference process interface | in-progress | `viva-uq` · `viva-torch` surrogates · `viva-ketchup` parameter estimation · `FBAKineticsPrototype` · `pbest` parameter scans | Name the "ensemble of simulations" process |
 | CP10 | Cell-free expression / NIST | interface, tools, models | experimental protocols | ? | none found | User to fill |
