@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class PackageType(str, Enum):
+class PackageType(StrEnum):
     CONDA = "conda"
     PYPI = "pypi"
 

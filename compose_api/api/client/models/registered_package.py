@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from collections.abc import Mapping
-from typing import Any, TypeVar, Optional, BinaryIO, TextIO, TYPE_CHECKING, Generator
+from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
@@ -24,20 +26,20 @@ class RegisteredPackage:
         database_id (int):
         package_type (PackageType):
         name (str):
-        processes (list['BiGraphProcess']):
-        steps (list['BiGraphStep']):
+        processes (list[BiGraphProcess]):
+        steps (list[BiGraphStep]):
     """
 
     database_id: int
     package_type: PackageType
     name: str
-    processes: list["BiGraphProcess"]
-    steps: list["BiGraphStep"]
+    processes: list[BiGraphProcess]
+    steps: list[BiGraphStep]
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.bi_graph_process import BiGraphProcess
-        from ..models.bi_graph_step import BiGraphStep
+        from ..models.bi_graph_process import BiGraphProcess  # noqa: PLC0415
+        from ..models.bi_graph_step import BiGraphStep  # noqa: PLC0415
 
         database_id = self.database_id
 
@@ -69,8 +71,8 @@ class RegisteredPackage:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.bi_graph_process import BiGraphProcess
-        from ..models.bi_graph_step import BiGraphStep
+        from ..models.bi_graph_process import BiGraphProcess  # noqa: PLC0415
+        from ..models.bi_graph_step import BiGraphStep  # noqa: PLC0415
 
         d = dict(src_dict)
         database_id = d.pop("database_id")

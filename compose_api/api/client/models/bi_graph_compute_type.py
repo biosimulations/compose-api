@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class BiGraphComputeType(str, Enum):
+class BiGraphComputeType(StrEnum):
     PROCESS = "process"
     STEP = "step"
 

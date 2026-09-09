@@ -1,5 +1,6 @@
 from http import HTTPStatus
-from typing import Any, Optional, Union, cast
+from typing import Any, cast
+from urllib.parse import quote
 
 import httpx
 
@@ -20,13 +21,12 @@ def _get_kwargs() -> dict[str, Any]:
     return _kwargs
 
 
-def _parse_response(
-    *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Optional[RegisteredSimulators]:
+def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> RegisteredSimulators | None:
     if response.status_code == 200:
         response_200 = RegisteredSimulators.from_dict(response.json())
 
         return response_200
+
     if client.raise_on_unexpected_status:
         raise errors.UnexpectedStatus(response.status_code, response.content)
     else:
@@ -34,7 +34,7 @@ def _parse_response(
 
 
 def _build_response(
-    *, client: Union[AuthenticatedClient, Client], response: httpx.Response
+    *, client: AuthenticatedClient | Client, response: httpx.Response
 ) -> Response[RegisteredSimulators]:
     return Response(
         status_code=HTTPStatus(response.status_code),
@@ -46,7 +46,7 @@ def _build_response(
 
 def sync_detailed(
     *,
-    client: Union[AuthenticatedClient, Client],
+    client: AuthenticatedClient | Client,
 ) -> Response[RegisteredSimulators]:
     """Get the list of simulators
 
@@ -69,8 +69,8 @@ def sync_detailed(
 
 def sync(
     *,
-    client: Union[AuthenticatedClient, Client],
-) -> Optional[RegisteredSimulators]:
+    client: AuthenticatedClient | Client,
+) -> RegisteredSimulators | None:
     """Get the list of simulators
 
     Raises:
@@ -88,7 +88,7 @@ def sync(
 
 async def asyncio_detailed(
     *,
-    client: Union[AuthenticatedClient, Client],
+    client: AuthenticatedClient | Client,
 ) -> Response[RegisteredSimulators]:
     """Get the list of simulators
 
@@ -109,8 +109,8 @@ async def asyncio_detailed(
 
 async def asyncio(
     *,
-    client: Union[AuthenticatedClient, Client],
-) -> Optional[RegisteredSimulators]:
+    client: AuthenticatedClient | Client,
+) -> RegisteredSimulators | None:
     """Get the list of simulators
 
     Raises:
