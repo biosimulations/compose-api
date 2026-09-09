@@ -167,8 +167,17 @@ def check_anchors(doc: Path) -> list[str]:
 def normalize(s: str) -> str:
     s = unicodedata.normalize("NFKC", s)
     s = s.replace("\\", "")
-    s = s.replace("’", "'").replace("‘", "'").replace("“", '"').replace("”", '"')
-    s = s.replace("–", "-").replace("—", "-").replace("''", '"')
+    # Curly quotes and dashes, written as escapes so the linter does not flag ambiguous characters.
+    for src, dst in (
+        ("\u2019", "'"),  # right single quotation mark
+        ("\u2018", "'"),  # left single quotation mark
+        ("\u201c", '"'),  # left double quotation mark
+        ("\u201d", '"'),  # right double quotation mark
+        ("\u2013", "-"),  # en dash
+        ("\u2014", "-"),  # em dash
+        ("''", '"'),
+    ):
+        s = s.replace(src, dst)
     s = re.sub(r"[*_]+", "", s)
     s = re.sub(r"\s+", " ", s)
     return s.strip().lower()
