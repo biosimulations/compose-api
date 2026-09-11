@@ -590,21 +590,57 @@ built for prose semantics and monotone narrowing, not for identifiers.
 **Grant said.** "Adapter processes that can translate between data types will play an important role"; "an
 adapter registry (like KiSAO but for converting state types)"; a checker that "will return a list of suggestions".
 
-**Code does.** Adapters exist as ordinary processes written by hand and as type-level `Translator`s (§2.7);
-there is no registry category for them, though `viva-catalog` indexes processes by tag. Four partial checkers
-exist and none reads a document and returns suggestions (§2.7).
+**Code does.** Adapters exist as ordinary processes written by hand and as type-level `Translator`s (§2.7). Four
+partial checkers exist and none reads a document and returns suggestions (§2.7).
+
+**On registries, surveyed 2026-09-11.** Five things in this ecosystem are called a registry. None can answer the
+question an adapter registry has to answer, which is "what converts type A to type B", because **none of them
+stores a port type**.
+
+| Registry | Where | What it holds | Live contents |
+|---|---|---|---|
+| Package and compute catalog | this repo, Postgres, `/core/*` | simulator versions, processes, steps, an approval allow-list | 37 simulator versions, 1 process, 3 steps |
+| Dependency list | `biosimulations/registry`, one `registry.json` on branch `dev` | library name, URL, package registry, version | 4 libraries |
+| Ecosystem ledger | `vivarium-collective/viva-catalog`, rebuilt nightly | repos, plus artifacts indexed by name | 49 repos; 166 processes, 163 steps, 187 composites |
+| Link registry | `bigraph-schema`, built at import from installed distributions | class name to implementation, backing `local:` addresses | per-process, not shared |
+| KiSAO | external ontology | algorithm identifiers | nothing in this stack reads it |
+
+The catalog in this repository is the closest existing fit, and it is half-built in a specific way. Its read path is
+live and serving production data; its write path is commented out (`compose_api/api/routers/compute.py:75`), so the
+only code that inserts a package is the test fixtures. Production holds 37 simulator versions, every one with zero
+packages attached, and four compute entries from a single library. `introspect_package`
+(`compose_api/api/introspect_package.py:12`) returns outlines with empty compute lists; the real path, fetching a
+`pb_outline.json` from the package's repository, handles only GitHub URLs and the live-from-PyPI variant is
+commented out.
+
+Its data model does reserve room for ports: `BiGraphComputeOutline` carries `inputs` and `outputs`
+(`compose_api/simulation/models.py:87`). They are typed `str` and hold *names*, not types. The one populated example
+in production is the semicolon-delimited `num_data_points;starting_time;end_time`; the rest are empty. It also has
+an `allow_list` table (`compose_api/db/tables/package_tables.py:132`) recording approved package name, type, and
+version, which is a trust mechanism of the same shape as the `git:` transport's allow list (D-H).
+
+The ecosystem ledger carries a `tags` field on every entry, which is where an adapter category would naturally
+live. It is empty for all 49 repositories, and each indexed artifact carries only a name and a description.
 
 **Why they differ.** The record shows the checker and registry deferred behind the engine and the wrappers; the
-`Translator` design explicitly contrasts itself with silent coercion but does not mention a registry.
+`Translator` design explicitly contrasts itself with silent coercion but does not mention a registry. The two
+registries that exist were each built for a different purpose, one to resolve container dependencies and one to
+let a workbench browse the ecosystem, and neither was asked to describe an interface.
 
 **Options.**
 1. Adapters and the checker are tooling, outside the protocol. Costs: the protocol cannot promise automatic
    composition (grant reporting); nothing else.
 2. The protocol defines an *adapter* as a process whose contract declares a `from` and `to` type, and a registry as
-   any index that can be queried by that pair. Costs: a contract field (engine); tagging existing adapters
-   (wrapper authors); `viva-catalog` gains the query (tooling).
-3. As 2, plus a specified checker output format (a list of findings with a suggested adapter per unit mismatch).
-   Costs: the checker itself, and its integration with the LSP and portability lints (tooling).
+   any index queryable by that pair, leaving the choice of index open. Costs: a contract field (engine); tagging
+   existing adapters (wrapper authors); one index gains the query (tooling).
+3. As 2, hosted in this repository's catalog: finish the write path, make `inputs`/`outputs` carry rendered types
+   rather than names, and query by type pair. Costs: schema migration and the introspection path (this repo);
+   wrappers publish an outline (wrapper authors); gains the existing allow-list for trust.
+4. As 2, hosted in the ecosystem ledger: populate `tags`, extend each artifact entry with its rendered port types,
+   and query nightly-built data. Costs: index builder and entry shape (tooling, and a `vivarium-collective`
+   repository, so subject to the owner's agreement); no allow-list, and freshness is nightly.
+5. As 2 or 3, plus a specified checker output format (a list of findings with a suggested adapter per mismatch).
+   Costs: the checker itself, and its integration with the language server and portability lints (tooling).
 
 **Your call.**
 
