@@ -179,7 +179,61 @@ This matters more than it looks. Only nine tests execute in CI (F1), so a single
 false-failure rate on the entire signal. Combined with the absence of branch protection (F3), the practical effect
 is to train people to merge past red checks, which is precisely the habit that makes a suite worthless.
 
-### F8. Smaller things worth fixing while nearby
+### F8. The dependency-injection pattern has a hole at SSH
+
+`compose_api/dependencies.py` provides `get`/`set` pairs for five services: the postgres engine, database service,
+simulation service, job monitor, and data service. Fixtures save, swap, yield, and restore each one. That part
+works and is the strongest thing in the suite (§1.3).
+
+**SSH is not one of them.** There is no `set_ssh_service` anywhere in the codebase. What exists is a factory in
+`compose_api/common/ssh/ssh_service.py:111` that rebuilds from settings on every call:
+
+```python
+def get_ssh_service() -> SSHService:
+    settings = get_settings()
+    return SSHService(...)
+```
+
+Three production call sites use it: `simulation_service.py:61`, `simulation_service.py:216`, and
+`data_service.py:28`.
+
+The consequence is that the `ssh_service` fixture yields an object **only the test code ever sees**. It is passed
+directly to `SlurmService` in the test body. As soon as the test exercises `SimulationServiceHpc`, that code calls
+`get_ssh_service()` and builds a fresh connection from settings, ignoring the fixture entirely.
+
+The evidence that someone hit this and worked around it is in the fixture itself: `tests/fixtures/slurm_fixtures.py:37`
+contains a commented-out `set_ssh_service(saved_ssh_service)` calling a function that does not exist.
+
+This is why A6 below routes through settings rather than through injection. For the SLURM path, settings are not
+merely convenient; they are the only lever.
+
+### F9. Settings have no override seam, and the obvious one does not compose
+
+Services sit behind a mutable module-level singleton with a setter. Settings sit behind `@lru_cache`
+(`compose_api/config.py:90`), which has a getter and no setter. Same intent, only one has a seam.
+
+The obvious fix — save the whole `Settings`, `model_copy` it with overrides, restore on teardown — is wrong in a
+way worth writing down, because it *appears* to work. Under pytest's LIFO teardown, two fixtures overriding
+disjoint fields do compose. But they compose **by accident of ordering, not because the fields are disjoint**, and
+the same mechanism fails three ways:
+
+1. Two fixtures overriding the *same* field resolve silently to whichever ran second. No conflict is reported.
+2. Any object constructed during the first fixture's lifetime holds that snapshot, so a later override never
+   reaches it.
+3. A fixture cannot be read locally: its correctness depends on what else is active and in what order.
+
+All three have one cause: **the unit of override is the whole object, so the system cannot tell disjoint overrides
+from conflicting ones.** The five service singletons do not have this problem because each concern owns its own
+slot; disjointness is structural. Settings is the one place that property was lost.
+
+**What is not a problem.** Only two settings reads in production code happen at module scope, and both are
+`assets_dir` (`data_service.py:17`, `api/main.py:50`). Every read on the SLURM path is inside a function —
+`hpc_utils._namespace_path()`, `get_internal_experiment_dir()`, `get_ssh_service()`,
+`SimulationServiceHpc._get_services()`, `job_monitor.py:39` — so an override genuinely reaches the code under
+test. `CLAUDE.md`'s warning that settings changes require a process restart is true only of those two constants and
+is overly broad as written.
+
+### F10. Smaller things worth fixing while nearby
 
 - `tests/simulation/dont_test_sedml.py` (3 tests) and 12 commented-out tests in pbest are dead weight. Either
   restore them or delete them, but leaving them as text misleads.
@@ -356,7 +410,7 @@ Size **S–M**: the fixture and the `port` parameter are small; the judgement ca
    That is the right shape for any wire format we settle on in the protocol work, including the OpenAPI contract
    this repository publishes to pbest. Size M.
 
-### E. Tidy (addresses F7, F8)
+### E. Tidy (addresses F7, F10)
 
 Fix the `test_sync_producer_with_async_subscriber` race (wait on the subscriber rather than assuming ordering);
 restore or delete the dead tests; add a `pull_request` trigger to pbest; upload or stop measuring pbest's coverage.
@@ -364,6 +418,118 @@ Size S in total. The flake is worth doing first and on its own: while only nine 
 test is an eleven percent false-failure rate on the whole signal.
 
 ---
+
+### F. One test body, two backends (addresses F1, F8, F9)
+
+The companion to A4. A4 answers "can we run SLURM in CI"; this answers "how do the same tests run against both the
+container and the real cluster without the two drifting apart". It has three parts, and the first two are
+prerequisites rather than choices.
+
+#### F.a Give settings a composable override seam (addresses F9)
+
+Replace whole-object replacement with a stack of **partial layers removed by identity**, so a fixture owns exactly
+its own fields and teardown order stops mattering:
+
+```python
+_layers: list[dict[str, Any]] = []
+
+def get_settings() -> Settings:
+    if not _layers:
+        return _load_settings()
+    merged: dict[str, Any] = {}
+    for layer in _layers:
+        merged.update(layer)
+    return _load_settings().model_copy(update=merged)
+
+@contextmanager
+def override_settings(**fields: Any):
+    clashes = {k for layer in _layers for k in layer} & fields.keys()
+    if clashes:
+        raise RuntimeError(f"settings already overridden by an active fixture: {sorted(clashes)}")
+    layer = dict(fields)
+    _layers.append(layer)
+    try:
+        yield
+    finally:
+        _layers.remove(layer)      # by identity, not pop
+```
+
+`remove` by identity is the whole trick: a fixture gives back exactly its own fields regardless of what else is
+active. The clash check makes contention a setup-time error instead of a silent last-writer-wins, which is the
+failure mode F9 describes. Strict is the right default in tests.
+
+Two things to note in the accessor's docstring: `get_settings()` now returns a fresh copy whenever layers are
+active, so anything holding a captured `Settings` keeps the old view (only the two `assets_dir` constants do); and
+the cost is one `model_copy` per call, memoizable on a layer-version counter if it ever matters.
+
+Size S. This is the piece that makes everything else possible.
+
+#### F.b Close the SSH injection hole (addresses F8)
+
+Either add `set_ssh_service` to `dependencies.py` so SSH joins the other five services, or accept that settings are
+the injection point and delete the misleading commented-out line at `tests/fixtures/slurm_fixtures.py:37`. The
+second is cheaper and, given F.a, sufficient. The first is more consistent with the rest of the file. Size S
+either way; the choice is about consistency, not capability.
+
+#### F.c Parameterize the backend, never the test
+
+One test body. A fixture yields a backend; the backend is a parameter.
+
+```python
+def pytest_addoption(parser):
+    parser.addoption("--slurm-backend", action="append", default=[],
+                     choices=["container", "cluster"])
+
+def pytest_generate_tests(metafunc):
+    if "slurm_backend" in metafunc.fixturenames:
+        chosen = metafunc.config.getoption("--slurm-backend") or _default(metafunc.config)
+        metafunc.parametrize("slurm_backend", chosen, indirect=True, scope="session")
+```
+
+Default: `container` when Docker is present, nothing otherwise. CI gets the container without asking. A developer
+on VPN runs `--slurm-backend cluster`, or passes both to run every test twice, once per backend.
+
+**Mark by what a test needs, not where it runs.** This is the part most people get wrong: a marker called
+`integration` or `e2e` answers "where does this run", which forecloses parameterization because the marker has
+already chosen the environment.
+
+| Marker | Meaning | Where it runs |
+|---|---|---|
+| none | no scheduler needed | everywhere |
+| `@pytest.mark.slurm` | needs *a* SLURM | parameterized over the chosen backends |
+| `@pytest.mark.cluster_only` | needs *the* production cluster | never in CI, never on the container |
+
+**Differences become data, not branches.** `slurm_template_hello_TEMPLATE` currently reads
+`settings.slurm_partition` and `settings.slurm_qos` directly, which is the drift surface: the container has
+partition `cpu` and no QoS. One dict of fields is the single source of truth — the settings layer applies it to the
+production code path, and a small descriptor exposes the same values to the test body. Maintaining those as two
+separate literals would recreate the drift problem one level down.
+
+A branch on `if backend.kind == "container"` inside a test body is the thing to forbid. That is where two
+implementations quietly grow.
+
+**Capabilities, not forked tests.** When something genuinely only works on one side:
+
+```python
+if not slurm_backend.can_build_singularity:
+    pytest.skip("backend cannot build singularity images")
+```
+
+The test still exists for the other backend, the gap is greppable, and nobody writes a parallel copy.
+
+**A conformance test is the drift alarm.** One test that runs on *every* backend and asserts the backend itself
+behaves as our parsers assume: `sbatch --parsable` returns a bare integer, `squeue` emits five pipe-delimited
+fields, `sacct` emits nine. Cheap, and it fails loudly when the container image and the cluster diverge — which is
+otherwise exactly the kind of difference nobody notices. If both backends are available, a stronger version submits
+the same job to each and compares the parsed `SlurmJob` structurally, ignoring ids and timestamps.
+
+**What genuinely cannot be shared**, and should stay a short list: that the production partition and QoS exist and
+accept work, that the real storage path under the namespace is writable, that a real Singularity build succeeds.
+Those are `cluster_only` and should be smoke tests proving the environment, not tests proving logic. All the logic
+lives in the shared bodies.
+
+Size M for the fixture and the marker migration, replacing the eighteen identical `skipif` decorators. The only
+production changes are F.a, the `port` parameter from A4, and optionally F.b.
 
 ## Practice worth copying
 
