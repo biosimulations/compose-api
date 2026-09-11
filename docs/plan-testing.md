@@ -195,63 +195,122 @@ Sized as S (under a day), M (a few days), L (a week or more). Nothing here is ch
 
 #### A4 in detail: measured, not estimated
 
-Everything in this subsection was run, not reasoned about. The image is `xenonmiddleware/slurm:latest`, started as
-a plain container with port 22 published, a generated public key injected into the `xenon` user's
-`authorized_keys`, and then driven through **this repository's real `SSHService` code path and `SlurmJob`
-parsers** — not through a separate SSH client written for the test.
+Two candidate images were run on 2026-09-11 and each driven through **this repository's real `SSHService` code
+path and `SlurmJob` parsers** — not through a separate SSH client written for the test. Both work. The second is
+clearly better.
 
-Result, verbatim:
+##### The comparison
+
+| | `xenonmiddleware/slurm:latest` | `giovtorres/slurm-docker-cluster` |
+|---|---|---|
+| SLURM version | 17.02.6 (March 2020) | **26.05.2** (August 2026) |
+| Architectures | amd64 only | **amd64 and arm64** (native on an Apple-silicon laptop) |
+| Shape | one container | compose cluster: mysql, slurmdbd, slurmctld, slurmrestd, 2 workers |
+| SSH | must be added by hand | **built in, key-only** |
+| `sacct` (needs slurmdbd) | works | works |
+| Singularity / Apptainer | absent | **both present** at `/usr/bin/` |
+| Startup | ~1s | ~19s, including healthchecks |
+| Teardown | instant | ~1s |
+| Disk | 648 MB | 2.33 GB + 485 MB MariaDB |
+| Maintained | last pushed 2020 | last pushed 2026-08-09 |
+
+**Recommendation of record: `giovtorres/slurm-docker-cluster`.** The nine-year version gap is the deciding factor:
+pinning our parsers against SLURM 17 output would encode a format the real cluster no longer produces.
+
+##### What was proved, on the modern cluster
 
 ```
-asyncssh key auth: OK
-sbatch --parsable -> '3'  (int-parseable: True)
-squeue raw: '3|wrap|(null)|xenon|PENDING'
-  parsed squeue -> job_id=3 name='wrap' user='xenon' state='PENDING'
-sacct raw: '2|wrap|(null)|xenon|COMPLETED|2026-09-11T18:11:59|2026-09-11T18:12:01|00:00:02|0:0|'
-  parsed sacct  -> job_id=2 state='COMPLETED' start='2026-09-11T18:11:59' end='2026-09-11T18:12:01'
-                   elapsed='00:00:02' exit='0:0'
+compose up + healthchecks: OK  (wait=True, no sleep)
+exec_in_container -> exit=0  stdout='cpu* up 2 idle\ngpu up 0 n/a'  (types: str)
+get_service_port('slurmctld', 22) -> 56812
+asyncssh key auth (root@slurmctld): OK
+sbatch --parsable -> '1'  (int-parseable: True)
+squeue raw: '1|wrap|root|root|PENDING'
+  parsed squeue -> job_id=1 name='wrap' account='root' state='PENDING'
+sacct raw:  '1|wrap|root|root|COMPLETED|2026-09-11T18:24:35|2026-09-11T18:24:37|00:00:02|0:0|'
+  parsed sacct  -> job_id=1 state='COMPLETED' elapsed='00:00:02' exit='0:0'
 scp_upload: OK
-sbatch of uploaded file -> 4
+sbatch of uploaded file -> 2
 ```
 
-Those are the exact commands `SlurmService` issues: `squeue -u $USER --noheader --format="%i|%j|%a|%u|%T"` and
-`sacct -u $USER --parsable --allocations --delimiter="|" --noheader --format="jobid,jobname,account,user,state,
-start,end,elapsed,exitcode"`. The output parsed cleanly through `SlurmJob.from_squeue_formatted_output` and
-`from_sacct_formatted_output`.
+Those are the exact commands `SlurmService` issues, parsed by `SlurmJob.from_squeue_formatted_output` and
+`from_sacct_formatted_output`. Note `account='root'` rather than the ancient image's `(null)` — closer to real
+cluster output.
 
-**`sacct` was the open question and it works.** `sacct` needs the accounting daemon, which many minimal SLURM
-images do not run; this one does (its startup log says "making accounting readable to users"). Without it, only
-`squeue` would be exercisable and the `sacct` reconciliation path in `JobMonitor` would stay dark.
+##### SSH is built in, and is the right shape
 
-**What it covers.** `sbatch --parsable`, both status-parsing paths, `scp_upload`, real job state transitions
-(`PENDING` → `COMPLETED`), and the sbatch heredocs in `simulation_service.py` actually executing. That is
-precisely the code the HPC gate hides today: `slurm_service` 18%, `handlers` 19%, `job_monitor` 20%,
-`ssh_service` 23%.
+This is the single most important correction to the obvious assumption (and to at least one AI-generated
+walkthrough of this image, which claims the opposite and proposes installing `openssh-server` at container start).
+The Dockerfile installs `openssh-server` and configures it **key-only** (`PasswordAuthentication no`,
+`PermitRootLogin prohibit-password`); `docker-entrypoint.sh` copies a host-mounted `authorized_keys` into
+`/root/.ssh/` and starts `sshd`; the compose file already publishes container port 22. Three environment variables
+turn it on:
 
-**What it does not cover.** Neither `singularity` nor `apptainer` is present in the image, so the container-build
-job path (`singularity build --fakeroot`) stays uncovered by this route. Partition and QoS names are the
-container's (`mypartition`, `otherpartition`), not the cluster's.
+```
+SSH_ENABLE=true
+SSH_AUTHORIZED_KEYS=/host/path/to/authorized_keys   # bind-mounted read-only
+SSH_PORT=0                                           # 0 = random host port; default 3022
+```
 
-**One prerequisite code change.** `SSHService.__init__` accepts hostname, username, key path, and known hosts —
-**there is no port parameter**, and none of its three `asyncssh.connect` call sites passes one, so it can only
-reach port 22. A testcontainer publishes a random high port. Adding `port: int = 22` and threading it through
-those three calls is the whole change, and it is defensible on its own merits.
+Key-only root login to a head node is exactly our production shape, so the fixture exercises the real
+authentication path rather than a password shortcut.
 
-**Two corrections to the obvious first draft of such a fixture.** Use `asyncssh` with an injected key rather than
-`paramiko` with the image's default password: the point is to exercise `SSHService`, and a `paramiko` client would
-test `paramiko`. And poll `sinfo` until it answers rather than sleeping a fixed interval; the image carries a
-Docker healthcheck and cold start measured **one second** under amd64 emulation on an arm64 laptop.
+##### Using it from testcontainers
 
-**The real caveat: the image is old.** `xenonmiddleware/slurm:latest` is **SLURM 17.02.6, published March 2020,
-amd64 only**. Pinning our parsers against a six-year-old output format is a genuine cost, mitigated by the fact
-that these particular format strings have been stable across those releases. Before adopting, check what version
-the cluster runs. `giovtorres/slurm-docker-cluster` is actively maintained (last update August 2026) and is the
-better-known option, at the cost of being a multi-container compose cluster rather than one image.
+`testcontainers.compose.DockerCompose` drives it. The signatures in the installed version (4.x) are worth writing
+down, because they differ from what is commonly assumed:
 
-**Suggested shape if this is chosen.** A session-scoped fixture that starts the container, injects a generated
-key, waits on `sinfo`, and yields a real `SSHService` pointed at the mapped port. The existing `skipif` gate then
-changes meaning: instead of "skip unless a cluster credential exists", it becomes "use the real cluster when a
-credential exists, otherwise use the container". Same tests, two backends.
+```python
+DockerCompose(context, compose_file_name=None, pull=False, build=False, wait=True, ...)
+exec_in_container(command, service_name=None) -> tuple[str, str, int]   # (stdout, stderr, exit_code), all str
+get_service_port(service_name=None, port=None) -> int | None
+```
+
+The first argument is `context`, positional. `exec_in_container` returns the exit code **last**, and returns `str`
+rather than `bytes`, so decoding is unnecessary. `wait=True` is already the default and every service in the
+compose file has a healthcheck, so a fixed sleep is both unnecessary and less reliable.
+
+##### Covers and does not cover
+
+**Covers.** `sbatch --parsable`, both status-parsing paths, `scp_upload`, real state transitions, and the sbatch
+heredocs in `simulation_service.py` actually executing. That is precisely the code the HPC gate hides today:
+`slurm_service` 18%, `handlers` 19%, `job_monitor` 20%, `ssh_service` 23%.
+
+**Possibly also covers the container-build path.** Unlike the older image, Singularity and Apptainer are both
+installed, so the `BUILD_CONTAINER` job type may be exercisable too. Not yet proved: `singularity build
+--fakeroot` typically wants privileges a default container does not have. Worth one experiment before counting on
+it.
+
+**Does not cover.** The cluster's real partition and QoS names (`cpu`/`gpu` here versus the production names), the
+real filesystem layout, and anything about the production scheduler's configuration.
+
+##### One prerequisite code change
+
+`SSHService.__init__` accepts hostname, username, key path, and known hosts — **there is no port parameter**, and
+none of its three `asyncssh.connect` call sites passes one, so it can only reach port 22. A container publishes a
+random high port. Adding `port: int = 22` and threading it through those three calls is the whole change, and it
+is defensible on its own merits.
+
+##### Two practical cautions
+
+**Pull the prebuilt image and retag it.** The compose file references the local tag
+`slurm-docker-cluster:${SLURM_VERSION}` behind a `build:` block that compiles SLURM from source with `rpmbuild`.
+Left alone the first run is a long build. `docker pull giovtorres/slurm-docker-cluster:26.05.2` followed by
+`docker tag giovtorres/slurm-docker-cluster:26.05.2 slurm-docker-cluster:26.05.2` skips it.
+
+**Seven services declare a fixed `container_name`.** Two runs on one host collide. One job per CI runner is fine;
+local parallel runs need care, or an override removing the fixed names.
+
+##### Suggested shape if this is chosen
+
+A session-scoped fixture that brings the cluster up with `DockerCompose(..., wait=True)`, writes a generated public
+key to the `authorized_keys` path the entrypoint expects, reads the mapped port with `get_service_port`, and yields
+a real `SSHService` pointed at it. The existing `skipif` gate then changes meaning: instead of "skip unless a
+cluster credential exists", it becomes "use the real cluster when a credential exists, otherwise use the
+container". Same tests, two backends.
+
+Size **S–M**: the fixture and the `port` parameter are small; the judgement call is whether a ~2.8 GB pull and a
+20-second startup belong in the per-pull-request job or in a separate one.
 
 ### B. Make coverage mean something (addresses F2)
 
