@@ -11,7 +11,7 @@ from compose_api.config import get_settings
 @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
 @pytest.mark.asyncio
 async def test_ssh_command(ssh_service: SSHService) -> None:
-    return_code, stdout, stderr = await ssh_service.run_command("hostname")
+    return_code, _stdout, _stderr = await ssh_service.run_command("hostname")
     assert return_code == 0
     # assert stdout.strip("\n") == ssh_service.hostname  # hostname may be different if behind a proxy server
 
@@ -33,5 +33,5 @@ async def test_scp_upload_download(ssh_service: SSHService) -> None:
             f2.seek(0)
             assert f2.read() == "hello world"
 
-            return_code, stdout, stderr = await ssh_service.run_command(f"rm {remote_path}")
+            return_code, _stdout, _stderr = await ssh_service.run_command(f"rm {remote_path}")
             assert return_code == 0

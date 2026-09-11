@@ -1,11 +1,11 @@
 import datetime
 import logging
 from abc import ABC, abstractmethod
+from typing import override
 
 from sqlalchemy import Result, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import InstrumentedAttribute
-from typing_extensions import override
 
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.db.tables.hpc_tables import (

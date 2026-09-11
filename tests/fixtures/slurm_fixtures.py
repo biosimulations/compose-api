@@ -94,7 +94,7 @@ def slurm_template_hello_10s(slurm_template_hello_TEMPLATE: str) -> str:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def data_service() -> AsyncGenerator[DataService, None]:
+async def data_service() -> AsyncGenerator[DataService]:
     old_data_service = get_data_service()
     new_data_service = TestDataService()
 

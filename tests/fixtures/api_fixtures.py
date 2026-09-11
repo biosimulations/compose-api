@@ -20,7 +20,7 @@ async def fastapi_app() -> FastAPI:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def in_memory_api_client() -> AsyncGenerator[Client, None]:
+async def in_memory_api_client() -> AsyncGenerator[Client]:
     transport = ASGITransport(app=app)
     async_client = httpx.AsyncClient(transport=transport, base_url="http://testserver")
     client = Client(base_url="http://testserver", raise_on_unexpected_status=True)

@@ -1,10 +1,10 @@
 import logging
 from abc import ABC, abstractmethod
+from typing import override
 
 from pbest.utils.input_types import ContainerizationFileRepr
 from sqlalchemy import Result, Row, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from typing_extensions import override
 
 from compose_api.db.tables.hpc_tables import ORMHpcRun
 from compose_api.db.tables.simulator_tables import (

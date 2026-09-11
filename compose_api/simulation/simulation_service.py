@@ -6,8 +6,7 @@ import tempfile
 from abc import ABC, abstractmethod
 from pathlib import Path
 from textwrap import dedent
-
-from typing_extensions import override
+from typing import override
 
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
@@ -144,7 +143,7 @@ class SimulationServiceHpc(SimulationService):
 
     @override
     async def build_container(self, simulator_version: SimulatorVersion, random_str: str) -> HpcRun:
-        slurm_service, ssh_service, settings = self._get_services()
+        slurm_service, _ssh_service, settings = self._get_services()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             local_singularity_file = Path(tmpdir + "/singularity.def")
