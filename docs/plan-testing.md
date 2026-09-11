@@ -218,22 +218,42 @@ paper, has no suite at all; its `tests.py` is a demo script with no assertions a
 out of its own entry point. `pbg-vcell-fvsolver` has nine genuinely good numerical tests, including mass
 conservation to 2%, and no CI to run them.
 
-### F7. One of the nine tests that run in CI is flaky
+### F7. Two of the nine tests that run in CI are unreliable, for different reasons
 
-`tests/common/test_nats.py::test_sync_producer_with_async_subscriber` failed on pull request #161, a docs-only
-change, with:
+Both were observed on **docs-only** pull requests during a single afternoon, which is the point: neither could
+possibly have been caused by the change under review.
+
+**A race, in `tests/common/test_nats.py::test_sync_producer_with_async_subscriber`** (PR #161):
 
 ```
 AssertionError: assert b'hello world 5' == b'hello world 9'
 ```
 
-It is a race between the synchronous producer and the asynchronous subscriber, not a regression. The proof is that
-the duplicated CI (F4) ran the same commit twice on the same Python: one leg passed and the other failed. It also
-passes locally three times out of three.
+A race between the synchronous producer and the asynchronous subscriber. The proof that it is not a regression is
+that the duplicated CI (F4) ran the same commit twice on the same Python and one leg passed while the other failed.
+It also passes locally three times out of three.
 
-This matters more than it looks. Only nine tests execute in CI (F1), so a single flaky test is an eleven percent
-false-failure rate on the entire signal. Combined with the absence of branch protection (F3), the practical effect
-is to train people to merge past red checks, which is precisely the habit that makes a suite worthless.
+**An external dependency, in `tests/api/test_hpc_run_serialization.py`** (PR #164):
+
+```
+docker.errors.APIError: 500 Server Error ... fromImage=postgres
+  Head "https://registry-1.docker.io/v2/library/postgres/manifests/15": ...
+  read: connection reset by peer
+```
+
+Docker Hub reset the connection while the Postgres testcontainer was being pulled. A rerun passed. Nothing in the
+repository is at fault, and nothing in the repository defends against it either: there is no retry, no registry
+mirror, and no pre-pull step.
+
+**Why this matters more than the raw count suggests.** Only nine tests execute in CI (F1), so two unreliable ones
+are roughly a **22% false-failure rate on the entire signal**. Combined with the absence of branch protection (F3),
+the practical effect is to train people to merge past red checks — precisely the habit that makes a suite
+worthless, and the habit that then hides a real failure when one arrives.
+
+**The second one connects to F10.** `platform`'s CI is coupled to third-party uptime through live API calls; ours
+is coupled to it through container image pulls. Same exposure, different door, and neither repo defends against it.
+Any fix for F1 that adds more containers — the SLURM cluster in A4 pulls about 2.8 GB — widens this surface rather
+than narrowing it, so a registry mirror or a pull-retry belongs in that work rather than after it.
 
 ### F8. The SSH dependency is located, not injected
 
@@ -537,10 +557,11 @@ Size **S–M**: the fixture and the `port` parameter are small; the judgement ca
 
 State in each repo's `pyproject.toml` which pytest config is live where both exist (F11) — a one-line comment,
 since the shadowing is invisible and one of the dead blocks would collect zero tests if the file shadowing it were
-ever removed as redundant. Then: fix the `test_sync_producer_with_async_subscriber` race (wait on the subscriber rather than assuming ordering);
-restore or delete the dead tests; add a `pull_request` trigger to pbest; upload or stop measuring pbest's coverage.
-Size S in total. The flake is worth doing first and on its own: while only nine tests run in CI, one unreliable
-test is an eleven percent false-failure rate on the whole signal.
+ever removed as redundant. Then: fix the `test_sync_producer_with_async_subscriber` race (wait on the subscriber rather than assuming
+ordering); decide how image pulls are defended, whether by a retry, a registry mirror, or an explicitly accepted
+risk; restore or delete the dead tests; add a `pull_request` trigger to pbest; upload or stop measuring pbest's
+coverage. Size S in total. The two unreliable tests are worth doing first and on their own: while only nine tests
+run in CI, two of them flaking is roughly a 22% false-failure rate on the whole signal.
 
 ---
 
