@@ -179,7 +179,78 @@ This matters more than it looks. Only nine tests execute in CI (F1), so a single
 false-failure rate on the entire signal. Combined with the absence of branch protection (F3), the practical effect
 is to train people to merge past red checks, which is precisely the habit that makes a suite worthless.
 
-### F8. Smaller things worth fixing while nearby
+### F8. The SSH dependency is located, not injected
+
+**First, what is not wrong.** `get_ssh_service()` (`compose_api/common/ssh/ssh_service.py:111`) returns a fresh
+`SSHService` on every call, and that is deliberate and correct. `SSHService` is a **stateless value object**: it
+holds four connection parameters and no connection. Each of its methods opens its own connection and closes it, and
+`close()` is a documented no-op — *"nothing to do here because we don't yet keep the connection around."*
+
+So there is no session lifecycle to own, construction is free, and a singleton would buy nothing. Per-call
+construction is also safer than a captured instance, because it picks up configuration changes rather than pinning
+them. There is a further reason: a long-lived SSH connection to an HPC login node is dropped by idle timeouts, so a
+persistent session would need liveness checks, reconnect, and retry. Constructing per operation sidesteps all of
+that. The word "yet" in that comment shows pooling is the anticipated future, and the factory shape is exactly what
+lets it be added later behind the same interface.
+
+Contrast the five services that *are* injected in `dependencies.py`: a database engine with a connection pool, a job
+monitor with a background polling task, a database service with sessions. All stateful, all needing singleton
+lifecycle. SSH is not like them, and treating it the same would be the mistake.
+
+**What is wrong is narrower: the dependency is located rather than declared.** `SimulationServiceHpc` has no
+`__init__` at all. A static method reaches into the global factory at the point of use:
+
+```python
+@staticmethod
+def _get_services() -> tuple[SlurmService, SSHService, Settings]:
+    settings = get_settings()
+    ssh_service = get_ssh_service()
+    return SlurmService(ssh_service=ssh_service), ssh_service, settings
+```
+
+That is the service-locator pattern: the dependency is buried in the implementation instead of appearing at the
+boundary, so a test can only redirect it by mutating a global. `simulation_service.py:216` calls the global factory
+a second time directly, and `data_service.py:28` exposes it as a property.
+
+**It is also the outlier.** `SlurmService.__init__(ssh_service=...)` already takes its dependency as a constructor
+parameter, and `DataService.__init__(settings: Settings | None = None)` already uses the inject-or-fall-back idiom
+for settings. `SimulationServiceHpc` is the one class that does neither.
+
+There is also plain duplication: `dependencies.py:175` constructs an `SSHService` inline from the same four
+settings fields instead of calling the factory, so the construction logic lives in two places.
+
+Evidence someone hit this: `tests/fixtures/slurm_fixtures.py:37` contains a commented-out
+`set_ssh_service(saved_ssh_service)` calling a function that does not exist.
+
+The fix is F.b below, and it is small.
+
+### F9. Settings have no override seam, and the obvious one does not compose
+
+Services sit behind a mutable module-level singleton with a setter. Settings sit behind `@lru_cache`
+(`compose_api/config.py:90`), which has a getter and no setter. Same intent, only one has a seam.
+
+The obvious fix — save the whole `Settings`, `model_copy` it with overrides, restore on teardown — is wrong in a
+way worth writing down, because it *appears* to work. Under pytest's LIFO teardown, two fixtures overriding
+disjoint fields do compose. But they compose **by accident of ordering, not because the fields are disjoint**, and
+the same mechanism fails three ways:
+
+1. Two fixtures overriding the *same* field resolve silently to whichever ran second. No conflict is reported.
+2. Any object constructed during the first fixture's lifetime holds that snapshot, so a later override never
+   reaches it.
+3. A fixture cannot be read locally: its correctness depends on what else is active and in what order.
+
+All three have one cause: **the unit of override is the whole object, so the system cannot tell disjoint overrides
+from conflicting ones.** The five service singletons do not have this problem because each concern owns its own
+slot; disjointness is structural. Settings is the one place that property was lost.
+
+**What is not a problem.** Only two settings reads in production code happen at module scope, and both are
+`assets_dir` (`data_service.py:17`, `api/main.py:50`). Every read on the SLURM path is inside a function —
+`hpc_utils._namespace_path()`, `get_internal_experiment_dir()`, `get_ssh_service()`,
+`SimulationServiceHpc._get_services()`, `job_monitor.py:39` — so an override genuinely reaches the code under
+test. `CLAUDE.md`'s warning that settings changes require a process restart is true only of those two constants and
+is overly broad as written.
+
+### F10. Smaller things worth fixing while nearby
 
 - `tests/simulation/dont_test_sedml.py` (3 tests) and 12 commented-out tests in pbest are dead weight. Either
   restore them or delete them, but leaving them as text misleads.
@@ -356,7 +427,7 @@ Size **S–M**: the fixture and the `port` parameter are small; the judgement ca
    That is the right shape for any wire format we settle on in the protocol work, including the OpenAPI contract
    this repository publishes to pbest. Size M.
 
-### E. Tidy (addresses F7, F8)
+### E. Tidy (addresses F7, F10)
 
 Fix the `test_sync_producer_with_async_subscriber` race (wait on the subscriber rather than assuming ordering);
 restore or delete the dead tests; add a `pull_request` trigger to pbest; upload or stop measuring pbest's coverage.
@@ -364,6 +435,225 @@ Size S in total. The flake is worth doing first and on its own: while only nine 
 test is an eleven percent false-failure rate on the whole signal.
 
 ---
+
+### F. One test body, two backends (addresses F1, F8, F9)
+
+The companion to A4. A4 answers "can we run SLURM in CI"; this answers "how do the same tests run against both the
+container and the real cluster without the two drifting apart". It has three parts, and the first two are
+prerequisites rather than choices.
+
+#### F.a Give settings a composable override seam (addresses F9)
+
+Replace whole-object replacement with a stack of **partial layers removed by identity**, so a fixture owns exactly
+its own fields and teardown order stops mattering:
+
+```python
+_layers: list[dict[str, Any]] = []
+
+def get_settings() -> Settings:
+    if not _layers:
+        return _load_settings()
+    merged: dict[str, Any] = {}
+    for layer in _layers:
+        merged.update(layer)
+    return _load_settings().model_copy(update=merged)
+
+@contextmanager
+def override_settings(**fields: Any):
+    clashes = {k for layer in _layers for k in layer} & fields.keys()
+    if clashes:
+        raise RuntimeError(f"settings already overridden by an active fixture: {sorted(clashes)}")
+    layer = dict(fields)
+    _layers.append(layer)
+    try:
+        yield
+    finally:
+        _layers.remove(layer)      # by identity, not pop
+```
+
+`remove` by identity is the whole trick: a fixture gives back exactly its own fields regardless of what else is
+active. The clash check makes contention a setup-time error instead of a silent last-writer-wins, which is the
+failure mode F9 describes. Strict is the right default in tests.
+
+Two things to note in the accessor's docstring: `get_settings()` now returns a fresh copy whenever layers are
+active, so anything holding a captured `Settings` keeps the old view (only the two `assets_dir` constants do); and
+the cost is one `model_copy` per call, memoizable on a layer-version counter if it ever matters.
+
+Size S. This is the piece that makes everything else possible.
+
+#### F.b Declare the SSH dependency instead of locating it (addresses F8)
+
+**Decision: provider injection.** Inject a `Callable[[], SSHService]` whose default is the existing global factory.
+
+```python
+SSHProvider = Callable[[], SSHService]
+
+class SimulationServiceHpc(SimulationService):
+    def __init__(self, ssh_provider: SSHProvider = get_ssh_service) -> None:
+        self._ssh_provider = ssh_provider
+
+    def _get_services(self) -> tuple[SlurmService, SSHService, Settings]:   # no longer @staticmethod
+        ssh = self._ssh_provider()                      # resolved per operation, exactly as today
+        return SlurmService(ssh_service=ssh), ssh, get_settings()
+```
+
+```python
+class DataService(ABC):
+    def __init__(self, settings: Settings | None = None,
+                 ssh_provider: SSHProvider = get_ssh_service) -> None:
+        self.settings = settings or get_settings()
+        self._ssh_provider = ssh_provider
+
+    @property
+    def ssh_service(self) -> SSHService:
+        return self._ssh_provider()                     # was: return get_ssh_service()
+```
+
+The three `self._get_services()` call sites (`simulation_service.py:72`, `:133`, `:147`) are untouched; the bare
+global call at `:216` becomes `self._ssh_provider()`. The default is today's factory, so production behaviour is
+unchanged and `dependencies.py:135` keeps working as written. While nearby, replace the duplicated inline
+construction at `dependencies.py:175` with a call to the factory, leaving exactly one place in production that
+builds an `SSHService`.
+
+**Why a provider and not the instance.** Injecting the `SSHService` value looks simpler and matches
+`SlurmService.__init__(ssh_service=...)`, but it would change behaviour. SSH resolution today is **deferred and
+per-operation**: `_get_services()` runs at the top of every public method, `download_container` calls the factory
+directly, and `DataService.ssh_service` is a `@property` that resolves on every access. Capturing an instance in
+`__init__` would freeze that at construction time. Harmless in production, where `init_standalone()` builds
+everything once and settings never change at runtime — but it converts "reads current configuration" into "pinned
+at build time", which is not a change this refactor should smuggle in. A provider moves the dependency to the
+boundary while leaving *when* it is read exactly as it is.
+
+The consistency argument for value injection is also weaker than it first appears. `SlurmService` holds an
+`SSHService` because it is a thin wrapper whose lifetime genuinely matches its dependency's.
+`SimulationServiceHpc` and `DataService` resolve per operation. They are not the same situation.
+
+Provider injection additionally gives a seam that value injection cannot express — a different object per
+operation, for failure injection:
+
+```python
+def flaky(n: int = 1) -> SSHProvider:
+    calls = itertools.count()
+    def provider() -> SSHService:
+        if next(calls) < n:
+            raise OSError("connection refused")
+        return get_ssh_service()
+    return provider
+```
+
+and it is the shape pooling would slot into, which the `close()` comment anticipates: the provider becomes the
+acquire step and no call site changes.
+
+Size S. Worth doing on its own merits regardless of the backend work: it removes a service locator, deletes a
+duplicated constructor, and preserves the existing resolution semantics while making the dependency visible. The
+dead `set_ssh_service` line at `tests/fixtures/slurm_fixtures.py:37` goes away with it.
+
+#### F.b.1 How F.a and F.b divide the work
+
+They are complementary, and using either alone is a mistake in a different direction.
+
+**Injection alone is a poor backend switch, because of fan-out.** Three consumers obtain SSH independently:
+
+| Consumer | Where |
+|---|---|
+| `SimulationServiceHpc` | `_get_services()` at `:61`, plus a bare call at `:216` |
+| `DataService` | the `ssh_service` property at `data_service.py:28` |
+| `SlurmService` inside `JobMonitor` | built at `dependencies.py:175` |
+
+A fixture that wires two and forgets the third leaves the third on real settings. In CI that is an empty key path
+and a confusing failure; on a developer machine it means **talking to the production cluster while believing you
+are on the container**. Injection requires knowing the full consumer list, and that list will grow.
+
+**The settings layer is the switch.** All three resolve through `get_ssh_service()` and therefore through
+`get_settings()`, so one layer reaches every consumer — including the one a fixture author forgets and the one
+added next year. After F.b's de-duplication there is exactly one construction site in production reading exactly
+one source with exactly one override seam, which is what makes the layer trustworthy rather than usually right.
+
+So: **F.a switches the system, F.b is the local seam.** The e2e fixture injects nothing, because under an active
+layer the default provider already yields the container descriptor:
+
+```python
+@pytest_asyncio.fixture
+async def hpc_backend(slurm_cluster):
+    with override_settings(
+        slurm_submit_host="127.0.0.1",
+        slurm_submit_port=slurm_cluster.ssh_port,       # the A4 prerequisite
+        slurm_submit_user="root",
+        slurm_submit_key_path=str(slurm_cluster.key_path),
+        slurm_partition="cpu",
+        slurm_qos="",
+    ):
+        yield slurm_cluster
+```
+
+Injection stays for the narrow case: handing one specific object to one service without moving the world, or the
+failure-injection provider above.
+
+**On ordering.** Because the provider is called per operation rather than at construction, the layer may be applied
+at any point before the operation runs. This is the concrete reason F.b chose a provider over an instance: value
+injection would have made fixture ordering load-bearing, requiring every service fixture to declare the settings
+fixture as a dependency and failing confusingly when one did not. Declaring the dependency is still good practice —
+it documents intent — but with a provider it is no longer a correctness requirement.
+
+#### F.c Parameterize the backend, never the test
+
+One test body. A fixture yields a backend; the backend is a parameter.
+
+```python
+def pytest_addoption(parser):
+    parser.addoption("--slurm-backend", action="append", default=[],
+                     choices=["container", "cluster"])
+
+def pytest_generate_tests(metafunc):
+    if "slurm_backend" in metafunc.fixturenames:
+        chosen = metafunc.config.getoption("--slurm-backend") or _default(metafunc.config)
+        metafunc.parametrize("slurm_backend", chosen, indirect=True, scope="session")
+```
+
+Default: `container` when Docker is present, nothing otherwise. CI gets the container without asking. A developer
+on VPN runs `--slurm-backend cluster`, or passes both to run every test twice, once per backend.
+
+**Mark by what a test needs, not where it runs.** This is the part most people get wrong: a marker called
+`integration` or `e2e` answers "where does this run", which forecloses parameterization because the marker has
+already chosen the environment.
+
+| Marker | Meaning | Where it runs |
+|---|---|---|
+| none | no scheduler needed | everywhere |
+| `@pytest.mark.slurm` | needs *a* SLURM | parameterized over the chosen backends |
+| `@pytest.mark.cluster_only` | needs *the* production cluster | never in CI, never on the container |
+
+**Differences become data, not branches.** `slurm_template_hello_TEMPLATE` currently reads
+`settings.slurm_partition` and `settings.slurm_qos` directly, which is the drift surface: the container has
+partition `cpu` and no QoS. One dict of fields is the single source of truth — the settings layer applies it to the
+production code path, and a small descriptor exposes the same values to the test body. Maintaining those as two
+separate literals would recreate the drift problem one level down.
+
+A branch on `if backend.kind == "container"` inside a test body is the thing to forbid. That is where two
+implementations quietly grow.
+
+**Capabilities, not forked tests.** When something genuinely only works on one side:
+
+```python
+if not slurm_backend.can_build_singularity:
+    pytest.skip("backend cannot build singularity images")
+```
+
+The test still exists for the other backend, the gap is greppable, and nobody writes a parallel copy.
+
+**A conformance test is the drift alarm.** One test that runs on *every* backend and asserts the backend itself
+behaves as our parsers assume: `sbatch --parsable` returns a bare integer, `squeue` emits five pipe-delimited
+fields, `sacct` emits nine. Cheap, and it fails loudly when the container image and the cluster diverge — which is
+otherwise exactly the kind of difference nobody notices. If both backends are available, a stronger version submits
+the same job to each and compares the parsed `SlurmJob` structurally, ignoring ids and timestamps.
+
+**What genuinely cannot be shared**, and should stay a short list: that the production partition and QoS exist and
+accept work, that the real storage path under the namespace is writable, that a real Singularity build succeeds.
+Those are `cluster_only` and should be smoke tests proving the environment, not tests proving logic. All the logic
+lives in the shared bodies.
+
+Size M for the fixture and the marker migration, replacing the eighteen identical `skipif` decorators. The only
+production changes are F.a, F.b, and the `port` parameter from A4.
 
 ## Practice worth copying
 
