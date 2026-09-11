@@ -483,42 +483,117 @@ Size S. This is the piece that makes everything else possible.
 
 #### F.b Declare the SSH dependency instead of locating it (addresses F8)
 
-**Decision: value injection.** `SSHService` is a stateless descriptor, so sharing an instance shares nothing — the
-per-operation connect lives inside its methods, not in construction. Injecting the value therefore preserves the
-lifecycle design F8 describes while moving the dependency to the boundary.
+**Decision: provider injection.** Inject a `Callable[[], SSHService]` whose default is the existing global factory.
 
 ```python
+SSHProvider = Callable[[], SSHService]
+
 class SimulationServiceHpc(SimulationService):
-    def __init__(self, ssh_service: SSHService | None = None) -> None:
-        self._ssh = ssh_service or get_ssh_service()
+    def __init__(self, ssh_provider: SSHProvider = get_ssh_service) -> None:
+        self._ssh_provider = ssh_provider
 
     def _get_services(self) -> tuple[SlurmService, SSHService, Settings]:   # no longer @staticmethod
-        return SlurmService(ssh_service=self._ssh), self._ssh, get_settings()
+        ssh = self._ssh_provider()                      # resolved per operation, exactly as today
+        return SlurmService(ssh_service=ssh), ssh, get_settings()
 ```
-
-The three `self._get_services()` call sites (`simulation_service.py:72`, `:133`, `:147`) are untouched. The bare
-global call at `:216` becomes `self._ssh`. `DataService` already accepts `settings` this way; give it
-`ssh_service` on the same terms and its `ssh_service` property returns the injected value. Production is unchanged
-because the default is today's behaviour, so `dependencies.py:135` keeps working as written; while nearby, replace
-the duplicated inline construction at `dependencies.py:175` with a call to the factory.
-
-A test then points the system at a container with no global mutation:
 
 ```python
-SimulationServiceHpc(ssh_service=SSHService(
-    hostname="127.0.0.1", port=cluster.ssh_port, username="root", key_path=cluster.key_path))
+class DataService(ABC):
+    def __init__(self, settings: Settings | None = None,
+                 ssh_provider: SSHProvider = get_ssh_service) -> None:
+        self.settings = settings or get_settings()
+        self._ssh_provider = ssh_provider
+
+    @property
+    def ssh_service(self) -> SSHService:
+        return self._ssh_provider()                     # was: return get_ssh_service()
 ```
 
-**Why this and not provider injection.** The alternative is to inject a `Callable[[], SSHService]`, which is the
-textbook answer when construction itself must be swappable per operation. It earns its extra concept only in two
-cases: if pooling arrives, so the provider becomes the acquire step; or if a test needs each operation to get a
-different object, for failure injection. Neither is on the table now, and value injection matches
-`SlurmService.__init__(ssh_service=...)` exactly, so it imports no new pattern. If pooling does land, the injected
-object becomes stateful, `close()` starts to matter, and it joins the other five services in `dependencies.py`
-naturally — with no change at the call sites either way.
+The three `self._get_services()` call sites (`simulation_service.py:72`, `:133`, `:147`) are untouched; the bare
+global call at `:216` becomes `self._ssh_provider()`. The default is today's factory, so production behaviour is
+unchanged and `dependencies.py:135` keeps working as written. While nearby, replace the duplicated inline
+construction at `dependencies.py:175` with a call to the factory, leaving exactly one place in production that
+builds an `SSHService`.
 
-Size S. Note this is worth doing on its own merits regardless of the backend work: it removes a service locator,
-deletes a duplicated constructor, and makes the class consistent with its sibling.
+**Why a provider and not the instance.** Injecting the `SSHService` value looks simpler and matches
+`SlurmService.__init__(ssh_service=...)`, but it would change behaviour. SSH resolution today is **deferred and
+per-operation**: `_get_services()` runs at the top of every public method, `download_container` calls the factory
+directly, and `DataService.ssh_service` is a `@property` that resolves on every access. Capturing an instance in
+`__init__` would freeze that at construction time. Harmless in production, where `init_standalone()` builds
+everything once and settings never change at runtime — but it converts "reads current configuration" into "pinned
+at build time", which is not a change this refactor should smuggle in. A provider moves the dependency to the
+boundary while leaving *when* it is read exactly as it is.
+
+The consistency argument for value injection is also weaker than it first appears. `SlurmService` holds an
+`SSHService` because it is a thin wrapper whose lifetime genuinely matches its dependency's.
+`SimulationServiceHpc` and `DataService` resolve per operation. They are not the same situation.
+
+Provider injection additionally gives a seam that value injection cannot express — a different object per
+operation, for failure injection:
+
+```python
+def flaky(n: int = 1) -> SSHProvider:
+    calls = itertools.count()
+    def provider() -> SSHService:
+        if next(calls) < n:
+            raise OSError("connection refused")
+        return get_ssh_service()
+    return provider
+```
+
+and it is the shape pooling would slot into, which the `close()` comment anticipates: the provider becomes the
+acquire step and no call site changes.
+
+Size S. Worth doing on its own merits regardless of the backend work: it removes a service locator, deletes a
+duplicated constructor, and preserves the existing resolution semantics while making the dependency visible. The
+dead `set_ssh_service` line at `tests/fixtures/slurm_fixtures.py:37` goes away with it.
+
+#### F.b.1 How F.a and F.b divide the work
+
+They are complementary, and using either alone is a mistake in a different direction.
+
+**Injection alone is a poor backend switch, because of fan-out.** Three consumers obtain SSH independently:
+
+| Consumer | Where |
+|---|---|
+| `SimulationServiceHpc` | `_get_services()` at `:61`, plus a bare call at `:216` |
+| `DataService` | the `ssh_service` property at `data_service.py:28` |
+| `SlurmService` inside `JobMonitor` | built at `dependencies.py:175` |
+
+A fixture that wires two and forgets the third leaves the third on real settings. In CI that is an empty key path
+and a confusing failure; on a developer machine it means **talking to the production cluster while believing you
+are on the container**. Injection requires knowing the full consumer list, and that list will grow.
+
+**The settings layer is the switch.** All three resolve through `get_ssh_service()` and therefore through
+`get_settings()`, so one layer reaches every consumer — including the one a fixture author forgets and the one
+added next year. After F.b's de-duplication there is exactly one construction site in production reading exactly
+one source with exactly one override seam, which is what makes the layer trustworthy rather than usually right.
+
+So: **F.a switches the system, F.b is the local seam.** The e2e fixture injects nothing, because under an active
+layer the default provider already yields the container descriptor:
+
+```python
+@pytest_asyncio.fixture
+async def hpc_backend(slurm_cluster):
+    with override_settings(
+        slurm_submit_host="127.0.0.1",
+        slurm_submit_port=slurm_cluster.ssh_port,       # the A4 prerequisite
+        slurm_submit_user="root",
+        slurm_submit_key_path=str(slurm_cluster.key_path),
+        slurm_partition="cpu",
+        slurm_qos="",
+    ):
+        yield slurm_cluster
+```
+
+Injection stays for the narrow case: handing one specific object to one service without moving the world, or the
+failure-injection provider above.
+
+**On ordering.** Because the provider is called per operation rather than at construction, the layer may be applied
+at any point before the operation runs. This is the concrete reason F.b chose a provider over an instance: value
+injection would have made fixture ordering load-bearing, requiring every service fixture to declare the settings
+fixture as a dependency and failing confusingly when one did not. Declaring the dependency is still good practice —
+it documents intent — but with a provider it is no longer a correctness requirement.
 
 #### F.c Parameterize the backend, never the test
 
@@ -578,8 +653,7 @@ Those are `cluster_only` and should be smoke tests proving the environment, not 
 lives in the shared bodies.
 
 Size M for the fixture and the marker migration, replacing the eighteen identical `skipif` decorators. The only
-production changes are F.a, the `port` parameter from A4, and F.b. The dead
-`set_ssh_service` line at `tests/fixtures/slurm_fixtures.py:37` goes away with F.b.
+production changes are F.a, F.b, and the `port` parameter from A4.
 
 ## Practice worth copying
 
