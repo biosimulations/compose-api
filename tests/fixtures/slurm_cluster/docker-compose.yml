@@ -68,6 +68,9 @@ services:
       - slurm_jobdir:/data:z
       - var_log_slurm:/var/log/slurm:z
       - ${SSH_AUTHORIZED_KEYS:?set SSH_AUTHORIZED_KEYS to an authorized_keys file}:/tmp/authorized_keys_host:ro,z
+      # see the file itself: without this, sshd's PAM account stage denies root on some
+      # hosts and drops the connection before a key is ever offered
+      - ./sshd_test.conf:/etc/ssh/sshd_config.d/01-tests.conf:ro
     ports:
       - "0:22"
     expose: ["6817"]
