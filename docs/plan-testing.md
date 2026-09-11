@@ -179,33 +179,50 @@ This matters more than it looks. Only nine tests execute in CI (F1), so a single
 false-failure rate on the entire signal. Combined with the absence of branch protection (F3), the practical effect
 is to train people to merge past red checks, which is precisely the habit that makes a suite worthless.
 
-### F8. The dependency-injection pattern has a hole at SSH
+### F8. The SSH dependency is located, not injected
 
-`compose_api/dependencies.py` provides `get`/`set` pairs for five services: the postgres engine, database service,
-simulation service, job monitor, and data service. Fixtures save, swap, yield, and restore each one. That part
-works and is the strongest thing in the suite (§1.3).
+**First, what is not wrong.** `get_ssh_service()` (`compose_api/common/ssh/ssh_service.py:111`) returns a fresh
+`SSHService` on every call, and that is deliberate and correct. `SSHService` is a **stateless value object**: it
+holds four connection parameters and no connection. Each of its methods opens its own connection and closes it, and
+`close()` is a documented no-op — *"nothing to do here because we don't yet keep the connection around."*
 
-**SSH is not one of them.** There is no `set_ssh_service` anywhere in the codebase. What exists is a factory in
-`compose_api/common/ssh/ssh_service.py:111` that rebuilds from settings on every call:
+So there is no session lifecycle to own, construction is free, and a singleton would buy nothing. Per-call
+construction is also safer than a captured instance, because it picks up configuration changes rather than pinning
+them. There is a further reason: a long-lived SSH connection to an HPC login node is dropped by idle timeouts, so a
+persistent session would need liveness checks, reconnect, and retry. Constructing per operation sidesteps all of
+that. The word "yet" in that comment shows pooling is the anticipated future, and the factory shape is exactly what
+lets it be added later behind the same interface.
+
+Contrast the five services that *are* injected in `dependencies.py`: a database engine with a connection pool, a job
+monitor with a background polling task, a database service with sessions. All stateful, all needing singleton
+lifecycle. SSH is not like them, and treating it the same would be the mistake.
+
+**What is wrong is narrower: the dependency is located rather than declared.** `SimulationServiceHpc` has no
+`__init__` at all. A static method reaches into the global factory at the point of use:
 
 ```python
-def get_ssh_service() -> SSHService:
+@staticmethod
+def _get_services() -> tuple[SlurmService, SSHService, Settings]:
     settings = get_settings()
-    return SSHService(...)
+    ssh_service = get_ssh_service()
+    return SlurmService(ssh_service=ssh_service), ssh_service, settings
 ```
 
-Three production call sites use it: `simulation_service.py:61`, `simulation_service.py:216`, and
-`data_service.py:28`.
+That is the service-locator pattern: the dependency is buried in the implementation instead of appearing at the
+boundary, so a test can only redirect it by mutating a global. `simulation_service.py:216` calls the global factory
+a second time directly, and `data_service.py:28` exposes it as a property.
 
-The consequence is that the `ssh_service` fixture yields an object **only the test code ever sees**. It is passed
-directly to `SlurmService` in the test body. As soon as the test exercises `SimulationServiceHpc`, that code calls
-`get_ssh_service()` and builds a fresh connection from settings, ignoring the fixture entirely.
+**It is also the outlier.** `SlurmService.__init__(ssh_service=...)` already takes its dependency as a constructor
+parameter, and `DataService.__init__(settings: Settings | None = None)` already uses the inject-or-fall-back idiom
+for settings. `SimulationServiceHpc` is the one class that does neither.
 
-The evidence that someone hit this and worked around it is in the fixture itself: `tests/fixtures/slurm_fixtures.py:37`
-contains a commented-out `set_ssh_service(saved_ssh_service)` calling a function that does not exist.
+There is also plain duplication: `dependencies.py:175` constructs an `SSHService` inline from the same four
+settings fields instead of calling the factory, so the construction logic lives in two places.
 
-This is why A6 below routes through settings rather than through injection. For the SLURM path, settings are not
-merely convenient; they are the only lever.
+Evidence someone hit this: `tests/fixtures/slurm_fixtures.py:37` contains a commented-out
+`set_ssh_service(saved_ssh_service)` calling a function that does not exist.
+
+The fix is F.b below, and it is small.
 
 ### F9. Settings have no override seam, and the obvious one does not compose
 
@@ -464,12 +481,44 @@ the cost is one `model_copy` per call, memoizable on a layer-version counter if 
 
 Size S. This is the piece that makes everything else possible.
 
-#### F.b Close the SSH injection hole (addresses F8)
+#### F.b Declare the SSH dependency instead of locating it (addresses F8)
 
-Either add `set_ssh_service` to `dependencies.py` so SSH joins the other five services, or accept that settings are
-the injection point and delete the misleading commented-out line at `tests/fixtures/slurm_fixtures.py:37`. The
-second is cheaper and, given F.a, sufficient. The first is more consistent with the rest of the file. Size S
-either way; the choice is about consistency, not capability.
+**Decision: value injection.** `SSHService` is a stateless descriptor, so sharing an instance shares nothing — the
+per-operation connect lives inside its methods, not in construction. Injecting the value therefore preserves the
+lifecycle design F8 describes while moving the dependency to the boundary.
+
+```python
+class SimulationServiceHpc(SimulationService):
+    def __init__(self, ssh_service: SSHService | None = None) -> None:
+        self._ssh = ssh_service or get_ssh_service()
+
+    def _get_services(self) -> tuple[SlurmService, SSHService, Settings]:   # no longer @staticmethod
+        return SlurmService(ssh_service=self._ssh), self._ssh, get_settings()
+```
+
+The three `self._get_services()` call sites (`simulation_service.py:72`, `:133`, `:147`) are untouched. The bare
+global call at `:216` becomes `self._ssh`. `DataService` already accepts `settings` this way; give it
+`ssh_service` on the same terms and its `ssh_service` property returns the injected value. Production is unchanged
+because the default is today's behaviour, so `dependencies.py:135` keeps working as written; while nearby, replace
+the duplicated inline construction at `dependencies.py:175` with a call to the factory.
+
+A test then points the system at a container with no global mutation:
+
+```python
+SimulationServiceHpc(ssh_service=SSHService(
+    hostname="127.0.0.1", port=cluster.ssh_port, username="root", key_path=cluster.key_path))
+```
+
+**Why this and not provider injection.** The alternative is to inject a `Callable[[], SSHService]`, which is the
+textbook answer when construction itself must be swappable per operation. It earns its extra concept only in two
+cases: if pooling arrives, so the provider becomes the acquire step; or if a test needs each operation to get a
+different object, for failure injection. Neither is on the table now, and value injection matches
+`SlurmService.__init__(ssh_service=...)` exactly, so it imports no new pattern. If pooling does land, the injected
+object becomes stateful, `close()` starts to matter, and it joins the other five services in `dependencies.py`
+naturally — with no change at the call sites either way.
+
+Size S. Note this is worth doing on its own merits regardless of the backend work: it removes a service locator,
+deletes a duplicated constructor, and makes the class consistent with its sibling.
 
 #### F.c Parameterize the backend, never the test
 
@@ -529,7 +578,8 @@ Those are `cluster_only` and should be smoke tests proving the environment, not 
 lives in the shared bodies.
 
 Size M for the fixture and the marker migration, replacing the eighteen identical `skipif` decorators. The only
-production changes are F.a, the `port` parameter from A4, and optionally F.b.
+production changes are F.a, the `port` parameter from A4, and F.b. The dead
+`set_ssh_service` line at `tests/fixtures/slurm_fixtures.py:37` goes away with F.b.
 
 ## Practice worth copying
 
