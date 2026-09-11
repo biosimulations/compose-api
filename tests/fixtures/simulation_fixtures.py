@@ -23,7 +23,7 @@ from compose_api.simulation.simulation_service import SimulationServiceHpc
 
 
 @pytest_asyncio.fixture(scope="function")
-async def simulation_service_slurm() -> AsyncGenerator[SimulationServiceHpc, None]:
+async def simulation_service_slurm() -> AsyncGenerator[SimulationServiceHpc]:
     simulation_service = SimulationServiceHpc()
     saved_simulation_service = get_simulation_service()
     set_simulation_service(simulation_service)
@@ -37,7 +37,7 @@ async def simulation_service_slurm() -> AsyncGenerator[SimulationServiceHpc, Non
 @pytest_asyncio.fixture(scope="function")
 async def job_monitor(
     database_service: DatabaseService, slurm_service: SlurmService, nats_subscriber_client: NATSClient
-) -> AsyncGenerator[JobMonitor, None]:
+) -> AsyncGenerator[JobMonitor]:
     job_service = JobMonitor(
         nats_client=nats_subscriber_client, database_service=database_service, slurm_service=slurm_service
     )
@@ -55,7 +55,7 @@ async def job_monitor(
 
 
 @pytest_asyncio.fixture(scope="function")
-async def simulator(database_service: DatabaseService) -> AsyncGenerator[SimulatorVersion, None]:
+async def simulator(database_service: DatabaseService) -> AsyncGenerator[SimulatorVersion]:
     experiment_dep = _default_registry_deps()
     singularity_def = generate_container_def_file(_default_registry_deps(), ContainerizationEngine.APPTAINER)
 

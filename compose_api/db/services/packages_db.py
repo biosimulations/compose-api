@@ -1,11 +1,10 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, override
 
 from pbest.utils.input_types import ExperimentPrimaryDependencies
 from sqlalchemy import Result, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from typing_extensions import override
 
 from compose_api.db.tables.package_tables import (
     BiGraphComputeTypeDB,

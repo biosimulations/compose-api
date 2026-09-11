@@ -16,14 +16,14 @@ from compose_api.dependencies import (
 
 
 @pytest.fixture(scope="module")
-def postgres_url() -> Generator[str, None, None]:
+def postgres_url() -> Generator[str]:
     with PostgresContainer("postgres:15", username="test", password="test", dbname="test") as postgres:  # noqa: S106 Possible hardcoded password assigned to argument: "password"
         url = postgres.get_connection_url().replace("postgresql+psycopg2://", "postgresql+asyncpg://")
         yield url
 
 
 @pytest_asyncio.fixture(scope="function")
-async def async_postgres_engine(postgres_url: str) -> AsyncGenerator[AsyncEngine, None]:
+async def async_postgres_engine(postgres_url: str) -> AsyncGenerator[AsyncEngine]:
     engine = create_async_engine(postgres_url, echo=True)
     prev_engine: AsyncEngine | None = get_postgres_engine()
     try:
@@ -36,7 +36,7 @@ async def async_postgres_engine(postgres_url: str) -> AsyncGenerator[AsyncEngine
 
 
 @pytest_asyncio.fixture(scope="function")
-async def database_service(async_postgres_engine: AsyncEngine) -> AsyncGenerator[DatabaseService, None]:
+async def database_service(async_postgres_engine: AsyncEngine) -> AsyncGenerator[DatabaseService]:
     saved_database_service = get_database_service()
     database_service = DatabaseServiceSQL(async_engine=async_postgres_engine)
     set_database_service(database_service)

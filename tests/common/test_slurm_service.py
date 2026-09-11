@@ -6,13 +6,13 @@ import pytest
 
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
-from compose_api.config import get_settings
 from compose_api.simulation.hpc_utils import _namespace_path
+from tests.fixtures.slurm_fixtures_backend import SlurmBackend
 
 
-@pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
+@pytest.mark.slurm
 @pytest.mark.asyncio
-async def test_slurm_job_query_squeue(slurm_service: SlurmService) -> None:
+async def test_slurm_job_query_squeue(slurm_backend: SlurmBackend, slurm_service: SlurmService) -> None:
     all_jobs: list[SlurmJob] = await slurm_service.get_job_status_squeue()
     assert all_jobs is not None
     if len(all_jobs) > 0:
@@ -23,9 +23,9 @@ async def test_slurm_job_query_squeue(slurm_service: SlurmService) -> None:
         assert one_job[0] == all_jobs[0]
 
 
-@pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
+@pytest.mark.slurm
 @pytest.mark.asyncio
-async def test_slurm_job_query_sacct(slurm_service: SlurmService) -> None:
+async def test_slurm_job_query_sacct(slurm_backend: SlurmBackend, slurm_service: SlurmService) -> None:
     all_jobs: list[SlurmJob] = await slurm_service.get_job_status_sacct()
     assert all_jobs is not None
     if len(all_jobs) > 0:
@@ -36,9 +36,11 @@ async def test_slurm_job_query_sacct(slurm_service: SlurmService) -> None:
         assert one_job[0] == all_jobs[0]
 
 
-@pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
+@pytest.mark.slurm
 @pytest.mark.asyncio
-async def test_slurm_job_submit(slurm_service: SlurmService, slurm_template_hello_1s: str) -> None:
+async def test_slurm_job_submit(
+    slurm_backend: SlurmBackend, slurm_service: SlurmService, slurm_template_hello_1s: str
+) -> None:
     _all_jobs_before_submit: list[SlurmJob] = await slurm_service.get_job_status_squeue()
     remote_path = _namespace_path() / "htclogs"
     with tempfile.TemporaryDirectory() as tmpdir:

@@ -1,4 +1,6 @@
 import os
+import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -6,7 +8,6 @@ from compose_api.api.client import Client
 from compose_api.api.client.api.simulation import run_simulation
 from compose_api.api.client.models import BodyRunSimulation
 from compose_api.api.client.types import File
-from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation.data_service import DataService
 from compose_api.simulation.job_monitor import JobMonitor
@@ -15,7 +16,8 @@ from compose_api.simulation.simulation_service import SimulationServiceHpc
 from tests.simulators.utils import check_experiment_run
 
 
-@pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
+@pytest.mark.slurm
+@pytest.mark.cluster_only
 @pytest.mark.asyncio
 async def test_readdy(
     in_memory_api_client: Client,
@@ -37,6 +39,7 @@ async def test_readdy(
             sim_experiment=sim_experiment, in_memory_api_client=in_memory_api_client, seconds_to_wait=5 * 60
         )
 
-    result_path = "/Users/evalencia/Desktop/readdy.zip"
-    with open(result_path, "wb") as f:
-        f.write(results.content)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        result_path = Path(temp_dir) / "readdy.zip"
+        result_path.write_bytes(results.content)
+        assert result_path.stat().st_size > 0

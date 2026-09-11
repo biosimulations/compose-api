@@ -8,7 +8,6 @@ from compose_api.api.client import Client
 from compose_api.api.client.api.curated import run_tellurium
 from compose_api.api.client.models import BodyRunTellurium
 from compose_api.api.client.types import File
-from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation.data_service import DataService
 from compose_api.simulation.job_monitor import JobMonitor
@@ -17,7 +16,8 @@ from compose_api.simulation.simulation_service import SimulationServiceHpc
 from tests.simulators.utils import assert_test_sim_results, check_experiment_run, test_dir
 
 
-@pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
+@pytest.mark.slurm
+@pytest.mark.cluster_only
 @pytest.mark.asyncio
 async def test_tellurium(
     in_memory_api_client: Client,

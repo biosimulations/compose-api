@@ -104,13 +104,19 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov-report=html"
+log_cli = true
+log_cli_level = "INFO"
+markers = [
+    "slurm: needs a SLURM backend; parameterised over --slurm-backend (default: container when Docker is present)",
+    "cluster_only: needs the real submit host, not the container; never runs in CI",
+]
 
 [tool.deptry]
 exclude = [".venv/*", "alembic/*"]
 ignore = ["DEP002", "DEP003", "DEP004"]
 
 [tool.ruff]
-target-version = 'py39'
+target-version = 'py313'  # the floor in requires-python; the runtime is 3.14
 line-length = 120
 fix = true
 exclude = ["alembic/"]
@@ -222,6 +228,10 @@ exclude = [".venv/*", "compose_api/api/client/*", "documentation/*", "alembic/*"
 
 [tool.ruff.format]
 preview = true
+# Under preview, ruff 0.16 also formats Python inside Markdown code blocks. `docs/cip`
+# quotes upstream source verbatim and is checked against the real files, so reformatting
+# those blocks would make the document misrepresent the code it cites.
+exclude = ["*.md"]
 
 [tool.coverage.report]
 skip_empty = true
@@ -230,5 +240,5 @@ skip_empty = true
 branch = true
 source = ["compose_api"]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]

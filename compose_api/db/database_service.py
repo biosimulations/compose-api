@@ -1,8 +1,8 @@
 import logging
 from abc import ABC, abstractmethod
+from typing import override
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
-from typing_extensions import override
 
 from compose_api.db.services.hpc_db import HPCDatabaseService, HPCORMExecutor
 from compose_api.db.services.packages_db import PackageDatabaseService, PackageORMExecutor

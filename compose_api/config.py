@@ -1,7 +1,9 @@
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
@@ -54,6 +56,7 @@ class Settings(BaseSettings):
     postgres_pool_recycle: int = 1800  # recycle connections every seconds
 
     slurm_submit_host: str = ""
+    slurm_submit_port: int = 22
     slurm_submit_user: str = ""
     slurm_submit_key_path: str = ""
     slurm_submit_known_hosts: str | None = None
@@ -87,8 +90,52 @@ class Settings(BaseSettings):
 
 
 @lru_cache
-def get_settings() -> Settings:
+def _load_settings() -> Settings:
+    """Load settings from the environment once. Never call directly; use get_settings()."""
     return Settings()
+
+
+# Active override layers, innermost last. Each layer is owned by exactly one caller
+# (normally a test fixture) and is removed by identity, so teardown order does not
+# matter and two callers overriding disjoint fields compose. Whole-object replacement
+# would not: it cannot tell a disjoint override from a conflicting one.
+_settings_layers: list[dict[str, Any]] = []
+
+
+def get_settings() -> Settings:
+    """Return the effective settings.
+
+    With no override active this is the cached environment-derived object. With layers
+    active it is a fresh copy on every call, so a caller that captured a Settings earlier
+    keeps the older view -- resolve settings at use, not at construction.
+    """
+    if not _settings_layers:
+        return _load_settings()
+    merged: dict[str, Any] = {}
+    for layer in _settings_layers:
+        merged.update(layer)
+    return _load_settings().model_copy(update=merged)
+
+
+@contextmanager
+def override_settings(**fields: Any) -> Iterator[Settings]:
+    """Temporarily override individual settings fields.
+
+    Raises if a field is already overridden by another active layer, so contention
+    surfaces at setup instead of resolving silently to whichever caller ran last.
+    """
+    unknown = fields.keys() - type(_load_settings()).model_fields.keys()
+    if unknown:
+        raise KeyError(f"unknown settings field(s): {sorted(unknown)}")
+    clashes = {key for layer in _settings_layers for key in layer} & fields.keys()
+    if clashes:
+        raise RuntimeError(f"settings already overridden by an active layer: {sorted(clashes)}")
+    layer = dict(fields)
+    _settings_layers.append(layer)
+    try:
+        yield get_settings()
+    finally:
+        _settings_layers.remove(layer)
 
 
 def get_local_cache_dir() -> Path:

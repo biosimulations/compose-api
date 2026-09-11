@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 from typing import Any
 
 import nats
@@ -8,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from compose_api.common.gateway.models import Namespace
 from compose_api.common.hpc.slurm_service import SlurmService
-from compose_api.common.ssh.ssh_service import SSHService
+from compose_api.common.ssh.ssh_service import get_ssh_service
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService, DatabaseServiceSQL
 from compose_api.db.db_utils import create_db
@@ -171,14 +170,7 @@ async def init_standalone(enable_ssl: bool = True) -> None:
     database = DatabaseServiceSQL(engine)
     set_database_service(database)
 
-    settings = get_settings()
-    ssh_service = SSHService(
-        hostname=settings.slurm_submit_host,
-        username=settings.slurm_submit_user,
-        key_path=Path(settings.slurm_submit_key_path),
-        known_hosts=Path(settings.slurm_submit_known_hosts) if settings.slurm_submit_known_hosts else None,
-    )
-    slurm_service = SlurmService(ssh_service=ssh_service)
+    slurm_service = SlurmService(ssh_service=get_ssh_service())
 
     nats_client = await nats.connect(_settings.nats_url) if get_settings().hpc_has_messaging else None
     job_monitor = JobMonitor(nats_client=nats_client, database_service=database, slurm_service=slurm_service)

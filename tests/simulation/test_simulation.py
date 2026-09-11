@@ -16,7 +16,6 @@ from compose_api.api.introspect_package import introspect_package
 from compose_api.common.gateway.utils import allow_list
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.ssh.ssh_service import SSHService
-from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation import handlers
 from compose_api.simulation.hpc_utils import get_singularity_hash
@@ -31,13 +30,17 @@ from compose_api.simulation.models import (
 )
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 from tests.fixtures.mocks import TestBackgroundTask
+from tests.fixtures.slurm_fixtures_backend import SlurmBackend
 from tests.simulators.utils import assert_test_sim_results, test_dir
 
 
-@pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
+@pytest.mark.slurm
+@pytest.mark.cluster_only
 @pytest.mark.asyncio
 async def test_download_simulator(
-    simulation_service_slurm: SimulationServiceHpc, database_service: DatabaseServiceSQL
+    slurm_backend: SlurmBackend,
+    simulation_service_slurm: SimulationServiceHpc,
+    database_service: DatabaseServiceSQL,
 ) -> None:
     container_rep = generate_container_def_file(_default_registry_deps(), ContainerizationEngine.APPTAINER)
     image = RemoteContainerImage(
@@ -65,7 +68,8 @@ async def test_download_simulator(
     assert downloaded_image.source_url == image.source_url
 
 
-@pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
+@pytest.mark.slurm
+@pytest.mark.cluster_only
 @pytest.mark.asyncio
 async def test_build_simulator(
     simulation_service_slurm: SimulationServiceHpc,
@@ -111,7 +115,8 @@ async def test_build_simulator(
         await database_service.get_package_db().delete_bigraph_package(p)
 
 
-@pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
+@pytest.mark.slurm
+@pytest.mark.cluster_only
 @pytest.mark.asyncio
 async def test_simulate(
     simulation_service_slurm: SimulationServiceHpc,

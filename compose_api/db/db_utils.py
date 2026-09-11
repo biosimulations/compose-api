@@ -12,8 +12,9 @@ class DeclarativeTableBase(AsyncAttrs, DeclarativeBase):
 
 
 def _do_upgrade(sync_conn: Connection) -> None:
-    from alembic import command
     from alembic.config import Config
+
+    from alembic import command
 
     cfg = Config(str(_ALEMBIC_INI))
     cfg.attributes["connection"] = sync_conn

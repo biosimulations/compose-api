@@ -7,24 +7,23 @@ import pytest
 import pytest_asyncio
 
 from compose_api.common.hpc.slurm_service import SlurmService
-from compose_api.common.ssh.ssh_service import SSHService
-from compose_api.config import get_settings
+from compose_api.common.ssh.ssh_service import SSHService, get_ssh_service
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.dependencies import get_data_service, set_data_service
 from compose_api.simulation.data_service import DataService
 from compose_api.simulation.models import SimulationFileType, SimulationRequest
 from tests.fixtures.mocks import TestDataService
+from tests.fixtures.slurm_fixtures_backend import SlurmBackend
 
 
 @pytest_asyncio.fixture(scope="session")
-async def ssh_service() -> AsyncGenerator[SSHService]:
-    settings = get_settings()
-    ssh_service = SSHService(
-        hostname=settings.slurm_submit_host,
-        username=settings.slurm_submit_user,
-        key_path=Path(settings.slurm_submit_key_path),
-        known_hosts=Path(settings.slurm_submit_known_hosts) if settings.slurm_submit_known_hosts else None,
-    )
+async def ssh_service(slurm_backend: SlurmBackend) -> AsyncGenerator[SSHService]:
+    """A descriptor for whichever backend is selected.
+
+    Depending on `slurm_backend` is what guarantees its settings override is already in
+    force; the descriptor is otherwise built from whatever settings happen to be current.
+    """
+    ssh_service = get_ssh_service()
     yield ssh_service
     await ssh_service.close()
 
@@ -39,10 +38,11 @@ async def slurm_service(ssh_service: SSHService) -> AsyncGenerator[SlurmService]
 
 
 @pytest.fixture(scope="session")
-def slurm_template_hello_TEMPLATE() -> str:
-    settings = get_settings()
-    partition = settings.slurm_partition
-    qos = settings.slurm_qos
+def slurm_template_hello_TEMPLATE(slurm_backend: SlurmBackend) -> str:
+    partition = slurm_backend.partition
+    # the container cluster has no QOS configured; omit the directive rather than
+    # emitting an empty one, which sbatch rejects
+    qos_directive = f"#SBATCH --qos={slurm_backend.qos}" if slurm_backend.qos else ""
     template = dedent(f"""\
         #!/bin/bash
         #SBATCH --job-name=my_test_job        # Job name
@@ -50,7 +50,7 @@ def slurm_template_hello_TEMPLATE() -> str:
         #SBATCH --output=output.txt           # Standard output file
         #SBATCH --error=error.txt             # Standard error file
         #SBATCH --partition={partition}       # Partition or queue name
-        #SBATCH --qos={qos}                   # QOS level
+        {qos_directive}
         #SBATCH --nodes=1                     # Number of nodes
         #SBATCH --ntasks-per-node=1           # Number of tasks per node
         #SBATCH --cpus-per-task=1             # Number of CPU cores per task
@@ -94,7 +94,7 @@ def slurm_template_hello_10s(slurm_template_hello_TEMPLATE: str) -> str:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def data_service() -> AsyncGenerator[DataService, None]:
+async def data_service() -> AsyncGenerator[DataService]:
     old_data_service = get_data_service()
     new_data_service = TestDataService()
 
