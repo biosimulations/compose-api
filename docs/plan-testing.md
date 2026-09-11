@@ -5,8 +5,12 @@ be checkable. Part 3 is a menu of candidate actions with sizes and costs, not a 
 agreed; the decisions get made by iterating on this file.
 
 **Scope.** This repository (`compose-api`) and `pbest` are the subjects. The other repositories in the loop are
-included as context and as sources of practice worth copying or avoiding: `sms-api`, `biosim-client`,
+included as context and as sources of practice worth copying or avoiding: `platform`, `sms-api`, `biosim-client`,
 `compose-server`, `process-bigraph`, `bigraph-schema`, `spatio-flux`, `pbg-vcell-fvsolver`, `vivarium-workbench`.
+
+`platform` was added on 2026-09-11 and is worth reading closely: it is the sibling service, it is the only repo here
+with branch protection, and it fails on gating in exactly the opposite direction from this one. Figures are from
+`main` at `75dc795` (2026-09-04); PR #107 adds practices `main` does not yet have, noted where relevant.
 
 **A note on the vivarium-collective repositories.** They are read-only for this work. Any change there needs the
 owner's agreement first, so actions below that would touch them are marked as such.
@@ -34,6 +38,8 @@ Measured 2026-09-11. "Run in CI" counts tests that actually execute, not tests t
 |---|---|---|---|---|
 | **compose-api** | 25 collected | **9** | `SLURM_SUBMIT_KEY_PATH` is empty in CI | 45%, uploaded from one workflow |
 | **pbest** | 23 | 21 | `hpc` marker, CI runs `-m "not hpc"` | measured, never uploaded |
+| **platform** (backend) | 205 | ~188 | 17 `skipif` on a GCS credential or a SLURM key | **not measured at all** |
+| **platform** (frontend) | 0 | 0 | there is no test runner | none |
 | sms-api | ~1,392 | most | collection hook plus ~40 `skipif` | measured, never uploaded |
 | biosim-client | 20 | 20 | nothing is gated | uploaded |
 | compose-server | ~7, most bodies commented out | 0 | no workflow runs on push or PR | none |
@@ -78,6 +84,45 @@ things worth testing are the real integrations.
 **Twelve test functions are commented out**, including the entire whitelist-rejection matrix in
 `tests/containerization/test_whitelist.py` and the arm64 image build.
 
+### 1.5 How platform tests today
+
+The sibling service, and the most useful comparison in this document because it is the same kind of system solving
+the same problem with different choices.
+
+**Backend: 205 tests across 29 files**, `backend/tests/` mirroring the package. The DI pattern is the same as ours
+and slightly better executed: seven paired `set_`/`get_` accessors in `dependencies.py`, every fixture saving,
+swapping, yielding and restoring. The database fixtures go further and pair the restore with explicit data cleanup,
+with a comment naming the exact bug it prevents, since a session-scoped Mongo container would otherwise hand a later
+test a stale success record.
+
+**Real infrastructure, not mocks, for the hard parts.** Two testcontainers, Mongo and Keycloak, plus a real Temporal
+dev server via `start_local`. Nothing guards Docker availability, so on a machine without it a bare `pytest` errors
+rather than skips.
+
+**Frontend: zero tests.** No runner, no spec files, and the required `frontend-ci` check is lint and typecheck only.
+
+**Coverage: none at all.** No `pytest-cov` in the lockfile, no config, no upload, and no `codecov.yaml`. Two
+documents advertise `uv run pytest --cov=biosim_server`, which cannot run.
+
+**Gating is documented but not enforced.** Two markers are declared, `integration` and `integration_local`, and the
+prose in four files says to run `-m "not integration"`. Nothing implements it: `lefthook.yml` runs ruff, eslint,
+mypy and typecheck but **no tests at all**, so the first execution of the suite for any change is in CI.
+
+### 1.6 What PR #107 adds that `main` does not have
+
+Worth recording separately, because these are the practices this repo should be copying and they are arriving now
+rather than already present:
+
+- **A failure matrix over a mocked transport.** `tests/pages/test_run_page.py::test_failure_policy` parametrizes
+  four resources against six failure modes, 24 cases per route, asserting both the resulting status and that no
+  upstream body leaked into the response.
+- **Assertions that no upstream request happened** (`seen == []`) on every rejection path, so the guarantee is that
+  the transport was never entered rather than merely that the status was right.
+- **Leak assertions** (`assert "secret" not in response.text`) on every failure case.
+- **OpenAPI contract tests in pytest**, rather than only the shell `curl | jq` in the smoke job.
+- **`httpx.MockTransport`**, which `main` does not use anywhere — and its absence is precisely why the live calls
+  described in F10 get through.
+
 ---
 
 ## Part 2. Findings
@@ -114,6 +159,11 @@ condition:
 | sms-api | 3.13 | `== '3.11'` | **no** |
 | biosim-client | 3.8–3.12 | `== '3.11'` | yes |
 
+`platform` is the other end of the same failure: it never adopted the template's `codecov.yaml` at all, has no
+`pytest-cov` in its lockfile, and measures nothing — while two of its documents advertise a `--cov` command that
+cannot run. Four repos carry an unenforced 90% target; the fifth carries no target and no measurement. Neither end
+produces a number anyone acts on.
+
 Actual coverage here is **45%** against a stated target of 90%, and no pull request carries a codecov status check.
 The worst-covered modules are the ones the HPC gate hides: `slurm_service` at 18%, `job_monitor` at 20%,
 `ssh_service` at 23%, `handlers` at 19%.
@@ -126,6 +176,12 @@ a direct push to `main` is possible.
 
 `pbest/CLAUDE.md` states that `main` "is protected: no direct pushes, changes land through a PR". That is not true
 today, and a stale instruction is worse than none because it stops people checking.
+
+**`platform` shows this is achievable in the same organisation, and what it costs.** Its `main` requires two
+contexts, `build` and `build (ubuntu-latest, 24)`, with `strict: true` so a branch must be current before merging.
+It requires **zero** approving reviews, which is a deliberate trade: the machine gates, humans are not forced to.
+Notably `smoke`, its only cross-service test, is **not** required, so the check that would catch a broken
+integration is the one that cannot block.
 
 ### F4. This repository runs its CI twice
 
@@ -250,7 +306,57 @@ slot; disjointness is structural. Settings is the one place that property was lo
 test. `CLAUDE.md`'s warning that settings changes require a process restart is true only of those two constants and
 is overly broad as written.
 
-### F10. Smaller things worth fixing while nearby
+### F10. Two repos fail at gating in opposite directions, and both are wrong
+
+This one only becomes visible by comparing, which is why `platform` earns its place in this document.
+
+**Here, everything real is skipped.** 16 of 25 tests are gated on a credential CI never has (F1), so CI proves
+imports and database round-trips and nothing about the system's purpose.
+
+**In `platform`, the live tests run in the required check.** Its CI invocation is bare:
+
+```yaml
+- name: Run tests
+  run: uv run python -m pytest
+```
+
+No marker selection. So three tests hit third-party services on every pull request:
+`test_get_simulator_spec_real_api` and `test_find_compatible_simulators_real_api` reach `api.biosimulators.org`,
+and `test_get_simulation_versions_rest` does too — that third one carries **no marker and no skipif**, so it
+survives even the documented `-m "not integration"` escape hatch. A `vcell` delisting or an upstream outage reds a
+required check on unrelated work. `WorkflowEnvironment.start_local` also downloads the Temporal binary from the
+network on first use, a second uncontrolled dependency.
+
+The two failures share a cause: **in neither repo does the marker decide where the test runs.** Here the gate is a
+credential that happens to be absent; there the intent lives in prose that nothing enforces, in four documents and a
+file banner, while `lefthook.yml` runs no tests at all so nobody discovers the drift locally.
+
+That is the argument for F.c's rule — mark by what a test *needs*, then let the runner decide what to supply — and
+it is worth noting that `platform`'s `smoke.yaml` already gets this right in its own header, stating it deliberately
+avoids a real submission because of "minutes and flaky external state". Its backend suite does not follow its own
+smoke job's policy.
+
+### F11. Config shadowing silently disables settings in three repos
+
+`pytest` takes the first `pytest.ini` it finds and never merges `[tool.pytest.ini_options]` from `pyproject.toml`.
+Three repos here have both, so one block is dead in each: `platform`, `sms-api`, and `biosim-client`.
+
+In `platform` the dead block is doing real damage in waiting. It contains:
+
+```toml
+python_files = "main.py"
+```
+
+which, if the `pytest.ini` were ever removed as redundant, would treat only `main.py` as a test module and collect
+**zero** tests — a green suite that runs nothing. The shadowing is currently the only thing preventing that.
+
+In `biosim-client` the shadowing works the other way: with `testpaths` dead, a bare `pytest` also collects 35
+generated OpenAPI stub files that CI's `pytest tests` does not.
+
+This repo has only the `pyproject.toml` block and is unaffected, but the check is worth adding to any review of the
+others: if both exist, say out loud which one is live.
+
+### F12. Smaller things worth fixing while nearby
 
 - `tests/simulation/dont_test_sedml.py` (3 tests) and 12 commented-out tests in pbest are dead weight. Either
   restore them or delete them, but leaving them as text misleads.
@@ -427,16 +533,18 @@ Size **S–M**: the fixture and the `port` parameter are small; the judgement ca
    That is the right shape for any wire format we settle on in the protocol work, including the OpenAPI contract
    this repository publishes to pbest. Size M.
 
-### E. Tidy (addresses F7, F10)
+### E. Tidy (addresses F7, F11, F12)
 
-Fix the `test_sync_producer_with_async_subscriber` race (wait on the subscriber rather than assuming ordering);
+State in each repo's `pyproject.toml` which pytest config is live where both exist (F11) — a one-line comment,
+since the shadowing is invisible and one of the dead blocks would collect zero tests if the file shadowing it were
+ever removed as redundant. Then: fix the `test_sync_producer_with_async_subscriber` race (wait on the subscriber rather than assuming ordering);
 restore or delete the dead tests; add a `pull_request` trigger to pbest; upload or stop measuring pbest's coverage.
 Size S in total. The flake is worth doing first and on its own: while only nine tests run in CI, one unreliable
 test is an eleven percent false-failure rate on the whole signal.
 
 ---
 
-### F. One test body, two backends (addresses F1, F8, F9)
+### F. One test body, two backends (addresses F1, F8, F9, F10)
 
 The companion to A4. A4 answers "can we run SLURM in CI"; this answers "how do the same tests run against both the
 container and the real cluster without the two drifting apart". It has three parts, and the first two are
@@ -595,7 +703,7 @@ injection would have made fixture ordering load-bearing, requiring every service
 fixture as a dependency and failing confusingly when one did not. Declaring the dependency is still good practice —
 it documents intent — but with a provider it is no longer a correctness requirement.
 
-#### F.c Parameterize the backend, never the test
+#### F.c Parameterize the backend, never the test (addresses F1, F10)
 
 One test body. A fixture yields a backend; the backend is a parameter.
 
@@ -666,10 +774,32 @@ production changes are F.a, F.b, and the `port` parameter from A4.
   empty cell rather than as an absence nobody notices.
 - **Golden vectors with an identity assertion.** Described in D3 above.
 
+- **`platform`'s real-identity RBAC tests.** `backend/tests/rbac_demo/test_keycloak_integration.py` runs a
+  Keycloak container preloaded with a realm defining three users at different privilege levels, fetches genuine
+  tokens, and drives the real JWKS fetch, signature verification and roles extraction. A sibling file tests the same
+  endpoints with auth mocked out, and each file's docstring says which layer it is. Running a fast mocked layer and
+  a slow real layer over the same endpoints, and labelling them, is the shape our backend selector in F.c is
+  reaching for.
+- **`platform`'s `smoke.yaml`.** A genuine three-process check with no pytest: compose up Mongo and Temporal, build
+  the frontend, launch both servers, then assert on `/version`, an OpenAPI path via `jq`, `/docs`, a CORS preflight,
+  and that the frontend serves HTML — with log dumping on failure and teardown always. It is the only cross-service
+  test in any repo here.
+- **Fixture teardown that names the bug it prevents.** `platform`'s database fixtures pair the singleton restore
+  with explicit data cleanup and a comment explaining that a session-scoped container would otherwise hand a later
+  test a stale success record. Ours restore but do not clean.
+- **Negative-authorization assertions inside the happy path.** `platform` asserts that a caller supplying someone
+  else's user id gets zero rows, with a comment naming the escalation it prevents.
+
 ## Practice worth avoiding
 
 - **`biosim-client`'s ungated live calls.** Its CI hits the production API on every matrix leg, and one test
   asserts a hard-coded remote version string, so a server release breaks the client's build.
+- **`platform`'s release path.** `release.yaml` builds and pushes three container images and cuts a GitHub Release
+  with **no test dependency** — its only guard compares the tag against a version file. Nothing re-runs the suite
+  at the tag. Our own `build-containers.yml` has the same property.
+- **Documenting a command that cannot run.** Two `platform` documents advertise `uv run pytest --cov=biosim_server`
+  while `pytest-cov` is absent from the lockfile. A reader's first attempt fails, which teaches them the docs are
+  unreliable.
 - **`compose-server`'s state.** Seven workflows, all manual; the one test job invokes a file that does not exist;
   a test module runs a real dispatch at import time. It is the end state of not deciding.
 
