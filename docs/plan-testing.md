@@ -1,8 +1,15 @@
 # Testing plan: current state and candidate actions
 
 **Status:** working document, opened 2026-09-11. Part 1 and Part 2 are findings, measured on that date and meant to
-be checkable. Part 3 is a menu of candidate actions with sizes and costs, not a decided plan. Nothing here has been
-agreed; the decisions get made by iterating on this file.
+be checkable. Part 3 is a menu of candidate actions with sizes and costs. Most of it is still undecided; the
+decisions get made by iterating on this file.
+
+**What has been built (2026-09-11).** A4, F.a, F.b and F.c are no longer candidates: they are implemented and
+merged into this branch. `pytest` now brings up a throwaway SLURM cluster whenever Docker is present and runs the
+SSH and scheduler tests against it, with no key, no VPN and no opt-in. The eleven `skipif` decorators are gone,
+replaced by `slurm` and `cluster_only` markers over a parameterized backend. The whole suite runs in about a minute.
+Section F carries an **As built** note for each part. The exercise paid for itself immediately: the container
+backend exposed a production bug, recorded as F13.
 
 **Scope.** This repository (`compose-api`) and `pbest` are the subjects. The other repositories in the loop are
 included as context and as sources of practice worth copying or avoiding: `platform`, `sms-api`, `biosim-client`,
@@ -206,6 +213,12 @@ Using CPython 3.14.7
 All seven matrix legs execute the same interpreter. The matrix costs seven times the minutes and proves nothing
 about version compatibility. The same is true in every repository here that has a matrix.
 
+**Fixed here on 2026-09-11.** The composite action now exports `UV_PYTHON` from the matrix value, which pins every
+later `uv sync` and `uv run` in the job, and prints the interpreter it ended up with. The matrix itself was cut from
+seven legs to `3.13` and `3.14`: `requires-python` is `>=3.13.2`, so the older legs were claiming to test versions
+the project does not support. The suite was run against a real 3.13 before the change landed. The remaining
+repositories with a matrix are untouched and still have this problem.
+
 ### F6. The risk profile is inverted
 
 The pure library with no I/O is exhaustively tested: `bigraph-schema` has about 1,178 tests, no gating, and a
@@ -373,8 +386,16 @@ which, if the `pytest.ini` were ever removed as redundant, would treat only `mai
 In `biosim-client` the shadowing works the other way: with `testpaths` dead, a bare `pytest` also collects 35
 generated OpenAPI stub files that CI's `pytest tests` does not.
 
-This repo has only the `pyproject.toml` block and is unaffected, but the check is worth adding to any review of the
-others: if both exist, say out loud which one is live.
+~~This repo has only the `pyproject.toml` block and is unaffected~~ — **wrong, corrected 2026-09-11.** This repo had
+both. A two-line root `pytest.ini` holding only `log_cli` settings was silently disabling the entire
+`[tool.pytest.ini_options]` block in `pyproject.toml`: `testpaths`, `addopts`, and, as of this branch, the `slurm`
+and `cluster_only` marker registrations. The symptom was `PytestUnknownMarkWarning` for markers that were plainly
+declared, which is what led back to the cause. The `pytest.ini` is deleted and its two settings folded into
+`pyproject.toml`, so there is now one file.
+
+The general check stands, and this repo is the argument for it: if both exist, say out loud which one is live.
+`tox.ini` was stale in the same way, still declaring `py39` through `py312` envs that `requires-python` forbids; it
+now lists `py313` and `py314`. Nothing invokes tox, which is why nobody noticed.
 
 ### F12. Smaller things worth fixing while nearby
 
@@ -385,8 +406,33 @@ others: if both exist, say out loud which one is live.
 - `process-bigraph`'s REST and Ray transports are covered only by `slow` tests that CI never enables, so those
   transports are untested in every realistic environment. Relevant to us because the composition protocol's remote
   story rests on them.
+- ~~Coverage is uploaded to Codecov on the Python 3.11 leg~~ — **fixed 2026-09-11.** There was no 3.11 leg, so the
+  condition was never true and coverage had stopped reaching Codecov entirely. It now runs on the 3.13 leg.
+- ~~`tests/simulators/test_readdy.py` writes its results to a fixed path~~ — **fixed 2026-09-11.** It wrote to a
+  named developer's Desktop, so the test could not pass for anyone else. It uses a temporary directory now.
 
 ---
+
+### F13. A job seen as PENDING was abandoned by the monitor
+
+Found on 2026-09-11 by running the existing scheduler test against the container, where the poll interval is short
+enough to catch a job before it starts. `JobMonitor` re-reads its work list every tick from a query that selected
+**only** rows whose status was exactly `RUNNING`. Runs are inserted as `RUNNING`, so the first poll that saw the
+job still queued wrote `PENDING` and thereby removed the row from every later poll. The run then stayed `PENDING`
+forever: it never reached `COMPLETED`, the results were never fetched, and the API reported it as queued
+indefinitely.
+
+Nothing caught this because the only tests that exercise the monitor were the ones gated behind a real cluster, and
+on a cluster the behaviour is intermittent rather than deterministic: it happens exactly when a job is still queued
+at the first poll, which is the common case on a busy queue and the rare case on an idle one.
+
+The query now selects everything that has not reached a terminal status, with the terminal set named explicitly so
+a status added later keeps being polled instead of being silently dropped. `list_running_hpcruns` is renamed
+`list_unfinished_hpcruns`, because the old name described the bug. Covered by `tests/simulation/test_job_polling.py`,
+which needs only Postgres and so runs everywhere, on every status in the enum.
+
+**This is the argument for A4 in one finding.** The bug was reachable only by running the monitor against a real
+scheduler. It had been latent for as long as those tests have been skipped.
 
 ## Part 3. Candidate actions
 
@@ -402,8 +448,8 @@ Sized as S (under a day), M (a few days), L (a week or more). Nothing here is ch
    next morning rather than on the pull request.
 3. **Record and replay.** Capture real `squeue`/`sacct` output and SSH transcripts once, replay them in CI. Size M.
    Cost: recordings rot silently when the cluster's output format changes.
-4. **Containerized SLURM in a testcontainer.** Size **S–M**, and no longer speculative: measured working against
-   this repository's own code on 2026-09-11. See A4 below.
+4. **Containerized SLURM in a testcontainer.** **Chosen and implemented on 2026-09-11.** See A4 below for the
+   measurement that decided it, and the As built note at the end of that section for what shipped.
 5. **Do nothing, but say so.** Document that the HPC path is covered by manual testing only, and stop implying
    otherwise with a 90% coverage target. Size S.
 
@@ -526,6 +572,18 @@ container". Same tests, two backends.
 Size **S–M**: the fixture and the `port` parameter are small; the judgement call is whether a ~2.8 GB pull and a
 20-second startup belong in the per-pull-request job or in a separate one.
 
+**As built (2026-09-11).** `tests/fixtures/slurm_cluster/docker-compose.yml` vendors the upstream stack with four
+deliberate changes: the published multi-arch image is used directly so nothing compiles on first run; no
+`container_name:` anywhere, so two runs on one host do not collide; port 22 is published on host port `0` and read
+back with `docker compose port`, so concurrent runs and CI pick free ports; and slurmrestd, the GPU worker and the
+portal are dropped. `COMPOSE_PROJECT_NAME` is set per session to a random value and must be threaded to the worker,
+whose entrypoint resolves its own replica index over DNS and will not start without it.
+
+The cluster comes up in about twenty seconds and the seven container-backed tests finish in under thirty. Two
+adjustments were needed beyond the plan: the production code creates a per-experiment directory but never its
+parents, so the fixture provisions the same tree an administrator made once on the real cluster; and the scheduler
+test asserted status after a fixed sleep, which is a race on any backend and was replaced with polling.
+
 ### B. Make coverage mean something (addresses F2)
 
 1. Fix the upload condition to match the matrix, or drop the condition, so coverage is reported from one place.
@@ -610,6 +668,11 @@ the cost is one `model_copy` per call, memoizable on a layer-version counter if 
 
 Size S. This is the piece that makes everything else possible.
 
+**As built.** `override_settings(**fields)` in `compose_api/config.py`, backed by a list of partial layers removed
+by identity on exit. Unknown field names and a field already owned by an active layer both raise rather than
+silently winning, so two fixtures overriding disjoint settings compose and two overriding the same one is an error
+at the point of overlap.
+
 #### F.b Declare the SSH dependency instead of locating it (addresses F8)
 
 **Decision: provider injection.** Inject a `Callable[[], SSHService]` whose default is the existing global factory.
@@ -676,6 +739,11 @@ acquire step and no call site changes.
 Size S. Worth doing on its own merits regardless of the backend work: it removes a service locator, deletes a
 duplicated constructor, and preserves the existing resolution semantics while making the dependency visible. The
 dead `set_ssh_service` line at `tests/fixtures/slurm_fixtures.py:37` goes away with it.
+
+**As built.** `SimulationServiceHpc` and `DataService` take an `SSHProvider` (`Callable[[], SSHService]`) defaulting
+to `get_ssh_service`, and resolve it per operation rather than at construction, which is what the existing design
+relied on. `SSHService` gained a `port`, carried through all three `asyncssh.connect` sites, so the container's
+published port reaches the production code path unchanged.
 
 #### F.b.1 How F.a and F.b divide the work
 
@@ -783,6 +851,17 @@ lives in the shared bodies.
 
 Size M for the fixture and the marker migration, replacing the eighteen identical `skipif` decorators. The only
 production changes are F.a, F.b, and the `port` parameter from A4.
+
+**As built.** `pytest_generate_tests` parameterizes any test reaching `slurm_backend` over the selected backends,
+defaulting to `container` when Docker is present. A `cluster_only` test is restricted to the real host and, when
+that is not selected, skips with a message naming the flag to pass, rather than passing silently. Eleven `skipif`
+decorators became two markers: two tests run on the container, nine need real simulator images and stay
+`cluster_only`. The conformance test landed as `tests/common/test_slurm_conformance.py` and immediately earned its
+keep by pinning something no one had written down, that `sacct --parsable` terminates each row with the delimiter
+and so yields a trailing empty field.
+
+Differences between the backends are fields on a frozen `SlurmBackend`, so adding one is visible in review. No test
+body branches on `kind`.
 
 ## Practice worth copying
 

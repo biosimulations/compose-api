@@ -41,9 +41,19 @@ Release & deploy: `make tag` (`tag.sh` bumps `pyproject.toml` + `compose_api/ver
 
 ## Test environment
 
-- Tests requiring a real SLURM cluster are skipped unless `SLURM_SUBMIT_KEY_PATH` is set:
-  `@pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, ...)`. Add that marker to any new test that
-  submits jobs or SSHes to HPC.
+- SLURM tests are **parameterised over a backend**, not skipped. Mark a test that needs a scheduler
+  `@pytest.mark.slurm` and take the `slurm_backend` fixture; it runs against a throwaway SLURM cluster
+  (`tests/fixtures/slurm_cluster/docker-compose.yml`, brought up per session) whenever Docker is present, with no
+  key and no VPN. Add `@pytest.mark.cluster_only` when the test needs the real submit host — a real simulator image,
+  a `singularity build --fakeroot`, the production partition — and it will run only under
+  `--slurm-backend cluster`. `--slurm-backend` is repeatable, so passing both runs the body against each.
+- **Never branch on `slurm_backend.kind` in a test body.** Differences between the backends are fields on the frozen
+  `SlurmBackend` (`partition`, `qos`, `remote_base`, `can_build_singularity`); add a field rather than a branch, or
+  the two backends grow separate implementations. `tests/common/test_slurm_conformance.py` is the drift alarm: it
+  asserts the raw `sbatch`/`squeue`/`sacct` output shape our parsers assume, on every selected backend.
+- The backend switch is a **settings override**, not an injected object, because three consumers reach for SSH
+  independently. Use `override_settings(**fields)` from `compose_api/config.py`; it stacks partial layers removed by
+  identity, so two fixtures overriding disjoint settings compose and overlapping ones raise.
 - Postgres, NATS, and MongoDB fixtures use **testcontainers**, so Docker must be running for most of the suite.
 - All fixtures live in `tests/fixtures/` and are re-exported from `tests/conftest.py`; add new fixtures there too.
 - Service fixtures swap the module-level singletons in `compose_api/dependencies.py` and restore the previous value on
@@ -139,7 +149,8 @@ This service is one side of a three-package loop. `../pbest` is checked out next
 
 - ruff, line length 120, with a broad rule set (bandit `S`, bugbear `B`, tryceratops `TRY`, …); `make check` must be
   clean. `alembic/`, `documentation/`, and `compose_api/api/client/` are excluded.
-- mypy runs `--strict` over `compose_api` and `tests`; use `typing_extensions.override` on interface implementations,
-  as the existing services do.
+- mypy runs `--strict` over `compose_api` and `tests`; use `typing.override` on interface implementations, as the
+  existing services do. (It moved from `typing_extensions` when the ruff target went to `py313`; the floor in
+  `requires-python` is 3.13.2 and the runtime is 3.14.)
 - Domain models are pydantic (`compose_api/simulation/models.py` subclasses a local `BaseModel` that adds
   `as_payload()`); enums are `StrEnum` when their string value is wire- or path-visible.
