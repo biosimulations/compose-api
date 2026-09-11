@@ -34,6 +34,17 @@ class JobStatusDB(enum.Enum):
         return JobStatus(self.value)
 
 
+#: Statuses a SLURM job never leaves. Everything else is still worth polling, so a status
+#: added to the enum later keeps being polled rather than being silently abandoned.
+TERMINAL_JOB_STATUSES = frozenset({
+    JobStatusDB.COMPLETED,
+    JobStatusDB.FAILED,
+    JobStatusDB.CANCELLED,
+    JobStatusDB.OUT_OF_MEMORY,
+    JobStatusDB.TIMEOUT,
+})
+
+
 class JobTypeDB(enum.Enum):
     SIMULATION = "simulation"
     BUILD_CONTAINER = "build_container"

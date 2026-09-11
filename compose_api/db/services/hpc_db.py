@@ -9,6 +9,7 @@ from sqlalchemy.orm import InstrumentedAttribute
 
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.db.tables.hpc_tables import (
+    TERMINAL_JOB_STATUSES,
     JobStatusDB,
     JobTypeDB,
     ORMHpcRun,
@@ -71,8 +72,8 @@ class HPCDatabaseService(ABC):
         pass
 
     @abstractmethod
-    async def list_running_hpcruns(self) -> list[HpcRun]:
-        """Return all HpcRun jobs with status RUNNING."""
+    async def list_unfinished_hpcruns(self) -> list[HpcRun]:
+        """Return every HpcRun that has not reached a terminal status."""
         pass
 
     @abstractmethod
@@ -218,9 +219,9 @@ class HPCORMExecutor(HPCDatabaseService):
             return worker_events
 
     @override
-    async def list_running_hpcruns(self) -> list[HpcRun]:
+    async def list_unfinished_hpcruns(self) -> list[HpcRun]:
         async with self.async_session_maker() as session:
-            stmt = select(ORMHpcRun).where(ORMHpcRun.status == JobStatusDB.RUNNING)
+            stmt = select(ORMHpcRun).where(ORMHpcRun.status.not_in(TERMINAL_JOB_STATUSES))
             result: Result[tuple[ORMHpcRun]] = await session.execute(stmt)
             orm_hpcruns = result.scalars().all()
             return [orm_hpcrun.to_hpc_run() for orm_hpcrun in orm_hpcruns]

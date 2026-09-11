@@ -83,10 +83,12 @@ class JobMonitor:
             await asyncio.sleep(interval_seconds)
 
     async def update_running_jobs(self) -> None:
-        # Fetch all running HpcRun jobs
-        running_jobs = await self.database_service.get_hpc_db().list_running_hpcruns()
+        # Every run that has not reached a terminal status, not only the RUNNING ones: a
+        # job seen as PENDING on one poll must still be polled on the next, or it is
+        # abandoned in that state and never reaches COMPLETED.
+        running_jobs = await self.database_service.get_hpc_db().list_unfinished_hpcruns()
         if not running_jobs:
-            logger.debug("No running jobs found for polling.")
+            logger.debug("No unfinished jobs found for polling.")
             return
         job_ids = [job.slurmjobid for job in running_jobs if job.slurmjobid]
         if not job_ids:
