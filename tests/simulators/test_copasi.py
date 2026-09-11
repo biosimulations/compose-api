@@ -6,7 +6,6 @@ from compose_api.api.client import Client
 from compose_api.api.client.api.curated import run_copasi
 from compose_api.api.client.models import BodyRunCopasi
 from compose_api.api.client.types import File
-from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation.data_service import DataService
 from compose_api.simulation.job_monitor import JobMonitor
@@ -18,7 +17,8 @@ from tests.simulators.utils import (
 )
 
 
-@pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
+@pytest.mark.slurm
+@pytest.mark.cluster_only
 @pytest.mark.asyncio
 async def test_copasi(
     in_memory_api_client: Client,

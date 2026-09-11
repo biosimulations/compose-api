@@ -2,6 +2,7 @@ import asyncio
 import random
 import string
 import tempfile
+import time
 import uuid
 from pathlib import Path
 
@@ -54,7 +55,29 @@ async def insert_job(database_service: DatabaseServiceSQL, slurmjobid: int, simu
     return hpcrun
 
 
-@pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
+async def wait_for_status(
+    database_service: DatabaseServiceSQL, slurmjobid: int, expected: JobStatus, timeout_seconds: float
+) -> HpcRun:
+    """Poll until the monitor has written `expected`, or fail saying what it last saw.
+
+    Sleeping a fixed interval and asserting once makes the result depend on how quickly
+    the scheduler happens to dispatch, which differs between the throwaway container and
+    a busy cluster. Polling lets the one test body be deterministic on both.
+    """
+    deadline = time.monotonic() + timeout_seconds
+    last: HpcRun | None = None
+    while time.monotonic() < deadline:
+        last = await database_service.get_hpc_db().get_hpcrun_by_slurmjobid(slurmjobid=slurmjobid)
+        if last is not None and last.status == expected:
+            return last
+        await asyncio.sleep(0.5)
+    raise AssertionError(
+        f"slurm job {slurmjobid} never reached {expected.value} within {timeout_seconds}s; "
+        f"last status was {last.status if last else 'no hpcrun row'}"
+    )
+
+
+@pytest.mark.slurm
 @pytest.mark.asyncio
 async def test_messaging(
     nats_subscriber_client: NATSClient,
@@ -93,7 +116,7 @@ async def test_messaging(
     assert len(_updated_worker_events) == 1
 
 
-@pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
+@pytest.mark.slurm
 @pytest.mark.asyncio
 async def test_job_monitor(
     nats_subscriber_client: NATSClient,
@@ -128,20 +151,12 @@ async def test_job_monitor(
     hpc_run = await insert_job(database_service=database_service, slurmjobid=job_id, simulator=simulator)
     assert hpc_run.status == JobStatus.RUNNING
 
-    # Wait for the job to receive a RUNNING status
-    await asyncio.sleep(5)
-
-    # Check if the job is in the database
-    running_hpcrun: HpcRun | None = await database_service.get_hpc_db().get_hpcrun_by_slurmjobid(slurmjobid=job_id)
-    assert running_hpcrun is not None
+    # The monitor should see the job start, then finish. The sbatch script sleeps 10s and
+    # the monitor polls every second, so RUNNING cannot be stepped over.
+    running_hpcrun = await wait_for_status(database_service, job_id, JobStatus.RUNNING, timeout_seconds=120)
     assert running_hpcrun.status == JobStatus.RUNNING
 
-    # Wait for the job to receive a COMPLETE status
-    await asyncio.sleep(20)
-
-    # Check if the job is in the database
-    completed_hpcrun: HpcRun | None = await database_service.get_hpc_db().get_hpcrun_by_slurmjobid(slurmjobid=job_id)
-    assert completed_hpcrun is not None
+    completed_hpcrun = await wait_for_status(database_service, job_id, JobStatus.COMPLETED, timeout_seconds=120)
     assert completed_hpcrun.status == JobStatus.COMPLETED
 
     # Stop polling

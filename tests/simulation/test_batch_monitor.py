@@ -8,7 +8,6 @@ from compose_api.api.client.api.curated import run_copasi
 from compose_api.api.client.api.results import get_simulations_status_batch
 from compose_api.api.client.models import BodyRunCopasi, HpcRun, JobStatus, SimulationExperiment
 from compose_api.api.client.types import File
-from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService, DatabaseServiceSQL
 from compose_api.simulation.data_service import DataService
 from compose_api.simulation.job_monitor import JobMonitor
@@ -72,7 +71,8 @@ async def test_get_simulations_status_batch(
         await database_service.get_simulator_db().delete_simulation(sim_b.database_id)
 
 
-@pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
+@pytest.mark.slurm
+@pytest.mark.cluster_only
 @pytest.mark.asyncio
 async def test_batch_status_after_copasi_runs(
     in_memory_api_client: Client,
