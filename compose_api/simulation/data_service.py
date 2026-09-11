@@ -7,7 +7,7 @@ import numpy
 from pydantic import BaseModel
 
 from compose_api.common.gateway.models import Namespace
-from compose_api.common.ssh.ssh_service import SSHService, get_ssh_service
+from compose_api.common.ssh.ssh_service import SSHProvider, SSHService, get_ssh_service
 from compose_api.config import Settings, get_settings
 from compose_api.simulation.hpc_utils import get_internal_experiment_dir
 
@@ -20,12 +20,13 @@ assets_dir = Path(get_settings().assets_dir)
 class DataService(ABC):
     settings: Settings
 
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(self, settings: Settings | None = None, ssh_provider: SSHProvider = get_ssh_service) -> None:
         self.settings = settings or get_settings()
+        self._ssh_provider = ssh_provider
 
     @property
     def ssh_service(self) -> SSHService:
-        return get_ssh_service()
+        return self._ssh_provider()
 
     @abstractmethod
     async def get_results_zip(self, experiment_id: str, namespace: Namespace) -> Path:

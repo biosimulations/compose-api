@@ -1,5 +1,6 @@
 import logging
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 import asyncssh
@@ -17,22 +18,48 @@ from compose_api.simulation.models import RemoteContainerImage
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+SSHProvider = Callable[[], "SSHService"]
+"""Produces a connection descriptor, called once per operation.
+
+Injected rather than an ``SSHService`` instance so that resolution stays deferred: the
+descriptor is built when an operation runs, not when the consuming service is constructed.
+"""
+
 
 class SSHService:
+    """A connection descriptor, not a connection.
+
+    Holds only the parameters needed to open one; every method opens its own connection
+    and closes it, which is why ``close()`` is a no-op and why constructing one is free.
+    """
+
     hostname: str
+    port: int
     username: str
     key_path: Path
     known_hosts: str | None
 
-    def __init__(self, hostname: str, username: str, key_path: Path, known_hosts: Path | None = None) -> None:
+    def __init__(
+        self,
+        hostname: str,
+        username: str,
+        key_path: Path,
+        known_hosts: Path | None = None,
+        port: int = 22,
+    ) -> None:
         self.hostname = hostname
+        self.port = port
         self.username = username
         self.key_path = key_path
         self.known_hosts = str(known_hosts) if known_hosts else None
 
     async def run_command(self, command: str) -> tuple[int, str, str]:
         async with asyncssh.connect(
-            host=self.hostname, username=self.username, client_keys=[self.key_path], known_hosts=self.known_hosts
+            host=self.hostname,
+            port=self.port,
+            username=self.username,
+            client_keys=[self.key_path],
+            known_hosts=self.known_hosts,
         ) as conn:
             try:
                 logger.info(f"Running ssh command: {command}")
@@ -57,7 +84,11 @@ class SSHService:
 
     async def scp_upload(self, local_file: Path, remote_path: Path) -> None:
         async with asyncssh.connect(
-            host=self.hostname, username=self.username, client_keys=[self.key_path], known_hosts=self.known_hosts
+            host=self.hostname,
+            port=self.port,
+            username=self.username,
+            client_keys=[self.key_path],
+            known_hosts=self.known_hosts,
         ) as conn:
             try:
                 await asyncssh.scp(srcpaths=local_file, dstpath=(conn, remote_path))
@@ -68,7 +99,11 @@ class SSHService:
 
     async def scp_download(self, local_file: Path, remote_path: Path) -> None:
         async with asyncssh.connect(
-            host=self.hostname, username=self.username, client_keys=[self.key_path], known_hosts=self.known_hosts
+            host=self.hostname,
+            port=self.port,
+            username=self.username,
+            client_keys=[self.key_path],
+            known_hosts=self.known_hosts,
         ) as conn:
             try:
                 await asyncssh.scp(srcpaths=(conn, remote_path), dstpath=local_file)
@@ -109,9 +144,15 @@ class SSHService:
 
 
 def get_ssh_service() -> SSHService:
+    """Build a descriptor from the current settings.
+
+    Called per operation rather than once, so a settings change is picked up without
+    reconstructing the services that use it. This is the default :data:`SSHProvider`.
+    """
     settings = get_settings()
     return SSHService(
         hostname=settings.slurm_submit_host,
+        port=settings.slurm_submit_port,
         username=settings.slurm_submit_user,
         key_path=Path(settings.slurm_submit_key_path),
         known_hosts=Path(settings.slurm_submit_known_hosts) if settings.slurm_submit_known_hosts else None,

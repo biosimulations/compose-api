@@ -10,7 +10,7 @@ from typing import override
 
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
-from compose_api.common.ssh.ssh_service import SSHService, get_ssh_service
+from compose_api.common.ssh.ssh_service import SSHProvider, SSHService, get_ssh_service
 from compose_api.config import Settings, get_settings
 from compose_api.simulation.hpc_utils import (
     get_correlation_id,
@@ -54,11 +54,17 @@ class SimulationService(ABC):
 class SimulationServiceHpc(SimulationService):
     _latest_commit_hash: str | None = None
 
-    @staticmethod
-    def _get_services() -> tuple[SlurmService, SSHService, Settings]:
-        settings = get_settings()
-        ssh_service = get_ssh_service()
-        return SlurmService(ssh_service=ssh_service), ssh_service, settings
+    def __init__(self, ssh_provider: SSHProvider = get_ssh_service) -> None:
+        """Take the SSH provider at the boundary rather than locating it at the point of use.
+
+        The default is the settings-backed factory, so production behaviour is unchanged.
+        A test supplies its own provider to reach a different host without touching globals.
+        """
+        self._ssh_provider = ssh_provider
+
+    def _get_services(self) -> tuple[SlurmService, SSHService, Settings]:
+        ssh_service = self._ssh_provider()
+        return SlurmService(ssh_service=ssh_service), ssh_service, get_settings()
 
     @override
     async def submit_simulation_job(
@@ -212,7 +218,7 @@ class SimulationServiceHpc(SimulationService):
     async def download_container(self, remote_container_image: RemoteContainerImage) -> SimulatorVersion:
         from compose_api.dependencies import get_required_database_service
 
-        await get_ssh_service().download_container(remote_container_image=remote_container_image)
+        await self._ssh_provider().download_container(remote_container_image=remote_container_image)
         return (
             await get_required_database_service()
             .get_simulator_db()
