@@ -188,10 +188,70 @@ Sized as S (under a day), M (a few days), L (a week or more). Nothing here is ch
    next morning rather than on the pull request.
 3. **Record and replay.** Capture real `squeue`/`sacct` output and SSH transcripts once, replay them in CI. Size M.
    Cost: recordings rot silently when the cluster's output format changes.
-4. **Containerized SLURM.** Run a single-node SLURM in a testcontainer. Size L. Cost: a heavy image and a new class
-   of CI flakiness, in exchange for the most faithful coverage.
+4. **Containerized SLURM in a testcontainer.** Size **S–M**, and no longer speculative: measured working against
+   this repository's own code on 2026-09-11. See A4 below.
 5. **Do nothing, but say so.** Document that the HPC path is covered by manual testing only, and stop implying
    otherwise with a 90% coverage target. Size S.
+
+#### A4 in detail: measured, not estimated
+
+Everything in this subsection was run, not reasoned about. The image is `xenonmiddleware/slurm:latest`, started as
+a plain container with port 22 published, a generated public key injected into the `xenon` user's
+`authorized_keys`, and then driven through **this repository's real `SSHService` code path and `SlurmJob`
+parsers** — not through a separate SSH client written for the test.
+
+Result, verbatim:
+
+```
+asyncssh key auth: OK
+sbatch --parsable -> '3'  (int-parseable: True)
+squeue raw: '3|wrap|(null)|xenon|PENDING'
+  parsed squeue -> job_id=3 name='wrap' user='xenon' state='PENDING'
+sacct raw: '2|wrap|(null)|xenon|COMPLETED|2026-09-11T18:11:59|2026-09-11T18:12:01|00:00:02|0:0|'
+  parsed sacct  -> job_id=2 state='COMPLETED' start='2026-09-11T18:11:59' end='2026-09-11T18:12:01'
+                   elapsed='00:00:02' exit='0:0'
+scp_upload: OK
+sbatch of uploaded file -> 4
+```
+
+Those are the exact commands `SlurmService` issues: `squeue -u $USER --noheader --format="%i|%j|%a|%u|%T"` and
+`sacct -u $USER --parsable --allocations --delimiter="|" --noheader --format="jobid,jobname,account,user,state,
+start,end,elapsed,exitcode"`. The output parsed cleanly through `SlurmJob.from_squeue_formatted_output` and
+`from_sacct_formatted_output`.
+
+**`sacct` was the open question and it works.** `sacct` needs the accounting daemon, which many minimal SLURM
+images do not run; this one does (its startup log says "making accounting readable to users"). Without it, only
+`squeue` would be exercisable and the `sacct` reconciliation path in `JobMonitor` would stay dark.
+
+**What it covers.** `sbatch --parsable`, both status-parsing paths, `scp_upload`, real job state transitions
+(`PENDING` → `COMPLETED`), and the sbatch heredocs in `simulation_service.py` actually executing. That is
+precisely the code the HPC gate hides today: `slurm_service` 18%, `handlers` 19%, `job_monitor` 20%,
+`ssh_service` 23%.
+
+**What it does not cover.** Neither `singularity` nor `apptainer` is present in the image, so the container-build
+job path (`singularity build --fakeroot`) stays uncovered by this route. Partition and QoS names are the
+container's (`mypartition`, `otherpartition`), not the cluster's.
+
+**One prerequisite code change.** `SSHService.__init__` accepts hostname, username, key path, and known hosts —
+**there is no port parameter**, and none of its three `asyncssh.connect` call sites passes one, so it can only
+reach port 22. A testcontainer publishes a random high port. Adding `port: int = 22` and threading it through
+those three calls is the whole change, and it is defensible on its own merits.
+
+**Two corrections to the obvious first draft of such a fixture.** Use `asyncssh` with an injected key rather than
+`paramiko` with the image's default password: the point is to exercise `SSHService`, and a `paramiko` client would
+test `paramiko`. And poll `sinfo` until it answers rather than sleeping a fixed interval; the image carries a
+Docker healthcheck and cold start measured **one second** under amd64 emulation on an arm64 laptop.
+
+**The real caveat: the image is old.** `xenonmiddleware/slurm:latest` is **SLURM 17.02.6, published March 2020,
+amd64 only**. Pinning our parsers against a six-year-old output format is a genuine cost, mitigated by the fact
+that these particular format strings have been stable across those releases. Before adopting, check what version
+the cluster runs. `giovtorres/slurm-docker-cluster` is actively maintained (last update August 2026) and is the
+better-known option, at the cost of being a multi-container compose cluster rather than one image.
+
+**Suggested shape if this is chosen.** A session-scoped fixture that starts the container, injects a generated
+key, waits on `sinfo`, and yields a real `SSHService` pointed at the mapped port. The existing `skipif` gate then
+changes meaning: instead of "skip unless a cluster credential exists", it becomes "use the real cluster when a
+credential exists, otherwise use the container". Same tests, two backends.
 
 ### B. Make coverage mean something (addresses F2)
 
