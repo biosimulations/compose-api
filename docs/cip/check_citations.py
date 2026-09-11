@@ -3,8 +3,8 @@
 Read-only. Two checks:
 
 1. Every backticked ``path:line`` (or ``path:line-line``) whose path resolves into one of the two library
-   checkouts exists, and the file has at least that many lines. For anchors listed in ``SYMBOLS`` the named
-   symbol must also appear within three lines of the cited line.
+   checkouts, or into this repository, exists and the file has at least that many lines. For anchors listed in
+   ``SYMBOLS`` the named symbol must also appear within three lines of the cited line.
 2. Every blockquoted line in §1 of the review, and every ``**Grant said.**`` quote in §4, is a verbatim
    substring of the grant text after light normalization (markdown escapes, curly quotes, dashes, whitespace).
 
@@ -31,6 +31,7 @@ REPOS = {
     "process_bigraph/": WORKSPACE / "process-bigraph",
     "tests.py": WORKSPACE / "process-bigraph",
     "bigraph_schema/": WORKSPACE / "bigraph-schema",
+    "compose_api/": ROOT,
 }
 
 # Anchors whose symbol must be within 3 lines of the cited line. (file, line) -> symbol
@@ -118,9 +119,14 @@ SYMBOLS: dict[tuple[str, int], str] = {
     ("tests.py", 3292): "def test_the_results_handle_is_a_reference_not_the_data(",
     ("tests.py", 3668): "def test_unfilled_required_site_is_rejected(",
     ("tests.py", 5910): "def test_version_matches_pyproject(",
+    # This repository, cited by D-F on the registry landscape.
+    ("compose_api/api/routers/compute.py", 75): "simulator/register/bspil",
+    ("compose_api/api/introspect_package.py", 12): "def introspect_package(",
+    ("compose_api/simulation/models.py", 87): "class BiGraphComputeOutline",
+    ("compose_api/db/tables/package_tables.py", 132): "class ORMAllowList",
 }
 
-ANCHOR_RE = re.compile(r"`((?:process_bigraph/|bigraph_schema/|tests\.py)[^`:]*):(\d+)(?:-(\d+))?")
+ANCHOR_RE = re.compile(r"`((?:process_bigraph/|bigraph_schema/|compose_api/|tests\.py)[^`:]*):(\d+)(?:-(\d+))?")
 FILE_LINE_CACHE: dict[Path, list[str]] = {}
 
 
