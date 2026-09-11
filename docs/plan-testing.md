@@ -162,7 +162,24 @@ paper, has no suite at all; its `tests.py` is a demo script with no assertions a
 out of its own entry point. `pbg-vcell-fvsolver` has nine genuinely good numerical tests, including mass
 conservation to 2%, and no CI to run them.
 
-### F7. Smaller things worth fixing while nearby
+### F7. One of the nine tests that run in CI is flaky
+
+`tests/common/test_nats.py::test_sync_producer_with_async_subscriber` failed on pull request #161, a docs-only
+change, with:
+
+```
+AssertionError: assert b'hello world 5' == b'hello world 9'
+```
+
+It is a race between the synchronous producer and the asynchronous subscriber, not a regression. The proof is that
+the duplicated CI (F4) ran the same commit twice on the same Python: one leg passed and the other failed. It also
+passes locally three times out of three.
+
+This matters more than it looks. Only nine tests execute in CI (F1), so a single flaky test is an eleven percent
+false-failure rate on the entire signal. Combined with the absence of branch protection (F3), the practical effect
+is to train people to merge past red checks, which is precisely the habit that makes a suite worthless.
+
+### F8. Smaller things worth fixing while nearby
 
 - `tests/simulation/dont_test_sedml.py` (3 tests) and 12 commented-out tests in pbest are dead weight. Either
   restore them or delete them, but leaving them as text misleads.
@@ -339,10 +356,12 @@ Size **S–M**: the fixture and the `port` parameter are small; the judgement ca
    That is the right shape for any wire format we settle on in the protocol work, including the OpenAPI contract
    this repository publishes to pbest. Size M.
 
-### E. Tidy (addresses F7)
+### E. Tidy (addresses F7, F8)
 
-Restore or delete the dead tests; add a `pull_request` trigger to pbest; upload or stop measuring pbest's coverage.
-Size S in total.
+Fix the `test_sync_producer_with_async_subscriber` race (wait on the subscriber rather than assuming ordering);
+restore or delete the dead tests; add a `pull_request` trigger to pbest; upload or stop measuring pbest's coverage.
+Size S in total. The flake is worth doing first and on its own: while only nine tests run in CI, one unreliable
+test is an eleven percent false-failure rate on the whole signal.
 
 ---
 
