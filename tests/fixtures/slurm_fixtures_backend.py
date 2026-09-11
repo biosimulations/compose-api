@@ -18,14 +18,17 @@ leave the third talking to the real cluster. Overriding settings reaches all of 
 including ones added later.
 """
 
+import asyncio
 import os
 import subprocess
+import time
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+import asyncssh
 import pytest
 
 from compose_api.common.ssh.ssh_service import SSHService, get_ssh_service
@@ -97,6 +100,44 @@ def cluster_credentials_present() -> bool:
     return bool(settings.slurm_submit_key_path) and Path(settings.slurm_submit_key_path).exists()
 
 
+async def _ssh_probe(port: int, key_path: Path) -> None:
+    async with asyncssh.connect(
+        host="127.0.0.1",
+        port=port,
+        username=CONTAINER_USER,
+        client_keys=[str(key_path)],
+        known_hosts=None,
+    ) as conn:
+        await conn.run("true", check=True)
+
+
+def _wait_for_ssh(port: int, key_path: Path, env: dict[str, str], timeout_seconds: float = 90.0) -> None:
+    """Block until the cluster actually accepts an SSH session.
+
+    ``docker compose up --wait`` only waits for the healthchecks, and slurmctld's is
+    ``scontrol ping``, which says nothing about sshd: the entrypoint backgrounds sshd and
+    goes on to start the controller, so the container can be healthy while SSH is not yet
+    usable, or while sshd has already died. Probing the real thing turns that race into a
+    wait, and a genuine misconfiguration into one clear error carrying the container's own
+    logs, instead of every SSH test failing separately with ``ConnectionLost``.
+    """
+    deadline = time.monotonic() + timeout_seconds
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            asyncio.run(_ssh_probe(port, key_path))
+            return
+        except Exception as exc:
+            last_error = exc
+            time.sleep(2)
+    ps = _compose("ps", env=env, check=False).stdout
+    logs = _compose("logs", "--no-color", "--tail", "60", "slurmctld", env=env, check=False).stdout
+    raise RuntimeError(
+        f"the SLURM container never accepted SSH on 127.0.0.1:{port} "
+        f"within {timeout_seconds:.0f}s; last error was {last_error!r}\n\n{ps}\n\n{logs}"
+    )
+
+
 @pytest.fixture(scope="session")
 def _container_cluster(tmp_path_factory: pytest.TempPathFactory) -> Iterator[_ContainerCluster]:
     """Bring up the throwaway cluster once per session and yield its connection details."""
@@ -122,8 +163,12 @@ def _container_cluster(tmp_path_factory: pytest.TempPathFactory) -> Iterator[_Co
     _compose("down", "-v", "--remove-orphans", env=env, check=False)
     _compose("up", "-d", "--wait", env=env)
     try:
-        published = _compose("port", "slurmctld", "22", env=env).stdout.strip()
-        yield _ContainerCluster(port=int(published.rsplit(":", 1)[1]), key_path=key_path, env=env)
+        # `docker compose port` can print one line per address family; they carry the
+        # same published port, so take the first and parse it alone.
+        published = _compose("port", "slurmctld", "22", env=env).stdout.strip().splitlines()[0]
+        port = int(published.rsplit(":", 1)[1])
+        _wait_for_ssh(port=port, key_path=key_path, env=env)
+        yield _ContainerCluster(port=port, key_path=key_path, env=env)
     finally:
         _compose("down", "-v", "--remove-orphans", env=env, check=False)
 
