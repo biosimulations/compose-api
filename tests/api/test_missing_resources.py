@@ -16,8 +16,8 @@ does not declare, and the spec declares none of these -- see the note at the bot
 import httpx
 import pytest
 
-from compose_api.dependencies import get_data_service, set_data_service
 from compose_api.db.database_service import DatabaseServiceSQL
+from compose_api.dependencies import get_data_service, set_data_service
 from compose_api.simulation.data_service import DataServiceHpc
 from compose_api.simulation.models import JobType, SimulationRequest, SimulatorVersion
 
