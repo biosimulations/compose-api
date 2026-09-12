@@ -121,7 +121,18 @@ services:
       retries: 12
       start_period: 20s
     deploy:
-      replicas: 2
+      # One worker, deliberately. The upstream entrypoint derives a worker's node name
+      # from its Compose replica index by resolving `${COMPOSE_PROJECT_NAME}-cpu-worker-N`
+      # over Docker DNS, walking N upward from 1. Replica 2 therefore depends on replica
+      # 1 already being resolvable, and when it is not the helper takes its fallback path
+      # and `return 1` -- under the entrypoint's `set -e`, that kills the container before
+      # slurmd ever starts, as `cpu-worker-2 exited (1)`. Compose starts replicas
+      # concurrently and offers no ordering between them, so the race is unavoidable at
+      # two or more. A single replica resolves only its own name and cannot lose it.
+      #
+      # Nothing here needs a second compute node; jobs simply queue. Raising this means
+      # fixing the upstream race first.
+      replicas: 1
 
 volumes:
   etc_munge:
