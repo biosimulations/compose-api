@@ -28,6 +28,10 @@ identifies a simulator is the *recipe*, while the thing that runs is a *separate
 yet, and `download_container` and `build_container` are two different ways of reaching the same state with nothing
 reconciling them.
 
+There is a sharper version of this objection, evidenced in §3: the recipe hash does not merely *differ* from the
+image identity, it **claims something false**. The generated definition is not deterministic, so the same hash can
+name materially different images built at different times.
+
 Under the invariant, a `SimulatorVersion` carries a repository and a digest, and each execution backend keeps its own
 cache keyed by that digest. Those caches can be deleted and regenerated without changing what a simulator *is*, which
 makes a future runtime swap nearly free. **This is the only recommendation in this document that does not depend on
@@ -74,20 +78,48 @@ contributes a GPU simulator, the constraint set changes and §4.2 in particular 
 
 **The pipeline.** `pbest` generates an Apptainer definition file from a dependency set; its md5 is the simulator
 identity. An unseen hash triggers a SLURM job running `singularity build --fakeroot` on a named build node before any
-science can run. `download_container` instead runs `singularity pull` from the configured simulator image repository, tagged with
-that hash. Results are `.sif` files under `images/`.
+science can run. `download_container` instead runs `singularity pull` from the configured simulator image repository,
+tagged with that hash. Results are `.sif` files under `images/`.
+
+**What the artifact actually is.** Read from the generated definition on 2026-09-12. `registry_env` is a *single*
+image holding **every simulator in pbest's default registry**, plus pbest itself as the entry point. "Registry" is
+the simulator registry; "env" is the one conda environment they all share.
+
+| Layer | Contents |
+|---|---|
+| base | `astral/uv:python3.12-bookworm-slim` |
+| pbest | cloned from git at the pinned tag, installed into the environment |
+| pip simulators | `python-copasi`, `tellurium`, `pb_multiscale_actin`, each version-pinned |
+| conda simulator | `readdy` from conda-forge, via micromamba |
+
+Its run script is `micromamba run … python3 /runtime/pbest/main.py "$@"`, so the container is invoked as the pbest
+command line. Four simulators, a conda stack and a full Python environment in one artifact is why it is 1.3 GB.
+
+Worth naming: this is the opposite of what Aim 3 promised in `A3.4.docker`, which is each simulator in its own
+container exposing the Process Interface. The tracker already records the same whole-composite-in-one-image pattern
+in `pbest containerize` and `bsew`, so it is consistent rather than surprising.
 
 1. **A build step that can fail, and a queue wait before any science runs.** A new dependency set means a job that
    installs packages before the simulation starts. It is the slowest and most failure-prone part of a first run.
 2. **Two identities for one thing**, as in §1. This is the root problem.
 3. **No layer sharing anywhere in our pipeline.** A `.sif` is a single flattened SquashFS image, so twenty simulators
-   sharing a Python base store it twenty times. Note the careful form of the claim: moving to OCI does not
-   automatically give layer sharing *on the compute node* either, see §4.1.
+   sharing a Python base store it twenty times. Because `registry_env` is monolithic, changing any single pin
+   produces an entirely new 1.3 GB artifact that shares nothing with its predecessor. Note the careful form of the
+   claim: moving to OCI does not automatically give layer sharing *on the compute node* either, see §4.1.
 4. **`--fakeroot` needs the host to cooperate.** It maps the builder into a user namespace and needs a subordinate id
    range; our test cluster needed `/etc/subuid` populated before a build would run. A production cluster may refuse
    user namespaces outright.
 5. **The format is ours alone.** The registry, CI, the `docker-process` work and the platform service all speak OCI.
    Apptainer is the only place that does not.
+6. **The identity asserts a reproducibility that does not exist.** This is the sharpest of the six, and the one that
+   most directly justifies §1. The md5 identifies the *recipe*, and the recipe is not deterministic: the definition
+   runs `apt upgrade -y`, fetches micromamba from a `latest` URL, resolves pbest's own requirements with
+   `uv pip compile` at build time, and sits on a mutable base-image tag. Only the four simulator versions are
+   pinned. Two builds of the byte-identical definition, months apart, therefore produce different images under the
+   same identity.
+
+   An image digest describes what was actually built; a hash of the recipe describes only what was asked for. Here
+   the gap is not theoretical, and it is precisely the gap that matters for reproducing a five-year-old result.
 
 **What already works and helps.** The test cluster pulls `docker://` images, builds definition files with
 `--fakeroot`, and runs the result from inside a SLURM job, verified on every pull request by
