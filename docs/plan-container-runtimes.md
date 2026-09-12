@@ -74,8 +74,8 @@ contributes a GPU simulator, the constraint set changes and §4.2 in particular 
 
 **The pipeline.** `pbest` generates an Apptainer definition file from a dependency set; its md5 is the simulator
 identity. An unseen hash triggers a SLURM job running `singularity build --fakeroot` on a named build node before any
-science can run. `download_container` instead runs `singularity pull` from
-`docker://ezqvalencia/registry_env:<hash>`. Results are `.sif` files under `images/`.
+science can run. `download_container` instead runs `singularity pull` from the configured simulator image repository, tagged with
+that hash. Results are `.sif` files under `images/`.
 
 1. **A build step that can fail, and a queue wait before any science runs.** A new dependency set means a job that
    installs packages before the simulation starts. It is the slowest and most failure-prone part of a first run.
@@ -165,8 +165,15 @@ untrusted workload by this definition, whatever image it runs in.
 
 ### 4.4 Image management, the half that is easy to forget
 
-- **Registry.** Today: a personal Docker Hub account (`ezqvalencia/registry_env`), plus GHCR for the service image. A
-  personal namespace holding scientific artifacts is a durability risk worth closing regardless of runtime.
+- **Registry.** This turned out to be the most urgent item, and it is now partly addressed. The simulator images
+  lived under a **personal Docker Hub account belonging to someone who has since left**, hardcoded in two places in
+  `models.py`. That is a durability risk in the ordinary sense and an access risk in a sharper one, and the account
+  is not to be used. It is now the `simulator_image_repository` setting, defaulting to
+  `ghcr.io/biosimulations/registry_env` alongside the service image. **No image is published there yet**, so until
+  one is, every first run of a simulator takes the build fallback in
+  `handlers._download_or_build_container`. That is the designed behaviour when a download fails, not a regression:
+  the old location had no image for the current pbest pin either. Publishing images under the organisation account
+  is an operational task this document cannot do.
 - **Identity.** §1. The most invasive change, and the one that pays for itself.
 - **Caching.** Requirement 4. On a shared filesystem the cache design matters more than the runtime choice.
 - **Provenance.** Reproducing a five-year-old result means the digest still resolving: pinning, a mirror, and
