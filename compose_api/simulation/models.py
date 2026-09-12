@@ -150,11 +150,15 @@ class RemoteContainerImage(Simulator):
     def from_container_version(
         simulator_version: "SimulatorVersion", source_url: str | None = None
     ) -> "RemoteContainerImage":
+        from compose_api.config import get_settings
+
+        repository = get_settings().simulator_image_repository
+        tagged = f"{repository}:{simulator_version.container_def_hash}"
         if source_url is None:
-            source_url = f"docker://ezqvalencia/registry_env:{simulator_version.container_def_hash}"
+            source_url = f"docker://{tagged}"
         return RemoteContainerImage(
             source_url=source_url,
-            image_name_and_tag=f"ezqvalencia/registry_env:{simulator_version.container_def_hash}",
+            image_name_and_tag=tagged,
             container_def=simulator_version.container_def,
             container_def_hash=simulator_version.container_def_hash,
             packages=simulator_version.packages,

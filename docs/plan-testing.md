@@ -674,6 +674,18 @@ adjustments were needed beyond the plan: the production code creates a per-exper
 parents, so the fixture provisions the same tree an administrator made once on the real cluster; and the scheduler
 test asserted status after a fixed sleep, which is a race on any backend and was replaced with polling.
 
+**Extended 2026-09-12.** `test_download_simulator` moved from `cluster_only` to the container backend, leaving
+eight cluster-only tests. Three things had to change first. The image it pulled came from a personal Docker Hub
+account belonging to a former employee, hardcoded in `models.py`; that is now the `simulator_image_repository`
+setting. The tag for the current pbest pin does not exist there in any case, so the download the test is named for
+could not be performed at all. And the test asserted only database rows, so it never checked that the pull wrote
+anything. It now pulls a small public image, verifies the artifact exists on the backend, and was confirmed to fail
+when the tag is bad.
+
+What it proves on the container is the mechanism and the database recording, against the real production code path.
+What no test proves is that *the* simulator image downloads, because no such image is published under an account we
+control. That is an operational task, not a testing one.
+
 **Extended 2026-09-11.** The backend was initially declared unable to build container images. That was wrong,
 and only a configuration gap: with a subordinate id range mounted over `/etc/subuid`, the container pulls from a
 registry, builds a definition file with `singularity build --fakeroot`, and runs the result from inside a SLURM job

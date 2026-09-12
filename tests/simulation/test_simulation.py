@@ -18,7 +18,7 @@ from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation import handlers
-from compose_api.simulation.hpc_utils import get_singularity_hash
+from compose_api.simulation.hpc_utils import get_singularity_hash, get_slurm_singularity_container_file
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import (
     JobStatus,
@@ -33,25 +33,46 @@ from tests.fixtures.mocks import TestBackgroundTask
 from tests.fixtures.slurm_fixtures_backend import SlurmBackend
 from tests.simulators.utils import assert_test_sim_results, test_dir
 
+# Small, multi-arch and public, so it pulls quickly on either backend and on either CPU
+# architecture. It stands in for a simulator image only to exercise the download path.
+PULLABLE_PROBE_IMAGE = "docker://busybox:latest"
+
 
 @pytest.mark.slurm
-@pytest.mark.cluster_only
 @pytest.mark.asyncio
 async def test_download_simulator(
     slurm_backend: SlurmBackend,
     simulation_service_slurm: SimulationServiceHpc,
     database_service: DatabaseServiceSQL,
+    ssh_service: SSHService,
 ) -> None:
+    """`download_container` pulls a real image over SSH and records it in the database.
+
+    The identity is the real pbest-generated definition and its hash, but the image pulled
+    is a small public one, for two reasons. No simulator image is published under an
+    account we control: the previous location was a personal Docker Hub account belonging
+    to someone who has left, and it is not to be used. And the tag for the current pbest
+    pin does not exist there in any case, so the download this test is named for cannot be
+    performed at all until an image is published. What it does still prove is the
+    mechanism and the database recording, against the real production code path.
+    """
     container_rep = generate_container_def_file(_default_registry_deps(), ContainerizationEngine.APPTAINER)
     image = RemoteContainerImage(
-        source_url=f"docker://ezqvalencia/registry_env:{get_singularity_hash(container_rep)}",
-        image_name_and_tag="ezqvalencia/registry_env",
+        source_url=PULLABLE_PROBE_IMAGE,
+        image_name_and_tag=PULLABLE_PROBE_IMAGE.removeprefix("docker://"),
         container_def=container_rep,
         container_def_hash=get_singularity_hash(container_rep),
         packages=None,
     )
     simulator_version = await simulation_service_slurm.download_container(image)
     assert simulator_version is not None
+
+    # The pull is the point. Asserting only on database rows would let a download that
+    # wrote nothing pass, which is how this test could previously have gone green against
+    # an image that does not exist.
+    sif = get_slurm_singularity_container_file(singularity_hash=image.container_def_hash)
+    return_code, _stdout, _stderr = await ssh_service.run_command(f"test -s {sif}")
+    assert return_code == 0, f"{sif} is missing or empty on the {slurm_backend.kind} backend"
     saved_simulator_version = await database_service.get_simulator_db().get_simulator(
         simulator_id=simulator_version.database_id
     )
@@ -66,6 +87,8 @@ async def test_download_simulator(
     assert downloaded_image.image_name_and_tag == image.image_name_and_tag
     assert downloaded_image.container_def_hash == get_singularity_hash(container_rep)
     assert downloaded_image.source_url == image.source_url
+
+    await ssh_service.run_command(f"rm -f {sif}")
 
 
 @pytest.mark.slurm

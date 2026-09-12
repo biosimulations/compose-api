@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.responses import FileResponse
@@ -19,6 +20,12 @@ from compose_api.simulation.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Declared on every endpoint that resolves a resource by id. Without it the generated
+# client has no notion of a 404: configured strictly it raises on one, and by default it
+# returns a parsed value of None that a caller can mistake for "no data yet". The server
+# has always returned 404 for some of these; the spec simply never said so.
+NOT_FOUND_RESPONSE = {"description": "The requested resource does not exist"}
 
 # -- app components -- #
 
@@ -48,6 +55,7 @@ async def get_simulations_status_batch(ids: list[int]) -> list[HpcRun]:
     path="/simulation/status",
     response_model=HpcRun,
     operation_id="get-simulation-status",
+    responses={404: NOT_FOUND_RESPONSE},
     tags=["Results"],
     dependencies=[Depends(get_database_service)],
     summary="Get the simulation status record by its ID",
@@ -146,7 +154,8 @@ async def get_simulation_status(simulation_id: int = Query(...)) -> HpcRun:
         200: {
             "content": {"application/octet-stream": {"schema": {"format": "binary"}}},
             "description": "Simulation result zip file",
-        }
+        },
+        404: {"description": "The simulation does not exist, or its results are not available"},
     },
     operation_id="get-simulation-results-file",
     tags=["Results"],
@@ -159,22 +168,38 @@ async def get_results(simulation_id: int = Query()) -> FileResponse:
     if service is None:
         logger.error("Data service is not initialized")
         raise HTTPException(status_code=500, detail="Data service is not initialized")
+    # A simulation that does not exist is the client's mistake, not ours. The database
+    # layer signals it with LookupError, which was previously swallowed into a 500 along
+    # with everything else, so asking for the results of a nonexistent simulation said
+    # "Internal Server Error".
     try:
         experiment_id = await db_service.get_simulator_db().get_simulations_experiment_id(simulation_id=simulation_id)
-        zip_path = await service.get_results_zip(experiment_id, Namespace(get_settings().namespace))
-        file_response = FileResponse(
-            path=zip_path, filename=f"{experiment_id}_results.zip", media_type="application/zip"
-        )
-        return file_response
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=f"Simulation with id {simulation_id} not found.") from e
     except Exception as e:
-        # logger.exception(f"Error fetching simulation results for id: {database_id}.")
+        logger.exception(f"Error resolving experiment id for simulation {simulation_id}.")
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+    try:
+        zip_path = await service.get_results_zip(experiment_id, Namespace(get_settings().namespace))
+    except Exception as e:
+        logger.exception(f"Error fetching simulation results for id: {simulation_id}.")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    # `DataServiceHpc.get_results_zip` builds a path without checking it, so a run whose
+    # results do not exist yet would otherwise be handed to FileResponse and fail while
+    # streaming, after the status line had already been sent.
+    if not Path(zip_path).exists():
+        raise HTTPException(status_code=404, detail=f"Results for simulation {simulation_id} are not available.")
+
+    return FileResponse(path=zip_path, filename=f"{experiment_id}_results.zip", media_type="application/zip")
 
 
 @config.router.get(
     path="/simulator/build/status",
     response_model=HpcRun,
     operation_id="get-simulator-build-status",
+    responses={404: NOT_FOUND_RESPONSE},
     tags=["Results"],
     dependencies=[Depends(get_database_service)],
     summary="Get the simulator build status record by its ID",

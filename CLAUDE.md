@@ -10,6 +10,8 @@ Dependencies are managed with `uv` (`requires-python` floor 3.13.2; the local ru
 make install                 # uv sync + install pre-commit hooks
 make run                     # uvicorn compose_api.api.main:app --reload on :8000
 make check                   # uv lock --locked, pre-commit (ruff lint+format), mypy --strict, deptry
+                             # `git add` new files FIRST: pre-commit only sees tracked files,
+                             # so an untracked file passes here and fails in CI
 make test                    # pytest with coverage
 make docs                    # mkdocs serve
 ```

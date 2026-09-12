@@ -88,6 +88,14 @@ class Settings(BaseSettings):
     containers_output_dir: str = "/experiment/output"
     container_service: str = "APPTAINER"
 
+    # Repository holding the prebuilt simulator images, without a tag; the tag is the
+    # SimulatorVersion's container_def_hash. This was hardcoded to a personal Docker Hub
+    # account belonging to someone who has since left, which is why it is configuration
+    # now. No image is published at the default yet: until one is, every run takes the
+    # build fallback in handlers._download_or_build_container, which is the intended
+    # behaviour when a download fails, not an error.
+    simulator_image_repository: str = "ghcr.io/biosimulations/registry_env"
+
 
 @lru_cache
 def _load_settings() -> Settings:

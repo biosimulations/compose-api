@@ -20,6 +20,20 @@ async def fastapi_app() -> FastAPI:
 
 
 @pytest_asyncio.fixture(scope="function")
+async def http_api_client() -> AsyncGenerator[httpx.AsyncClient]:
+    """A plain httpx client against the ASGI app, for asserting status codes.
+
+    `in_memory_api_client` is the generated client with `raise_on_unexpected_status=True`,
+    so it raises on any status the OpenAPI spec does not declare -- including a 404 that
+    the server is correct to return. Use this fixture when the status code *is* the
+    assertion; use the generated client when the parsed model is.
+    """
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        yield client
+
+
+@pytest_asyncio.fixture(scope="function")
 async def in_memory_api_client() -> AsyncGenerator[Client]:
     transport = ASGITransport(app=app)
     async_client = httpx.AsyncClient(transport=transport, base_url="http://testserver")
