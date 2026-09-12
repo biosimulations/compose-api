@@ -182,6 +182,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HpcRun'
+        '404':
+          description: The requested resource does not exist
         '422':
           description: Validation Error
           content:
@@ -208,6 +210,8 @@ paths:
             application/octet-stream:
               schema:
                 format: binary
+        '404':
+          description: The simulation does not exist, or its results are not available
         '422':
           description: Validation Error
           content:
@@ -234,6 +238,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HpcRun'
+        '404':
+          description: The requested resource does not exist
         '422':
           description: Validation Error
           content:

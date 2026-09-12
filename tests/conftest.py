@@ -3,6 +3,7 @@ import pytest_asyncio  # noqa: F401
 
 from tests.fixtures.api_fixtures import (  # noqa: F401
     fastapi_app,
+    http_api_client,
     in_memory_api_client,
     local_base_url,
 )
