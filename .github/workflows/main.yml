@@ -25,7 +25,13 @@ jobs:
       - name: Run checks
         run: make check
 
-  tests-and-type-check:
+  # Split from the SLURM tests below so the common failure modes report in about a
+  # minute instead of waiting behind a six-minute container build. Together the two jobs
+  # run every test: a test either carries the `slurm` marker or it does not.
+  #
+  # No `Check typing` step here: `make check` in `quality` already runs mypy, so having
+  # it in both was duplicate work on every leg.
+  tests:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -43,15 +49,52 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Run tests
-        run: uv run python -m pytest tests --cov --cov-config=pyproject.toml --cov-report=xml
-
-      - name: Check typing
-        run: uv run mypy
+      - name: Run the tests that need no scheduler
+        run: uv run python -m pytest tests -m "not slurm" --cov --cov-config=pyproject.toml --cov-report=xml
 
       - name: Upload coverage reports to Codecov with GitHub Action on Python 3.13
         uses: codecov/codecov-action@v7
         if: ${{ matrix.python-version == '3.13' }}
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # The expensive one: brings up a throwaway SLURM cluster and builds a real simulator
+  # image, about six minutes against roughly one for the job above.
+  tests-slurm:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    # Cancellation is scoped to this job alone, because it is the only one where
+    # abandoning a superseded run saves anything worth having; the others finish in
+    # under a minute and cancelling them would only make their status harder to read.
+    #
+    # Only pull-request runs are abandoned. A push to `main` keeps its run, so `main`
+    # never carries a cancelled and therefore ambiguous status.
+    #
+    # If this job is ever given a matrix, the matrix value must go into the group key:
+    # without it every leg shares one group and the legs cancel each other.
+    concurrency:
+      group: tests-slurm-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up the environment
+        uses: ./.github/actions/setup-python-env
+        with:
+          # One interpreter, deliberately. These tests exercise the scheduler, SSH and
+          # the container build rather than anything version-specific, and running them
+          # twice would cost more than the whole rest of CI. 3.14 is what production
+          # runs (`.python-version`). The job above still covers both interpreters.
+          python-version: "3.14"
+
+      - name: Run the tests that need a SLURM backend
+        run: uv run python -m pytest tests -m slurm --cov --cov-config=pyproject.toml --cov-report=xml
+
+      - name: Upload coverage reports to Codecov with GitHub Action
+        uses: codecov/codecov-action@v7
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 

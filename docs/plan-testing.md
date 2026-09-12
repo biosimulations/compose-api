@@ -266,9 +266,32 @@ on pushes to `main` and on pull requests, which is the intended coverage.
 Halving the jobs matters more than it did when this was written, because the build test added in group F takes the
 suite from roughly two minutes to over six per job. Runner time per push goes from about 25 minutes to about 12.
 
-A further saving is available and **not** taken here: a `concurrency` group with `cancel-in-progress` would abandon
-superseded runs when a branch is pushed repeatedly, rather than letting a queue of them finish. That is a different
-change from de-duplicating triggers, so it is left as a separate decision.
+**Taken on 2026-09-12**, together with a split that makes it worth having. `tests-and-type-check` became two jobs:
+
+| Job | Selection | Interpreters | Time |
+|---|---|---|---|
+| `tests` | `-m "not slurm"` | 3.13 and 3.14 | ~1m |
+| `tests-slurm` | `-m slurm` | 3.14 only | ~6m |
+
+The two selections cover every test exactly once, verified by collection count: 26 + 21 = 47.
+
+Three things fall out of the split.
+
+**`cancel-in-progress` is scoped to `tests-slurm` alone**, which is the only job where abandoning a superseded run
+saves anything worth having. The others finish in under a minute, and cancelling them would only make their status
+harder to read. Cancellation applies to pull requests only, so a push to `main` keeps its run rather than carrying a
+cancelled and therefore ambiguous status.
+
+**The duplicate mypy is gone.** `make check` in `quality` already runs it, so the `Check typing` step was running
+the type checker a second and third time on every matrix leg.
+
+**The expensive job runs on one interpreter, deliberately.** It exercises the scheduler, SSH and the container
+build rather than anything version-specific, and running it twice cost more than the whole rest of CI. 3.14 is what
+production runs. The fast job still covers both. This is a coverage trade, recorded here so it is visible rather
+than implied.
+
+Net runner time per push: roughly 13 minutes to roughly 9, and the failure modes that fire most often now report in
+about a minute instead of after six.
 
 ### F5. The Python matrix does not test Python versions
 
