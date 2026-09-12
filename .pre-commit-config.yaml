@@ -10,8 +10,14 @@ repos:
       - id: check-json
       - id: pretty-format-json
         args: [--autofix, --no-sort-keys]
+      # Fixtures copied verbatim from a running system must not be reformatted. The
+      # simulator definition is identified by an md5 over its exact bytes, so appending
+      # the newline this hook likes changes the hash and the file stops being a copy of
+      # what production recorded. Learned by having it happen.
       - id: end-of-file-fixer
+        exclude: ^tests/fixtures/resources/
       - id: trailing-whitespace
+        exclude: ^tests/fixtures/resources/
 
   # Must match the `ruff` pin in pyproject.toml. When they drift, the two disagree on
   # import order and `make check` oscillates on the same file forever, each run

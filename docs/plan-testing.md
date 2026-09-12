@@ -16,6 +16,10 @@ included as context and as sources of practice worth copying or avoiding: `platf
 `compose-server`, `process-bigraph`, `bigraph-schema`, `spatio-flux`, `pbg-vcell-fvsolver`, `vivarium-workbench`,
 `viva-superpowers`.
 
+A wider survey of the associated repositories, including `bsew`, `bsander` and the ~54 simulator wrappers, is
+[ecosystem-repos.md](ecosystem-repos.md). It records that the `pbg-` repositories were renamed `viva-`, that an
+automatically generated index of them already exists, and a consolidation question left open.
+
 `viva-superpowers` was surveyed on 2026-09-12 and added as §1.7. **It is `pbg-superpowers` renamed**, not a second
 project: the GitHub API redirects the old name to the new one and it is the same repository, created 2026-05-09. A
 local checkout under the old name is that repository. Inside it, `viva_superpowers/` is the package and
@@ -673,6 +677,25 @@ The cluster comes up in about twenty seconds and the container-backed tests fini
 adjustments were needed beyond the plan: the production code creates a per-experiment directory but never its
 parents, so the fixture provisions the same tree an administrator made once on the real cluster; and the scheduler
 test asserted status after a fixed sleep, which is a race on any backend and was replaced with polling.
+
+**Extended again 2026-09-12.** `test_build_simulator` moved too, leaving **seven** cluster-only tests. It now builds
+a definition copied verbatim from the live deployment
+(`tests/fixtures/resources/production_simulator.def`, simulator version 34), so the build path is exercised against
+content a deployment really produced. That definition is the smallest of the 37 published there: it declares no
+conda and no PyPI dependencies, and builds in about 70 seconds to a 594 MB image, against minutes and 1.3 GB for the
+versions that solve a full conda environment. The test asserts the image is produced *and runs*, not merely that the
+job exited zero.
+
+**This is the first test with a real CI cost.** The suite went from about 91 seconds to about 279. That buys the
+first coverage anywhere of `singularity build --fakeroot` against real content, so it is probably worth it, but it
+is a decision rather than a free win, and if it becomes a problem the cheapest lever is moving this one test to a
+scheduled job rather than every pull request.
+
+Two hazards it surfaced. The pre-commit `end-of-file-fixer` appended a newline to the definition, changing its md5
+and therefore its identity; `tests/fixtures/resources/` is now excluded from the whitespace hooks, and the test
+asserts the hash still matches what the deployment recorded. And asserting the recorded status immediately after the
+scheduler reports the job done is a race, because the monitor writes on its own schedule: the same mistake as F13's
+test, made again in a new place.
 
 **Extended 2026-09-12.** `test_download_simulator` moved from `cluster_only` to the container backend, leaving
 eight cluster-only tests. Three things had to change first. The image it pulled came from a personal Docker Hub
