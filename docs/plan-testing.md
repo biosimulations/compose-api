@@ -13,7 +13,13 @@ backend exposed a production bug, recorded as F13.
 
 **Scope.** This repository (`compose-api`) and `pbest` are the subjects. The other repositories in the loop are
 included as context and as sources of practice worth copying or avoiding: `platform`, `sms-api`, `biosim-client`,
-`compose-server`, `process-bigraph`, `bigraph-schema`, `spatio-flux`, `pbg-vcell-fvsolver`, `vivarium-workbench`.
+`compose-server`, `process-bigraph`, `bigraph-schema`, `spatio-flux`, `pbg-vcell-fvsolver`, `vivarium-workbench`,
+`viva-superpowers`.
+
+`viva-superpowers` was surveyed on 2026-09-12 and added as §1.7. **It is `pbg-superpowers` renamed**, not a second
+project: the GitHub API redirects the old name to the new one and it is the same repository, created 2026-05-09. A
+local checkout under the old name is that repository. Inside it, `viva_superpowers/` is the package and
+`pbg_superpowers/` is a back-compatibility import shim that warns on use.
 
 `platform` was added on 2026-09-11 and is worth reading closely: it is the sibling service, it is the only repo here
 with branch protection, and it fails on gating in exactly the opposite direction from this one. Figures are from
@@ -130,6 +136,47 @@ rather than already present:
 - **`httpx.MockTransport`**, which `main` does not use anywhere — and its absence is precisely why the live calls
   described in F10 get through.
 
+### 1.7 How viva-superpowers tests today
+
+Surveyed 2026-09-12. It is a Claude Code plugin of seventeen skills plus a Python helper package for building
+process-bigraph models, depending on `bigraph-schema` and `process-bigraph` directly. It is a sibling of `pbest`,
+not a consumer: there is no `pbest` dependency.
+
+**By far the largest suite in this survey, and the fastest.** 121 test files, roughly 1,390 test functions expanding
+to about 1,560 collected items, last green run 34 seconds. Counts are from a repository scan, not from a run here.
+No Docker, no testcontainers, network calls mocked at `urllib.request.urlopen`. The whole suite runs offline.
+
+**Layout is flat and tiered by filename** rather than by directory: `test_e2e_happy_path.py`,
+`test_integration_observable_pipeline.py`, `test_cross_harness.py`. `conftest.py` is seventeen lines and three path
+fixtures. Roughly twenty-eight files assert on *authored artifacts* rather than code: skill manifests, naming
+conventions, a discovery contract, report linting.
+
+**Twenty-six tests skip at runtime**, gated on an absent upstream template checkout, an uninstalled optional
+dependency, and — the one that matters — **private workspace data that CI will never have.** The golden scientific
+studies are the highest-value assertions in the suite and they are green-by-absence forever, because `pytest.skip()`
+on missing data is indistinguishable from passing. This is the same shape as F1 here, arrived at by a different route.
+
+**It is clean on config shadowing.** No `pytest.ini`, `tox.ini` or `setup.cfg` anywhere; the `pyproject.toml` block
+is the sole live config. It is the counter-example to F11.
+
+**It repeats three of our own mistakes**, which is the most useful thing the survey found:
+
+- **CI does not gate merges.** Branch protection on `main` requires one review and enforces admins, but carries **no
+  required status checks at all**, so a red build does not block a merge. Verified against the API on 2026-09-12.
+  This is F3 in a repository that *has* branch protection, which is worse than not having it: the protection implies
+  a gate that is not there.
+- **It runs its CI twice**, `on: [push, pull_request]` with no branch filter. F4, second instance.
+- **Its matrix does not test Python versions.** The matrix varies operating system only and both legs hardcode
+  3.11, while `requires-python` declares `>=3.11`. So 3.12 through 3.14 are advertised and never exercised, and one
+  module already skips itself in CI for requiring 3.12. F5, second instance, by a different mechanism than ours.
+
+Also: `pytest-cov` is a declared dev dependency and is never invoked, there is no type checker, and ruff is narrowed
+to two rules over one directory with `tests/` unlinted entirely.
+
+**A note on scope.** `viva-superpowers` is a `vivarium-collective` repository. Nothing in this document is to be
+changed there without the owner's agreement, including opening an issue. The single highest-value fix is one line,
+adding required status checks to `main`, and it is not ours to make.
+
 ---
 
 ## Part 2. Findings
@@ -200,6 +247,11 @@ That is why every pull request shows two `quality` jobs and seven `tests-and-typ
 minutes spent on this repository are duplicate work, and the duplication also explains why the codecov condition
 appears twice with different matrices.
 
+**Second instance, 2026-09-12.** `viva-superpowers` does the same thing with a single workflow triggered
+`on: [push, pull_request]` and no branch filter (§1.7). The fix in both cases is to filter the push trigger to
+`main`. Here the duplication is no longer only a cost: it doubles the SLURM clusters and image pulls a single push
+starts, which is what made the worker startup race in group F fire intermittently on busy runners.
+
 ### F5. The Python matrix does not test Python versions
 
 The composite action installs an interpreter with `setup-python`, then runs `uv sync`, which ignores it and uses
@@ -218,6 +270,11 @@ later `uv sync` and `uv run` in the job, and prints the interpreter it ended up 
 seven legs to `3.13` and `3.14`: `requires-python` is `>=3.13.2`, so the older legs were claiming to test versions
 the project does not support. The suite was run against a real 3.13 before the change landed. The remaining
 repositories with a matrix are untouched and still have this problem.
+
+**Second instance, 2026-09-12.** `viva-superpowers` reaches the same outcome by a different mechanism: its matrix
+varies operating system only and both legs hardcode 3.11, while `requires-python` declares `>=3.11` (§1.7). So the
+check worth running on any repository here is not "is there a matrix" but "does a matrix leg actually change the
+interpreter".
 
 ### F6. The risk profile is inverted
 
@@ -397,6 +454,9 @@ The general check stands, and this repo is the argument for it: if both exist, s
 `tox.ini` was stale in the same way, still declaring `py39` through `py312` envs that `requires-python` forbids; it
 now lists `py313` and `py314`. Nothing invokes tox, which is why nobody noticed.
 
+**A clean counter-example, 2026-09-12.** `viva-superpowers` has no `pytest.ini`, `tox.ini` or `setup.cfg` at all,
+so its `pyproject.toml` block is unambiguously live (§1.7). Having one config file is the whole fix.
+
 ### F12. Smaller things worth fixing while nearby
 
 - `tests/simulation/dont_test_sedml.py` (3 tests) and 12 commented-out tests in pbest are dead weight. Either
@@ -433,6 +493,36 @@ which needs only Postgres and so runs everywhere, on every status in the enum.
 
 **This is the argument for A4 in one finding.** The bug was reachable only by running the monitor against a real
 scheduler. It had been latent for as long as those tests have been skipped.
+
+### F14. A published wheel can declare a dependency that does not exist, and nothing here would catch it
+
+Learned from `viva-superpowers` on 2026-09-12 rather than from our own breakage, which is the point of surveying
+siblings.
+
+**The failure class.** A `[tool.uv.sources]` entry redirecting a dependency to a git URL is *workspace-local*. It is
+not written into a built wheel. The wheel declares a bare `Requires-Dist` that a downstream consumer must resolve
+from PyPI, and if the package is not there, the install fails for them and never for us. `viva-superpowers` shipped
+a broken 0.14.0 exactly this way, and its `pypi-installable` workflow header records the incident.
+
+**Our exposure is the client, not the service.** This repository is never installed as a wheel: it ships as a
+container built with `uv sync --frozen` (`Dockerfile-api:30,36`), which honours `uv.sources`, and there is no
+publish workflow here. The published artifact is `compose-api-client`, generated into a separate repository that is
+not in this workspace and that I have not inspected. `pbest` installs it from PyPI. That is where the check belongs.
+
+**The trap is already set here, though it has not sprung.** `pyproject.toml:75-76` carries
+
+```toml
+[tool.uv.sources]
+bsander = { git = "https://github.com/biosimulators/bsander.git" }
+```
+
+`bsander` appears in no dependency list and in no lock entry, and `pypi.org/pypi/bsander/json` returns 404. The
+override is therefore inert: `uv.sources` only redirects something actually depended upon. It costs nothing to
+delete, and deleting it removes a line that would silently become load-bearing the moment someone adds `bsander` to
+`dependencies`.
+
+Size S. The action is two things: drop the dead override here, and add a wheel-installability preflight to the
+client repository, not to this one.
 
 ## Part 3. Candidate actions
 
@@ -884,6 +974,16 @@ body branches on `kind`.
   empty cell rather than as an absence nobody notices.
 - **Golden vectors with an identity assertion.** Described in D3 above.
 
+- **`viva-superpowers`'s `pypi-installable` preflight.** On every pull request it builds the wheel and installs it
+  in a clean environment from PyPI *alone* — no `uv.sources`, no git — so a dependency that cannot be resolved by a
+  downstream consumer fails there instead of at someone else's `pip install`. Its header documents the release that
+  motivated it. See F14; the place to apply it is the client repository.
+- **`viva-superpowers` pins its cross-repo golden fixture to a commit.** The upstream template checkout is pinned by
+  SHA with a regenerated manifest, so an unrelated push upstream cannot redden this repository's `main`, and bumping
+  it is a deliberate pull request. Directly applicable to our `pbest` pin and the generated client.
+- **`viva-superpowers` tests its authored artifacts, not only its code.** Roughly twenty-eight files assert on skill
+  manifests, naming conventions, a discovery contract and report linting. Our analogue is asserting `operation_id`
+  stability, since those strings *are* pbest's function names and renaming one is a silent breaking change.
 - **`platform`'s real-identity RBAC tests.** `backend/tests/rbac_demo/test_keycloak_integration.py` runs a
   Keycloak container preloaded with a realm defining three users at different privilege levels, fetches genuine
   tokens, and drives the real JWKS fetch, signature verification and roles extraction. A sibling file tests the same
@@ -902,6 +1002,20 @@ body branches on `kind`.
 
 ## Practice worth avoiding
 
+- **Branch protection that gates on review but not on CI.** `viva-superpowers` requires an approving review on
+  `main` and enforces it for admins, but declares **no required status checks at all**, so a red build does not
+  block a merge. This is worse than F3's no-protection-at-all: the protection implies a gate that is not there. One
+  line fixes it, and it is not ours to change.
+- **Declaring Python support a matrix never exercises.** `viva-superpowers` varies operating system only while both
+  legs hardcode 3.11, against a `requires-python` of `>=3.11`. One of its own modules already skips itself in CI for
+  needing 3.12. Same outcome as F5 by a different mechanism, so the check to run on any repo is "does a matrix leg
+  actually change the interpreter", not "is there a matrix".
+- **Skipping the highest-value tests on absent private data.** `viva-superpowers`'s golden scientific studies are
+  gated on workspace data CI will never have, and `pytest.skip()` on missing data is indistinguishable from passing,
+  so they are green-by-absence permanently. If a test cannot run where it matters, a strict-mode environment
+  variable on a scheduled job at least makes the gap visible.
+- **Installing a coverage plugin and never invoking it.** `pytest-cov` is a declared dev dependency there and
+  appears in no command, which reads as coverage being handled when it is not measured at all.
 - **`biosim-client`'s ungated live calls.** Its CI hits the production API on every matrix leg, and one test
   asserts a hard-coded remote version string, so a server release breaks the client's build.
 - **`platform`'s release path.** `release.yaml` builds and pushes three container images and cuts a GitHub Release
