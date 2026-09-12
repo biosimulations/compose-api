@@ -579,10 +579,20 @@ back with `docker compose port`, so concurrent runs and CI pick free ports; and 
 portal are dropped. `COMPOSE_PROJECT_NAME` is set per session to a random value and must be threaded to the worker,
 whose entrypoint resolves its own replica index over DNS and will not start without it.
 
-The cluster comes up in about twenty seconds and the seven container-backed tests finish in under thirty. Two
+The cluster comes up in about twenty seconds and the container-backed tests finish in under a minute. Two
 adjustments were needed beyond the plan: the production code creates a per-experiment directory but never its
 parents, so the fixture provisions the same tree an administrator made once on the real cluster; and the scheduler
 test asserted status after a fixed sleep, which is a race on any backend and was replaced with polling.
+
+**Extended 2026-09-11.** The backend was initially declared unable to build container images. That was wrong,
+and only a configuration gap: with a subordinate id range mounted over `/etc/subuid`, the container pulls from a
+registry, builds a definition file with `singularity build --fakeroot`, and runs the result from inside a SLURM job
+on a worker node. `tests/simulation/test_container_lifecycle.py` now drives the production `download_container` and
+`build_container` against a busybox definition, in seconds. The nine `cluster_only` tests stay where they are: what
+the container lacks is the real simulator images and the minutes it takes to build them, not the machinery.
+
+The wider question this raises -- whether to keep a second image format at all -- is
+[plan-container-runtimes.md](plan-container-runtimes.md).
 
 ### B. Make coverage mean something (addresses F2)
 

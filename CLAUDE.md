@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-Dependencies are managed with `uv` (Python >= 3.13.2 locally; CI also runs 3.12). Everything runs through `uv run`.
+Dependencies are managed with `uv` (`requires-python` floor 3.13.2; the local runtime is 3.14 and CI runs both 3.13 and 3.14). Everything runs through `uv run`.
 
 ```bash
 make install                 # uv sync + install pre-commit hooks
@@ -44,9 +44,10 @@ Release & deploy: `make tag` (`tag.sh` bumps `pyproject.toml` + `compose_api/ver
 - SLURM tests are **parameterised over a backend**, not skipped. Mark a test that needs a scheduler
   `@pytest.mark.slurm` and take the `slurm_backend` fixture; it runs against a throwaway SLURM cluster
   (`tests/fixtures/slurm_cluster/docker-compose.yml`, brought up per session) whenever Docker is present, with no
-  key and no VPN. Add `@pytest.mark.cluster_only` when the test needs the real submit host — a real simulator image,
-  a `singularity build --fakeroot`, the production partition — and it will run only under
-  `--slurm-backend cluster`. `--slurm-backend` is repeatable, so passing both runs the body against each.
+  key and no VPN. Add `@pytest.mark.cluster_only` when the test needs the real submit host — a real simulator
+  image, the production partition, the real storage tree — and it will run only under
+  `--slurm-backend cluster`. Building a container is *not* a reason on its own: the test cluster pulls from a
+  registry and runs `singularity build --fakeroot`, covered by `tests/simulation/test_container_lifecycle.py`. `--slurm-backend` is repeatable, so passing both runs the body against each.
 - **Never branch on `slurm_backend.kind` in a test body.** Differences between the backends are fields on the frozen
   `SlurmBackend` (`partition`, `qos`, `remote_base`, `can_build_singularity`); add a field rather than a branch, or
   the two backends grow separate implementations. `tests/common/test_slurm_conformance.py` is the drift alarm: it

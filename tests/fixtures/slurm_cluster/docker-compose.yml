@@ -71,6 +71,10 @@ services:
       # see the file itself: without this, sshd's PAM account stage denies root on some
       # hosts and drops the connection before a key is ever offered
       - ./sshd_test.conf:/etc/ssh/sshd_config.d/01-tests.conf:ro
+      # see the file itself: without a subordinate id range, `singularity build --fakeroot`
+      # cannot create its user namespace, and the production build path uses --fakeroot
+      - ./subid:/etc/subuid:ro
+      - ./subid:/etc/subgid:ro
     ports:
       - "0:22"
     expose: ["6817"]
@@ -92,15 +96,33 @@ services:
     working_dir: /data
     privileged: true
     environment:
-      # the entrypoint resolves "${COMPOSE_PROJECT_NAME}-cpu-worker-N" over DNS to work
-      # out its own replica index, and names itself cN from it. Without this the lookup
-      # fails, the fallback produces an invalid node name, and slurmd exits 1.
-      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME}
+      # Compose names every container it creates "<project>-<service>-<index>" and
+      # registers that name in the network's DNS. A container cannot discover its own
+      # project name -- that is a host-side concept -- so it has to be handed in.
+      #
+      # The upstream entrypoint needs it to work out which replica it is: it asks DNS for
+      # "<project>-cpu-worker-1", "-2", ... and compares each answer to its own address,
+      # then names itself c1, c2 accordingly. Drop this line and the lookup becomes
+      # "-cpu-worker-1", which resolves to nothing; the helper then takes its fallback
+      # path and returns non-zero, and because the entrypoint runs under `set -e` the
+      # container dies before slurmd ever starts.
+      #
+      # No guard here on purpose. Compose substitutes the *effective* project name, so
+      # this always matches reality: the directory name by default, or whatever `-p` or
+      # the COMPOSE_PROJECT_NAME environment variable set. It cannot drift, and a `:?`
+      # guard would assert something that can never be false. The test fixture sets a
+      # random project name per session so concurrent runs get separate containers,
+      # networks and volumes.
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME}
     volumes:
       - etc_munge:/etc/munge
       - etc_slurm:/etc/slurm
       - slurm_jobdir:/data
       - var_log_slurm:/var/log/slurm
+      # see the file itself: without a subordinate id range, `singularity build --fakeroot`
+      # cannot create its user namespace, and the production build path uses --fakeroot
+      - ./subid:/etc/subuid:ro
+      - ./subid:/etc/subgid:ro
     expose: ["6818"]
     depends_on:
       slurmctld:
@@ -113,7 +135,18 @@ services:
       retries: 12
       start_period: 20s
     deploy:
-      replicas: 2
+      # One worker, deliberately. The upstream entrypoint derives a worker's node name
+      # from its Compose replica index by resolving `${COMPOSE_PROJECT_NAME}-cpu-worker-N`
+      # over Docker DNS, walking N upward from 1. Replica 2 therefore depends on replica
+      # 1 already being resolvable, and when it is not the helper takes its fallback path
+      # and `return 1` -- under the entrypoint's `set -e`, that kills the container before
+      # slurmd ever starts, as `cpu-worker-2 exited (1)`. Compose starts replicas
+      # concurrently and offers no ordering between them, so the race is unavoidable at
+      # two or more. A single replica resolves only its own name and cannot lose it.
+      #
+      # Nothing here needs a second compute node; jobs simply queue. Raising this means
+      # fixing the upstream race first.
+      replicas: 1
 
 volumes:
   etc_munge:
