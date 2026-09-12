@@ -213,6 +213,7 @@ condition:
 |---|---|---|---|
 | compose-api `main.yml` | 3.9–3.13 | `== '3.11'` | yes |
 | compose-api `ci-test.yml` | 3.12, 3.13 | `== '3.11'` | **no** |
+| *(both since fixed: the condition now names 3.13, and `ci-test.yml` is deleted — see F4)* | | | |
 | pbest | 3.12 | there is no upload step | **no** |
 | sms-api | 3.13 | `== '3.11'` | **no** |
 | biosim-client | 3.8–3.12 | `== '3.11'` | yes |
@@ -252,9 +253,22 @@ minutes spent on this repository are duplicate work, and the duplication also ex
 appears twice with different matrices.
 
 **Second instance, 2026-09-12.** `viva-superpowers` does the same thing with a single workflow triggered
-`on: [push, pull_request]` and no branch filter (§1.7). The fix in both cases is to filter the push trigger to
-`main`. Here the duplication is no longer only a cost: it doubles the SLURM clusters and image pulls a single push
-starts, which is what made the worker startup race in group F fire intermittently on busy runners.
+`on: [push, pull_request]` and no branch filter (§1.7). Here the duplication was no longer only a cost: it doubled
+the SLURM clusters and image pulls a single push starts, which is what made the worker startup race in group F fire
+intermittently on busy runners.
+
+**Fixed here on 2026-09-12 by deleting `ci-test.yml`.** No trigger needed changing, because that file was a strict
+subset of `main.yml`: the two `quality` jobs were byte-identical, the two `tests-and-type-check` jobs differed only
+in one step's display name, and `check-docs` existed solely in `main.yml`. What `ci-test.yml` added was a worse
+trigger, a bare `on: push` with no branch filter, firing on every push to every branch. `main.yml` already triggers
+on pushes to `main` and on pull requests, which is the intended coverage.
+
+Halving the jobs matters more than it did when this was written, because the build test added in group F takes the
+suite from roughly two minutes to over six per job. Runner time per push goes from about 25 minutes to about 12.
+
+A further saving is available and **not** taken here: a `concurrency` group with `cancel-in-progress` would abandon
+superseded runs when a branch is pushed repeatedly, rather than letting a queue of them finish. That is a different
+change from de-duplicating triggers, so it is left as a separate decision.
 
 ### F5. The Python matrix does not test Python versions
 
