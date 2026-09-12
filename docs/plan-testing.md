@@ -16,6 +16,10 @@ included as context and as sources of practice worth copying or avoiding: `platf
 `compose-server`, `process-bigraph`, `bigraph-schema`, `spatio-flux`, `pbg-vcell-fvsolver`, `vivarium-workbench`,
 `viva-superpowers`.
 
+A wider survey of the associated repositories, including `bsew`, `bsander` and the ~54 simulator wrappers, is
+[ecosystem-repos.md](ecosystem-repos.md). It records that the `pbg-` repositories were renamed `viva-`, that an
+automatically generated index of them already exists, and a consolidation question left open.
+
 `viva-superpowers` was surveyed on 2026-09-12 and added as §1.7. **It is `pbg-superpowers` renamed**, not a second
 project: the GitHub API redirects the old name to the new one and it is the same repository, created 2026-05-09. A
 local checkout under the old name is that repository. Inside it, `viva_superpowers/` is the package and
