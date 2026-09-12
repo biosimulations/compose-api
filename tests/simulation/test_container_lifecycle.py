@@ -51,9 +51,7 @@ PROBE_IMAGE_URL = "docker://busybox:latest"
 def _probe_repr() -> ContainerizationFileRepr:
     # A unique definition per run, so two runs never race on the same remote .sif name.
     unique = PROBE_DEF + f"\n# {uuid.uuid4().hex}\n"
-    return ContainerizationFileRepr(
-        representation=unique, containerization_engine=ContainerizationEngine.APPTAINER
-    )
+    return ContainerizationFileRepr(representation=unique, containerization_engine=ContainerizationEngine.APPTAINER)
 
 
 async def _wait_for_db_status(
@@ -170,8 +168,6 @@ async def test_build_container_runs_a_fakeroot_build_to_completion(
         assert return_code == 0
         assert "compose-api build probe" in stdout
     finally:
-        await ssh_service.run_command(
-            f"rm -f {get_slurm_singularity_container_file(simulator.container_def_hash)}"
-        )
+        await ssh_service.run_command(f"rm -f {get_slurm_singularity_container_file(simulator.container_def_hash)}")
         await database_service.get_hpc_db().delete_hpcrun(hpcrun_id=hpc_run.database_id)
         await database_service.get_simulator_db().delete_simulator(simulator_id=simulator.database_id)

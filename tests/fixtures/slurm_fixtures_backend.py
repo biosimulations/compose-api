@@ -75,14 +75,28 @@ class _ContainerCluster:
 
 
 def _compose(*args: str, env: dict[str, str], check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(  # noqa: S603
+    """Run `docker compose`, and on failure say what it actually printed.
+
+    Output is captured so it does not drown the test log, which means a plain
+    `check=True` raises a `CalledProcessError` whose message names the command and
+    nothing else. Compose's own diagnosis -- an image that would not pull, a container
+    that exited, a port already bound -- is exactly what is needed and would be thrown
+    away, so it is reattached here.
+    """
+    result = subprocess.run(  # noqa: S603
         ["docker", "compose", *args],  # noqa: S607
         cwd=COMPOSE_DIR,
         env=env,
-        check=check,
+        check=False,
         capture_output=True,
         text=True,
     )
+    if check and result.returncode != 0:
+        raise RuntimeError(
+            f"`docker compose {' '.join(args)}` exited {result.returncode}\n"
+            f"--- stdout ---\n{result.stdout}\n--- stderr ---\n{result.stderr}"
+        )
+    return result
 
 
 def docker_available() -> bool:
