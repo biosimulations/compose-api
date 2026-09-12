@@ -1,0 +1,30 @@
+Bootstrap: docker
+From: ghcr.io/astral-sh/uv:python3.12-bookworm
+Stage: spython-base
+
+%post
+
+apt update
+apt upgrade -y
+apt install -y git curl
+
+## Dependency Installs
+### Conda
+# No conda dependencies!
+
+### PyPI
+# No PyPI dependencies!
+
+##
+mkdir /runtime
+mkdir -p /runtime
+cd /runtime
+git clone https://github.com/biosimulators/bsew.git  /runtime
+python3 -m pip install -e /runtime
+
+%runscript
+cd /runtime
+exec python3 /runtime/main.py "$@"
+%startscript
+cd /runtime
+exec python3 /runtime/main.py "$@"

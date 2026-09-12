@@ -674,6 +674,25 @@ adjustments were needed beyond the plan: the production code creates a per-exper
 parents, so the fixture provisions the same tree an administrator made once on the real cluster; and the scheduler
 test asserted status after a fixed sleep, which is a race on any backend and was replaced with polling.
 
+**Extended again 2026-09-12.** `test_build_simulator` moved too, leaving **seven** cluster-only tests. It now builds
+a definition copied verbatim from the live deployment
+(`tests/fixtures/resources/production_simulator.def`, simulator version 34), so the build path is exercised against
+content a deployment really produced. That definition is the smallest of the 37 published there: it declares no
+conda and no PyPI dependencies, and builds in about 70 seconds to a 594 MB image, against minutes and 1.3 GB for the
+versions that solve a full conda environment. The test asserts the image is produced *and runs*, not merely that the
+job exited zero.
+
+**This is the first test with a real CI cost.** The suite went from about 91 seconds to about 279. That buys the
+first coverage anywhere of `singularity build --fakeroot` against real content, so it is probably worth it, but it
+is a decision rather than a free win, and if it becomes a problem the cheapest lever is moving this one test to a
+scheduled job rather than every pull request.
+
+Two hazards it surfaced. The pre-commit `end-of-file-fixer` appended a newline to the definition, changing its md5
+and therefore its identity; `tests/fixtures/resources/` is now excluded from the whitespace hooks, and the test
+asserts the hash still matches what the deployment recorded. And asserting the recorded status immediately after the
+scheduler reports the job done is a race, because the monitor writes on its own schedule: the same mistake as F13's
+test, made again in a new place.
+
 **Extended 2026-09-12.** `test_download_simulator` moved from `cluster_only` to the container backend, leaving
 eight cluster-only tests. Three things had to change first. The image it pulled came from a personal Docker Hub
 account belonging to a former employee, hardcoded in `models.py`; that is now the `simulator_image_repository`

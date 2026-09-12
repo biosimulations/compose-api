@@ -1,10 +1,13 @@
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
+import pytest
 import pytest_asyncio
 from nats.aio.client import Client as NATSClient
 from pbest.containerization.container_constructor import _default_registry_deps, generate_container_def_file
 from pbest.utils.input_types import (
     ContainerizationEngine,
+    ContainerizationFileRepr,
 )
 
 from compose_api.api.introspect_package import introspect_package
@@ -52,6 +55,23 @@ async def job_monitor(
     await job_service.stop_polling()
     await job_service.close()
     set_job_monitor(saved_job_service)
+
+
+#: The hash the live deployment recorded for this definition. Asserted rather than
+#: recomputed, so an accidental edit to the fixture file is caught instead of absorbed.
+PRODUCTION_SIMULATOR_DEF_HASH = "b3352156bfe3a538219a202037486a80"
+
+
+@pytest.fixture(scope="session")
+def production_simulator_def() -> ContainerizationFileRepr:
+    """A real Apptainer definition, copied verbatim from the live deployment.
+
+    See `tests/fixtures/resources/production_simulator.README.md` for where it came from
+    and how to refresh it. Using a definition a deployment actually produced means the
+    build path is exercised against real content rather than something a test invented.
+    """
+    text = (Path(__file__).parent / "resources" / "production_simulator.def").read_text()
+    return ContainerizationFileRepr(representation=text, containerization_engine=ContainerizationEngine.APPTAINER)
 
 
 @pytest_asyncio.fixture(scope="function")

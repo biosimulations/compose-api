@@ -10,15 +10,19 @@ import pytest
 from pbest.containerization.container_constructor import _default_registry_deps, generate_container_def_file
 from pbest.utils.input_types import (
     ContainerizationEngine,
+    ContainerizationFileRepr,
 )
 
-from compose_api.api.introspect_package import introspect_package
 from compose_api.common.gateway.utils import allow_list
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation import handlers
-from compose_api.simulation.hpc_utils import get_singularity_hash, get_slurm_singularity_container_file
+from compose_api.simulation.hpc_utils import (
+    _namespace_path,
+    get_singularity_hash,
+    get_slurm_singularity_container_file,
+)
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import (
     JobStatus,
@@ -30,6 +34,7 @@ from compose_api.simulation.models import (
 )
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 from tests.fixtures.mocks import TestBackgroundTask
+from tests.fixtures.simulation_fixtures import PRODUCTION_SIMULATOR_DEF_HASH
 from tests.fixtures.slurm_fixtures_backend import SlurmBackend
 from tests.simulators.utils import assert_test_sim_results, test_dir
 
@@ -92,50 +97,83 @@ async def test_download_simulator(
 
 
 @pytest.mark.slurm
-@pytest.mark.cluster_only
 @pytest.mark.asyncio
 async def test_build_simulator(
+    slurm_backend: SlurmBackend,
     simulation_service_slurm: SimulationServiceHpc,
     database_service: DatabaseServiceSQL,
-    simulation_request: SimulationRequest,
     ssh_service: SSHService,
     job_monitor: JobMonitor,
+    production_simulator_def: ContainerizationFileRepr,
 ) -> None:
-    singularity_def = generate_container_def_file(_default_registry_deps(), ContainerizationEngine.APPTAINER)
-    experiment_dep = _default_registry_deps()
-    package_outlines = introspect_package(experiment_dep)
-    packages = []
-    for outline in package_outlines:
-        packages.append(await database_service.get_package_db().insert_package(outline))
-    simulator = await database_service.get_simulator_db().insert_simulator(singularity_def, packages)
-    start_time = time.time()
+    """Build a real deployed simulator definition through the production build path.
+
+    The definition is copied verbatim from the live deployment, so this exercises
+    `singularity build --fakeroot` against content a deployment actually produced rather
+    than against something a test invented. It is the smallest of the definitions
+    published there, which is why it is affordable on every pull request: about 70 seconds
+    to a 594 MB image on the containerised cluster, against minutes and 1.3 GB for the
+    versions that solve a full conda environment.
+
+    The package introspection the previous version did is dropped. It exercised pbest's
+    default dependency set, not the build, and it tied this test to a pin that changes.
+    """
+    if not slurm_backend.can_build_singularity:
+        pytest.skip(f"the {slurm_backend.kind} backend cannot build singularity images")
+
+    # Guards the fixture: `get_singularity_hash` is an md5 over the exact bytes, so an
+    # edit to the .def file would otherwise silently change what is being built.
+    assert get_singularity_hash(production_simulator_def) == PRODUCTION_SIMULATOR_DEF_HASH
+
+    simulator = await database_service.get_simulator_db().insert_simulator(production_simulator_def)
     random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
     hpc_run = await simulation_service_slurm.build_container(simulator, random_str=random_string_7_hex)
 
-    slurm_build_job: SlurmJob | None = None
-    while start_time + (60 * 20) > time.time():  # No longer than twenty mins
-        slurm_build_job = await simulation_service_slurm.get_slurm_job(slurmjobid=hpc_run.slurmjobid)
-        if slurm_build_job is not None and slurm_build_job.is_done():
-            break
-        await asyncio.sleep(30)
+    sif = get_slurm_singularity_container_file(singularity_hash=simulator.container_def_hash)
+    try:
+        deadline = time.monotonic() + 20 * 60
+        slurm_build_job: SlurmJob | None = None
+        while time.monotonic() < deadline:
+            slurm_build_job = await simulation_service_slurm.get_slurm_job(slurmjobid=hpc_run.slurmjobid)
+            if slurm_build_job is not None and slurm_build_job.is_done():
+                break
+            await asyncio.sleep(5)
 
-    db_view_of_run = await database_service.get_hpc_db().get_hpcrun(hpc_run.database_id)
+        assert slurm_build_job is not None, f"build job {hpc_run.slurmjobid} never appeared"
+        assert slurm_build_job.is_done(), f"build job did not finish; last state {slurm_build_job.job_state}"
+        if slurm_build_job.is_failed():
+            _rc, log, _err = await ssh_service.run_command(
+                f"tail -40 {_namespace_path()}/htclogs/*{simulator.container_def_hash[:5]}*.out 2>/dev/null"
+            )
+            raise AssertionError(f"build failed with {slurm_build_job.job_state}; log tail:\n{log}")
 
-    assert slurm_build_job is not None
-    assert slurm_build_job.is_done()
-    assert not slurm_build_job.is_failed()
-    assert db_view_of_run is not None
-    assert db_view_of_run.status == JobStatus.COMPLETED
+        # The scheduler reporting the job done and the monitor recording it are separate
+        # events; the monitor polls on its own schedule, so this must wait rather than
+        # assert once.
+        db_deadline = time.monotonic() + 120
+        db_view_of_run = None
+        while time.monotonic() < db_deadline:
+            db_view_of_run = await database_service.get_hpc_db().get_hpcrun(hpc_run.database_id)
+            if db_view_of_run is not None and db_view_of_run.status == JobStatus.COMPLETED:
+                break
+            await asyncio.sleep(2)
+        assert db_view_of_run is not None
+        assert db_view_of_run.status == JobStatus.COMPLETED, (
+            f"the monitor never recorded the build as completed; last status {db_view_of_run.status}"
+        )
 
-    await database_service.get_hpc_db().delete_hpcrun(hpcrun_id=hpc_run.database_id)
-    await database_service.get_simulator_db().delete_simulator(simulator_id=simulator.database_id)
-
-    for p in packages:
-        for s in p.steps:
-            await database_service.get_package_db().delete_bigraph_compute(s)
-        for process in p.processes:
-            await database_service.get_package_db().delete_bigraph_compute(process)
-        await database_service.get_package_db().delete_bigraph_package(p)
+        # The artifact is the point. A job that exits zero without producing an image
+        # would otherwise pass, and the image must be runnable, not merely present.
+        return_code, _stdout, _stderr = await ssh_service.run_command(f"test -s {sif}")
+        assert return_code == 0, f"{sif} was not produced by the build"
+        return_code, stdout, _stderr = await ssh_service.run_command(
+            f"singularity exec {sif} python3 -c 'import bsew; print(\"BSEW_OK\")'"
+        )
+        assert return_code == 0 and "BSEW_OK" in stdout, "the built image does not run its installed package"
+    finally:
+        await ssh_service.run_command(f"rm -f {sif}")
+        await database_service.get_hpc_db().delete_hpcrun(hpcrun_id=hpc_run.database_id)
+        await database_service.get_simulator_db().delete_simulator(simulator_id=simulator.database_id)
 
 
 @pytest.mark.slurm
