@@ -38,6 +38,11 @@ from compose_api.simulation.hpc_utils import _namespace_path
 COMPOSE_DIR = Path(__file__).parent / "slurm_cluster"
 CONTAINER_USER = "root"
 CONTAINER_PARTITION = "cpu"
+# slurmdbd creates a `normal` QOS; naming it keeps the sbatch templates identical to
+# production, which always emits a --qos directive.
+CONTAINER_QOS = "normal"
+# The first worker replica. `build_container` pins the build to one node by name.
+CONTAINER_BUILD_NODE = "c1"
 
 
 @dataclass(frozen=True)
@@ -216,16 +221,19 @@ def slurm_backend(request: pytest.FixtureRequest) -> Iterator[SlurmBackend]:
         slurm_submit_key_path=str(details.key_path),
         slurm_submit_known_hosts=None,
         slurm_partition=CONTAINER_PARTITION,
-        slurm_qos="",
+        slurm_qos=CONTAINER_QOS,
+        slurm_build_node=CONTAINER_BUILD_NODE,
         simulation_store_base_path=str(remote_base),
     ):
         _provision_remote_tree(env=details.env)
         yield SlurmBackend(
             kind="container",
             partition=CONTAINER_PARTITION,
-            qos="",
+            qos=CONTAINER_QOS,
             remote_base=remote_base,
-            # singularity and apptainer are both installed in the image, but a
-            # --fakeroot build needs privileges a default container does not have.
-            can_build_singularity=False,
+            # Measured, not assumed: with the subordinate id range mounted in, the
+            # container pulls from a registry, builds a definition file with --fakeroot,
+            # and runs the result from inside a SLURM job. What it does not have is the
+            # real simulator images, which is why those tests stay cluster_only.
+            can_build_singularity=True,
         )

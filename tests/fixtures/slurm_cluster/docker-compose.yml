@@ -71,6 +71,10 @@ services:
       # see the file itself: without this, sshd's PAM account stage denies root on some
       # hosts and drops the connection before a key is ever offered
       - ./sshd_test.conf:/etc/ssh/sshd_config.d/01-tests.conf:ro
+      # see the file itself: without a subordinate id range, `singularity build --fakeroot`
+      # cannot create its user namespace, and the production build path uses --fakeroot
+      - ./subid:/etc/subuid:ro
+      - ./subid:/etc/subgid:ro
     ports:
       - "0:22"
     expose: ["6817"]
@@ -101,6 +105,10 @@ services:
       - etc_slurm:/etc/slurm
       - slurm_jobdir:/data
       - var_log_slurm:/var/log/slurm
+      # see the file itself: without a subordinate id range, `singularity build --fakeroot`
+      # cannot create its user namespace, and the production build path uses --fakeroot
+      - ./subid:/etc/subuid:ro
+      - ./subid:/etc/subgid:ro
     expose: ["6818"]
     depends_on:
       slurmctld:
