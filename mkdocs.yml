@@ -7,6 +7,20 @@ edit_uri: edit/main/docs/
 repo_name: biosimulations/compose-api
 copyright: Maintained by <a href="https://biosimulations.com">Florian</a>.
 
+# Internal planning, analysis and grant material lives under docs/ so it is versioned with
+# the code and rendered on GitHub, but it is NOT part of the public documentation site.
+# mkdocs builds every file under docs/ unless told otherwise, and `on-release-main.yml`
+# runs `gh-deploy`, so without this list the next release would publish all of it.
+# Verify with: uv run mkdocs build -s -d /tmp/site && find /tmp/site -name index.html
+exclude_docs: |
+  README.md
+  goals.md
+  strategy.md
+  plan-*.md
+  ecosystem-repos.md
+  cip/
+  grant/
+
 nav:
   - Home: index.md
   - Modules: modules.md
