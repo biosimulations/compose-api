@@ -14,7 +14,7 @@ Four layers. Each owns something, and each must not know about the layer above i
 | Layer | What lives here | Owns | Must not know about |
 |---|---|---|---|
 | **Foundation** | `bigraph-schema`, `process-bigraph` | the type system, the composite document, the scheduler | any toolkit, service or client |
-| **Toolkit** | `pbest` — local-or-remote execution, container definitions | running one composite anywhere; producing a recipe from a dependency set | how the service is deployed |
+| **Toolkit** | `viva-toolkit` (formerly `pbest`) — local-or-remote execution, container definitions | running one composite anywhere; producing a recipe from a dependency set | how the service is deployed |
 | **Service** | `compose-api` | HPC submission, job state, the simulator registry, results | which client is calling |
 | **Clients** | the generated client, the workbench, the web front end | presenting the service to a user | each other |
 
@@ -33,7 +33,8 @@ convenience, not permission for the service to import the CLI or the toolkit to 
 
 ## 2. Decision 1 — consolidate the toolchain into this repository
 
-**Decided 2026-09-13.** Absorb `pbest` as a subpackage of this repository; archive `bsander`, `bsew` and, last,
+**Decided 2026-09-13; naming revised 2026-09-22.** Absorb `pbest` as a subpackage of this repository, renamed
+`viva-toolkit` (see *Naming* below); archive `bsander`, `bsew` and, last,
 `pbest`, with explanatory notes and their history intact. Full analysis in [ecosystem-repos.md](ecosystem-repos.md)
 and the planning record from that session.
 
@@ -87,20 +88,35 @@ Four mechanisms, in descending order of how much they preserve.
 4. **A short `docs/lineage.md`** stating what came from where and who wrote it, for a reader who never sees git.
 
 Archive notes should point all three repositories **directly here**, not through each other. Archive `pbest` last
-and only after a release has shipped from its new home; it is on PyPI and pinned by a real consumer. Keep the package
-name `pbest`.
+and only after a release has shipped from its new home; it is on PyPI and pinned by a real consumer.
+
+### Naming
+
+The toolkit is renamed **`viva-toolkit`**: distribution `viva-toolkit`, import package `viva_toolkit`, command
+`viva-toolkit`. `pbest` says nothing about what the package does to someone who has not been told, and the toolkit
+is the thing a collaborator installs and types, so its name should say what it is. The name is free on PyPI
+(checked 2026-09-22). It is a working name: `viva-` is also the prefix of the simulator wrappers in
+`vivarium-collective`, so it reads as part of that family, which is accurate for a toolkit that runs them but may
+prompt a question about which organisation owns it.
+
+The rename happens **after** the import, not during it, so phase 2 can still prove the imported code is
+byte-identical to the released 0.6.3. Existing users are not broken: one final `pbest` release depends on
+`viva-toolkit` and re-exports it with a deprecation warning, so `import pbest` keeps working for the one known
+external consumer until it moves. The history keeps the old name, and `docs/lineage.md` records the rename alongside
+the authorship.
 
 ### The phases
 
 | Phase | What | Gate |
 |---|---|---|
 | 1 | Harvest two ideas from bsander into the CIP review (decision D-H, the in-document address protocol) and tracker row `A3.4.docker` (the multi-environment premise); record deviations; draft archive notes. The owner archives. | Deviations recorded for `A2.2`, `A3.3a`, `A3.4.docker`, D3. |
-| 2 | Bring pbest in unchanged from **tag 0.6.3** (its published tags are not on its `main`), hold the engine at 1.0.5, add the console script, keep the import direction as today. | `pbest containerize` output byte-identical to today; simulator hash unchanged; original authors visible in `git log`. |
+| 2 | Bring pbest in unchanged from **tag 0.6.3** (its published tags are not on its `main`), hold the engine at 1.0.5, keep the import direction as today. | `pbest containerize` output byte-identical to today; simulator hash unchanged; original authors visible in `git log`. |
 | 2a | **Put the local execution path under test first.** pbest has eleven tests across nine files, four of them empty, and the code most likely to break under an engine upgrade is the code the service never runs. | End-to-end tests through `run_experiment` on existing `.pbg` fixtures, in the fast CI job. |
 | 2b | Bring `compose-api-client` in the same way, with its history, as a third workspace package; keep its hand-written `utils/run_simulation_and_wait.py`, which the generator does not produce, outside the generated tree so regeneration cannot clobber it. | `make clients` writes only in-repo; the regenerated client is byte-identical to the published 0.2.0 apart from the hand-written file. |
 | 3 | Decide the identity consequence **before** the engine upgrade lands: see decision 2. | A dated choice between a scheduled rebuild wave and digest identity first. |
 | 4 | Upgrade the engine, alone, in its own pull request. | Phase 2a tests green; phase 3 decided; one composite end to end on the containerised SLURM backend. |
-| 5 | Publish `pbest`, `compose-api-client` and the service from the new home, then archive the old repositories. | One release of all three from here before any archive. |
+| 2c | Rename to `viva-toolkit` (distribution, import package, console script) inside the workspace; update the service's imports. | Tests green under the new name; `import pbest` works through the shim with a deprecation warning. |
+| 5 | Publish `viva-toolkit`, the final `pbest` shim release, `compose-api-client` and the service from the new home, then archive the old repositories. | One release of each from here before any archive. |
 
 ### Packaging after the merge
 
@@ -108,11 +124,11 @@ One repository, one `uv` workspace, three distributions:
 
 | Distribution | What it is | Must stay free of |
 |---|---|---|
-| `pbest` | the toolkit and its command line, the product a collaborator installs | FastAPI, asyncpg, asyncssh, SQLAlchemy — a laptop install must not pull the server |
+| `viva-toolkit` | the toolkit and its command line, the product a collaborator installs (formerly `pbest`) | FastAPI, asyncpg, asyncssh, SQLAlchemy — a laptop install must not pull the server |
 | `compose-api-client` | the generated client, plus its one hand-written helper | anything but its HTTP stack |
 | `compose-api` | the service | — it depends on the other two, pinned to the same workspace version |
 
-The package names on PyPI do not change, so no downstream import breaks. The payoff is the one that motivated the
+The client and service keep their names on PyPI; the toolkit's rename is covered by the `pbest` shim, so no downstream import breaks. The payoff is the one that motivated the
 open follow-up on 404s: a request or response model change becomes one pull request and one release, instead of the
 four-step release across three repositories that `CLAUDE.md` describes today.
 
@@ -135,7 +151,7 @@ parallel track (§7).
 (`docker://…@sha256:…`), so digest identity can land on today's runtime. Decision 3's runtime question, which
 depends on the cluster administrators, is independent of it.
 
-**Why it interacts with decision 1.** Absorbing pbest changes what the `pbest_tag` baked into the recipe means, and
+**Why it interacts with decision 1.** Absorbing and renaming pbest changes the `pbest_tag` baked into the recipe, and
 upgrading the engine changes the recipe text. Either one invalidates every existing simulator identity and rebuilds
 every container. Landing digest identity first makes both non-events; landing it afterwards means paying for one
 rebuild wave and then changing the identity scheme anyway. Decision 1 phase 3 exists to force that choice.

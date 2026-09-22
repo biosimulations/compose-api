@@ -13,7 +13,7 @@ a plan for ourselves.
 ## 1. Who it is for
 
 **The primary user is a researcher on a Collaborating Project.** The first one this year is
-**<Collaborating Project — to be named>**. They install one Python toolkit, build a composite
+**<Collaborating Project — to be named>**. They install one Python toolkit (`viva-toolkit`, formerly `pbest`), build a composite
 simulation on their own machine, run it there, and then submit the *same* composite to HPC without changing it. The
 command-line toolkit is the product they touch; the hosted service is its backend. This follows the grant's framing
 of Collaborating and Service Projects as the audience, and the advisory board's repeated emphasis on engagement with
@@ -89,7 +89,7 @@ Each goal has an observable test. If the test cannot be run, the goal is not don
 
 | Goal | Done means |
 |---|---|
-| G1 | A named collaborator, not a member of this team, installs the toolkit from PyPI on a clean machine, runs a composite locally, submits the identical file to HPC, and gets the same result back. Documented as a walkthrough they followed, not one we wrote for them. |
+| G1 | A named collaborator, not a member of this team, installs `viva-toolkit` from PyPI on a clean machine, runs a composite locally, submits the identical file to HPC, and gets the same result back. Documented as a walkthrough they followed, not one we wrote for them. |
 | G2 | The API returns 404 for absent resources and 5xx only for server faults; a job the scheduler reports as failed is recorded as failed within one polling interval; the test suite covers these without a real cluster. Most of this landed in September 2026. |
 | G3 | Pick any simulation from 2026. Its record names an image digest. Pulling that digest and re-running the composite reproduces the result to the tolerance the tests use. |
 | G4 | Each registered simulator has its own pinned environment spec and digest; adding one does not rebuild the others; the registry lists at least one particle-based and one spatial simulator beyond what exists today, at curation level *tested* or higher, and every result records the curation level of each component it used. |
