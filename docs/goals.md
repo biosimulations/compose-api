@@ -1,6 +1,6 @@
 # Goals
 
-**Status:** draft, opened 2026-09-13. This is the statement of who the system is for, what it must do, and what
+**Status:** draft, opened 2026-09-13, revised 2026-09-22. This is the statement of who the system is for, what it must do, and what
 "done" looks like. It changes rarely. It is written to be readable by the External Advisory Board, and it is the
 document the Year 3 progress report is checked against. How we get there is in [strategy.md](strategy.md).
 
@@ -12,7 +12,8 @@ a plan for ourselves.
 
 ## 1. Who it is for
 
-**The primary user is a researcher on a Collaborating Project.** They install one Python toolkit, build a composite
+**The primary user is a researcher on a Collaborating Project.** The first one this year is
+**<Collaborating Project — to be named>**. They install one Python toolkit, build a composite
 simulation on their own machine, run it there, and then submit the *same* composite to HPC without changing it. The
 command-line toolkit is the product they touch; the hosted service is its backend. This follows the grant's framing
 of Collaborating and Service Projects as the audience, and the advisory board's repeated emphasis on engagement with
@@ -24,6 +25,11 @@ contract the toolkit uses, and the goals below hold for them too. The contract i
 apart.
 
 **Who it is not yet for.** Anyone who needs to run code we have not registered. See goal G6 and the non-goals.
+
+**What "the registry" means here.** Throughout this document it is *this service's* simulator registry: the set of
+components the hosted service will run on HPC. The `vivarium-collective` catalog (`viva-catalog`) is a discovery
+list of what exists; this registry is what we have pinned, built, tested and will execute. Strategy decision 5 says
+how the one feeds the other and what the curation levels are.
 
 ---
 
@@ -47,20 +53,23 @@ Trace: `A1.1`, `A2.2`. The case for digest identity is made in
 [plan-container-runtimes.md §1](plan-container-runtimes.md).
 
 **G4. The process registry grows to include spatial and particle-based simulators, each independently versioned and
-independently rebuildable.**
+independently rebuildable, each carrying a curation level that says how far it has been checked.**
 Trace: `A1.2.readdy`, `A1.2.cpm`, `A1.2.mem3dg`, `A1.2.cellpack` and siblings. Year 2 committed:
 *"The process registry will be expanded to include additional simulators, including spatial and particle-based
 tools, creating a growing catalog of interoperable components."*
 
 **G5. An adapter registry exists, with unit normalisation and concentration-to-count conversion available as
-processes a composite can wire in.**
+processes a composite can wire in.** Adapters are a category of the same registry, on the same curation levels, and
+they require declared port types and units, which no registry stores today.
 Trace: `A3.3e` (in-progress). Year 2 committed: *"development of an adapter registry will begin, targeting common
 translation challenges such as unit normalization and conversions between concentrations and counts."*
 
 **G6. In this funding year, composites execute only registered simulators; running arbitrary user-supplied code is a
 stated later goal with a stated trigger.**
 Trace: `A3.4.docker` (in-progress). This is an access-control boundary, not a security boundary, and this document
-says so plainly rather than implying isolation that does not exist.
+says so plainly rather than implying isolation that does not exist. "Registered" means an entry in this service's
+registry at curation level *tested* or higher (strategy decision 5); lower levels are visible and runnable locally
+through the toolkit, not on HPC.
 
 **G7. There is one execution backend, whichever front door a user arrives through.**
 Trace: `A3.2.hosted`, deviation D2. Today there are two hosted composition backends. Converging them is a goal, and
@@ -83,9 +92,9 @@ Each goal has an observable test. If the test cannot be run, the goal is not don
 | G1 | A named collaborator, not a member of this team, installs the toolkit from PyPI on a clean machine, runs a composite locally, submits the identical file to HPC, and gets the same result back. Documented as a walkthrough they followed, not one we wrote for them. |
 | G2 | The API returns 404 for absent resources and 5xx only for server faults; a job the scheduler reports as failed is recorded as failed within one polling interval; the test suite covers these without a real cluster. Most of this landed in September 2026. |
 | G3 | Pick any simulation from 2026. Its record names an image digest. Pulling that digest and re-running the composite reproduces the result to the tolerance the tests use. |
-| G4 | Each registered simulator is its own image with its own digest; adding one does not rebuild the others; the registry lists at least one particle-based and one spatial simulator beyond what exists today. |
-| G5 | A composite that wires a concentration-emitting process to a count-consuming process runs correctly through a registered adapter, with no hand-written glue in the composite. |
-| G6 | The service rejects a composite naming an unregistered process address with a clear message, and the goals for the untrusted tier are written down with their trigger. |
+| G4 | Each registered simulator has its own pinned environment spec and digest; adding one does not rebuild the others; the registry lists at least one particle-based and one spatial simulator beyond what exists today, at curation level *tested* or higher, and every result records the curation level of each component it used. |
+| G5 | A composite that wires a concentration-emitting process to a count-consuming process runs correctly through a registered adapter with declared port types and units, with no hand-written glue in the composite. |
+| G6 | The service rejects a composite naming an unregistered process address, or a component below *tested*, with a clear message; and the goals for the untrusted tier are written down with their trigger. |
 | G7 | A composite submitted through either front door runs on the same backend, or the strategy document records a dated decision that they will stay separate and why. |
 | G8 | `uv.lock` here resolves the same `process-bigraph` minor version the workbench ecosystem resolves, and a scheduled check fails when it drifts more than one minor version. |
 
@@ -97,9 +106,9 @@ Year 2 made three forward commitments. They map to goals as follows, with what t
 
 | Year 2 commitment (verbatim) | Goal | Evidence Year 3 must produce |
 |---|---|---|
-| *"further development and validation of the Composition API through real composite simulations with Collaborative Projects and HPC-scale use cases"* | G1, G2 | One real composite from one named Collaborating Project, run end to end on HPC through the toolkit, with the collaborator's walkthrough. |
-| *"The process registry will be expanded to include additional simulators, including spatial and particle-based tools"* | G4 | ReaDDy (particle-based) is already registered. At least one spatial simulator added and one composite that uses it. Which ones, named in advance in the tracker. |
-| *"development of an adapter registry will begin, targeting common translation challenges such as unit normalization and conversions between concentrations and counts"* | G5 | The adapter category exists in the registry with at least the two named adapters, and one composite uses one of them. |
+| *"further development and validation of the Composition API through real composite simulations with Collaborative Projects and HPC-scale use cases"* | G1, G2 | One real composite from **<Collaborating Project — to be named>**, run end to end on HPC through the toolkit, with the collaborator's walkthrough. |
+| *"The process registry will be expanded to include additional simulators, including spatial and particle-based tools"* | G4 | ReaDDy (particle-based) is already in the service's image. At least one spatial simulator **developed and validated** in its wrapper repository, with one composite that uses it; **registered** here at *tested* or higher if digest identity has landed, otherwise a dated deviation saying so. Which ones, named in advance in the tracker. Every wrapper in the catalog also appears in the registry at its measured curation level, which is itself evidence of an expanding catalog. |
+| *"development of an adapter registry will begin, targeting common translation challenges such as unit normalization and conversions between concentrations and counts"* | G5 | The adapter category exists in the registry with at least the two named adapters, seeded from existing code (`viva-basic-processes`' expression step, `spatio-flux`'s count/concentration conversion), and one composite uses one of them. |
 
 **A framing point for the report.** Both prior reports cite repository counts as evidence of output. This year the
 toolchain is being consolidated, which lowers that number. The report should count tools delivered and maintained,
@@ -120,8 +129,11 @@ Things this project is explicitly not trying to do in this funding year, so that
 - **GPU or multi-node execution.** No current workload requests either: the production jobs ask for one or two CPUs
   and one to eight gigabytes on one node. This is measured, not assumed, and it would change if a collaborator
   brought such a simulator.
-- **Consolidating the ~50 simulator-wrapper repositories.** They have separate upstreams, licences and release
-  cadences, and a generated index already makes them addressable. See [ecosystem-repos.md](ecosystem-repos.md).
+- **Merging the ~50 simulator-wrapper repositories into this one.** They have separate upstreams, licences and
+  release cadences, and stay where they are. They are brought in as *registry entries* — pinned, built, tested and
+  curated here — not as source. See strategy decision 5 and [ecosystem-repos.md](ecosystem-repos.md).
+- **One environment holding every simulator.** The wrappers' dependencies conflict and several need runtimes pip
+  cannot install; strategy decision 5 builds environments per composite instead.
 - **Renaming this repository in this cycle.** It will hold more than an API once the toolkit moves in, and a broader
   name is reasonable, but a rename touches a permanent identifier (the Zenodo concept DOI) and is a separate
   decision.

@@ -1,9 +1,10 @@
 # Internal documentation
 
-**Not public.** Everything listed here is internal planning, analysis and grant material. It is versioned with the
-code and rendered when browsing this folder on GitHub, but it is excluded from the published documentation site by
-`exclude_docs` in `mkdocs.yml`. The public site carries only `index.md` and the generated module reference. If you
-add a document here that should stay internal, add it to that list.
+**Internal planning, not user documentation.** Everything listed here is planning, analysis and grant material for
+the team. This repository is public, so these files are readable by anyone browsing it on GitHub; they are written
+with that in mind. They are kept off the published documentation site by `exclude_docs` in `mkdocs.yml`, because
+they are not user documentation. The site carries only `index.md` and the generated module reference. If you add a
+planning document here, add it to that list.
 
 ## Where to start
 
@@ -11,8 +12,8 @@ Several documents answer different questions. Start with the one that matches yo
 
 | If you want to know… | Read | Kind | Last measured |
 |---|---|---|---|
-| who this is for, what it must do, and what "done" means | [goals.md](goals.md) | direction, changes rarely | 2026-09-13 |
-| how we get there: layering, decisions, order, risks | [strategy.md](strategy.md) | direction, changes as decisions land | 2026-09-13 |
+| who this is for, what it must do, and what "done" means | [goals.md](goals.md) | direction, changes rarely | 2026-09-22 |
+| how we get there: layering, decisions (toolchain, identity, trust, convergence, simulator wrappers), order, risks | [strategy.md](strategy.md) | direction, changes as decisions land | 2026-09-22 |
 | what the grant promised and where we diverged, row by row | [grant tracker](grant/trd3/tracking/TRACKER.md), [deviations](grant/trd3/tracking/DEVIATIONS.md) | record | 2026-09-09 |
 | what the composition protocol is and its open design decisions | [CIP design review](cip/CIP-design-review.md), [glossary](cip/GLOSSARY.md) | analysis | 2026-09-09 |
 | which libraries and repositories surround this one, and whether we need them all | [ecosystem-repos.md](ecosystem-repos.md) | analysis | 2026-09-12 |
