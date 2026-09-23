@@ -68,4 +68,3 @@ The API prefixes are `/simulation`, `/results`, `/core`, and `/curated`. Each ro
 ## Deployment and release touchpoints
 
 `make tag` updates the project version, commits, tags, and pushes; the tag triggers the container workflow. Kubernetes manifests live under `kustomize/`, and `make deploy` applies the production RKE overlay. The production host is repeated in the API configuration, ingress, and pbest defaults, so host changes must be coordinated across all three repositories.
-

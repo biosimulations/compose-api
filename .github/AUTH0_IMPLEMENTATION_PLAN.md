@@ -715,4 +715,3 @@ necessary, and its semantics must not turn invalid supplied credentials into ano
    check?
 8. At what future milestone, if any, should simulation submission/result access become authorized by subject, scope,
    or ownership? That policy is intentionally outside this first authentication phase.
-
