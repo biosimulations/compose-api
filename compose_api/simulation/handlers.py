@@ -13,7 +13,6 @@ from pbest.utils.input_types import (
     ContainerizationEngine,
 )
 
-from compose_api.common.gateway.utils import allow_list
 from compose_api.db.database_service import DatabaseService
 from compose_api.db.services.hpc_db import HPCDatabaseService
 from compose_api.dependencies import (
@@ -28,7 +27,6 @@ from compose_api.simulation.models import (
     HpcRun,
     JobStatus,
     JobType,
-    PBAllowList,
     RegisteredSimulators,
     RemoteContainerImage,
     Simulation,
@@ -64,7 +62,6 @@ async def run_simulation(
     database_service: DatabaseService,
     simulation_service_slurm: SimulationService,
     job_monitor: JobMonitor,
-    pb_allow_list: PBAllowList,
     background_tasks: BackgroundTasks,
 ) -> SimulationExperiment:
     with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
@@ -146,7 +143,6 @@ async def run_curated_pbif(
                 database_service=db_service,
                 simulation_service_slurm=sim_service,
                 job_monitor=job_monitor,
-                pb_allow_list=PBAllowList(allow_list=allow_list),
                 background_tasks=background_tasks,
             )
         except Exception as e:
