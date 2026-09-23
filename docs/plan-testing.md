@@ -565,6 +565,10 @@ delete, and deleting it removes a line that would silently become load-bearing t
 Size S. The action is two things: drop the dead override here, and add a wheel-installability preflight to the
 client repository, not to this one.
 
+**Update 2026-09-22:** the dead override is removed. `uv lock` was unchanged by the removal, which confirms it was
+inert. The client-side preflight remains open, and moves into this repository when the client does (strategy
+decision 1).
+
 ## Part 3. Candidate actions
 
 Sized as S (under a day), M (a few days), L (a week or more). Nothing here is chosen.

@@ -72,9 +72,6 @@ default-groups = [
     "docs",
 ]
 
-[tool.uv.sources]
-bsander = { git = "https://github.com/biosimulators/bsander.git" }
-
 
 [tool.hatch.build.targets.sdist]
 include = [
