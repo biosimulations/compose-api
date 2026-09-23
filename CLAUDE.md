@@ -133,7 +133,7 @@ This service is one side of a three-package loop. `../pbest` is checked out next
   does editing `compose_api/simulation/simulator_registry.json`, the library list baked into that image: a copy of
   `biosimulations/registry`'s `registry.json` pinned at the commit in `simulator_registry.py`, deliberately not
   pbest's `_default_registry_deps()`, which fetches the file live from that repo's `dev` branch.
-  The pin is exact and resolves from PyPI — the local `../pbest` working copy is *not* what compose-api runs against
+  The pbest pin is exact and resolves from PyPI — the local `../pbest` working copy is *not* what compose-api runs against
   unless you deliberately install it editable, and it can sit on a different version than the pin.
 - **pbest calls back over HTTP** using the published `compose-api-client` package (imported as `compose_api_client`,
   currently 0.2.0), generated from this repo's OpenAPI spec, defaulting to `https://compose.cam.uchc.edu`. It uses
