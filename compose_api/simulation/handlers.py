@@ -8,7 +8,7 @@ import zipfile
 from pathlib import Path
 
 from fastapi import BackgroundTasks, HTTPException
-from pbest.containerization.container_constructor import _default_registry_deps, generate_container_def_file
+from pbest.containerization.container_constructor import generate_container_def_file
 from pbest.utils.input_types import (
     ContainerizationEngine,
 )
@@ -38,6 +38,7 @@ from compose_api.simulation.models import (
     SimulatorVersion,
 )
 from compose_api.simulation.simulation_service import SimulationService
+from compose_api.simulation.simulator_registry import registry_dependencies
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ async def run_simulation(
     background_tasks: BackgroundTasks,
 ) -> SimulationExperiment:
     with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
-        singularity_rep = generate_container_def_file(_default_registry_deps(), ContainerizationEngine.APPTAINER)
+        singularity_rep = generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)
         # simulation_request.omex_archive = Path(tmp_dir + f"/{os.path.basename(simulation_request.omex_archive.name)}")
 
     simulator_db = database_service.get_simulator_db()
