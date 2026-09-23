@@ -1,6 +1,6 @@
 # Strategy
 
-**Status:** draft, opened 2026-09-13, revised 2026-09-22 (decision 5 added). This is how we reach the goals in [goals.md](goals.md): the layering, the
+**Status:** draft, opened 2026-09-13, revised 2026-09-22 (decision 5 added) and 2026-09-23 (`registry_env` as a stopgap bundle). This is how we reach the goals in [goals.md](goals.md): the layering, the
 decisions taken, the order they land in, and the risks. It changes as decisions land. Each decision cites the
 analysis it rests on rather than repeating it, so this document stays short and the evidence stays where it was
 measured.
@@ -263,6 +263,20 @@ independently. In order of preference:
    container each. This is exactly grant row `A3.4.docker`, which the tracker records as not yet done.
 
 Namespacing process addresses by entry removes the flat-name collision as a side effect.
+
+**Today's `registry_env` is the first bundle, and a stopgap.** The service currently runs every composite in one
+image, `registry_env`, holding every library in its pinned list (COPASI, Tellurium, ReaDDy, multiscale actin) plus
+the toolkit. That is an all-in-one environment, the shape this section rejects at scale. It stays, for now, because
+those four coexist and cover the composites people actually submit today, the likely first G1 composite included. In
+the terms above it is simply the first pre-built bundle (rule 2) arrived at before rule 1 exists. Three rules keep it
+from becoming the registry by default:
+
+- **It grows only while additions are conflict-free.** The first library that will not co-install is the signal to
+  build the per-composite resolver, not to force the library in.
+- **It is not the registry.** Entries are registered and curated individually; membership of the bundle confers no
+  curation level.
+- **It is retired into rule 1, not replaced beside it.** Once the resolver exists, this image becomes one cached
+  resolution among many, identified by digest like the rest.
 
 ### Adapters
 
