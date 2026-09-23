@@ -2,6 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends
 
+from compose_api.authentication import get_optional_principal
 from compose_api.common.gateway.models import RouterConfig, ServerMode
 from compose_api.dependencies import (
     get_database_service,
@@ -26,7 +27,7 @@ def get_server_url(dev: bool = True) -> ServerMode:
 
 # -- app components -- #
 
-config = RouterConfig(router=APIRouter(), prefix="/core", dependencies=[])
+config = RouterConfig(router=APIRouter(), prefix="/core", dependencies=[Depends(get_optional_principal)])
 
 
 @config.router.get(

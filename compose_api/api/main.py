@@ -5,11 +5,13 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from functools import partial
 from pathlib import Path
+from typing import Any
 
 import uvicorn
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
+from compose_api.authentication import BEARER_SCHEME_NAME
 from compose_api.common.gateway.models import ServerMode
 from compose_api.config import get_settings
 from compose_api.dependencies import (
@@ -93,6 +95,25 @@ for api_name in APP_ROUTERS:
         )
     except Exception:
         logger.exception(f"Could not register the following api: {api_name}")
+
+
+def _openapi_with_optional_bearer() -> dict[str, Any]:
+    if app.openapi_schema is not None:
+        return app.openapi_schema
+    schema = FastAPI.openapi(app)  # builds and caches app.openapi_schema; amended in place below
+    schema.setdefault("components", {}).setdefault("securitySchemes", {})[BEARER_SCHEME_NAME] = {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Optional Auth0 access token for this API. Omit it to call anonymously.",
+    }
+    # Document-level, not per operation: openapi-python-client 0.29 types any operation carrying a
+    # `security` entry as requiring AuthenticatedClient, even when that entry allows anonymous ({}).
+    schema["security"] = [{}, {BEARER_SCHEME_NAME: []}]
+    return schema
+
+
+app.openapi = _openapi_with_optional_bearer  # type: ignore[method-assign]
 
 
 # -- app-level endpoints -- #

@@ -1,9 +1,9 @@
+import copy
 import json
 import os
 from typing import Any
 
 import yaml
-from fastapi.openapi.utils import get_openapi
 
 from compose_api.api.main import app
 
@@ -30,14 +30,9 @@ def _restore_binary_format(node: Any) -> None:
 
 
 def main() -> None:
-    openapi_spec = get_openapi(
-        title=app.title,
-        version=app.version,
-        openapi_version=app.openapi_version,
-        description=app.description,
-        routes=app.routes,
-        servers=app.servers,
-    )
+    # app.openapi(), not get_openapi(): the app adds the optional bearer scheme in its override.
+    # Deep-copied because the fix-up below mutates, and app.openapi() returns the served, cached dict.
+    openapi_spec = copy.deepcopy(app.openapi())
     _restore_binary_format(openapi_spec)
 
     # Convert the JSON OpenAPI spec to YAML

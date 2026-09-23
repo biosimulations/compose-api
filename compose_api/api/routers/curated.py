@@ -4,6 +4,7 @@ import os
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 from jinja2 import Template
 
+from compose_api.authentication import get_optional_principal
 from compose_api.common.gateway.models import RouterConfig, ServerMode
 from compose_api.common.gateway.utils import get_simulation_request_from_uploaded_file
 from compose_api.config import get_settings
@@ -27,7 +28,7 @@ def get_server_url(dev: bool = True) -> ServerMode:
 
 # -- app components -- #
 
-config = RouterConfig(router=APIRouter(), prefix="/curated", dependencies=[])
+config = RouterConfig(router=APIRouter(), prefix="/curated", dependencies=[Depends(get_optional_principal)])
 
 
 @config.router.post(

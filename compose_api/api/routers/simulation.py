@@ -2,6 +2,7 @@ import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 
+from compose_api.authentication import get_optional_principal
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.common.gateway.utils import allow_list, get_simulation_request_from_uploaded_file
 from compose_api.dependencies import (
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # -- app components -- #
 
-config = RouterConfig(router=APIRouter(), prefix="/simulation", dependencies=[])
+config = RouterConfig(router=APIRouter(), prefix="/simulation", dependencies=[Depends(get_optional_principal)])
 
 
 @config.router.post(

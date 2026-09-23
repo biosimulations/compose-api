@@ -32,3 +32,7 @@ INTERNAL_MOUNT_DIR=/mnt/svc_compose
 NAMESPACE=test
 SIMULATION_STORE_BASE_PATH=/projects/CRBM
 CONTAINER_SERVICE=APPTAINER
+
+# Auth0 (optional). Leave AUTH0_AUDIENCE blank to run anonymous-only; bearer tokens then get a 401.
+AUTH0_DOMAIN=dev-bu7yo7484tyxu6a1.us.auth0.com
+AUTH0_AUDIENCE=

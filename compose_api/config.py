@@ -96,6 +96,11 @@ class Settings(BaseSettings):
     # behaviour when a download fails, not an error.
     simulator_image_repository: str = "ghcr.io/biosimulations/registry_env"
 
+    # Auth0 access-token verification (compose_api/authentication.py). Neither is a secret. While either is
+    # empty no token can be verified: anonymous requests still work and any supplied bearer token gets a 401.
+    auth0_domain: str = ""  # e.g. dev-bu7yo7484tyxu6a1.us.auth0.com -- no scheme, no trailing slash
+    auth0_audience: str = ""  # the Auth0 API Identifier, exactly as shown in the dashboard
+
 
 @lru_cache
 def _load_settings() -> Settings:

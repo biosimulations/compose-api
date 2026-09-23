@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.responses import FileResponse
 
+from compose_api.authentication import get_optional_principal
 from compose_api.common.gateway.models import Namespace, RouterConfig
 from compose_api.common.gateway.utils import get_hpc_run_status
 from compose_api.common.ssh.ssh_service import get_ssh_service
@@ -29,7 +30,7 @@ NOT_FOUND_RESPONSE = {"description": "The requested resource does not exist"}
 
 # -- app components -- #
 
-config = RouterConfig(router=APIRouter(), prefix="/results", dependencies=[])
+config = RouterConfig(router=APIRouter(), prefix="/results", dependencies=[Depends(get_optional_principal)])
 
 
 @config.router.get(

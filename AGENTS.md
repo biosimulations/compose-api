@@ -99,16 +99,6 @@ and swallowed — an import error in a router silently drops its endpoints rathe
 (pre-baked copasi/tellurium runs). Every endpoint sets an explicit `operation_id` because those become the generated
 client's method names.
 
-**Authentication** is optional Auth0 bearer, all in `compose_api/authentication.py`. Each of the four routers
-sets `dependencies=[Depends(get_optional_principal)]` on its `RouterConfig` (keep its own prefix). A handler that
-wants the identity adds an `OptionalPrincipal` parameter; FastAPI caches the dependency, so the token is still verified
-once. No header means anonymous (`None`); any header that is present but invalid is a 401, never anonymous, which is
-why the header is parsed by hand: `HTTPBearer(auto_error=False)` also returns `None` for a non-Bearer scheme. OpenAPI
-security is document-level only (`_openapi_with_optional_bearer` in `api/main.py`). A per-operation `security`
-entry, even `[{}, ...]`, makes openapi-python-client type that method as requiring `AuthenticatedClient`, a breaking
-change for pbest. `openapi_spec.py` must use `app.openapi()` so the override reaches the checked-in spec. Settings are
-`auth0_domain` and `auth0_audience`; the issuer is derived and the algorithm is fixed to RS256.
-
 **HPC layer.** `SSHService` (asyncssh: `run_command`, `scp_upload`, `scp_download`) → `SlurmService`
 (`sbatch --parsable`, `squeue`, `sacct` parsing into `SlurmJob`) → `SimulationServiceHpc`, which writes sbatch scripts
 inline as f-string heredocs in `simulation_service.py` (one for simulation runs, one for `singularity build
