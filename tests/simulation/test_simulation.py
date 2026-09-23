@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 import pytest
-from pbest.containerization.container_constructor import _default_registry_deps, generate_container_def_file
+from pbest.containerization.container_constructor import generate_container_def_file
 from pbest.utils.input_types import (
     ContainerizationEngine,
     ContainerizationFileRepr,
@@ -33,6 +33,7 @@ from compose_api.simulation.models import (
     SimulatorVersion,
 )
 from compose_api.simulation.simulation_service import SimulationServiceHpc
+from compose_api.simulation.simulator_registry import registry_dependencies
 from tests.fixtures.mocks import TestBackgroundTask
 from tests.fixtures.simulation_fixtures import PRODUCTION_SIMULATOR_DEF_HASH
 from tests.fixtures.slurm_fixtures_backend import SlurmBackend
@@ -61,7 +62,7 @@ async def test_download_simulator(
     performed at all until an image is published. What it does still prove is the
     mechanism and the database recording, against the real production code path.
     """
-    container_rep = generate_container_def_file(_default_registry_deps(), ContainerizationEngine.APPTAINER)
+    container_rep = generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)
     image = RemoteContainerImage(
         source_url=PULLABLE_PROBE_IMAGE,
         image_name_and_tag=PULLABLE_PROBE_IMAGE.removeprefix("docker://"),

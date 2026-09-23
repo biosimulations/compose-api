@@ -127,10 +127,13 @@ This service is one side of a three-package loop. `../pbest` is checked out next
 - **compose-api imports pbest at runtime.** `pbest.utils.input_types` supplies domain types used here directly —
   `ContainerizationFileRepr` (persisted in `db/tables/simulator_tables.py` and carried on `Simulator`),
   `ContainerizationEngine`, `ExperimentPrimaryDependencies`. `handlers.run_simulation` calls
-  `generate_container_def_file(_default_registry_deps(), ContainerizationEngine.APPTAINER)`; that def file's md5 is the
+  `generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)`; that def file's md5 is the
   `SimulatorVersion` identity, so **bumping the `pbest==0.6.3` pin changes the hash and triggers a fresh container
-  build** on the next run (pbest's release script rewrites the `pbest_tag` baked into the generated def file).
-  The pin is exact and resolves from PyPI — the local `../pbest` working copy is *not* what compose-api runs against
+  build** on the next run (pbest's release script rewrites the `pbest_tag` baked into the generated def file). So
+  does editing `compose_api/simulation/simulator_registry.json`, the library list baked into that image: a copy of
+  `biosimulations/registry`'s `registry.json` pinned at the commit in `simulator_registry.py`, deliberately not
+  pbest's `_default_registry_deps()`, which fetches the file live from that repo's `dev` branch.
+  The pbest pin is exact and resolves from PyPI — the local `../pbest` working copy is *not* what compose-api runs against
   unless you deliberately install it editable, and it can sit on a different version than the pin.
 - **pbest calls back over HTTP** using the published `compose-api-client` package (imported as `compose_api_client`,
   currently 0.2.0), generated from this repo's OpenAPI spec, defaulting to `https://compose.cam.uchc.edu`. It uses

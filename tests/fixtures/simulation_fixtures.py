@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 from nats.aio.client import Client as NATSClient
-from pbest.containerization.container_constructor import _default_registry_deps, generate_container_def_file
+from pbest.containerization.container_constructor import generate_container_def_file
 from pbest.utils.input_types import (
     ContainerizationEngine,
     ContainerizationFileRepr,
@@ -23,6 +23,7 @@ from compose_api.dependencies import (
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import JobStatus, JobType, SimulatorVersion
 from compose_api.simulation.simulation_service import SimulationServiceHpc
+from compose_api.simulation.simulator_registry import registry_dependencies
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -76,8 +77,8 @@ def production_simulator_def() -> ContainerizationFileRepr:
 
 @pytest_asyncio.fixture(scope="function")
 async def simulator(database_service: DatabaseService) -> AsyncGenerator[SimulatorVersion]:
-    experiment_dep = _default_registry_deps()
-    singularity_def = generate_container_def_file(_default_registry_deps(), ContainerizationEngine.APPTAINER)
+    experiment_dep = registry_dependencies()
+    singularity_def = generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)
 
     package_outlines = introspect_package(experiment_dep)
     packages = []
