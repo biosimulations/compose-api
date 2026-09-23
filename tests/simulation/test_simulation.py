@@ -13,7 +13,6 @@ from pbest.utils.input_types import (
     ContainerizationFileRepr,
 )
 
-from compose_api.common.gateway.utils import allow_list
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.db.database_service import DatabaseServiceSQL
@@ -27,7 +26,6 @@ from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import (
     JobStatus,
     JobType,
-    PBAllowList,
     RemoteContainerImage,
     SimulationRequest,
     SimulatorVersion,
@@ -198,7 +196,6 @@ async def test_simulate(
         simulation_service_slurm=simulation_service_slurm,
         job_monitor=job_monitor,
         background_tasks=test_bg_tasks,
-        pb_allow_list=PBAllowList(allow_list=allow_list),
     )
     assert sim_experiement is not None
     await test_bg_tasks.call_tasks()
@@ -234,38 +231,3 @@ async def test_simulate(
         await ssh_service.scp_download(archive_result, remote_experiment_result)
         report_csv_file = Path(os.path.join(test_dir, "fixtures/resources/report.csv"))
         assert_test_sim_results(archive_result, report_csv_file, temp_dir_path, difference_tolerance=1e-4)
-
-
-# @pytest.mark.skipif(len(get_settings().slurm_submit_key_path) == 0, reason="slurm ssh key file not supplied")
-# @pytest.mark.asyncio
-# async def test_simulator_not_in_allowlist(
-#     simulation_service_slurm: SimulationServiceHpc,
-#     database_service: DatabaseServiceSQL,
-#     simulation_request: SimulationRequest,
-#     job_monitor: JobMonitor,
-#     simulator: SimulatorVersion,
-# ) -> None:
-#     # insert the latest commit into the database
-#     test_bg_tasks = TestBackgroundTask()
-#     experiement_id = get_experiment_id(simulator, "".join(random.choices(string.hexdigits, k=7)))
-#
-#     simulation = await database_service.get_simulator_db().insert_simulation(
-#         sim_request=simulation_request, experiment_id=experiement_id, simulator_version=simulator
-#     )
-#
-#     print(f"Reimplement allow list in the future: {allow_list}")
-
-# with pytest.raises(ValueError):
-#     await handlers.run_simulation(
-#         simulation_request,
-#         database_service,
-#         simulation_service_slurm,
-#         job_monitor=job_monitor,
-#         background_tasks=test_bg_tasks,
-#         pb_allow_list=PBAllowList(allow_list=["pypi:bspil"]),
-#     )
-#     await test_bg_tasks.call_tasks()
-#     await simulation_service_slurm.submit_simulation_job(
-#         simulation=simulation,
-#         experiment_id=experiement_id,
-#     )

@@ -96,6 +96,12 @@ class Settings(BaseSettings):
     # behaviour when a download fails, not an error.
     simulator_image_repository: str = "ghcr.io/biosimulations/registry_env"
 
+    # What /simulation/run does with a process address the registry manifest does not allow
+    # (compose_api/registry/manifest.yaml). "enforce" rejects the submission with a 400; "warn" logs and runs it,
+    # as an escape hatch if enforcement turns out to block a real user. Unsafe addresses -- non-local protocols
+    # and the arbitrary-import `local:!` form -- are rejected under either policy.
+    address_policy: Literal["enforce", "warn"] = "enforce"
+
 
 @lru_cache
 def _load_settings() -> Settings:

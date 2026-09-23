@@ -288,7 +288,7 @@ exists: `viva-basic-processes`' expression step and `spatio-flux`'s count/concen
 
 | Phase | What | Gate |
 |---|---|---|
-| A | Manifest schema; ingest the catalog; every wrapper appears at *listed*. Enforce the allow-list the service already receives. | Service rejects unlisted addresses (G6); registry lists every catalog wrapper. |
+| A | Manifest schema; ingest the catalog; every wrapper appears at *listed*. Enforce the allow-list the service already receives. | Service rejects unlisted addresses (G6); registry lists every catalog wrapper. **Manifest and enforcement landed 2026-09-23 (`compose_api/registry/`); catalog ingest follows.** |
 | B | CI that builds each entry's environment and runs its tests; levels 2 and 3 computed, not asserted. | A nightly report of every entry's level, and why. |
 | C | The per-composite resolver, after digest identity (decision 2). | Two wrappers from different entries run in one composite on HPC. |
 | D | Container splitting for conflicting components. | One composite with processes in two containers (`A3.4.docker`). |

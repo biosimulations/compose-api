@@ -249,10 +249,6 @@ class SubmittedSimulation(BaseModel):
     hpc_run: HpcRun | None
 
 
-class PBAllowList(BaseModel):
-    allow_list: list[str]
-
-
 class SimulationExperiment(BaseModel):
     simulation_database_id: int
     simulator_database_id: int
