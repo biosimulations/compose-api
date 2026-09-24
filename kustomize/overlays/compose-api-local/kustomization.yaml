@@ -30,3 +30,11 @@ resources:
   - secret-ssh.yaml
   - ../../config/compose-api-rke
   - ../../base
+
+# The API pods here load ../../config/compose-api-rke, the production config. Override only the
+# Auth0 keys so this cluster never accepts production tokens (or production, dev ones).
+configMapGenerator:
+  - name: api-config
+    behavior: merge
+    envs:
+      - auth0.env
