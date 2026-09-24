@@ -17,6 +17,26 @@ The known Auth0 tenant is `dev-bu7yo7484tyxu6a1.us.auth0.com`, with issuer
 `https://dev-bu7yo7484tyxu6a1.us.auth0.com/`. The Auth0 API Identifier/audience has not been supplied and must be
 chosen in the Auth0 Dashboard before implementation is completed.
 
+## Implementation Audit Status (2026-09-24)
+
+The `feature/auth0-implementation` branch substantially implements the verifier, optional bearer validation,
+OpenAPI documentation, deterministic tests, and local documentation. The following items remain incomplete:
+
+1. **Deployment configuration:** `AUTH0_AUDIENCE` has not been decided and Auth0 domain/audience values have not been
+   wired into the local and production Kubernetes ConfigMaps. The empty settings defaults intentionally support
+   anonymous-only operation, but they do not complete deployment configuration.
+2. **Principal availability:** the active routers use the authentication dependency only as a router-level side
+   effect. Its return value is discarded, so application handlers cannot currently receive the validated
+   `AuthenticatedPrincipal` through the typed `OptionalPrincipal` interface.
+3. **Rotation refresh behavior:** the production cache throttles JWKS refresh attempts for 30 seconds, including
+   unknown-`kid` requests. This can reject a newly rotated Auth0 signing key during that interval instead of
+   refreshing immediately once and then rejecting only if the key remains unknown. The policy and tests must be
+   corrected or explicitly changed and documented.
+
+The core offline auth tests pass, and the real-router malformed/invalid-token tests pass. One catalog integration
+test could not run because Docker-backed Postgres was unavailable; this is an environment limitation, not a failed
+authentication assertion.
+
 ## Goals
 
 - Preserve anonymous access to every currently active endpoint.
@@ -336,7 +356,7 @@ The verifier must not fetch JWKS for every request. Use a bounded process-local 
 - no indefinite retry loop inside a request;
 - no acceptance of a token merely because the JWKS endpoint is unavailable.
 
-If a key is unknown, refresh once, then reject with 401 if still unknown. If the JWKS endpoint is unavailable and no
+If a key is unknown, refresh once immediately (subject only to concurrency coalescing), then reject with 401 if still unknown. If the JWKS endpoint is unavailable and no
 valid cached key exists, fail closed with a generic authentication error. If a cached key can safely verify a token,
 the implementation may use it during a transient refresh failure, subject to the selected library's cache semantics
 and key TTL. Tests must pin whichever policy is chosen. Multi-worker deployments have one cache per worker, which is
@@ -390,10 +410,11 @@ secret.
 
 ## Application Configuration
 
-Modify `compose_api/config.py` to add typed Auth0 settings following the existing uppercase-environment-to-lowercase
-Pydantic Settings convention. Proposed names are `auth0_domain` and `auth0_audience`, with an explicit algorithm
-setting only if multiple algorithms are intentionally supported. Derive `auth0_issuer` from the domain to avoid
-issuer/audience drift.
+The branch now has `compose_api/config.py` settings following the existing uppercase-environment-to-lowercase
+Pydantic Settings convention. Keep the settings optional for the anonymous-only rollout, but complete deployment
+configuration after the API Identifier is chosen. Proposed names are `auth0_domain` and `auth0_audience`, with an
+explicit algorithm setting only if multiple algorithms are intentionally supported. Derive `auth0_issuer` from the
+domain to avoid issuer/audience drift.
 
 Document the non-secret variables in the existing environment template
 `assets/dev/config/.dev_env_TEMPLATE` (existing file) as placeholders, for example:
@@ -403,9 +424,8 @@ AUTH0_DOMAIN=dev-bu7yo7484tyxu6a1.us.auth0.com
 AUTH0_AUDIENCE=<set to the Auth0 API Identifier>
 ```
 
-Do not put a real audience, client secret, token, or private key in the repository. Update deployment ConfigMaps
-only in the implementation task after the API Identifier is decided; this planning task intentionally makes no
-deployment changes.
+Do not put a real audience, client secret, token, or private key in the repository. Update both deployment ConfigMaps
+with the approved non-secret domain/audience values, using separate production values where required.
 
 ## Dependency Changes
 
@@ -458,22 +478,22 @@ The following is a future implementation plan. No files other than this plan sho
 
 | Path | Status | Purpose and proposed changes | Dependencies / tests |
 |---|---|---|---|
-| `compose_api/config.py` | Existing; modify | Add `auth0_domain` and required `auth0_audience` settings, derive/validate issuer, and follow cached settings/override conventions. | Auth verifier and config tests; requires chosen audience policy. |
-| `compose_api/authentication.py` | **NEW FILE** | Define principal type, Auth0 verifier, optional FastAPI dependency, safe 401 mapping, explicit algorithm/issuer/audience validation, and injectable JWKS cache/transport boundary. Keep token parsing and policy centralized. | Depends on settings and selected JWT package; unit tests in new auth test file. |
+| `compose_api/config.py` | Implemented, deployment incomplete | Auth0 domain/audience settings are present and follow cached settings/override conventions. Choose the audience and wire non-secret values into deployment configuration. | Add configuration/deployment tests or manifest checks. |
+| `compose_api/authentication.py` | Implemented, rotation behavior incomplete | Principal type, verifier, optional dependency, safe 401 mapping, explicit algorithm/issuer/audience validation, and injectable JWKS transport are present. Remove the unknown-`kid` refresh delay or document and test an intentionally different policy. | Add immediate rotation-refresh regression coverage. |
 | `compose_api/api/main.py` | Existing; modify only if needed | Add narrow OpenAPI customization/security scheme or route-level registration needed to document optional bearer auth. Do not make application startup depend on a live JWKS request. | OpenAPI schema test; verify lifespan remains unchanged. |
-| `compose_api/api/routers/simulation.py` | Existing; modify | Add the optional principal dependency only where identity needs to be passed or where the chosen shared route policy requires it. Preserve current handler signature and anonymous path initially if no identity is consumed. | Anonymous/valid/invalid request tests. |
-| `compose_api/api/routers/results.py` | Existing; modify | Same optional dependency treatment for active result/status routes; do not introduce ownership authorization. | Endpoint compatibility tests. |
-| `compose_api/api/routers/compute.py` | Existing; modify | Same optional dependency treatment for active catalog routes. | Endpoint compatibility tests. |
-| `compose_api/api/routers/curated.py` | Existing; modify | Same optional dependency treatment for curated simulation routes. | Anonymous and invalid-token submission tests. |
+| `compose_api/api/routers/simulation.py` | Validation wired; principal propagation incomplete | Router-level validation is present, but the dependency return value is discarded. Pass `OptionalPrincipal` to handlers or add a deliberately typed request-context adapter without adding authorization. | Test that a valid token reaches an active handler as the expected principal. |
+| `compose_api/api/routers/results.py` | Validation wired; principal propagation incomplete | Same principal propagation gap for active result/status routes; do not introduce ownership authorization. | Endpoint compatibility and principal propagation tests. |
+| `compose_api/api/routers/compute.py` | Validation wired; principal propagation incomplete | Same principal propagation gap for active catalog routes. | Endpoint compatibility and principal propagation tests. |
+| `compose_api/api/routers/curated.py` | Validation wired; principal propagation incomplete | Same principal propagation gap for curated simulation routes. | Anonymous, invalid-token, and principal propagation tests. |
 | `compose_api/api/spec/openapi_3_1_0_generated.yaml` | Existing generated artifact; regenerate | Capture the bearer scheme and optional operation security after the live OpenAPI output is reviewed. | OpenAPI snapshot/contract test; generated diff review. |
 | `compose_api/api/client/` | Existing generated directory; regenerate only | Let `make clients` update generated types/client if the reviewed schema requires it. Never hand-edit. | Generated-client smoke test; preserve `Client` and `AuthenticatedClient`. |
 | `pyproject.toml` | Existing; modify | Add exactly one verified JWT/Auth0 runtime dependency and any required test dependency, with Python 3.13 compatibility. | `uv lock --locked`, `make check`, auth tests. |
 | `uv.lock` | Existing; regenerate | Lock the selected dependency through `uv`; no manual lockfile edits. | `uv lock --locked`; CI matrix. |
 | `assets/dev/config/.dev_env_TEMPLATE` | Existing; modify | Add non-secret Auth0 domain and audience placeholders plus concise local setup notes. | Configuration loading test; no real token/secret. |
-| `kustomize/config/compose-api-local/api.env` | Existing; modify in implementation | Add local development Auth0 domain/audience after the audience is decided, or reference a deployment-specific config source. | Manifest review and local deployment smoke test. |
-| `kustomize/config/compose-api-rke/api.env` | Existing; modify in implementation | Add production Auth0 non-secret configuration with production-appropriate tenant/audience values; do not copy development values blindly. | Kustomize render and deployment review. |
+| `kustomize/config/compose-api-local/api.env` | Not completed | Add local development Auth0 domain/audience after the audience is decided, or reference a deployment-specific config source. | Manifest review and local deployment smoke test. |
+| `kustomize/config/compose-api-rke/api.env` | Not completed | Add production Auth0 non-secret configuration with production-appropriate tenant/audience values; do not copy development values blindly. | Kustomize render and deployment review. |
 | `tests/fixtures/api_fixtures.py` | Existing; modify only if needed | Add reusable auth-aware ASGI client or dependency override fixture without disrupting current singleton fixture lifecycle. | Existing API tests plus auth tests. |
-| `tests/api/test_authentication.py` | **NEW FILE** | Exercise anonymous requests, valid principals, malformed/expired/wrong signature/wrong issuer/wrong audience/unsupported algorithm, JWKS failure, and key rotation. | Mocked RSA keys/JWKS; no live tenant. |
+| `tests/api/test_authentication.py` | Implemented, coverage gap remains | Exercises anonymous requests, valid principals, malformed/expired/wrong signature/wrong issuer/wrong audience/unsupported algorithm, JWKS failure, and key rotation. Add production-policy coverage for immediate refresh and active-route principal propagation. | Mocked RSA keys/JWKS; no live tenant. |
 | `tests/api/test_openapi_auth.py` | **NEW FILE** or combine with auth tests | Assert bearer scheme exists and public operations communicate optional security. | Generated schema contract. |
 | `docs/README.md` or `docs/index.md` | Existing; modify in implementation | Add local Auth0 development configuration, access-token request examples, anonymous equivalent, and clear no-token/invalid-token semantics. | Documentation review; never include real tokens. |
 | `.github/workflows/main.yml` | Existing; modify only if needed | Ensure auth tests run in both supported Python versions and no live-Auth0 secret is required. | CI test job; likely no change necessary. |
@@ -498,6 +518,8 @@ Use generated RSA key pairs and a fake JWKS document/transport. Tests should ass
 - missing `kid`, malformed JWT, missing `sub`, and malformed bearer syntax return 401;
 - a key with a new `kid` causes one JWKS refresh and succeeds when the refreshed document contains it;
 - unknown `kid` after refresh is rejected;
+- a newly rotated `kid` refreshes immediately under production cache settings rather than being blocked by a
+  general refresh throttle;
 - JWKS timeout/error fails closed and does not produce a principal;
 - cached keys are reused and the JWKS endpoint is not called for every request.
 
@@ -507,7 +529,8 @@ Using `tests/fixtures/api_fixtures.py::http_api_client` and ASGI transport:
 
 - call a stable public endpoint such as `GET /version` without a header and assert it succeeds;
 - call an active route without a header and assert its existing anonymous behavior remains;
-- call an endpoint with a valid token and assert it succeeds and the dependency receives the expected principal;
+- call an endpoint with a valid token and assert it succeeds and an active handler receives the expected typed
+  principal, not merely that a router-level dependency ran;
 - call the same route with malformed, expired, wrong-issuer, wrong-audience, and invalid-signature tokens and assert 401;
 - assert invalid credentials never invoke a future authenticated handler/service path as anonymous;
 - assert the 401 response includes the Bearer challenge without echoing the token.
@@ -589,8 +612,8 @@ the endpoint matrix; do not silently change the global default.
 ## Rollout Strategy
 
 1. Add settings, verifier, and deterministic tests without changing current endpoint behavior.
-2. Add optional dependency wiring and OpenAPI documentation, then verify anonymous requests against representative
-   endpoints.
+2. Add optional dependency wiring and OpenAPI documentation, then verify anonymous requests and typed principal
+   propagation against representative endpoints.
 3. Deploy with the development tenant and a decided audience in a non-production environment.
 4. Manually verify no-header, valid-token, expired-token, wrong-audience, and malformed-token requests.
 5. Observe JWKS cache/refresh and 401 categories without logging credentials.
@@ -603,25 +626,27 @@ necessary, and its semantics must not turn invalid supplied credentials into ano
 
 ## Implementation Phases
 
-### Phase 1 — Confirm Auth0 contract and configuration
+### Phase 1 — Confirm Auth0 contract and configuration (partially complete)
 
 - **Files:** Auth0 Dashboard; `compose_api/config.py`; `assets/dev/config/.dev_env_TEMPLATE`.
 - **Tasks:** Choose the API Identifier/audience, confirm RS256, confirm development client/token flow, define settings
   names and issuer normalization.
 - **Dependencies:** Requires Auth0 tenant access and the missing audience decision.
 - **Expected behavior:** Configuration has no secrets and enough information to validate a compose-api access token.
-- **Tests/completion:** Settings tests pass; audience and issuer are explicitly documented.
+- **Tests/completion:** Settings tests pass and issuer behavior is documented. **Remaining:** choose the API
+  Identifier/audience and wire local and production deployment configuration.
 
-### Phase 2 — Select dependency and build the verifier
+### Phase 2 — Select dependency and build the verifier (mostly complete)
 
 - **Files:** `pyproject.toml`, `uv.lock`, `compose_api/authentication.py` (NEW FILE).
 - **Tasks:** Verify current package support, add one JWT/JWK implementation, build cached JWKS verification with explicit
   issuer/audience/algorithm checks and safe exception mapping.
 - **Dependencies:** Phase 1.
 - **Expected behavior:** Valid tokens produce typed principals; all supplied invalid tokens fail closed.
-- **Tests/completion:** All verifier and JWKS rotation/outage tests pass; no token is logged.
+- **Tests/completion:** Core verifier and JWKS outage tests pass with no token logging. **Remaining:** make unknown-`kid`
+  refresh immediate under production settings and add a regression test for that behavior.
 
-### Phase 3 — Add optional FastAPI dependency
+### Phase 3 — Add optional FastAPI dependency (partially complete)
 
 - **Files:** `compose_api/authentication.py`; active router files as needed.
 - **Tasks:** Add optional bearer extraction and route dependency wiring. Preserve no-header behavior and make principal
@@ -629,7 +654,9 @@ necessary, and its semantics must not turn invalid supplied credentials into ano
 - **Dependencies:** Phase 2.
 - **Expected behavior:** Anonymous and valid-authenticated requests reach the same current business behavior; invalid
   supplied credentials return 401.
-- **Tests/completion:** API behavior matrix passes for representative routes.
+- **Tests/completion:** Invalid credentials are rejected by all active business routers and anonymous access is
+  preserved. **Remaining:** pass the validated principal to active handlers through the typed dependency/context
+  mechanism and test that propagation.
 
 ### Phase 4 — OpenAPI and generated client contract
 
@@ -639,7 +666,7 @@ necessary, and its semantics must not turn invalid supplied credentials into ano
 - **Expected behavior:** Swagger supports entering a token without falsely marking public routes mandatory.
 - **Tests/completion:** Schema assertions and generated-client checks pass; operation IDs remain unchanged.
 
-### Phase 5 — Documentation and deployment wiring
+### Phase 5 — Documentation and deployment wiring (documentation complete; deployment incomplete)
 
 - **Files:** `docs/index.md` or `docs/README.md`, local/production ConfigMaps, `kustomize/base/api.yaml` only if
   needed.
@@ -647,7 +674,9 @@ necessary, and its semantics must not turn invalid supplied credentials into ano
   separate development/production audiences.
 - **Dependencies:** Phase 1 and reviewed OpenAPI.
 - **Expected behavior:** Local and deployed processes receive the correct domain/audience without source secrets.
-- **Tests/completion:** MkDocs build and rendered Kustomize manifests pass.
+  **Current state:** local documentation and the environment template are updated, but both Kubernetes ConfigMaps
+  still lack Auth0 values.
+- **Tests/completion:** MkDocs build and rendered Kustomize manifests pass after deployment values are added.
 
 ### Phase 6 — CI and rollout verification
 
@@ -660,32 +689,32 @@ necessary, and its semantics must not turn invalid supplied credentials into ano
 
 ## Acceptance Criteria
 
-- [ ] Existing anonymous API consumers can continue using public `compose-api` endpoints.
-- [ ] No signup or signin is required for normal anonymous API usage.
-- [ ] A request with no `Authorization` header is treated as anonymous.
-- [ ] A valid Auth0 access token receives an authenticated identity context.
-- [ ] A supplied invalid access token never silently becomes anonymous.
-- [ ] Expired tokens return 401.
-- [ ] Wrong-issuer tokens return 401.
-- [ ] Wrong-audience tokens return 401.
-- [ ] Signatures are cryptographically verified.
-- [ ] Acceptable algorithms are explicitly constrained, initially to RS256.
-- [ ] Auth0 signing-key rotation is handled through cache refresh on unknown `kid`.
-- [ ] JWKS is not fetched unnecessarily on every request.
-- [ ] Authentication logic is centralized rather than duplicated across handlers.
-- [ ] Validated claims are exposed through a typed principal.
-- [ ] Authentication configuration follows `compose_api/config.py` and environment-file conventions.
-- [ ] No Auth0 secrets, private keys, access tokens, or refresh tokens are committed.
-- [ ] Tests cover anonymous, valid, malformed, expired, wrongly signed, wrong-issuer, wrong-audience, rotation, and
-  JWKS-failure cases.
-- [ ] Existing tests continue to pass.
-- [ ] OpenAPI exposes optional bearer authentication without falsely requiring it.
-- [ ] Auth0 Dashboard/API setup is documented separately from application changes.
-- [ ] Local development instructions use port 8000 and real repository endpoints.
-- [ ] Deployment configuration changes are identified and use non-secret configuration sources.
-- [ ] The implementation can be reviewed and deployed incrementally.
-- [ ] No database schema or simulation ownership behavior changes as an incidental effect.
-- [ ] Generated client files are regenerated rather than hand-edited.
+- [x] Existing anonymous API consumers can continue using public `compose-api` endpoints.
+- [x] No signup or signin is required for normal anonymous API usage.
+- [x] A request with no `Authorization` header is treated as anonymous.
+- [ ] A valid Auth0 access token receives an authenticated identity context in active application handlers.
+- [x] A supplied invalid access token never silently becomes anonymous.
+- [x] Expired tokens return 401.
+- [x] Wrong-issuer tokens return 401.
+- [x] Wrong-audience tokens return 401.
+- [x] Signatures are cryptographically verified.
+- [x] Acceptable algorithms are explicitly constrained, initially to RS256.
+- [ ] Auth0 signing-key rotation refreshes immediately on an unknown `kid` under production cache settings.
+- [x] JWKS is not fetched unnecessarily on every request.
+- [x] Authentication logic is centralized rather than duplicated across handlers.
+- [x] Validated claims are represented by an immutable typed principal.
+- [x] Authentication configuration follows `compose_api/config.py` and environment-file conventions.
+- [x] No Auth0 secrets, private keys, access tokens, or refresh tokens are committed.
+- [ ] Tests cover the production rotation-refresh policy, active-handler principal propagation, and the complete
+  anonymous/invalid-token matrix.
+- [ ] Existing tests continue to pass; the Docker-backed catalog test still requires an available Docker daemon.
+- [x] OpenAPI exposes optional bearer authentication without falsely requiring it.
+- [x] Auth0 Dashboard/API setup is documented separately from application changes.
+- [x] Local development instructions use port 8000 and real repository endpoints.
+- [ ] Deployment ConfigMaps contain approved non-secret Auth0 domain/audience values.
+- [x] The implementation can be reviewed and deployed incrementally.
+- [x] No database schema or simulation ownership behavior changes as an incidental effect.
+- [x] Generated client files were not hand-edited.
 
 ## Assumptions
 
@@ -700,17 +729,19 @@ necessary, and its semantics must not turn invalid supplied credentials into ano
 
 ## Open Questions / Decisions Required Before Implementation
 
-1. What exact Auth0 API Identifier should be used as `AUTH0_AUDIENCE`? This is mandatory for secure audience validation
-   and must not be invented.
+1. **Blocking:** What exact Auth0 API Identifier should be used as `AUTH0_AUDIENCE`? This is mandatory for secure
+   audience validation and must not be invented.
 2. Should the production environment use the same Auth0 tenant or a separate production tenant and issuer?
 3. Should `/health` and `/version` ignore credentials completely, or should they parse optional credentials like the
    business routers while remaining public?
-4. Should the principal be passed only to routes that consume it, or should a request-state adapter make it available
-   to all routes without changing signatures?
+4. **Implementation task:** Should the principal be passed only to routes that consume it, or should a request-state
+   adapter make it available to all routes without changing signatures? The chosen mechanism must make the validated
+   identity available to active handlers; router-level validation alone is insufficient.
 5. Which current Auth0 Python verification package is supported and preferred at implementation time: the official
    Auth0 package or PyJWT plus `cryptography` and the existing `httpx` transport? Verify release health, async behavior,
    JWKS caching, and exception handling before choosing.
-6. What cache TTL, JWKS timeout, and stale-key behavior meet deployment requirements?
+6. What cache TTL, JWKS timeout, and stale-key behavior meet deployment requirements? In particular, unknown-`kid`
+   refresh must not be blocked by the general TTL/throttle policy.
 7. Should a manually triggered live development-tenant integration test be added to CI, or remain a documented local
    check?
 8. At what future milestone, if any, should simulation submission/result access become authorized by subject, scope,
