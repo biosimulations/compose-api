@@ -28,6 +28,10 @@ JWKS_TTL_SECONDS = 600.0
 # instead of stalling every request on a fetch. Never delays the refresh for an unknown kid.
 JWKS_MIN_REFRESH_INTERVAL_SECONDS = 30.0
 JWKS_TIMEOUT_SECONDS = 5.0
+# Tolerated clock difference between Auth0 and this host for exp/iat/nbf. Without it a fresh token is rejected
+# whenever this host's clock is even a second behind Auth0's (PyJWT rejects iat > now). Auth0's own Python SDK
+# (TokenVerifier) defaults to the same 60 s.
+JWT_LEEWAY_SECONDS = 60
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,6 +142,7 @@ class Auth0Verifier:
                 audience=self.audience,
                 issuer=self.issuer,
                 options={"require": ["exp", "iat", "iss", "aud", "sub"]},
+                leeway=JWT_LEEWAY_SECONDS,
             )
         except jwt.ExpiredSignatureError:
             raise AuthenticationError("token_expired") from None

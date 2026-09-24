@@ -107,7 +107,13 @@ why the header is parsed by hand: `HTTPBearer(auto_error=False)` also returns `N
 security is document-level only (`_openapi_with_optional_bearer` in `api/main.py`). A per-operation `security`
 entry, even `[{}, ...]`, makes openapi-python-client type that method as requiring `AuthenticatedClient`, a breaking
 change for pbest. `openapi_spec.py` must use `app.openapi()` so the override reaches the checked-in spec. Settings are
-`auth0_domain` and `auth0_audience`; the issuer is derived and the algorithm is fixed to RS256.
+`auth0_domain` and `auth0_audience`; the issuer is derived and the algorithm is fixed to RS256. Every active handler
+also takes `principal: OptionalPrincipal` (a structural test enforces it); submission handlers log
+`describe_caller(principal)`. `JwksCache` refreshes immediately on an unknown `kid`, coalescing concurrent
+refreshes by counting *completed* refreshes; the 30 s back-off only limits re-fetching an expired cache. Deployment:
+both API overlays load `config/compose-api-rke`; the local overlay overrides only the Auth0 keys via a
+`behavior: merge` generator (`overlays/compose-api-local/auth0.env`); `config/compose-api-local` is used only by the
+migration job.
 
 **HPC layer.** `SSHService` (asyncssh: `run_command`, `scp_upload`, `scp_download`) → `SlurmService`
 (`sbatch --parsable`, `squeue`, `sacct` parsing into `SlurmJob`) → `SimulationServiceHpc`, which writes sbatch scripts

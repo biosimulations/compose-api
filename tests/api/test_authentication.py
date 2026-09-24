@@ -15,6 +15,7 @@ from httpx import ASGITransport
 
 from compose_api.api.main import app
 from compose_api.authentication import (
+    JWT_LEEWAY_SECONDS,
     Auth0Verifier,
     AuthenticatedPrincipal,
     AuthenticationError,
@@ -180,6 +181,30 @@ async def test_expired_cache_backs_off_during_an_outage(fake_auth0: FakeAuth0) -
     for _ in range(3):
         await verifier.verify(fake_auth0.token())
     assert fake_auth0.jwks_requests == 1
+
+
+@pytest.mark.asyncio
+async def test_small_clock_skew_is_tolerated(fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier) -> None:
+    """Auth0's clock a few seconds ahead of ours must not reject a token it has just issued."""
+    now = int(time.time())
+    principal = await auth0_verifier.verify(fake_auth0.token(iat=now + 5, exp=now + 300))
+    assert principal.subject == "auth0|test-user"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "claim_overrides",
+    [
+        {"iat": int(time.time()) + JWT_LEEWAY_SECONDS + 60},
+        {"exp": int(time.time()) - JWT_LEEWAY_SECONDS - 60},
+    ],
+    ids=["issued-in-the-future", "expired"],
+)
+async def test_skew_beyond_leeway_is_rejected(
+    fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier, claim_overrides: dict[str, Any]
+) -> None:
+    with pytest.raises(AuthenticationError):
+        await auth0_verifier.verify(fake_auth0.token(**claim_overrides))
 
 
 @pytest.mark.asyncio
