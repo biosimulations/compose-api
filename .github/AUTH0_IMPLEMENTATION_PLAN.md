@@ -708,7 +708,8 @@ necessary, and its semantics must not turn invalid supplied credentials into ano
 - [x] No Auth0 secrets, private keys, access tokens, or refresh tokens are committed.
 - [x] Tests cover the production rotation-refresh policy, active-handler principal propagation, and the complete
   anonymous/invalid-token matrix.
-- [x] Existing non-Docker tests continue to pass; Docker-backed integration tests require an available Docker daemon.
+- [x] Existing tests continue to pass (2026-09-24, Docker available): 79 non-SLURM and 14 SLURM tests pass; the 7
+  `cluster_only` tests need the real submit host and are skipped by design.
 - [x] OpenAPI exposes optional bearer authentication without falsely requiring it.
 - [x] Auth0 Dashboard/API setup is documented separately from application changes.
 - [x] Local development instructions use port 8000 and real repository endpoints.
@@ -735,17 +736,19 @@ necessary, and its semantics must not turn invalid supplied credentials into ano
    `kustomize/config/compose-api-rke/api.env`.
 2. **Decided for this rollout:** Production and local currently use the known development Auth0 tenant, but they use
    distinct audiences. A separate production tenant remains a future deployment decision.
-3. Should `/health` and `/version` ignore credentials completely, or should they parse optional credentials like the
-   business routers while remaining public?
+3. **Decided:** `/health` and `/version` ignore credentials completely, so probes and uptime checks can never
+   receive a 401. Enforced by `test_health_and_version_ignore_credentials`.
 4. **Decided:** Pass the principal directly to every active handler through the typed `OptionalPrincipal` dependency.
    No untyped request-state adapter is used; submission handlers use `describe_caller(principal)` for bounded logging.
-5. Which current Auth0 Python verification package is supported and preferred at implementation time: the official
-   Auth0 package or PyJWT plus `cryptography` and the existing `httpx` transport? Verify release health, async behavior,
-   JWKS caching, and exception handling before choosing.
+5. **Decided:** `pyjwt[crypto]>=2.15.0,<3` with the existing `httpx` for an async JWKS cache. `jwt.PyJWKClient` was
+   rejected because it fetches with blocking `urllib` inside the event loop; `auth0-python` is primarily a Management
+   API SDK.
 6. **Decided:** Use a 600-second JWKS TTL and 5-second request timeout. Unknown `kid` refreshes immediately, concurrent
    requests coalesce by counting completed refreshes, and the 30-second back-off limits only re-fetching an expired
-   cache for a known key. Cached keys remain usable during transient refresh failures.
-7. Should a manually triggered live development-tenant integration test be added to CI, or remain a documented local
-   check?
+   cache for a known key. Cached keys remain usable during transient refresh failures. `exp`/`iat`/`nbf` are checked
+   with a 60-second leeway (`JWT_LEEWAY_SECONDS`, matching Auth0's own `TokenVerifier` default) so a small clock
+   difference between Auth0 and this host cannot reject a freshly issued token.
+7. **Decided:** it remains a documented local check (curl with a token from the Auth0 Dashboard Test tab), so CI
+   needs no network access or Auth0 secret. Performed against the development tenant on 2026-09-24.
 8. At what future milestone, if any, should simulation submission/result access become authorized by subject, scope,
    or ownership? That policy is intentionally outside this first authentication phase.
