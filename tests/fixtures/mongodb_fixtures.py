@@ -13,8 +13,7 @@ MONGODB_COLLECTION_NAME = "mycollection"
 
 @pytest.fixture(scope="session")
 def mongodb_container() -> MongoDbContainer:
-    with MongoDbContainer() as container:
-        container.start()
+    with MongoDbContainer(image="mongo:7") as container:
         yield container
 
 
