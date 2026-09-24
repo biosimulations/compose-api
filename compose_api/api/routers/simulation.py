@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 
-from compose_api.authentication import get_optional_principal
+from compose_api.authentication import OptionalPrincipal, describe_caller, get_optional_principal
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.common.gateway.utils import allow_list, get_simulation_request_from_uploaded_file
 from compose_api.dependencies import (
@@ -37,9 +37,11 @@ config = RouterConfig(router=APIRouter(), prefix="/simulation", dependencies=[De
 async def submit_simulation(
     background_tasks: BackgroundTasks,
     uploaded_file: UploadFile,
+    principal: OptionalPrincipal,
     interval_time: float = 1.0,
     batch_submission: bool = False,
 ) -> SimulationExperiment:
+    logger.info("Simulation submission from %s", describe_caller(principal))
     sim_service = get_simulation_service()
     if sim_service is None:
         logger.error("Simulation service is not initialized")

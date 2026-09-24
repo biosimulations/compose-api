@@ -1,3 +1,5 @@
+import asyncio
+import importlib
 import time
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -7,7 +9,8 @@ import jwt
 import pytest
 import pytest_asyncio
 from cryptography.hazmat.primitives.asymmetric import rsa
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.routing import APIRoute
 from httpx import ASGITransport
 
 from compose_api.api.main import app
@@ -17,6 +20,7 @@ from compose_api.authentication import (
     AuthenticationError,
     JwksCache,
     OptionalPrincipal,
+    describe_caller,
     get_auth0_verifier,
     get_optional_principal,
 )
@@ -118,7 +122,7 @@ async def test_cached_keys_survive_a_jwks_outage(fake_auth0: FakeAuth0) -> None:
         "https://unused/jwks",
         transport=httpx.MockTransport(fake_auth0.handle_jwks),
         ttl_seconds=0,  # every lookup is past its TTL, so every lookup attempts a refresh
-        min_refresh_interval_seconds=0,
+        min_refresh_interval_seconds=0,  # override to test the outage behavior without back-off
     )
     verifier = Auth0Verifier(domain=AUTH0_TEST_DOMAIN, audience=AUTH0_TEST_AUDIENCE, jwks=jwks)
     await verifier.verify(fake_auth0.token())
@@ -129,16 +133,52 @@ async def test_cached_keys_survive_a_jwks_outage(fake_auth0: FakeAuth0) -> None:
 
 
 @pytest.mark.asyncio
-async def test_unknown_kids_cannot_force_repeated_refreshes(fake_auth0: FakeAuth0) -> None:
-    """Pinned policy: at most one JWKS refresh per interval, however many unknown kids arrive."""
-    jwks = JwksCache("https://unused/jwks", transport=httpx.MockTransport(fake_auth0.handle_jwks))
-    verifier = Auth0Verifier(domain=AUTH0_TEST_DOMAIN, audience=AUTH0_TEST_AUDIENCE, jwks=jwks)
-    await verifier.verify(fake_auth0.token())
+async def test_rotated_key_is_fetched_immediately(fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier) -> None:
+    """Auth0 has just rotated: a token signed by the new key verifies at once, not after the refresh back-off."""
+    await auth0_verifier.verify(fake_auth0.token())
+    fake_auth0.add_key("key-2")
+    principal = await auth0_verifier.verify(fake_auth0.token(kid="key-2"))
+    assert principal.subject == "auth0|test-user"
+    assert fake_auth0.jwks_requests == 2
+
+
+@pytest.mark.asyncio
+async def test_each_unknown_kid_refreshes_once_then_is_rejected(
+    fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier
+) -> None:
+    await auth0_verifier.verify(fake_auth0.token())
     for kid in ("forged-1", "forged-2", "forged-3"):
         forged = jwt.encode({"sub": "x"}, fake_auth0.keys["key-1"], algorithm="RS256", headers={"kid": kid})
         with pytest.raises(AuthenticationError) as excinfo:
-            await verifier.verify(forged)
+            await auth0_verifier.verify(forged)
         assert excinfo.value.category == "unknown_kid"
+    assert fake_auth0.jwks_requests == 1 + 3
+
+
+@pytest.mark.asyncio
+async def test_concurrent_unknown_kid_requests_share_one_refresh(fake_auth0: FakeAuth0) -> None:
+    async def slow_jwks(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(0.05)  # hold the refresh open so the other requests queue behind it
+        return fake_auth0.handle_jwks(request)
+
+    jwks = JwksCache("https://unused/jwks", transport=httpx.MockTransport(slow_jwks))
+    verifier = Auth0Verifier(domain=AUTH0_TEST_DOMAIN, audience=AUTH0_TEST_AUDIENCE, jwks=jwks)
+    await verifier.verify(fake_auth0.token())
+    fake_auth0.add_key("key-2")
+    principals = await asyncio.gather(*(verifier.verify(fake_auth0.token(kid="key-2")) for _ in range(5)))
+    assert {p.subject for p in principals} == {"auth0|test-user"}
+    assert fake_auth0.jwks_requests == 2
+
+
+@pytest.mark.asyncio
+async def test_expired_cache_backs_off_during_an_outage(fake_auth0: FakeAuth0) -> None:
+    """A known kid past its TTL is refetched at most once per back-off interval, so an outage cannot stall requests."""
+    jwks = JwksCache("https://unused/jwks", transport=httpx.MockTransport(fake_auth0.handle_jwks), ttl_seconds=0)
+    verifier = Auth0Verifier(domain=AUTH0_TEST_DOMAIN, audience=AUTH0_TEST_AUDIENCE, jwks=jwks)
+    await verifier.verify(fake_auth0.token())
+    fake_auth0.jwks_available = False
+    for _ in range(3):
+        await verifier.verify(fake_auth0.token())
     assert fake_auth0.jwks_requests == 1
 
 
@@ -259,7 +299,7 @@ async def test_every_router_rejects_bad_credentials(http_api_client: httpx.Async
 async def test_real_app_rejects_invalid_tokens_without_leaking_them(
     http_api_client: httpx.AsyncClient,
     fake_auth0: FakeAuth0,
-    caplog: pytest.LogCaptureFixture,
+    caplog: "pytest.LogCaptureFixture",
     claim_overrides: dict[str, Any],
 ) -> None:
     impostor = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -291,6 +331,54 @@ async def test_health_and_version_ignore_credentials(http_api_client: httpx.Asyn
     for path in ("/health", "/version"):
         response = await http_api_client.get(path, headers={"Authorization": "Basic garbage"})
         assert response.status_code == 200, path
+
+
+BUSINESS_ROUTERS = ["compute", "curated", "results", "simulation"]
+
+
+@pytest.mark.parametrize("router_name", BUSINESS_ROUTERS)
+def test_every_active_handler_receives_the_principal(router_name: str) -> None:
+    """Router-level validation alone discards the principal; each handler must also take it as a parameter."""
+    config = importlib.import_module(f"compose_api.api.routers.{router_name}").config
+    assert [d.dependency for d in config.dependencies or []] == [get_optional_principal]
+    routes = [route for route in config.router.routes if isinstance(route, APIRoute)]
+    assert routes
+    for route in routes:
+        parameters = {d.name: d.call for d in route.dependant.dependencies if d.name is not None}
+        assert parameters.get("principal") is get_optional_principal, route.path
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("app_with_test_auth0")
+async def test_active_handler_sees_the_verified_principal(
+    http_api_client: httpx.AsyncClient,
+    fake_auth0: FakeAuth0,
+    caplog: "pytest.LogCaptureFixture",
+    monkeypatch: "pytest.MonkeyPatch",
+) -> None:
+    async def stop_here(*_args: Any, **_kwargs: Any) -> None:
+        raise HTTPException(status_code=418)  # the handler got this far, so skip the real SBML parse and SLURM
+
+    monkeypatch.setattr("compose_api.api.routers.curated.get_simulation_request_from_uploaded_file", stop_here)
+    params = {"start_time": 0, "duration": 10, "num_data_points": 5}
+    files = {"sbml": ("model.sbml", b"<sbml/>", "application/xml")}
+
+    response = await http_api_client.post(
+        "/curated/copasi", params=params, files=files, headers={"Authorization": f"Bearer {fake_auth0.token()}"}
+    )
+    assert response.status_code == 418
+    assert "Curated copasi run from auth0|test-user" in caplog.text
+
+    caplog.clear()
+    response = await http_api_client.post("/curated/copasi", params=params, files=files)
+    assert response.status_code == 418
+    assert "Curated copasi run from anonymous" in caplog.text
+
+
+def test_describe_caller() -> None:
+    principal = AuthenticatedPrincipal("auth0|abc", "i", ("a",), frozenset(), frozenset())
+    assert describe_caller(principal) == "auth0|abc"
+    assert describe_caller(None) == "anonymous"
 
 
 # -- OpenAPI -- #

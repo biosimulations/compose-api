@@ -24,7 +24,9 @@ logger = logging.getLogger(__name__)
 ALLOWED_ALGORITHMS = ("RS256",)
 BEARER_SCHEME_NAME = "BearerAuth"
 JWKS_TTL_SECONDS = 600.0
-JWKS_MIN_REFRESH_INTERVAL_SECONDS = 30.0  # stops a stream of unknown kids from hammering Auth0
+# Back-off for re-fetching an expired cache while its keys still verify, so a JWKS outage serves the cached keys
+# instead of stalling every request on a fetch. Never delays the refresh for an unknown kid.
+JWKS_MIN_REFRESH_INTERVAL_SECONDS = 30.0
 JWKS_TIMEOUT_SECONDS = 5.0
 
 
@@ -46,7 +48,12 @@ class AuthenticationError(Exception):
 
 
 class JwksCache:
-    """Process-local cache of the tenant's signing keys, refreshed on TTL expiry or an unknown kid."""
+    """Process-local cache of the tenant's signing keys.
+
+    An unknown kid always triggers one refresh, because Auth0 may just have rotated its signing key; requests that
+    arrive while that refresh is in flight reuse its result rather than fetching again. A known kid whose entry has
+    passed its TTL is refreshed at most once per `min_refresh_interval_seconds`.
+    """
 
     def __init__(
         self,
@@ -62,15 +69,22 @@ class JwksCache:
         self._keys: dict[str, jwt.PyJWK] = {}
         self._fetched_at: float | None = None
         self._attempted_at: float | None = None
+        self._refresh_attempts = 0
         self._lock = asyncio.Lock()
 
     async def get_key(self, kid: str) -> jwt.PyJWK:
-        if self._is_fresh() and kid in self._keys:
-            return self._keys[kid]
+        key = self._keys.get(kid)
+        if key is not None and (self._is_fresh() or not self._may_refresh()):
+            return key
+        attempts_seen = self._refresh_attempts
         async with self._lock:
-            # Another request may have refreshed while this one waited on the lock.
-            if not (self._is_fresh() and kid in self._keys) and self._may_refresh():
-                await self._refresh()
+            # Coalesce: if a refresh ran while this request waited for the lock, use its result.
+            if self._refresh_attempts == attempts_seen:
+                try:
+                    await self._refresh()
+                finally:
+                    # Counted on completion, success or failure, so requests that arrived mid-refresh reuse it.
+                    self._refresh_attempts += 1
         key = self._keys.get(kid)
         if key is None:
             raise AuthenticationError("unknown_kid")
@@ -222,3 +236,8 @@ async def get_optional_principal(
 
 
 OptionalPrincipal = Annotated[AuthenticatedPrincipal | None, Depends(get_optional_principal)]
+
+
+def describe_caller(principal: AuthenticatedPrincipal | None) -> str:
+    """The caller for a log line: the verified subject, or "anonymous". Never includes token data."""
+    return principal.subject if principal is not None else "anonymous"

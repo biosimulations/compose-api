@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.responses import FileResponse
 
-from compose_api.authentication import get_optional_principal
+from compose_api.authentication import OptionalPrincipal, get_optional_principal
 from compose_api.common.gateway.models import Namespace, RouterConfig
 from compose_api.common.gateway.utils import get_hpc_run_status
 from compose_api.common.ssh.ssh_service import get_ssh_service
@@ -41,7 +41,7 @@ config = RouterConfig(router=APIRouter(), prefix="/results", dependencies=[Depen
     dependencies=[Depends(get_database_service)],
     summary="Get simulation status records for a list of IDs",
 )
-async def get_simulations_status_batch(ids: list[int]) -> list[HpcRun]:
+async def get_simulations_status_batch(ids: list[int], principal: OptionalPrincipal) -> list[HpcRun]:
     db_service = get_database_service()
     if db_service is None:
         raise HTTPException(status_code=500, detail="Database service is not initialized")
@@ -61,7 +61,7 @@ async def get_simulations_status_batch(ids: list[int]) -> list[HpcRun]:
     dependencies=[Depends(get_database_service)],
     summary="Get the simulation status record by its ID",
 )
-async def get_simulation_status(simulation_id: int = Query(...)) -> HpcRun:
+async def get_simulation_status(principal: OptionalPrincipal, simulation_id: int = Query(...)) -> HpcRun:
     db_service = get_database_service()
     if db_service is None:
         raise HTTPException(status_code=500, detail="Database service is not initialized")
@@ -163,7 +163,7 @@ async def get_simulation_status(simulation_id: int = Query(...)) -> HpcRun:
     dependencies=[Depends(get_simulation_service), Depends(get_ssh_service)],
     summary="Get simulation results as a zip file",
 )
-async def get_results(simulation_id: int = Query()) -> FileResponse:
+async def get_results(principal: OptionalPrincipal, simulation_id: int = Query()) -> FileResponse:
     service = get_data_service()
     db_service = get_required_database_service()
     if service is None:
@@ -205,7 +205,7 @@ async def get_results(simulation_id: int = Query()) -> FileResponse:
     dependencies=[Depends(get_database_service)],
     summary="Get the simulator build status record by its ID",
 )
-async def get_simulator_build_status(simulator_id: int = Query(...)) -> HpcRun:
+async def get_simulator_build_status(principal: OptionalPrincipal, simulator_id: int = Query(...)) -> HpcRun:
     db_service = get_database_service()
     if db_service is None:
         raise HTTPException(status_code=500, detail="Database service is not initialized")
