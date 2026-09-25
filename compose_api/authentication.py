@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 ALLOWED_ALGORITHMS = ("RS256",)
 BEARER_SCHEME_NAME = "BearerAuth"
 JWKS_TTL_SECONDS = 600.0
+# Bound outage fallback so a removed signing key cannot remain trusted indefinitely.
+JWKS_MAX_STALE_SECONDS = 86400.0
 # Back-off for re-fetching an expired cache while its keys still verify, so a JWKS outage serves the cached keys
 # instead of stalling every request on a fetch. Never delays the refresh for an unknown kid.
 JWKS_MIN_REFRESH_INTERVAL_SECONDS = 30.0
@@ -86,8 +88,10 @@ class JwksCache:
 
     async def get_key(self, kid: str) -> jwt.PyJWK:
         key = self._keys.get(kid)
-        if key is not None and (self._is_fresh() or not self._may_refresh()):
+        if key is not None and self._is_usable() and (self._is_fresh() or not self._may_refresh()):
             return key
+        if key is not None and not self._is_usable() and not self._may_refresh():
+            raise AuthenticationError("jwks_unavailable")
         attempts_seen = self._refresh_attempts
         async with self._lock:
             # Coalesce: if a refresh ran while this request waited for the lock, use its result.
@@ -100,7 +104,12 @@ class JwksCache:
         key = self._keys.get(kid)
         if key is None:
             raise AuthenticationError("unknown_kid")
+        if not self._is_usable():
+            raise AuthenticationError("jwks_unavailable")
         return key
+
+    def _is_usable(self) -> bool:
+        return self._fetched_at is not None and time.monotonic() - self._fetched_at < JWKS_MAX_STALE_SECONDS
 
     def _is_fresh(self) -> bool:
         return self._fetched_at is not None and time.monotonic() - self._fetched_at < self._ttl_seconds
@@ -114,14 +123,24 @@ class JwksCache:
             async with httpx.AsyncClient(transport=self._transport, timeout=JWKS_TIMEOUT_SECONDS) as client:
                 response = await client.get(self._jwks_url)
                 response.raise_for_status()
-            jwk_set = jwt.PyJWKSet.from_dict(response.json())
+            document = response.json()
+            if not isinstance(document, dict):
+                raise jwt.PyJWKSetError("Invalid JWKS document")
+            jwk_set = jwt.PyJWKSet.from_dict(document)
         except (httpx.HTTPError, ValueError, jwt.PyJWTError):
             # Keep serving the previous keys: a transient outage should not reject tokens signed by a known key.
             logger.warning("Could not refresh Auth0 JWKS; keeping %d cached key(s)", len(self._keys))
             if not self._keys:
                 raise AuthenticationError("jwks_unavailable") from None
             return
-        self._keys = {key.key_id: key for key in jwk_set.keys if key.key_id}
+        self._keys = {
+            key.key_id: key
+            for key in jwk_set.keys
+            if isinstance(key.key_id, str)
+            and key.key_id
+            and key.algorithm_name in ALLOWED_ALGORITHMS
+            and key.public_key_use in (None, "sig")
+        }
         self._fetched_at = time.monotonic()
 
 

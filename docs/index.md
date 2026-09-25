@@ -36,6 +36,10 @@ token, a bad signature, and the wrong issuer or audience. To call anonymously, l
 
 `/health` and `/version` ignore credentials.
 
+Signing keys refresh after ten minutes and immediately for an unknown key ID. During a JWKS outage, cached keys
+remain usable for at most 24 hours since the last successful fetch; after that, supplied tokens are rejected until
+JWKS recovers. Anonymous requests remain available.
+
 ### Roles
 
 Every verified caller holds the role `user`; an anonymous caller holds no role. If the token carries the

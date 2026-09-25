@@ -16,6 +16,7 @@ def _get_kwargs(
     *,
     simulation_id: int,
 ) -> dict[str, Any]:
+
     params: dict[str, Any] = {}
 
     params["simulation_id"] = simulation_id
@@ -37,6 +38,10 @@ def _parse_response(
     if response.status_code == 200:
         response_200 = cast(Any, response.content)
         return response_200
+
+    if response.status_code == 404:
+        response_404 = cast(Any, None)
+        return response_404
 
     if response.status_code == 422:
         response_422 = HTTPValidationError.from_dict(response.json())

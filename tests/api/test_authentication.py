@@ -13,9 +13,12 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.routing import APIRoute
 from httpx import ASGITransport
 
+from compose_api.api.client.api.results import get_simulation_status
+from compose_api.api.client.client import AuthenticatedClient, Client
 from compose_api.api.main import app
 from compose_api.authentication import (
     DEFAULT_ROLE,
+    JWKS_MAX_STALE_SECONDS,
     JWT_LEEWAY_SECONDS,
     ROLES_CLAIM,
     Auth0Verifier,
@@ -37,9 +40,10 @@ MALFORMED_HEADERS = ["Basic dXNlcjpwYXNz", "Bearer", "", "Bearer a b", "Bearer n
 
 
 @pytest.mark.asyncio
-async def test_valid_token_yields_principal(fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier) -> None:
-    principal = await auth0_verifier.verify(fake_auth0.token())
-    assert principal.subject == "auth0|test-user"
+@pytest.mark.parametrize("subject", ["auth0|test-user", "test-client@clients"])
+async def test_valid_token_yields_principal(fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier, subject: str) -> None:
+    principal = await auth0_verifier.verify(fake_auth0.token(sub=subject))
+    assert principal.subject == subject
     assert AUTH0_TEST_AUDIENCE in principal.audience
     assert principal.scopes == {"openid", "profile"}
     assert principal.permissions == frozenset()
@@ -120,6 +124,44 @@ async def test_jwks_timeout_fails_closed(fake_auth0: FakeAuth0) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("document", [[], "unexpected", 7, {"keys": []}, {"keys": [None]}])
+async def test_malformed_jwks_fails_closed(fake_auth0: FakeAuth0, document: object) -> None:
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json=document))
+    verifier = Auth0Verifier(
+        domain=AUTH0_TEST_DOMAIN,
+        audience=AUTH0_TEST_AUDIENCE,
+        jwks=JwksCache("https://unused/jwks", transport=transport),
+    )
+    probe = FastAPI()
+
+    @probe.get("/whoami")
+    async def whoami(principal: OptionalPrincipal) -> None:
+        pytest.fail("Malformed JWKS must not reach the handler")
+
+    probe.dependency_overrides[get_auth0_verifier] = lambda: verifier
+    async with httpx.AsyncClient(transport=ASGITransport(app=probe), base_url="http://testserver") as client:
+        response = await client.get("/whoami", headers={"Authorization": f"Bearer {fake_auth0.token()}"})
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+    assert response.json() == {"detail": "Invalid authentication credentials"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("overrides", [{"kid": []}, {"use": "enc"}, {"alg": "RS512"}])
+async def test_jwks_only_selects_rs256_signing_keys(fake_auth0: FakeAuth0, overrides: dict[str, Any]) -> None:
+    key = jwt.algorithms.RSAAlgorithm.to_jwk(fake_auth0.keys["key-1"].public_key(), as_dict=True)
+    document = {"keys": [{**key, "kid": "key-1", **overrides}]}
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json=document))
+    verifier = Auth0Verifier(
+        domain=AUTH0_TEST_DOMAIN,
+        audience=AUTH0_TEST_AUDIENCE,
+        jwks=JwksCache("https://unused/jwks", transport=transport),
+    )
+    with pytest.raises(AuthenticationError):
+        await verifier.verify(fake_auth0.token())
+
+
+@pytest.mark.asyncio
 async def test_cached_keys_survive_a_jwks_outage(fake_auth0: FakeAuth0) -> None:
     """Pinned policy: once keys are cached, a failed refresh keeps serving them rather than rejecting every token."""
     jwks = JwksCache(
@@ -134,6 +176,24 @@ async def test_cached_keys_survive_a_jwks_outage(fake_auth0: FakeAuth0) -> None:
     principal = await verifier.verify(fake_auth0.token())
     assert principal.subject == "auth0|test-user"
     assert fake_auth0.jwks_requests == 2
+
+
+@pytest.mark.asyncio
+async def test_cached_keys_expire_during_a_prolonged_outage(
+    fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clock = time.monotonic()
+    monkeypatch.setattr("compose_api.authentication.time.monotonic", lambda: clock)
+    await auth0_verifier.verify(fake_auth0.token())
+    fake_auth0.jwks_available = False
+    clock += JWKS_MAX_STALE_SECONDS - 1
+    await auth0_verifier.verify(fake_auth0.token())
+    clock += 2
+    with pytest.raises(AuthenticationError, match="jwks_unavailable"):
+        await auth0_verifier.verify(fake_auth0.token())
+    fake_auth0.jwks_available = True
+    clock += 31
+    await auth0_verifier.verify(fake_auth0.token())
 
 
 @pytest.mark.asyncio
@@ -465,3 +525,23 @@ def test_principal_is_immutable() -> None:
     principal = AuthenticatedPrincipal("s", "i", ("a",), frozenset(), frozenset(), frozenset({"user"}))
     with pytest.raises(AttributeError):
         principal.subject = "other"  # type: ignore[misc]
+
+
+@pytest.mark.parametrize("authenticated", [False, True])
+def test_generated_client_keeps_optional_bearer_and_documented_404(authenticated: bool) -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert request.headers.get("authorization") == ("Bearer test-token" if authenticated else None)
+        assert request.url.path == "/results/simulation/status"
+        assert request.url.params["simulation_id"] == "999"
+        return httpx.Response(404)
+
+    options: dict[str, Any] = {"transport": httpx.MockTransport(respond)}
+    client = (
+        AuthenticatedClient(base_url="https://api.test", token="test-token", httpx_args=options)  # noqa: S106 -- fake token
+        if authenticated
+        else Client(base_url="https://api.test", httpx_args=options)
+    )
+    with client:
+        response = get_simulation_status.sync_detailed(client=client, simulation_id=999)
+    assert response.status_code == 404
+    assert response.parsed is None

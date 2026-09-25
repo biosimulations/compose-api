@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Ready to implement. Part 1 was verified against the code, Part 2 offline; Part 3 is design only (see [Verification status](#verification-status)) |
+| **Status** | Parts 1–2 implemented and deployed. Part 3's Auth0 side implemented and applied 2026-09-25; its front end deferred (§6.3). See [Verification status](#verification-status) |
 | **Date** | 2026-09-24 |
 | **Repos** | `compose-api` (this repo) · `~/Github/UCHC/auth0-pulumi` (`biosim-platform/` and `compose-api/` stacks) |
 | **Tenant** | `dev-bu7yo7484tyxu6a1.us.auth0.com` (shared by BioSim Platform and compose-api) |
@@ -35,7 +35,8 @@ builds on `principal.roles`.
    `BioSim Roles` Action writes, so a person's other roles (`admin`, `publisher`) come through as well.
 4. **`BioSim Roles` moves into Pulumi** (`biosim-platform` stack, which owns the role). This makes the role it assigns
    reviewable, lets it assign `user` explicitly, and makes a Management API failure unable to block a login.
-5. **Part 3 (people calling compose-api as themselves) is conditional** on a product decision (§6.0).
+5. **Part 3 (people calling compose-api as themselves)** was decided on 2026-09-25 and its Auth0 side applied. The
+   front end is deferred until it calls compose-api (§6.3).
 
 **Non-goals:** enforcing roles on endpoints; RBAC permissions on the Compose-API API (it stays off); new roles;
 changes to anonymous access, the OpenAPI contract, or pbest.
@@ -403,6 +404,10 @@ pulumi config set --secret rolesActionClientSecret     # paste when prompted; st
  */
 const ROLES_CLAIM = "https://api.biosimulations.org/roles";
 const EMAIL_CLAIM = "https://api.biosimulations.org/email";
+// The Platform backend (biosim_server/config.py: email_verified_claim) reads this to allow the verified-email
+// ownership fallback for legacy runs; a missing claim counts as unverified. platform/auth0/actions/post-login.js,
+// the Action this one replaced, stamped it on every access token.
+const EMAIL_VERIFIED_CLAIM = "https://api.biosimulations.org/email_verified";
 const DEFAULT_ROLE = "user";
 
 function managementClient(secrets) {
@@ -437,9 +442,14 @@ async function run(event, api, makeClient) {
   if (event.user.email) {
     api.accessToken.setCustomClaim(EMAIL_CLAIM, event.user.email);
   }
+  api.accessToken.setCustomClaim(EMAIL_VERIFIED_CLAIM, event.user.email_verified === true);
 }
 
-exports.onExecutePostLogin = (event, api) => run(event, api, managementClient);
+// Must be an `async function`: Auth0 rejects any other shape (a plain arrow returning a promise included) with
+// "Invalid function signature for the onExecutePostLogin handler", which fails every login on the tenant.
+exports.onExecutePostLogin = async function (event, api) {
+  await run(event, api, managementClient);
+};
 exports.run = run; // for tests only; Auth0 invokes onExecutePostLogin
 ```
 
@@ -453,6 +463,8 @@ Behaviour, and the reason for each part:
 | Adds `user` to the claim on the assigning login | `event.authorization.roles` is read before this login's assignment. Without this, the first token would lack `user` |
 | Sorted claim | Deterministic tokens, which makes tests and debugging easier |
 | `run` exported alongside `onExecutePostLogin` | Lets tests inject a fake Management client. Auth0 only calls `onExecutePostLogin` |
+| Stamps `…/email_verified` on the access token (only a real `true` counts) | **Required by the Platform backend.** `platform/auth0/actions/post-login.js`, the Action this replaced, stamped it. Platform treats a missing claim as unverified, which disables the verified-email ownership fallback for legacy runs. The first Pulumi deploy omitted it; the §5.1 inventory missed it because it read the dashboard summary, not platform's source of truth. Fixed in source on 2026-09-25; **needs `pulumi up` in biosim-platform** |
+| `onExecutePostLogin` is an `async function` | **Required by Auth0.** The first deploy exported a plain arrow function; Auth0 rejected it and every login on the tenant failed from 2026-09-24 ~23:20 until the fix on 2026-09-25. A test now asserts the signature |
 
 Tests, in the new file `biosim-platform/actions/biosim_roles.test.js`. Run them with
 `node --test biosim-platform/actions/`; they need no npm install, because the SDK is only loaded in production:
@@ -786,49 +798,100 @@ node --test actions/
 
 ---
 
-## 6. Part 3 (conditional): let people call compose-api as themselves
+## 6. Part 3: let people call compose-api as themselves
 
-### 6.0 Decision gate
-Do this only if a person using a BioSim front end should call compose-api **with their own identity**, for
-attribution or future per-user policy. Today every compose-api caller is anonymous or a machine, and Parts 1–2 already
-meet the goal for them. **Not prototyped:** this depends on the decision, and on a front-end repo outside this
-workspace.
+**Status (2026-09-25): the Auth0 side is implemented and applied to the live tenant. The front end was skipped by
+decision (§6.3).** Code is on `auth0-pulumi` branch `feature/compose-api-user-access`, cut from
+`feature/biosim-roles-action` because it depends on Part 2.
 
-### 6.1 `auth0-pulumi/biosim-platform/__main__.py`: export the SPA's client id
+### 6.0 Decision
+Decided 2026-09-25: implement user-delegated access for the BioSim Platform SPA. The front-end change is deferred
+until the front end actually calls compose-api (§6.3).
+
+### 6.1 `auth0-pulumi/biosim-platform/__main__.py`: export the SPA's client id (applied)
 
 ```python
-pulumi.export("biosim_spa_client_id", auth0_biosim_platform.client_id)
+# Read by the compose-api stack through a StackReference (compose-api/clientGrants.py), which grants
+# this SPA user-delegated access to the Compose-API API. Renaming this output breaks that stack.
+pulumi.export('biosim_spa_client_id', auth0_biosim_platform.client_id)
 ```
 
-### 6.2 `auth0-pulumi/compose-api/clientGrants.py`: user-delegated grant for the SPA
+The applied `pulumi up` was 14 unchanged, outputs only. The value is `GA9L0b7xoDELHoHPfpdx4SSgo8S1fAkP`, the SPA's
+public client id (not a secret).
 
-The SPA client belongs to the biosim-platform stack, so reference it with a `StackReference` rather than
-re-declaring it. Two stacks declaring one client would fight over it.
+### 6.2 `auth0-pulumi/compose-api/clientGrants.py`: user-delegated grant for the SPA (applied)
 
 ```python
-biosim_platform_stack = pulumi.StackReference("<org>/biosim-platform/biosim-platform-auth0")
+# Same Pulumi organization as this stack; require_output fails the run loudly if the biosim-platform
+# stack stops exporting biosim_spa_client_id, instead of silently granting nothing.
+biosim_platform_stack = pulumi.StackReference(f"{pulumi.get_organization()}/biosim-platform/biosim-platform-auth0")
+biosim_spa_client_id = biosim_platform_stack.require_output("biosim_spa_client_id")
 
 """BioSimulation Platform SPA -> Compose-API (production), on behalf of the logged-in person"""
 
 biosim_spa_compose_user_grant = auth0.ClientGrant("biosim_spa_compose_user_grant",
     audience=compose_auth0_api.identifier,
-    client_id=biosim_platform_stack.get_output("biosim_spa_client_id"),
+    client_id=biosim_spa_client_id,
     scopes=[],
     subject_type="user",
     opts = pulumi.ResourceOptions(protect=True))
 ```
 
-Import it in `compose-api/__main__.py`, then run `pulumi preview` (expect 1 create) and `pulumi up`. Replace
-`<org>` with the value from `pulumi whoami` or `pulumi org get-default`.
+Two changes from the original design:
+- **`pulumi.get_organization()`** replaces a hard-coded org, so the reference survives moving the stacks to a
+  Pulumi organization.
+- **`require_output`** replaces `get_output`. Before §6.1 was applied, the compose-api preview failed with
+  `KeyError: 'biosim_spa_client_id'` rather than planning a grant with no client. That's why **biosim-platform must be
+  applied first** whenever that output changes.
 
-### 6.3 Front end (outside this workspace)
-Requesting a token for compose-api is a separate call from the BioSim API token, because a token has one API
-audience. For example, with auth0-spa-js:
-`getAccessTokenSilently({ authorizationParams: { audience: "https://api.compose.cam.uchc.edu" } })`. Send the result
-as `Authorization: Bearer …` on compose-api calls only.
+The grant is imported in `compose-api/__main__.py`. The applied `pulumi up` was 1 created, 6 unchanged; a fresh
+preview afterwards showed 7 unchanged. The grant has an Auth0 id (`cgr_…`) and is protected. The SPA is granted the
+**production** API only, not `https://api.compose.local`.
 
-### 6.4 Verify
-Decode the token locally; never paste tokens into jwt.io:
+**Tests (new: the compose-api Pulumi stack had none).**
+- `compose-api/tests/conftest.py` is a mocked provider whose `StackReference` returns a fixed SPA client id and whose
+  organization is pinned.
+- `compose-api/tests/test_client_grants.py` pins the complete set of grants: (prod, client), (local, client),
+  (prod, user). It also checks that the SPA grant is user-delegated, for production only, with no scopes, and that
+  the client id comes from `<org>/biosim-platform/biosim-platform-auth0`.
+- `pytest>=8` was added to the stack's `dev` group, and CI (`.github/workflows/mypy-check.yml`) runs the suite.
+- 4/4 pass. Pointing the SPA grant at the local API, or making it `subject_type="client"`, each fails 2 tests.
+- Every CI step passes locally: mypy on all three stacks, 12 biosim-platform tests, 6 Node Action tests, and the 4 new
+  tests.
+
+Both stack READMEs are updated: the new output and the ordering rule in biosim-platform, and the grant row, the
+`tests/` directory and the test command in compose-api.
+
+### 6.3 Front end: deferred, with a known pitfall
+`platform/frontend` (Nuxt, `@auth0/auth0-vue`) **doesn't call compose-api anywhere**, so there's no call site to attach
+a compose-api token to. When a compose-api feature is added there:
+
+- **The pitfall:** `app/plugins/auth0.client.ts` replaces `globalThis.$fetch` with an interceptor that attaches
+  `getAccessTokenSilently({ audience: auth0Audience })`, the **BioSim API** token, to **every** request. A compose-api
+  call made through `$fetch` would therefore send a token whose `aud` is `https://api.biosimulations.org`, and
+  compose-api would answer **401** (`invalid_audience`). It never falls back to anonymous, by design.
+- **The fix, when it's needed:**
+  - Add `compose_api_url` and `composeApiAudience` (`https://api.compose.cam.uchc.edu`) to `runtimeConfig.public`.
+  - Make the interceptor choose the audience from the destination: BioSim API URLs get the BioSim audience;
+    compose-api's URL gets `getAccessTokenSilently({ authorizationParams: { audience: composeApiAudience } })`; and
+    every other host gets **no** token.
+  - The same change stops the BioSim token going to every other host `$fetch` calls. Today it's sent to
+    `biosimulations_api_url` and `legacy_api_url` too. That's worth fixing on its own merits.
+- **CORS:** a browser call also needs compose-api to allow the front end's origin. `APP_ORIGINS` in
+  `compose_api/api/main.py` includes `http://localhost:4200` but **not** `https://biosim.biosimulations.org` or
+  `https://biosim.cam.uchc.edu` (checked 2026-09-25). Add them in the same change as the first compose-api call.
+- **Consent:** the grant makes the SPA *allowed* to request the compose-api audience. The Compose-API API has
+  `skip_consent_for_verifiable_first_party_clients=True`, and the SPA is first-party, so users see no extra consent
+  screen.
+
+### 6.4 Verify: Auth0 side done, person token pending the front end
+Verified:
+- the grant exists live, with the right audience, subject type and client, and there is no drift (§6.2);
+- compose-api's handling of a person's token (`sub = auth0|…` plus the roles claim giving `{"user", …}`) is covered
+  by Part 1's tests.
+
+**Not yet verifiable:** a real person's compose-api token, because nothing requests one until §6.3 is done. When it
+is, decode it locally (never in jwt.io):
 ```bash
 python3 -c 'import sys,base64,json; p=sys.argv[1].split(".")[1]; print(json.dumps(json.loads(base64.urlsafe_b64decode(p+"="*(-len(p)%4))),indent=2))' "$TOKEN"
 ```
@@ -837,6 +900,9 @@ Expect:
 - `sub` starting `auth0|` (a person), and `aud` including `https://api.compose.cam.uchc.edu`;
 - `https://api.biosimulations.org/roles` of `["user"]`, or more;
 - a 200 from compose-api, with the submission log line naming that `sub`.
+
+**Rollback:** `pulumi state unprotect` the grant's URN, remove `biosim_spa_compose_user_grant`, then run
+`pulumi up` in `compose-api/`. Keep the biosim-platform output; it's harmless.
 
 ---
 
@@ -848,7 +914,8 @@ Expect:
 | 5.2 | auth0-pulumi | nothing | `feat(biosim-platform): least-privilege client for the BioSim Roles Action` |
 | 5.3–5.5 | auth0-pulumi | 5.2 applied and secret set | `feat(biosim-platform): manage BioSim Roles in Pulumi; always assign 'user', never block login` |
 | 5.7 | auth0-pulumi | 5.6 passed | `chore(biosim-platform): retire old Action credentials; README` |
-| Part 3 | auth0-pulumi + front end | decision, Part 2 | `feat(compose-api): user-delegated access for the BioSim SPA` |
+| Part 3 (Auth0) | auth0-pulumi | Part 2 | `feat(compose-api): user-delegated access for the BioSim SPA` (applied 2026-09-25) |
+| Part 3 (front end) | platform | a compose-api call in the front end | deferred; see §6.3 |
 
 **Acceptance**
 - [ ] Anonymous request: 200, `principal is None`, no role. *(Part 1 tests)*
@@ -862,7 +929,10 @@ Expect:
 - [ ] An existing admin gains `user` and keeps `admin`. *(§5.6 step 5; Action tests)*
 - [ ] A Management API failure doesn't block a login. *(Action tests)*
 - [ ] The Action's credentials can only `update:users`. *(Pulumi test; §5.2 preview)*
-- [ ] *(Part 3 only)* A logged-in person's compose-api token carries `sub = auth0|…` and the roles claim. *(§6.4)*
+- [x] *(Part 3)* The SPA has a user-delegated grant for the production Compose-API API only, applied with no drift.
+      *(§6.2)*
+- [ ] *(Part 3, after §6.3)* A logged-in person's compose-api token carries `sub = auth0|…` and the roles claim.
+      *(§6.4)*
 
 ## 8. Risks and open questions
 
@@ -882,4 +952,4 @@ Expect:
 |---|---|---|
 | 1 | pre-commit, `mypy --strict` (91 files), auth tests, spec regeneration, mutation | clean; 54 passed (1 Docker-only test not run); spec identical; 6 tests catch a missing default role |
 | 2 | `node --test` (Node 26), mocked Pulumi tests, CI's mypy call, mutation | 6/6 Action tests; 7/7 new Pulumi tests; 14 files clean; both mutations caught. **Not run against the live tenant** |
-| 3 | none | design only; needs the §6.0 decision |
+| 3 | 4 new mocked stack tests plus 2 mutations, CI's mypy on all stacks, previews, `pulumi up` on both stacks, post-apply preview | 4/4 pass and both mutations caught; applied (biosim-platform: outputs only; compose-api: 1 created); post-apply preview has 7 unchanged. Person-token check pending the front end (§6.3) |

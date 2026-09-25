@@ -747,7 +747,9 @@ necessary, and its semantics must not turn invalid supplied credentials into ano
    API SDK.
 6. **Decided:** Use a 600-second JWKS TTL and 5-second request timeout. Unknown `kid` refreshes immediately, concurrent
    requests coalesce by counting completed refreshes, and the 30-second back-off limits only re-fetching an expired
-   cache for a known key. Cached keys remain usable during transient refresh failures. `exp`/`iat`/`nbf` are checked
+   cache for a known key. Cached keys remain usable during transient refresh failures, for at most 24 hours
+   since the last successful fetch (`JWKS_MAX_STALE_SECONDS`); after that, supplied tokens are rejected until JWKS
+   recovers. `exp`/`iat`/`nbf` are checked
    with a 60-second leeway (`JWT_LEEWAY_SECONDS`, matching Auth0's own `TokenVerifier` default) so a small clock
    difference between Auth0 and this host cannot reject a freshly issued token.
 7. **Decided:** it remains a documented local check (curl with a token from the Auth0 Dashboard Test tab), so CI
