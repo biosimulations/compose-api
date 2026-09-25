@@ -36,6 +36,13 @@ token, a bad signature, and the wrong issuer or audience. To call anonymously, l
 
 `/health` and `/version` ignore credentials.
 
+### Roles
+
+Every verified caller holds the role `user`; an anonymous caller holds no role. If the token carries the
+`https://api.biosimulations.org/roles` claim (tokens issued to a logged-in person on this tenant do), those Auth0
+roles are added, for example `{"user", "admin"}`. Roles identify the caller only: no endpoint requires a role, and
+every endpoint remains available anonymously.
+
 ### What is accepted
 
 Only RS256-signed Auth0 **access tokens** issued for this API's audience are accepted. These are rejected:

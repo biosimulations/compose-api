@@ -15,7 +15,9 @@ from httpx import ASGITransport
 
 from compose_api.api.main import app
 from compose_api.authentication import (
+    DEFAULT_ROLE,
     JWT_LEEWAY_SECONDS,
+    ROLES_CLAIM,
     Auth0Verifier,
     AuthenticatedPrincipal,
     AuthenticationError,
@@ -41,6 +43,7 @@ async def test_valid_token_yields_principal(fake_auth0: FakeAuth0, auth0_verifie
     assert AUTH0_TEST_AUDIENCE in principal.audience
     assert principal.scopes == {"openid", "profile"}
     assert principal.permissions == frozenset()
+    assert principal.roles == {DEFAULT_ROLE}  # an M2M token carries no roles claim, yet still gets the default role
 
 
 @pytest.mark.asyncio
@@ -208,6 +211,26 @@ async def test_skew_beyond_leeway_is_rejected(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("roles_claim", "expected"),
+    [
+        (["admin", "publisher"], {"user", "admin", "publisher"}),
+        (["user"], {"user"}),
+        (["admin", 7, None, {"x": 1}], {"user", "admin"}),
+        ("admin", {"user"}),
+        ([], {"user"}),
+    ],
+    ids=["extra-roles", "user-listed-again", "non-strings-dropped", "not-a-list", "empty"],
+)
+async def test_roles_claim_adds_to_the_default_role(
+    fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier, roles_claim: object, expected: set[str]
+) -> None:
+    claim: dict[str, Any] = {ROLES_CLAIM: roles_claim}  # a URL is not a valid keyword, so pass it via a dict
+    principal = await auth0_verifier.verify(fake_auth0.token(**claim))
+    assert principal.roles == expected
+
+
+@pytest.mark.asyncio
 async def test_missing_kid_rejected(fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier) -> None:
     token = jwt.encode({"sub": "x"}, fake_auth0.keys["key-1"], algorithm="RS256")
     with pytest.raises(AuthenticationError) as excinfo:
@@ -241,8 +264,11 @@ async def principal_client(auth0_verifier: Auth0Verifier) -> AsyncGenerator[http
     probe = FastAPI()
 
     @probe.get("/whoami")
-    async def whoami(principal: OptionalPrincipal) -> dict[str, str | None]:
-        return {"subject": principal.subject if principal else None}
+    async def whoami(principal: OptionalPrincipal) -> dict[str, str | list[str] | None]:
+        return {
+            "subject": principal.subject if principal else None,
+            "roles": sorted(principal.roles) if principal else None,
+        }
 
     probe.dependency_overrides[get_auth0_verifier] = lambda: auth0_verifier
     async with httpx.AsyncClient(transport=ASGITransport(app=probe), base_url="http://testserver") as client:
@@ -253,14 +279,14 @@ async def principal_client(auth0_verifier: Auth0Verifier) -> AsyncGenerator[http
 async def test_no_header_is_anonymous(principal_client: httpx.AsyncClient) -> None:
     response = await principal_client.get("/whoami")
     assert response.status_code == 200
-    assert response.json() == {"subject": None}
+    assert response.json() == {"subject": None, "roles": None}  # anonymous: no role
 
 
 @pytest.mark.asyncio
 async def test_valid_token_reaches_handler(principal_client: httpx.AsyncClient, fake_auth0: FakeAuth0) -> None:
     response = await principal_client.get("/whoami", headers={"Authorization": f"Bearer {fake_auth0.token()}"})
     assert response.status_code == 200
-    assert response.json() == {"subject": "auth0|test-user"}
+    assert response.json() == {"subject": "auth0|test-user", "roles": ["user"]}
 
 
 @pytest.mark.asyncio
@@ -401,7 +427,7 @@ async def test_active_handler_sees_the_verified_principal(
 
 
 def test_describe_caller() -> None:
-    principal = AuthenticatedPrincipal("auth0|abc", "i", ("a",), frozenset(), frozenset())
+    principal = AuthenticatedPrincipal("auth0|abc", "i", ("a",), frozenset(), frozenset(), frozenset({"user"}))
     assert describe_caller(principal) == "auth0|abc"
     assert describe_caller(None) == "anonymous"
 
@@ -436,6 +462,6 @@ def test_pbest_operations_keep_their_paths() -> None:
 
 
 def test_principal_is_immutable() -> None:
-    principal = AuthenticatedPrincipal("s", "i", ("a",), frozenset(), frozenset())
+    principal = AuthenticatedPrincipal("s", "i", ("a",), frozenset(), frozenset(), frozenset({"user"}))
     with pytest.raises(AttributeError):
         principal.subject = "other"  # type: ignore[misc]

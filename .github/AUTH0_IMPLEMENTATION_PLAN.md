@@ -52,7 +52,7 @@ Docker-backed integration tests still require an available Docker daemon.
 ## Non-Goals
 
 - Requiring login, signup, or an Auth0 account for existing API consumers.
-- Implementing role- or scope-based authorization for current routes.
+- Implementing role- or scope-based authorization for current routes. Roles are now derived on every verified principal (see `.agents/AUTH0_ROLES_IMPLEMENTATION_PLAN.md`) but still not enforced on any route.
 - Creating or synchronizing a local users table.
 - Using Auth0 Management API credentials.
 - Accepting ID tokens as API credentials.
@@ -315,11 +315,13 @@ class AuthenticatedPrincipal:
     audience: tuple[str, ...]
     scopes: frozenset[str]
     permissions: frozenset[str]
+    roles: frozenset[str]  # always includes "user"; see .agents/AUTH0_ROLES_IMPLEMENTATION_PLAN.md
 ```
 
 The verifier should normalize an audience string/list and split the OAuth `scope` string. `permissions` should be
 populated only from a validated `permissions` claim and should not grant anything until authorization code explicitly
-checks it. Omit empty claims rather than inventing application roles. A route can accept
+checks it. `roles` always includes the tenant role `user`, plus any names from the verified roles claim; see
+`.agents/AUTH0_ROLES_IMPLEMENTATION_PLAN.md`. A route can accept
 `AuthenticatedPrincipal | None`; `None` is the anonymous representation. A future authorization dependency can then
 require a principal or scope without changing JWT validation.
 

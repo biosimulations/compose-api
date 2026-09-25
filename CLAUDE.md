@@ -113,7 +113,10 @@ also takes `principal: OptionalPrincipal` (a structural test enforces it); submi
 refreshes by counting *completed* refreshes; the 30 s back-off only limits re-fetching an expired cache. Deployment:
 both API overlays load `config/compose-api-rke`; the local overlay overrides only the Auth0 keys via a
 `behavior: merge` generator (`overlays/compose-api-local/auth0.env`); `config/compose-api-local` is used only by the
-migration job.
+migration job. Every principal carries `roles`: always `DEFAULT_ROLE` ("user", the tenant role owned by auth0-pulumi's
+biosim-platform stack) plus any names in the `ROLES_CLAIM` (`https://api.biosimulations.org/roles`) claim written by
+the tenant's post-login "BioSim Roles" Action. Anonymous is `principal is None`, so no role. Roles gate nothing yet;
+keep the role and claim names in step with auth0-pulumi.
 
 **HPC layer.** `SSHService` (asyncssh: `run_command`, `scp_upload`, `scp_download`) → `SlurmService`
 (`sbatch --parsable`, `squeue`, `sacct` parsing into `SlurmJob`) → `SimulationServiceHpc`, which writes sbatch scripts

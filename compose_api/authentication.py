@@ -33,6 +33,13 @@ JWKS_TIMEOUT_SECONDS = 5.0
 # (TokenVerifier) defaults to the same 60 s.
 JWT_LEEWAY_SECONDS = 60
 
+# Every verified caller holds DEFAULT_ROLE; an anonymous caller has no principal and so no role. It is the tenant-wide
+# Auth0 role "user" owned by auth0-pulumi/biosim-platform (roles.py: biosim_user_role) -- keep the spelling in step.
+DEFAULT_ROLE = "user"
+# Namespaced claim in which the tenant's "BioSim Roles" post-login Action lists the caller's Auth0 role names. Only
+# tokens issued to a logged-in user carry it; client-credentials (M2M) tokens never do.
+ROLES_CLAIM = "https://api.biosimulations.org/roles"
+
 
 @dataclass(frozen=True, slots=True)
 class AuthenticatedPrincipal:
@@ -41,6 +48,7 @@ class AuthenticatedPrincipal:
     audience: tuple[str, ...]
     scopes: frozenset[str]
     permissions: frozenset[str]
+    roles: frozenset[str]  # always contains DEFAULT_ROLE; roles identify the caller, they do not authorize anything yet
 
 
 class AuthenticationError(Exception):
@@ -165,16 +173,19 @@ def _principal_from_claims(claims: dict[str, Any]) -> AuthenticatedPrincipal:
         raise AuthenticationError("missing_claim")
     audience = claims["aud"]
     scope = claims.get("scope")
-    permissions = claims.get("permissions")
     return AuthenticatedPrincipal(
         subject=subject,
         issuer=claims["iss"],
         audience=(audience,) if isinstance(audience, str) else tuple(audience),
         scopes=frozenset(scope.split()) if isinstance(scope, str) else frozenset(),
-        permissions=frozenset(p for p in permissions if isinstance(p, str))
-        if isinstance(permissions, list)
-        else frozenset(),
+        permissions=_string_set(claims.get("permissions")),
+        roles=frozenset({DEFAULT_ROLE}) | _string_set(claims.get(ROLES_CLAIM)),
     )
+
+
+def _string_set(value: object) -> frozenset[str]:
+    """The strings in a list-valued claim; anything else (absent, a bare string, a number) contributes nothing."""
+    return frozenset(item for item in value if isinstance(item, str)) if isinstance(value, list) else frozenset()
 
 
 @lru_cache(maxsize=4)
