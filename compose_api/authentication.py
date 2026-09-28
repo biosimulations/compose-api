@@ -72,14 +72,22 @@ class JwksCache:
     def __init__(
         self,
         jwks_url: str,
+        *,
+        client: httpx.AsyncClient | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
         ttl_seconds: float = JWKS_TTL_SECONDS,
+        max_stale_seconds: float = JWKS_MAX_STALE_SECONDS,
         min_refresh_interval_seconds: float = JWKS_MIN_REFRESH_INTERVAL_SECONDS,
     ) -> None:
+        """`client` is the reusable client a long-running service injects so JWKS fetches share its connection pool.
+        Passing `transport` instead builds a private client around that transport; that is the test seam."""
         self._jwks_url = jwks_url
-        self._transport = transport
+        self._client = client or httpx.AsyncClient(transport=transport, timeout=JWKS_TIMEOUT_SECONDS)
+        self._owns_client = client is None
         self._ttl_seconds = ttl_seconds
+        self._max_stale_seconds = max_stale_seconds
         self._min_refresh_interval_seconds = min_refresh_interval_seconds
+
         self._keys: dict[str, jwt.PyJWK] = {}
         self._fetched_at: float | None = None
         self._attempted_at: float | None = None
@@ -109,7 +117,7 @@ class JwksCache:
         return key
 
     def _is_usable(self) -> bool:
-        return self._fetched_at is not None and time.monotonic() - self._fetched_at < JWKS_MAX_STALE_SECONDS
+        return self._fetched_at is not None and time.monotonic() - self._fetched_at < self._max_stale_seconds
 
     def _is_fresh(self) -> bool:
         return self._fetched_at is not None and time.monotonic() - self._fetched_at < self._ttl_seconds
@@ -117,38 +125,71 @@ class JwksCache:
     def _may_refresh(self) -> bool:
         return self._attempted_at is None or time.monotonic() - self._attempted_at >= self._min_refresh_interval_seconds
 
+    async def aclose(self) -> None:
+        """Release the private client built from `transport`. A client injected by the caller is left alone."""
+        if self._owns_client:
+            await self._client.aclose()
+
     async def _refresh(self) -> None:
         self._attempted_at = time.monotonic()
         try:
-            async with httpx.AsyncClient(transport=self._transport, timeout=JWKS_TIMEOUT_SECONDS) as client:
-                response = await client.get(self._jwks_url)
-                response.raise_for_status()
+            response = await self._client.get(self._jwks_url)
+            response.raise_for_status()
+
             document = response.json()
+
             if not isinstance(document, dict):
                 raise jwt.PyJWKSetError("Invalid JWKS document")
+
             jwk_set = jwt.PyJWKSet.from_dict(document)
+
         except (httpx.HTTPError, ValueError, jwt.PyJWTError):
-            # Keep serving the previous keys: a transient outage should not reject tokens signed by a known key.
             logger.warning("Could not refresh Auth0 JWKS; keeping %d cached key(s)", len(self._keys))
+
             if not self._keys:
                 raise AuthenticationError("jwks_unavailable") from None
             return
-        self._keys = {
+
+        keys = {
             key.key_id: key
             for key in jwk_set.keys
-            if isinstance(key.key_id, str)
-            and key.key_id
-            and key.algorithm_name in ALLOWED_ALGORITHMS
-            and key.public_key_use in (None, "sig")
+            if (
+                isinstance(key.key_id, str)
+                and key.key_id
+                and key.algorithm_name in ALLOWED_ALGORITHMS
+                and key.public_key_use in (None, "sig")
+            )
         }
+
+        if not keys:
+            logger.warning("Auth0 JWKS contained no usable signing keys")
+            raise AuthenticationError("jwks_unavailable")
+        self._keys = keys
         self._fetched_at = time.monotonic()
 
 
 class Auth0Verifier:
-    def __init__(self, domain: str, audience: str, jwks: JwksCache | None = None) -> None:
+    # Verifiers this module constructed, and therefore owns the HTTP client of, so lifespan shutdown can close them.
+    _owned_verifiers: list["Auth0Verifier"] = []
+
+    def __init__(
+        self,
+        domain: str,
+        audience: str,
+        jwks: JwksCache | None = None,
+        *,
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
         self.issuer = f"https://{domain}/"
         self.audience = audience
-        self._jwks = jwks or JwksCache(f"https://{domain}/.well-known/jwks.json")
+        self._jwks = jwks or JwksCache(f"https://{domain}/.well-known/jwks.json", client=client)
+        if jwks is None:
+            # Built our own cache, so we own whatever client is behind it; lifespan shutdown closes it. A caller
+            # that passed `jwks` (or injected its own `client`) keeps ownership of that transport.
+            Auth0Verifier._owned_verifiers.append(self)
+
+    async def aclose(self) -> None:
+        await self._jwks.aclose()
 
     async def verify(self, token: str) -> AuthenticatedPrincipal:
         try:
@@ -186,19 +227,35 @@ class Auth0Verifier:
         return _principal_from_claims(claims)
 
 
-def _principal_from_claims(claims: dict[str, Any]) -> AuthenticatedPrincipal:
-    subject = claims["sub"]
+def _principal_from_claims(
+    claims: dict[str, Any],
+) -> AuthenticatedPrincipal:
+    subject = claims.get("sub")
+    issuer = claims.get("iss")
+    audience = claims.get("aud")
+
     if not isinstance(subject, str) or not subject:
         raise AuthenticationError("missing_claim")
-    audience = claims["aud"]
+
+    if not isinstance(issuer, str) or not issuer:
+        raise AuthenticationError("missing_claim")
+
+    if isinstance(audience, str) and audience:
+        audiences = (audience,)
+    elif isinstance(audience, list) and audience and all(isinstance(item, str) and item for item in audience):
+        audiences = tuple(audience)
+    else:
+        raise AuthenticationError("invalid_audience")
+
     scope = claims.get("scope")
+
     return AuthenticatedPrincipal(
         subject=subject,
-        issuer=claims["iss"],
-        audience=(audience,) if isinstance(audience, str) else tuple(audience),
-        scopes=frozenset(scope.split()) if isinstance(scope, str) else frozenset(),
+        issuer=issuer,
+        audience=audiences,
+        scopes=(frozenset(scope.split()) if isinstance(scope, str) else frozenset()),
         permissions=_string_set(claims.get("permissions")),
-        roles=frozenset({DEFAULT_ROLE}) | _string_set(claims.get(ROLES_CLAIM)),
+        roles=(frozenset({DEFAULT_ROLE}) | _string_set(claims.get(ROLES_CLAIM))),
     )
 
 
@@ -210,6 +267,18 @@ def _string_set(value: object) -> frozenset[str]:
 @lru_cache(maxsize=4)
 def _build_verifier(domain: str, audience: str) -> Auth0Verifier:
     return Auth0Verifier(domain=domain, audience=audience)
+
+
+async def aclose_verifiers() -> None:
+    """Close the HTTP client behind each verifier this process built, then drop them.
+
+    Verifiers passed in by a caller (tests, or an app injecting a shared client) own their own transport and are
+    never registered here. Call from the FastAPI lifespan alongside the other services.
+    """
+    _build_verifier.cache_clear()
+    verifiers, Auth0Verifier._owned_verifiers[:] = list(Auth0Verifier._owned_verifiers), []
+    for verifier in verifiers:
+        await verifier.aclose()
 
 
 def get_auth0_verifier() -> Auth0Verifier | None:
@@ -270,7 +339,26 @@ async def get_optional_principal(
         raise _unauthorized() from None
 
 
+async def get_required_principal(
+    principal: Annotated[
+        AuthenticatedPrincipal | None,
+        Depends(get_optional_principal),
+    ],
+) -> AuthenticatedPrincipal:
+    """
+    FastAPI dependency requiring a successfully authenticated caller.
+
+    Missing credentials are rejected with 401. Invalid supplied credentials
+    have already been rejected by get_optional_principal().
+    """
+    if principal is None:
+        raise _unauthorized()
+
+    return principal
+
+
 OptionalPrincipal = Annotated[AuthenticatedPrincipal | None, Depends(get_optional_principal)]
+RequiredPrincipal = Annotated[AuthenticatedPrincipal, Depends(get_required_principal)]
 
 
 def describe_caller(principal: AuthenticatedPrincipal | None) -> str:

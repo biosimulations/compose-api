@@ -2,7 +2,10 @@ import logging
 
 from fastapi import APIRouter, Depends
 
-from compose_api.authentication import OptionalPrincipal, get_optional_principal
+from compose_api.authentication import (
+    OptionalPrincipal,
+    get_optional_principal,
+)
 from compose_api.common.gateway.models import RouterConfig, ServerMode
 from compose_api.dependencies import (
     get_database_service,

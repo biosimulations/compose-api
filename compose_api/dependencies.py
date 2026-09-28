@@ -5,6 +5,7 @@ import nats
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
+from compose_api.authentication import aclose_verifiers
 from compose_api.common.gateway.models import Namespace
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.common.ssh.ssh_service import get_ssh_service
@@ -194,6 +195,8 @@ async def shutdown_standalone() -> None:
     if job_monitor:
         await job_monitor.close()
         set_job_monitor(None)
+
+    await aclose_verifiers()
 
 
 def verify_service(service: DatabaseService | DataService | SimulationService | None) -> None:
