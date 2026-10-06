@@ -67,7 +67,9 @@ So the consolidation is a decision to own and ship that product, not a decision 
 `process-bigraph 1.0.5`, released 2025-12-27, while the ecosystem runs 1.8.4: thirty-seven releases and 251 days
 behind. The cause is mechanical. This repository pins `pbest==0.6.3` exactly; pbest pins `process-bigraph==1.0.5`
 and `bigraph-schema==1.0.14` exactly; so the pin on the toolkit freezes the engine beneath it. Goal G8 cannot be met
-while that chain exists.
+while that chain exists. *(2026-10-06: the gap keeps growing. `process-bigraph` 1.8.5 and `bigraph-schema` 1.7.0 have
+since been released; the latter adds process contracts and contract-subsumption matching, which decision 5's
+adapters will want.)*
 
 **The separate-product case has not yet arrived.** The workbench ecosystem depends on the foundation directly and on
 pbest not at all. pbest's one external consumer takes it as an optional extra behind a lazy import, with a comment
@@ -206,6 +208,13 @@ organisation are read-only for this work.
 
 No timeline is claimed beyond that, and no change to `viva-api` is proposed here.
 
+**Related work in `viva-api` (2026-10-06).** Its open proposal `viva-api#975` would derive *its* compose allow-list
+from a reviewed, versioned registry file of workspace repositories, and notes that no such published registry exists
+yet. That is the same problem decision 5 solved here with `compose_api/registry/manifest.yaml`, the generated
+`catalog.yaml`, and the curation ladder, so the registry is the most concrete convergence point to raise first. Its
+structured refusals (`viva-api#982`, `{message, code, ...}`) are also close to this service's 400 shape, which makes
+the error contract a second, cheap one.
+
 ---
 
 ## 6. Decision 5 — bring the simulator wrappers in as tiered registry entries
@@ -292,6 +301,20 @@ from becoming the registry by default:
 Adapters are a category of the same registry, on the same ladder. They cannot reach *curated* without declared port
 types and units, which is also what lets a checker suggest them later. Seed the category from code that already
 exists: `viva-basic-processes`' expression step and `spatio-flux`'s count/concentration conversion (goal G5).
+
+### Simulators that bring their own image
+
+Some simulators cannot be expressed as a library list at all. `viva-pde-particle` needs dolfinx, netgen and a Smoldyn
+module built from source. Since 0.6.0 a deployment can list an owner-published image by name
+(`prebuilt_simulators`, `POST /simulation/run?simulator=<name>`; PR #190), and that image is the environment. This is
+rule 3 above (a component in its own container), reached before the resolver. It is also the first concrete G4
+candidate: a spatial **and** particle-based simulator with validation studies against a published reference (Schaff
+et al. 2016). Two gaps remain:
+
+- `viva-pde-particle` carries no `viva-marketplace` topic, so it is absent from the catalog and from `catalog.yaml`.
+- Documents submitted to a prebuilt image skip the address check entirely, *including* the unsafe forms (`local:!`,
+  non-`local` protocols). The deployment vouches for the image, not for every document sent to it, so the unsafe-form
+  check should still apply.
 
 ### The phases
 
