@@ -5,6 +5,13 @@ it was established that **no workload here needs a GPU**. That single constraint
 conclusion, so §5 no longer says what it said this morning. Nothing is committed, and nothing has been tested against
 `compose.cam.uchc.edu`.
 
+**Update 2026-10-06.** Three things moved. The list of libraries baked into the shared image is now pinned in this
+repository, so its identity changes only by reviewed commit (#182; §4.4). Since release 0.6.0 a deployment can list
+an **owner-published OCI image** per simulator and run a submission in it (#190, `prebuilt_simulators`), which is the
+first per-simulator image path and, when the reference is pinned by digest, the §1 invariant in miniature (§4.4).
+And the 0.6.0 image build succeeded on the `ubuntu-26.04` runner with the tag-checkout fix (#176, #180). The runtime
+questions in §6 are still unasked.
+
 **Claims about third-party runtimes carry a citation and were verified against upstream documentation on
 2026-09-12.** Claims without one are reasoning, not evidence, and are marked. Sources are listed at the end.
 
@@ -195,6 +202,13 @@ Untrusted execution prioritises containing hostile or compromised code and accep
 Note what this implies for the composition work: the moment a composite can carry a user-supplied process, it is an
 untrusted workload by this definition, whatever image it runs in.
 
+**Where the line sits today (2026-10-06).** Strategy decision 3 keeps this funding year on the trusted tier, and the
+service now enforces it at submission: process addresses must name a registry entry at level *tested* or higher, and
+the arbitrary-import `local:!` form and non-`local` protocols are always refused (#184). A prebuilt image (#190) is
+admitted by being listed in the deployment, which is a trust decision about the image. Documents sent to such an
+image currently skip the address check altogether, *including* the unsafe forms, which this section's definition
+says should still apply: listing an image vouches for its contents, not for every document that runs in it.
+
 ### 4.4 Image management, the half that is easy to forget
 
 - **Registry.** This turned out to be the most urgent item, and it is now partly addressed. The simulator images
@@ -206,6 +220,18 @@ untrusted workload by this definition, whatever image it runs in.
   `handlers._download_or_build_container`. That is the designed behaviour when a download fails, not a regression:
   the old location had no image for the current pbest pin either. Publishing images under the organisation account
   is an operational task this document cannot do.
+  *Update 2026-10-06:* the tag is now stable. The library list used to be fetched on every request from a branch of
+  another repository, so any upstream commit changed the tag; it is pinned here since #182 (identity `c7e984d3…`).
+  Still unpublished: the package is private and the cluster pulls with no credentials, so publishing also needs a
+  visibility or credential decision.
+- **Owner-published images (since 0.6.0, #190).** `prebuilt_simulators` maps a simulator name to an image reference;
+  `POST /simulation/run?simulator=<name>` runs the job in it, pulled as `docker://<image>`, and an unlisted name is a
+  400. The definition is just `Bootstrap: docker` / `From: <image>`, so its md5 identity is a function of the image
+  *reference*. Pin by digest and that identity is, in effect, the digest: the §1 invariant for this one path, with no
+  schema change. The first user is `vivarium-collective/viva-pde-particle` (dolfinx, netgen and a source-built
+  Smoldyn, which no library list could express); its image is built by that repository's #46. This is also the
+  cheapest version of §7's "prototype one simulator as a plain OCI image", though it runs through Apptainer pulling
+  an OCI image rather than through `ContainerizationEngine.DOCKER`.
 - **Identity.** §1. The most invasive change, and the one that pays for itself.
 - **Caching.** Requirement 4. On a shared filesystem the cache design matters more than the runtime choice.
 - **Provenance.** Reproducing a five-year-old result means the digest still resolving: pinning, a mirror, and
@@ -255,7 +281,8 @@ The first three are for the cluster administrators and most things depend on the
    to Kata rather than gVisor.
 2. Are user namespaces enabled at all? `--fakeroot` works today, which is evidence they are, but policy can change.
 3. Is there a shared image cache, and what is our quota?
-4. Do we need untrusted execution now, or is it a Y4–Y5 concern? This decides whether §4.2 belongs in this plan.
+4. ~~Do we need untrusted execution now, or is it a Y4–Y5 concern?~~ Answered 2026-09-13 by strategy decision 3:
+   registered simulators only this funding year; the untrusted tier is parked with a trigger.
 5. Do we keep `.sif` as a fallback, or commit to one runtime? A period of both is likely; `ContainerizationEngine`
    already has `NONE`, `DOCKER`, `APPTAINER` and `BOTH` arms to hang that on.
 6. The migration: `container_def_hash` is a non-nullable column and is used as the image tag, the `.def` name, the
@@ -269,6 +296,9 @@ Answer questions 1 to 3 by asking the administrators. In parallel, and at no cos
 the data model and prototype one simulator as a plain OCI image run through `ContainerizationEngine.DOCKER` on the
 test cluster, comparing pull time, disk footprint and startup against the `.sif` path already measured there. That
 produces a number to argue from rather than a preference.
+
+*2026-10-06:* the prototype half now has a working instance in production code (§4.4, owner-published images). The
+measurement against the `.sif` path has not been made, and the administrators have not been asked.
 
 ---
 

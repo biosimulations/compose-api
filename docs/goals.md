@@ -1,6 +1,6 @@
 # Goals
 
-**Status:** draft, opened 2026-09-13, revised 2026-09-22. This is the statement of who the system is for, what it must do, and what
+**Status:** draft, opened 2026-09-13, revised 2026-09-22; done-tests updated 2026-10-06. This is the statement of who the system is for, what it must do, and what
 "done" looks like. It changes rarely. It is written to be readable by the External Advisory Board, and it is the
 document the Year 3 progress report is checked against. How we get there is in [strategy.md](strategy.md).
 
@@ -90,11 +90,11 @@ Each goal has an observable test. If the test cannot be run, the goal is not don
 | Goal | Done means |
 |---|---|
 | G1 | A named collaborator, not a member of this team, installs `viva-toolkit` from PyPI on a clean machine, runs a composite locally, submits the identical file to HPC, and gets the same result back. Documented as a walkthrough they followed, not one we wrote for them. |
-| G2 | The API returns 404 for absent resources and 5xx only for server faults; a job the scheduler reports as failed is recorded as failed within one polling interval; the test suite covers these without a real cluster. Most of this landed in September 2026. |
+| G2 | The API returns 404 for absent resources and 5xx only for server faults; a job the scheduler reports as failed is recorded as failed within one polling interval; the test suite covers these without a real cluster. Most of this landed in September 2026 (#166, #167, #169); an unsupported upload type is a 400, not a 500, since 0.6.0 (#184). |
 | G3 | Pick any simulation from 2026. Its record names an image digest. Pulling that digest and re-running the composite reproduces the result to the tolerance the tests use. |
 | G4 | Each registered simulator has its own pinned environment spec and digest; adding one does not rebuild the others; the registry lists at least one particle-based and one spatial simulator beyond what exists today, at curation level *tested* or higher, and every result records the curation level of each component it used. |
 | G5 | A composite that wires a concentration-emitting process to a count-consuming process runs correctly through a registered adapter with declared port types and units, with no hand-written glue in the composite. |
-| G6 | The service rejects a composite naming an unregistered process address, or a component below *tested*, with a clear message; and the goals for the untrusted tier are written down with their trigger. |
+| G6 | The service rejects a composite naming an unregistered process address, or a component below *tested*, with a clear message; and the goals for the untrusted tier are written down with their trigger. **Met for the shared image, 2026-10-06:** released in 0.6.0 (#184; tests in `tests/registry/`, `tests/api/test_submission_rejection.py`); trigger recorded in strategy decision 3. **Open:** submissions to an owner-published image (#190) skip the check, including its unsafe forms. |
 | G7 | A composite submitted through either front door runs on the same backend, or the strategy document records a dated decision that they will stay separate and why. |
 | G8 | `uv.lock` here resolves the same `process-bigraph` minor version the workbench ecosystem resolves, and a scheduled check fails when it drifts more than one minor version. |
 
