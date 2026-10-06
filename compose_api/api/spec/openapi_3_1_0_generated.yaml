@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: compose-api
-  version: 0.5.0
+  version: 0.6.0
 paths:
   /curated/copasi:
     post:
@@ -96,6 +96,11 @@ paths:
       tags:
       - Simulation
       summary: Run a simulation
+      description: '`simulator` names an owner-published image this deployment lists
+        (settings.prebuilt_simulators);
+
+        the job then runs in that image instead of the shared container. Omitted:
+        the shared container.'
       operationId: run-simulation
       parameters:
       - name: interval_time
@@ -112,6 +117,14 @@ paths:
           type: boolean
           default: false
           title: Batch Submission
+      - name: simulator
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Simulator
       requestBody:
         required: true
         content:
