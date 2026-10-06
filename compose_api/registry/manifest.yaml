@@ -1,0 +1,39 @@
+# The simulator registry of record: which process-bigraph components this service will run, pinned, and how far
+# each has been checked. Strategy decision 5 (docs/strategy.md) defines the fields and the curation ladder.
+#
+# Changes land by pull request. Raising an entry's level needs the evidence for the new level in `evidence`.
+# An address is accepted on HPC only if its module sits under one of an entry's `module_roots`, that entry is at
+# level `tested` or higher, and the entry is part of the bundle the service runs (`registry_env`).
+
+entries:
+  - id: pbsim-common
+    package: pbsim-common
+    source: https://github.com/biosimulations/biosim-registry
+    version: "0.1.2"
+    module_roots:
+      - pbsim_common
+    level: tested
+    bundles:
+      - registry_env
+    evidence:
+      - >-
+        Grandfathered at tested on 2026-09-23. The gate is this repository's own cluster tests
+        (tests/simulators/test_copasi.py, tests/simulators/test_tellurium.py, and the phase_cycle.omex fixture),
+        which run CopasiUTCStep and TelluriumUTCStep inside the built registry_env image, not the package's own
+        test suite. Phase B of decision 5 replaces this with a computed level.
+
+  - id: pb-multiscale-actin
+    package: pb-multiscale-actin
+    source: https://pypi.org/project/pb-multiscale-actin/1.3.1/
+    version: "1.3.1"
+    module_roots:
+      - pb_multiscale_actin
+    level: tested
+    bundles:
+      - registry_env
+    evidence:
+      - >-
+        Grandfathered at tested on 2026-09-23. The gate is this repository's own cluster test
+        (tests/simulators/test_readdy.py with the readdy.omex fixture), which runs ReaddyActinMembrane and
+        SimulariumEmitter inside the built registry_env image, not the package's own test suite. Phase B of
+        decision 5 replaces this with a computed level.

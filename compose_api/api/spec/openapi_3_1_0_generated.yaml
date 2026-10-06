@@ -125,6 +125,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SimulationExperiment'
+        '400':
+          description: The submission cannot run. For a problem with the request itself
+            (empty file, unsupported type, interval out of range) `detail` is a string.
+            For a problem with its contents (unreadable archive, or processes the
+            registry does not allow) `detail` is an object with a `message` and a
+            `violations` list naming each address.
         '422':
           description: Validation Error
           content:

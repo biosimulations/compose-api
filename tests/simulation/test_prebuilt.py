@@ -9,14 +9,12 @@ from httpx import ASGITransport, AsyncClient
 from pbest.containerization.container_constructor import generate_container_def_file
 from pbest.utils.input_types import ContainerizationEngine
 
-from compose_api.common.gateway.utils import allow_list
 from compose_api.config import override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation import handlers
 from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import (
-    PBAllowList,
     RemoteContainerImage,
     SimulationRequest,
     SimulatorVersion,
@@ -68,7 +66,6 @@ async def test_run_simulation_records_the_prebuilt_simulator(
             simulation_service_slurm=cast(SimulationService, None),  # used only by the background job
             job_monitor=cast(JobMonitor, None),
             background_tasks=TestBackgroundTask(),  # not run: no cluster needed
-            pb_allow_list=PBAllowList(allow_list=allow_list),
         )
     simulator = await database_service.get_simulator_db().get_simulator(simulator_id=experiment.simulator_database_id)
     assert simulator is not None
