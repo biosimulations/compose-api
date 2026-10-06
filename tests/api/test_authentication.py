@@ -1,5 +1,9 @@
+import ast
 import asyncio
+import base64
 import importlib
+import inspect
+import json
 import time
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -19,6 +23,7 @@ from compose_api.api.main import app
 from compose_api.authentication import (
     DEFAULT_ROLE,
     JWKS_MAX_STALE_SECONDS,
+    JWKS_MIN_REFRESH_INTERVAL_SECONDS,
     JWT_LEEWAY_SECONDS,
     ROLES_CLAIM,
     Auth0Verifier,
@@ -35,6 +40,17 @@ from compose_api.db.database_service import DatabaseService
 from tests.fixtures.auth_fixtures import AUTH0_TEST_AUDIENCE, AUTH0_TEST_DOMAIN, FakeAuth0
 
 MALFORMED_HEADERS = ["Basic dXNlcjpwYXNz", "Bearer", "", "Bearer a b", "Bearer not-a-jwt", "Token abc"]
+
+
+def _unsigned_token(algorithm: str) -> str:
+    """A JWT with no signature. PyJWT will not mint `alg=none`, so the header is assembled directly."""
+
+    def segment(value: dict[str, str]) -> str:
+        raw = json.dumps(value, separators=(",", ":")).encode()
+        return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+    return f"{segment({'alg': algorithm, 'typ': 'JWT'})}.{segment({'sub': 'x'})}."
+
 
 # -- verifier -- #
 
@@ -87,15 +103,31 @@ async def test_symmetric_algorithm_rejected(auth0_verifier: Auth0Verifier) -> No
 
 
 @pytest.mark.asyncio
-async def test_jwks_is_cached_and_refreshed_on_rotation(fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier) -> None:
+async def test_unsigned_algorithm_rejected_without_jwks_fetch(
+    fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier
+) -> None:
+    with pytest.raises(AuthenticationError) as excinfo:
+        await auth0_verifier.verify(_unsigned_token("none"))
+    assert excinfo.value.category == "unsupported_algorithm"
+    assert fake_auth0.jwks_requests == 0
+
+
+@pytest.mark.asyncio
+async def test_jwks_is_cached_and_refreshed_on_rotation(
+    fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clock = time.monotonic()
+    monkeypatch.setattr("compose_api.authentication.time.monotonic", lambda: clock)
     await auth0_verifier.verify(fake_auth0.token())
     await auth0_verifier.verify(fake_auth0.token())
     assert fake_auth0.jwks_requests == 1
 
     fake_auth0.add_key("key-2")
+    clock += JWKS_MIN_REFRESH_INTERVAL_SECONDS + 1
     await auth0_verifier.verify(fake_auth0.token(kid="key-2"))
     assert fake_auth0.jwks_requests == 2
 
+    clock += JWKS_MIN_REFRESH_INTERVAL_SECONDS + 1
     unknown = jwt.encode({"sub": "x"}, fake_auth0.keys["key-1"], algorithm="RS256", headers={"kid": "retired"})
     with pytest.raises(AuthenticationError) as excinfo:
         await auth0_verifier.verify(unknown)
@@ -197,10 +229,19 @@ async def test_cached_keys_expire_during_a_prolonged_outage(
 
 
 @pytest.mark.asyncio
-async def test_rotated_key_is_fetched_immediately(fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier) -> None:
-    """Auth0 has just rotated: a token signed by the new key verifies at once, not after the refresh back-off."""
+async def test_rotated_key_waits_out_the_refresh_backoff(
+    fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A key added inside the back-off window is not fetched until that window has elapsed."""
+    clock = time.monotonic()
+    monkeypatch.setattr("compose_api.authentication.time.monotonic", lambda: clock)
     await auth0_verifier.verify(fake_auth0.token())
     fake_auth0.add_key("key-2")
+    with pytest.raises(AuthenticationError, match="unknown_kid"):
+        await auth0_verifier.verify(fake_auth0.token(kid="key-2"))
+    assert fake_auth0.jwks_requests == 1
+
+    clock += JWKS_MIN_REFRESH_INTERVAL_SECONDS + 1
     principal = await auth0_verifier.verify(fake_auth0.token(kid="key-2"))
     assert principal.subject == "auth0|test-user"
     assert fake_auth0.jwks_requests == 2
@@ -208,15 +249,28 @@ async def test_rotated_key_is_fetched_immediately(fake_auth0: FakeAuth0, auth0_v
 
 @pytest.mark.asyncio
 async def test_each_unknown_kid_refreshes_once_then_is_rejected(
-    fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier
+    fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """One forged kid may refresh JWKS. The next forged kids in that window must not."""
+    clock = time.monotonic()
+    monkeypatch.setattr("compose_api.authentication.time.monotonic", lambda: clock)
     await auth0_verifier.verify(fake_auth0.token())
-    for kid in ("forged-1", "forged-2", "forged-3"):
-        forged = jwt.encode({"sub": "x"}, fake_auth0.keys["key-1"], algorithm="RS256", headers={"kid": kid})
-        with pytest.raises(AuthenticationError) as excinfo:
-            await auth0_verifier.verify(forged)
-        assert excinfo.value.category == "unknown_kid"
-    assert fake_auth0.jwks_requests == 1 + 3
+    clock += JWKS_MIN_REFRESH_INTERVAL_SECONDS + 1
+
+    def forged(kid: str) -> str:
+        return jwt.encode({"sub": "x"}, fake_auth0.keys["key-1"], algorithm="RS256", headers={"kid": kid})
+
+    with pytest.raises(AuthenticationError, match="unknown_kid"):
+        await auth0_verifier.verify(forged("forged-1"))
+    assert fake_auth0.jwks_requests == 2
+
+    with pytest.raises(AuthenticationError, match="unknown_kid"):
+        await auth0_verifier.verify(forged("forged-2"))
+    assert fake_auth0.jwks_requests == 2
+
+    with pytest.raises(AuthenticationError, match="unknown_kid"):
+        await auth0_verifier.verify(forged("forged-3"))
+    assert fake_auth0.jwks_requests == 2
 
 
 @pytest.mark.asyncio
@@ -225,7 +279,11 @@ async def test_concurrent_unknown_kid_requests_share_one_refresh(fake_auth0: Fak
         await asyncio.sleep(0.05)  # hold the refresh open so the other requests queue behind it
         return fake_auth0.handle_jwks(request)
 
-    jwks = JwksCache("https://unused/jwks", transport=httpx.MockTransport(slow_jwks))
+    jwks = JwksCache(
+        "https://unused/jwks",
+        transport=httpx.MockTransport(slow_jwks),
+        min_refresh_interval_seconds=0,  # this test is the in-flight coalesce, not the back-off
+    )
     verifier = Auth0Verifier(domain=AUTH0_TEST_DOMAIN, audience=AUTH0_TEST_AUDIENCE, jwks=jwks)
     await verifier.verify(fake_auth0.token())
     fake_auth0.add_key("key-2")
@@ -268,6 +326,24 @@ async def test_skew_beyond_leeway_is_rejected(
 ) -> None:
     with pytest.raises(AuthenticationError):
         await auth0_verifier.verify(fake_auth0.token(**claim_overrides))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("nbf_offset", [0, JWT_LEEWAY_SECONDS // 2], ids=["now", "inside-leeway"])
+async def test_nbf_inside_leeway_is_accepted(
+    fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier, nbf_offset: int
+) -> None:
+    now = int(time.time())
+    principal = await auth0_verifier.verify(fake_auth0.token(nbf=now + nbf_offset, exp=now + 300))
+    assert principal.subject == "auth0|test-user"
+
+
+@pytest.mark.asyncio
+async def test_nbf_beyond_leeway_is_rejected(fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier) -> None:
+    now = int(time.time())
+    with pytest.raises(AuthenticationError) as excinfo:
+        await auth0_verifier.verify(fake_auth0.token(nbf=now + JWT_LEEWAY_SECONDS + 60, exp=now + 300))
+    assert excinfo.value.category == "invalid_token"
 
 
 @pytest.mark.asyncio
@@ -356,6 +432,24 @@ async def test_malformed_header_is_401_not_anonymous(principal_client: httpx.Asy
     assert response.status_code == 401
     assert response.headers["www-authenticate"] == "Bearer"
     assert response.json() == {"detail": "Invalid authentication credentials"}
+
+
+@pytest.mark.asyncio
+async def test_multiple_authorization_headers_are_401(principal_client: httpx.AsyncClient) -> None:
+    response = await principal_client.get(
+        "/whoami",
+        headers=[("Authorization", "Bearer one"), ("Authorization", "Bearer two")],
+    )
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+    assert response.json() == {"detail": "Invalid authentication credentials"}
+
+
+@pytest.mark.asyncio
+async def test_lowercase_bearer_scheme_is_accepted(principal_client: httpx.AsyncClient, fake_auth0: FakeAuth0) -> None:
+    response = await principal_client.get("/whoami", headers={"Authorization": f"bearer {fake_auth0.token()}"})
+    assert response.status_code == 200
+    assert response.json()["subject"] == "auth0|test-user"
 
 
 @pytest.mark.asyncio
@@ -484,6 +578,71 @@ async def test_active_handler_sees_the_verified_principal(
     response = await http_api_client.post("/curated/copasi", params=params, files=files)
     assert response.status_code == 418
     assert "Curated copasi run from anonymous" in caplog.text
+
+
+def _statement_calls_describe_caller(statement: ast.stmt) -> bool:
+    return any(
+        isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "describe_caller"
+        for node in ast.walk(statement)
+    )
+
+
+def test_submit_simulation_logs_caller_after_any_docstring() -> None:
+    """A docstring added above the log must stay the docstring. The log must not move in front of it."""
+    from compose_api.api.routers.simulation import submit_simulation
+
+    function = ast.parse(inspect.getsource(submit_simulation)).body[0]
+    assert isinstance(function, ast.AsyncFunctionDef)
+    string_statements = [
+        index
+        for index, statement in enumerate(function.body)
+        if isinstance(statement, ast.Expr)
+        and isinstance(statement.value, ast.Constant)
+        and isinstance(statement.value.value, str)
+    ]
+    log_statements = [
+        index for index, statement in enumerate(function.body) if _statement_calls_describe_caller(statement)
+    ]
+    assert log_statements, "submit_simulation must log describe_caller(principal)"
+    if string_statements:
+        assert string_statements[0] == 0, "the docstring must be the first statement, ahead of the caller log"
+        assert log_statements[0] > string_statements[0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("app_with_test_auth0")
+async def test_submit_simulation_logs_the_caller(
+    http_api_client: httpx.AsyncClient,
+    fake_auth0: FakeAuth0,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def stop_here(*_args: Any, **_kwargs: Any) -> None:
+        raise HTTPException(status_code=418)
+
+    # The route dependency captured the original getters. The handler looks them up again, so patch those
+    # names and stop before the upload is parsed. The caller log is what this test is here to see.
+    monkeypatch.setattr("compose_api.api.routers.simulation.get_simulation_service", lambda: object())
+    monkeypatch.setattr("compose_api.api.routers.simulation.get_database_service", lambda: object())
+    monkeypatch.setattr("compose_api.api.routers.simulation.get_job_monitor", lambda: object())
+    monkeypatch.setattr(
+        "compose_api.api.routers.simulation.get_simulation_request_from_uploaded_file",
+        stop_here,
+    )
+    files = {"uploaded_file": ("experiment.omex", b"not-a-real-archive", "application/zip")}
+
+    response = await http_api_client.post(
+        "/simulation/run",
+        files=files,
+        headers={"Authorization": f"Bearer {fake_auth0.token()}"},
+    )
+    assert response.status_code == 418
+    assert "Simulation submission from auth0|test-user" in caplog.text
+
+    caplog.clear()
+    response = await http_api_client.post("/simulation/run", files=files)
+    assert response.status_code == 418
+    assert "Simulation submission from anonymous" in caplog.text
 
 
 def test_describe_caller() -> None:

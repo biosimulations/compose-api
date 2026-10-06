@@ -26,8 +26,9 @@ BEARER_SCHEME_NAME = "BearerAuth"
 JWKS_TTL_SECONDS = 600.0
 # Bound outage fallback so a removed signing key cannot remain trusted indefinitely.
 JWKS_MAX_STALE_SECONDS = 86400.0
-# Back-off for re-fetching an expired cache while its keys still verify, so a JWKS outage serves the cached keys
-# instead of stalling every request on a fetch. Never delays the refresh for an unknown kid.
+# Minimum time between JWKS fetches. This covers an expired cache and an unknown kid, so a caller cannot force a
+# fetch per request by inventing key IDs. A signing key Auth0 has just added is picked up on the next unknown kid
+# once this interval has elapsed. Requests that arrive during an in-flight fetch still share that fetch.
 JWKS_MIN_REFRESH_INTERVAL_SECONDS = 30.0
 JWKS_TIMEOUT_SECONDS = 5.0
 # Tolerated clock difference between Auth0 and this host for exp/iat/nbf. Without it a fresh token is rejected
@@ -64,9 +65,9 @@ class AuthenticationError(Exception):
 class JwksCache:
     """Process-local cache of the tenant's signing keys.
 
-    An unknown kid always triggers one refresh, because Auth0 may just have rotated its signing key; requests that
-    arrive while that refresh is in flight reuse its result rather than fetching again. A known kid whose entry has
-    passed its TTL is refreshed at most once per `min_refresh_interval_seconds`.
+    An unknown kid triggers a refresh only when the last attempt is at least `min_refresh_interval_seconds` old.
+    Requests that arrive while that refresh is in flight reuse its result rather than fetching again. A known kid
+    whose entry has passed its TTL uses the same interval.
     """
 
     def __init__(
@@ -100,6 +101,9 @@ class JwksCache:
             return key
         if key is not None and not self._is_usable() and not self._may_refresh():
             raise AuthenticationError("jwks_unavailable")
+        # Same interval as a stale known key. A different forged kid must not start its own fetch.
+        if key is None and not self._may_refresh():
+            raise AuthenticationError("unknown_kid")
         attempts_seen = self._refresh_attempts
         async with self._lock:
             # Coalesce: if a refresh ran while this request waited for the lock, use its result.

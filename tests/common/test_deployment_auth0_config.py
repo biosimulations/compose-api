@@ -1,9 +1,12 @@
 """Checks on the Auth0 values the Kubernetes overlays deploy.
 
-CI has no kubectl, so this reads the env files the way kustomize's configMapGenerator does: one KEY=VALUE per line,
-`#` lines skipped, and no inline-comment stripping (a trailing `# note` would become part of the value).
+The env-file checks read sources the way kustomize's configMapGenerator does: one KEY=VALUE per line, `#` lines
+skipped, and no inline-comment stripping (a trailing `# note` would become part of the value). The render test
+builds the overlays with `kustomize` or `kubectl kustomize`, which is what CI installs for this file.
 """
 
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -48,3 +51,48 @@ def test_local_cluster_does_not_share_the_production_audience() -> None:
     production = _read_env(PRODUCTION_ENV)["AUTH0_AUDIENCE"]
     local = _read_env(_local_auth0_env())["AUTH0_AUDIENCE"]
     assert local != production, "a development token must never be accepted by production"
+
+
+def _render_overlay(overlay: Path) -> list[dict[str, object]]:
+    kustomize = shutil.which("kustomize")
+    if kustomize is not None:
+        command = [kustomize, "build", str(overlay)]
+    else:
+        kubectl = shutil.which("kubectl")
+        if kubectl is None:
+            pytest.fail("kustomize or kubectl is required to render the Auth0 overlays")
+        command = [kubectl, "kustomize", str(overlay)]
+    result = subprocess.run(command, check=True, capture_output=True, text=True)  # noqa: S603
+    documents = [document for document in yaml.safe_load_all(result.stdout) if isinstance(document, dict)]
+    return documents
+
+
+def _rendered_api_config(documents: list[dict[str, object]]) -> dict[str, str]:
+    configs: list[dict[str, object]] = []
+    for document in documents:
+        metadata = document.get("metadata")
+        name = metadata.get("name") if isinstance(metadata, dict) else None
+        if document.get("kind") == "ConfigMap" and isinstance(name, str) and name.startswith("api-config"):
+            configs.append(document)
+    assert len(configs) == 1, "each overlay must render exactly one api-config ConfigMap"
+    data = configs[0].get("data")
+    assert isinstance(data, dict)
+    return {str(key): str(value) for key, value in data.items()}
+
+
+def test_rendered_overlays_merge_auth0_without_dropping_shared_config() -> None:
+    shared = _read_env(KUSTOMIZE / "config" / "compose-api-rke" / "shared.env")
+    production_env = _read_env(PRODUCTION_ENV)
+    local_env = _read_env(_local_auth0_env())
+    production = _rendered_api_config(_render_overlay(KUSTOMIZE / "overlays" / "compose-api-rke"))
+    local = _rendered_api_config(_render_overlay(LOCAL_OVERLAY))
+
+    assert production["AUTH0_DOMAIN"] == production_env["AUTH0_DOMAIN"]
+    assert production["AUTH0_AUDIENCE"] == production_env["AUTH0_AUDIENCE"]
+    assert local["AUTH0_DOMAIN"] == local_env["AUTH0_DOMAIN"]
+    assert local["AUTH0_AUDIENCE"] == local_env["AUTH0_AUDIENCE"]
+    assert local["AUTH0_AUDIENCE"] != production["AUTH0_AUDIENCE"]
+    assert local["INTERNAL_MOUNT_DIR"] == production_env["INTERNAL_MOUNT_DIR"]
+    for key, value in shared.items():
+        assert production[key] == value
+        assert local[key] == value

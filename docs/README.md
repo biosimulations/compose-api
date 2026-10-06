@@ -3,8 +3,8 @@
 **Internal planning, not user documentation.** Everything listed here is planning, analysis and grant material for
 the team. This repository is public, so these files are readable by anyone browsing it on GitHub; they are written
 with that in mind. They are kept off the published documentation site by `exclude_docs` in `mkdocs.yml`, because
-they are not user documentation. The site carries only `index.md` and the generated module reference. If you add a
-planning document here, add it to that list.
+they are not user documentation. The site carries `index.md`, `authentication.md`, and the generated module
+reference. If you add a planning document here, add it to that list.
 
 ## Where to start
 

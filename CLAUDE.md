@@ -109,8 +109,8 @@ entry, even `[{}, ...]`, makes openapi-python-client type that method as requiri
 change for pbest. `openapi_spec.py` must use `app.openapi()` so the override reaches the checked-in spec. Settings are
 `auth0_domain` and `auth0_audience`; the issuer is derived and the algorithm is fixed to RS256. Every active handler
 also takes `principal: OptionalPrincipal` (a structural test enforces it); submission handlers log
-`describe_caller(principal)`. `JwksCache` refreshes immediately on an unknown `kid`, coalescing concurrent
-refreshes by counting *completed* refreshes; the 30 s back-off only limits re-fetching an expired cache. Deployment:
+`describe_caller(principal)`. `JwksCache` refreshes an unknown `kid` at most once per 30 s, the same back-off as an
+expired cache, coalescing concurrent refreshes by counting *completed* refreshes. Deployment:
 both API overlays load `config/compose-api-rke`; the local overlay overrides only the Auth0 keys via a
 `behavior: merge` generator (`overlays/compose-api-local/auth0.env`); `config/compose-api-local` is used only by the
 migration job. Every principal carries `roles`: always `DEFAULT_ROLE` ("user", the tenant role owned by auth0-pulumi's
