@@ -37,6 +37,7 @@ from compose_api.simulation.models import (
     SimulationRequest,
     SimulatorVersion,
 )
+from compose_api.simulation.prebuilt import prebuilt_definition, prebuilt_image, prebuilt_image_of
 from compose_api.simulation.simulation_service import SimulationService
 from compose_api.simulation.simulator_registry import registry_dependencies
 
@@ -68,7 +69,11 @@ async def run_simulation(
     background_tasks: BackgroundTasks,
 ) -> SimulationExperiment:
     with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
-        singularity_rep = generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)
+        if simulation_request.simulator is not None:
+            # an owner-published image (settings.prebuilt_simulators), instead of the shared container
+            singularity_rep = prebuilt_definition(prebuilt_image(simulation_request.simulator))
+        else:
+            singularity_rep = generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)
         # simulation_request.omex_archive = Path(tmp_dir + f"/{os.path.basename(simulation_request.omex_archive.name)}")
 
     simulator_db = database_service.get_simulator_db()
@@ -203,9 +208,13 @@ async def _download_or_build_container(
     random_string: str,
 ) -> None:
     download_succeeded = False
+    # a prebuilt simulator is pulled from its own image; any other from the shared repository by hash
+    prebuilt = prebuilt_image_of(simulator_version.container_def)
     try:
         await simulation_service_slurm.download_container(
-            RemoteContainerImage.from_container_version(simulator_version)
+            RemoteContainerImage.from_container_version(
+                simulator_version, source_url=f"docker://{prebuilt}" if prebuilt else None
+            )
         )
         download_succeeded = True
     except Exception as e:

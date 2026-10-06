@@ -96,6 +96,14 @@ class Settings(BaseSettings):
     # behaviour when a download fails, not an error.
     simulator_image_repository: str = "ghcr.io/biosimulations/registry_env"
 
+    # Simulators published by their owners as OCI images, by name: a request's `simulator`
+    # query parameter selects one and the job runs in that image instead of the shared one
+    # (compose_api/simulation/prebuilt.py). Only these names are accepted, so a request can
+    # never pull an arbitrary image. Pin by digest or an immutable tag: the cached SIF is
+    # keyed on the reference. In the environment, a JSON object:
+    #   PREBUILT_SIMULATORS='{"viva-pde-particle": "ghcr.io/vivarium-collective/viva-pde-particle-compose:sha-abc1234"}'
+    prebuilt_simulators: dict[str, str] = {}
+
 
 @lru_cache
 def _load_settings() -> Settings:
