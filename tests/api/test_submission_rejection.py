@@ -53,3 +53,29 @@ async def test_unknown_file_type_is_a_400_not_a_500(http_api_client: httpx.Async
     )
     assert response.status_code == 400
     assert "Unsupported file type" in response.text
+
+
+@pytest.mark.asyncio
+async def test_a_listed_prebuilt_simulator_is_not_checked_against_the_registry(
+    http_api_client: httpx.AsyncClient,
+) -> None:
+    """Its image brings its own processes; the deployment vouches for the image by listing it."""
+    with override_settings(prebuilt_simulators={"sim-a": "ghcr.io/example/simulator@sha256:" + "0" * 64}):
+        response = await http_api_client.post(
+            "/simulation/run",
+            params={"simulator": "sim-a"},
+            files={"uploaded_file": ("doc.pbg", pbg("local:sim_a.processes.Solver"), "application/json")},
+        )
+    assert not (response.status_code == 400 and "violations" in response.text), response.text
+
+
+@pytest.mark.asyncio
+async def test_an_unlisted_simulator_is_refused_before_the_registry(http_api_client: httpx.AsyncClient) -> None:
+    with override_settings(prebuilt_simulators={}):
+        response = await http_api_client.post(
+            "/simulation/run",
+            params={"simulator": "sim-a"},
+            files={"uploaded_file": ("doc.pbg", pbg("local:sim_a.processes.Solver"), "application/json")},
+        )
+    assert response.status_code == 400
+    assert "unknown simulator" in response.json()["detail"]
