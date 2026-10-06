@@ -215,6 +215,8 @@ class SimulationRequest(BaseModel):
     simulation_file_type: SimulationFileType
     end_time_point: float = 1.0
     is_batch: bool
+    # A prebuilt simulator by name (settings.prebuilt_simulators); None runs the shared container.
+    simulator: str | None = None
 
 
 class SimulationResults(BaseModel):
