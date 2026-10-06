@@ -16,6 +16,7 @@ from compose_api.simulation.models import (
     PBAllowList,
     SimulationExperiment,
 )
+from compose_api.simulation.prebuilt import UnknownSimulatorError, prebuilt_image
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,15 @@ async def submit_simulation(
     uploaded_file: UploadFile,
     interval_time: float = 1.0,
     batch_submission: bool = False,
+    simulator: str | None = None,
 ) -> SimulationExperiment:
+    """`simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);
+    the job then runs in that image instead of the shared container. Omitted: the shared container."""
+    if simulator is not None:
+        try:
+            prebuilt_image(simulator)
+        except UnknownSimulatorError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
     sim_service = get_simulation_service()
     if sim_service is None:
         logger.error("Simulation service is not initialized")
@@ -64,6 +73,7 @@ async def submit_simulation(
         uploaded_file=uploaded_file, batch_submission=batch_submission
     )
     simulation_request.end_time_point = interval_time
+    simulation_request.simulator = simulator
 
     try:
         return await run_simulation(
