@@ -11,6 +11,9 @@ import yaml
 from pydantic import BaseModel, Field, model_validator
 
 _MANIFEST_PATH = Path(__file__).parent / "manifest.yaml"
+# Generated from the vivarium-collective catalog by `python -m compose_api.registry.catalog`: every wrapper, at
+# level `listed`. An entry in manifest.yaml takes precedence over one here with the same id.
+CATALOG_PATH = Path(__file__).parent / "catalog.yaml"
 
 # The bundle the service currently runs every composite in. See strategy decision 5, "registry_env is the first
 # bundle, and a stopgap".
@@ -78,5 +81,11 @@ class Manifest(BaseModel):
         return None if best is None else best[1]
 
 
-def load_manifest(path: Path = _MANIFEST_PATH) -> Manifest:
-    return Manifest.model_validate(yaml.safe_load(path.read_text()))
+def load_manifest(path: Path = _MANIFEST_PATH, catalog_path: Path | None = CATALOG_PATH) -> Manifest:
+    """The curated manifest, plus every catalog entry it does not already name."""
+    curated = Manifest.model_validate(yaml.safe_load(path.read_text()))
+    if catalog_path is None or not catalog_path.exists():
+        return curated
+    named = {entry.id for entry in curated.entries}
+    catalog = Manifest.model_validate(yaml.safe_load(catalog_path.read_text()) or {"entries": []})
+    return Manifest(entries=[*curated.entries, *(e for e in catalog.entries if e.id not in named)])
