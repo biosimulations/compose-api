@@ -13,12 +13,12 @@ entries:
 - id: spatio-flux
   package: spatio-flux
   source: https://github.com/vivarium-collective/spatio-flux.git
-  commit: 59b7591f26e5af241c7c50180fe1bf41440ee539
+  commit: 4aff21698b147366917bc267bcd84f69714750a1
   module_roots:
   - spatio_flux
   level: listed
   evidence:
-  - Discovered in viva-catalog; pinned to `main` as of 2026-10-06.
+  - Discovered in viva-catalog; pinned to `main` as of 2026-10-07.
 - id: viva-Mgen
   package: viva-Mgen
   source: https://github.com/vivarium-collective/viva-Mgen.git
