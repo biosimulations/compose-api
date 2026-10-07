@@ -233,3 +233,5 @@ assets/dev/config/compose_known_hosts
 # Agentic Framework
 .kilo/
 .agents/
+.crush/
+.freebuff/
