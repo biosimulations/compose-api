@@ -13,8 +13,10 @@ a plan for ourselves.
 ## 1. Who it is for
 
 **The primary user is a researcher on a Collaborating Project.** The first one this year is
-**<Collaborating Project — to be named>** *(2026-10-07: the Year 2 report names two candidates, the DARPA Simulating
-Microbial Systems project and the Allen Institute for Cell Science (ReaDDy); a person chooses)*. They install one Python toolkit (`viva-toolkit`, formerly `pbest`), build a composite
+**BioModels (T.J. Sego, University of Florida, with Eran Agmon)**: the new maintainers of the BioModels database are
+working with TR&D3 so that every BioModels model runs as a process-bigraph composite, both locally and on the Center's
+services. *(Chosen 2026-10-07. The Year 2 report also suggests the DARPA Simulating Microbial Systems project and the
+Allen Institute for Cell Science (ReaDDy).)* They install one Python toolkit (`viva-toolkit`, formerly `pbest`), build a composite
 simulation on their own machine, run it there, and then submit the *same* composite to HPC without changing it. The
 command-line toolkit is the product they touch; the hosted service is its backend. This follows the grant's framing
 of Collaborating and Service Projects as the audience, and the advisory board's repeated emphasis on engagement with
@@ -109,7 +111,7 @@ names SED2 as TR&D3's largest 2026 effort; it is led outside this repository, so
 
 | Year 2 commitment (verbatim) | Goal | Evidence Year 3 must produce |
 |---|---|---|
-| *"further development and validation of the Composition API through real composite simulations with Collaborative Projects and HPC-scale use cases"* | G1, G2 | One real composite from **<Collaborating Project — to be named>**, run end to end on HPC through the toolkit, with the collaborator's walkthrough. |
+| *"further development and validation of the Composition API through real composite simulations with Collaborative Projects and HPC-scale use cases"* | G1, G2 | One real composite from **BioModels** (T.J. Sego's group, University of Florida), run end to end on HPC through the toolkit, with the collaborator's walkthrough; and, across the BioModels corpus, how many models run as composites locally, how many on HPC through this service, and how many agree. |
 | *"The process registry will be expanded to include additional simulators, including spatial and particle-based tools"* | G4 | ReaDDy (particle-based) is already in the service's image. At least one spatial simulator **developed and validated** in its wrapper repository, with one composite that uses it; **registered** here at *tested* or higher if digest identity has landed, otherwise a dated deviation saying so. Which ones, named in advance in the tracker. Every wrapper in the catalog also appears in the registry at its measured curation level, which is itself evidence of an expanding catalog. *2026-10-07:* `viva-pde-particle` (Smoldyn coupled to PDE solvers, spatial and particle-based) runs in production as a prebuilt simulator, and its Schaff et al. 2016 ensemble reproduced on HPC; it still needs a registry entry at *tested* or higher. |
 | *"development of an adapter registry will begin, targeting common translation challenges such as unit normalization and conversions between concentrations and counts"* | G5 | The adapter category exists in the registry with at least the two named adapters, seeded from existing code (`viva-basic-processes`' expression step, `spatio-flux`'s count/concentration conversion), and one composite uses one of them. |
 | *"The biggest project for TR&D 3, headed by Eran Agmon at UConn, is to roll out the first version of SED2."* The report also lists *"Enabled execution of SED2-style simulation experiments on the HPC"* among Year 2's results. | (none; evidence only) | One SED2 document executed through this service, run and recorded like any other composite, or a dated note in [strategy.md](strategy.md) saying why the service does not execute SED2 yet. |

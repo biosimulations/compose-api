@@ -68,8 +68,11 @@ SMS will migrate to the standard.
    ladder. The Year 3 report should say how the first became the second.
 4. **ReaDDy's status differs by date, not by fact.** The report says integration was *initiated* (by March 2026); the
    tracker says *delivered* (August 2026). The tracker should say which period a status belongs to.
-5. **G1's Collaborating Project is still a placeholder.** The report names two candidates: DARPA SMS and the Allen
-   Institute for Cell Science (ReaDDy).
+5. **G1's Collaborating Project was a placeholder.** The report suggests DARPA SMS and the Allen Institute for Cell
+   Science (ReaDDy). *Resolved 2026-10-07:* G1's project is **BioModels** (T.J. Sego, University of Florida, with Eran
+   Agmon), which makes every BioModels model run as a process-bigraph composite locally and on the Center's services
+   (tracker row CP-BM). The report covers the BioModels curation under TR&D1 and does not connect it to TR&D3 or the
+   Compose API; the Year 3 report should.
 6. **G5 has nothing built.** The adapter registry is a named Year 3 commitment, and strategy phase E is where it lands.
 
 ## 3. Follow-ups (applied 2026-10-07; none changes a status)
