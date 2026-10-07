@@ -63,12 +63,24 @@ def test_builtin_profiles_need_no_file(tmp_path: Path, name: str) -> None:
     loaded = _load(tmp_path, profile=name)
     settings = loaded.settings
     assert settings.api_base_url == BUILTIN_PROFILES[name]["api_base_url"]
-    assert settings.auth0_client_id is None, "no native application ID has been published yet"
+    assert settings.auth0_client_id == BUILTIN_PROFILES[name]["auth0_client_id"], "published, so sign-in works"
+    assert (settings.database_connection, settings.google_connection) == (
+        "Username-Password-Authentication",
+        "google-oauth2",
+    )
     assert settings.issuer == f"https://{settings.auth0_domain}/"
     assert settings.redirect_uri == f"http://127.0.0.1:{DEFAULT_CALLBACK_PORT}/callback"
     assert loaded.config_found is False
-    assert loaded.sources["api_base_url"] == loaded.sources["callback_port"] == "default"
-    assert loaded.sources["auth0_client_id"] == loaded.sources["ca_bundle"] == "unset"
+    assert loaded.sources["api_base_url"] == loaded.sources["auth0_client_id"] == loaded.sources["callback_port"]
+    assert loaded.sources["callback_port"] == "default"
+    assert loaded.sources["ca_bundle"] == "unset"
+
+
+def test_the_builtin_profiles_are_distinct_public_applications() -> None:
+    production, local = BUILTIN_PROFILES["production"], BUILTIN_PROFILES["local"]
+    assert production["auth0_client_id"] != local["auth0_client_id"], "separate apps keep the environments apart"
+    for profile in (production, local):
+        CliSettings.model_validate({"profile": "check", **profile})  # every built-in value passes validation
 
 
 def test_builtin_profiles_match_the_deployments(tmp_path: Path) -> None:
@@ -317,6 +329,7 @@ def test_ca_bundle_accepts_an_absolute_or_home_relative_file(tmp_path: Path, mon
     bundle.write_text("-----BEGIN CERTIFICATE-----\n")
     assert _load(tmp_path, env={"COMPOSE_API_CLI_CA_BUNDLE": str(bundle)}).settings.ca_bundle == bundle
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))  # what `~` means on Windows
     assert _load(tmp_path, env={"COMPOSE_API_CLI_CA_BUNDLE": "~/ca.pem"}).settings.ca_bundle == bundle
     message = _config_error(tmp_path, env={"COMPOSE_API_CLI_CA_BUNDLE": str(tmp_path)})
     assert "existing CA certificate file" in message
@@ -363,8 +376,14 @@ def test_working_directory_config_is_never_read(tmp_path: Path, monkeypatch: pyt
 
 
 def test_missing_public_client_id_blocks_sign_in_only(tmp_path: Path) -> None:
-    settings = _load(tmp_path).settings
-    with pytest.raises(ConfigError, match="auth0_client_id is not set for profile 'production'") as caught:
+    config = """
+[profiles.dev]
+api_base_url = "https://compose.example.org"
+auth0_domain = "tenant.example.auth0.com"
+auth0_audience = "https://api.compose.example.org"
+"""
+    settings = _load(tmp_path, config, profile="dev").settings
+    with pytest.raises(ConfigError, match="auth0_client_id is not set for profile 'dev'") as caught:
         settings.require_client_id()
     assert "COMPOSE_API_CLI_AUTH0_CLIENT_ID" in caught.value.message
     with pytest.raises(ConfigError):

@@ -38,7 +38,19 @@ dependencies = [
     "python-libsbml>=5.20.5",
     "pbest==0.6.3",
     "pyjwt[crypto]>=2.15.0,<3",
+    # The CLI's user config directory.
+    "platformdirs>=4.5.1,<5",
+    # Imported by the generated API client the CLI calls through; declared rather than left to arrive transitively.
+    "attrs>=25.4.0",
+    # CLI sign-in: authorization URLs, the PKCE S256 challenge and OIDC ID-token claim rules. Only its protocol
+    # modules are used -- never authlib.integrations, whose clients refresh tokens and attach bearers implicitly.
+    "authlib>=1.8.0,<2",
+    # The JOSE library Authlib's OIDC claim validation raises from; imported for its error types.
+    "joserfc>=1.7.5,<2",
 ]
+
+[project.scripts]
+compose-api = "compose_api.cli.main:main"
 
 [project.urls]
 Homepage = "https://biosimulations.github.io/compose-api/"
@@ -99,7 +111,7 @@ strict = true
 exclude = ['^compose_api/api/client/.*']
 
 [[tool.mypy.overrides]]
-module = ["process_bigraph.*"]
+module = ["process_bigraph.*", "authlib.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -1,12 +1,15 @@
 import time
+from collections.abc import AsyncGenerator
 from typing import Any
 
 import httpx
 import jwt
 import pytest
+import pytest_asyncio
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from compose_api.authentication import Auth0Verifier, JwksCache
+from compose_api.api.main import app
+from compose_api.authentication import Auth0Verifier, JwksCache, get_auth0_verifier
 
 AUTH0_TEST_DOMAIN = "compose-test.example.auth0.com"
 AUTH0_TEST_ISSUER = f"https://{AUTH0_TEST_DOMAIN}/"
@@ -62,3 +65,19 @@ def auth0_verifier(fake_auth0: FakeAuth0) -> Auth0Verifier:
     """A verifier against the fake tenant, with the production cache TTL and refresh settings."""
     jwks = JwksCache(f"{AUTH0_TEST_ISSUER}.well-known/jwks.json", transport=httpx.MockTransport(fake_auth0.handle_jwks))
     return Auth0Verifier(domain=AUTH0_TEST_DOMAIN, audience=AUTH0_TEST_AUDIENCE, jwks=jwks)
+
+
+@pytest_asyncio.fixture
+async def authenticated_identity_client(auth0_verifier: Auth0Verifier) -> AsyncGenerator[httpx.AsyncClient]:
+    """Real router/verification, without starting the HPC lifespan or replacing authentication itself."""
+    previous = app.dependency_overrides.get(get_auth0_verifier)
+    app.dependency_overrides[get_auth0_verifier] = lambda: auth0_verifier
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+            yield client
+    finally:
+        if previous is None:
+            app.dependency_overrides.pop(get_auth0_verifier, None)
+        else:
+            app.dependency_overrides[get_auth0_verifier] = previous
+        await auth0_verifier.aclose()

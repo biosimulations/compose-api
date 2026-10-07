@@ -48,7 +48,7 @@ APP_ORIGINS = [
 #     {"url": ServerMode.PORT_FORWARD_DEV, "description": "Local port-forward"},
 # ]
 APP_SERVERS = None
-APP_ROUTERS = ["curated", "simulation", "results", "compute"]  # for now, just referencing core
+APP_ROUTERS = ["curated", "simulation", "results", "compute", "auth"]
 assets_dir = Path(get_settings().assets_dir)
 ACTIVE_URL = ServerMode.detect(assets_dir / "dev" / "config" / ".dev_env")
 
@@ -107,7 +107,7 @@ def _openapi_with_optional_bearer() -> dict[str, Any]:
         "bearerFormat": "JWT",
         "description": "Optional Auth0 access token for this API. Omit it to call anonymously.",
     }
-    # Document-level, not per operation: openapi-python-client 0.29 types any operation carrying a
+    # Default is document-level: openapi-python-client 0.29 types any operation carrying a
     # `security` entry as requiring AuthenticatedClient, even when that entry allows anonymous ({}).
     schema["security"] = [{}, {BEARER_SCHEME_NAME: []}]
     return schema

@@ -7,7 +7,13 @@ from tests.fixtures.api_fixtures import (  # noqa: F401
     in_memory_api_client,
     local_base_url,
 )
-from tests.fixtures.auth_fixtures import auth0_verifier, fake_auth0  # noqa: F401
+from tests.fixtures.auth_fixtures import auth0_verifier, authenticated_identity_client, fake_auth0  # noqa: F401
+from tests.fixtures.cli_fixtures import (  # noqa: F401
+    cli_config_path,
+    cli_subprocess_env,
+    fake_tenant,
+    no_network_or_browser,
+)
 from tests.fixtures.mongodb_fixtures import (  # noqa: F401
     mongo_test_client,
     mongo_test_collection,

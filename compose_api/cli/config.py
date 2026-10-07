@@ -55,17 +55,25 @@ _ENV_FIELDS: Final = {f"{ENV_PREFIX}{name.upper()}": name for name in ("profile"
 
 # Public values, kept in step with the deployments by tests/cli/test_config.py: production with ServerMode.PROD and
 # kustomize/config/compose-api-rke/api.env, local with the compose-api-local overlay's ingress host and auth0.env.
-# Neither has a client ID yet: the native applications' public IDs must be published before either can sign in.
+# The client IDs are the native (public, secretless) applications from auth0-pulumi's compose-api stack, exactly as
+# `pulumi stack output cli_profiles` prints them; a native client ID is an identifier, not a credential. The
+# connection names are the tenant's shared database and Google connections those applications are enabled for.
 BUILTIN_PROFILES: Final[Mapping[str, Mapping[str, str]]] = {
     "production": {
         "api_base_url": "https://compose.cam.uchc.edu",
         "auth0_domain": "dev-bu7yo7484tyxu6a1.us.auth0.com",
         "auth0_audience": "https://api.compose.cam.uchc.edu",
+        "auth0_client_id": "1FV43fysEjhTrYYRNaMEGvCteu4g2ay4",
+        "database_connection": "Username-Password-Authentication",
+        "google_connection": "google-oauth2",
     },
     "local": {
         "api_base_url": "https://api.compose-api-local",
         "auth0_domain": "dev-bu7yo7484tyxu6a1.us.auth0.com",
         "auth0_audience": "https://api.compose.local",
+        "auth0_client_id": "Fp3QmULWNIhdutlBRVFm2HjPGapqdnKV",
+        "database_connection": "Username-Password-Authentication",
+        "google_connection": "google-oauth2",
     },
 }
 

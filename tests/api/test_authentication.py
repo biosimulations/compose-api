@@ -663,7 +663,8 @@ def test_openapi_documents_optional_bearer() -> None:
         "description": "Optional Auth0 access token for this API. Omit it to call anonymously.",
     }
     assert schema["security"] == [{}, {"BearerAuth": []}]
-    operations = [op for path in schema["paths"].values() for op in path.values()]
+    assert schema["paths"]["/auth/me"]["get"]["security"] == [{"BearerAuth": []}]
+    operations = [op for path, methods in schema["paths"].items() if path != "/auth/me" for op in methods.values()]
     assert all("security" not in op for op in operations), "per-operation security retypes the generated client"
 
 

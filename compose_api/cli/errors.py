@@ -41,3 +41,44 @@ class CommandUnavailableError(CliError):
     """The command is part of the CLI surface but this build cannot carry it out yet."""
 
     category = "unavailable"
+
+
+class AuthError(CliError):
+    """Sign-in did not produce a session: denied, expired, timed out, or a code the tenant rejected."""
+
+    exit_code = ExitCode.AUTH_REQUIRED
+    category = "authentication"
+
+
+class NetworkError(CliError):
+    exit_code = ExitCode.NETWORK
+    category = "network"
+
+
+class NotTransmitted(Exception):
+    """`cause` happened before a refresh token was sent, so the current session can stay."""
+
+    def __init__(self, cause: CliError) -> None:
+        super().__init__(cause.message)
+        self.cause = cause
+
+
+class ProtocolError(CliError):
+    """A server answered, but not in a form the CLI can trust. Nothing from that answer is kept."""
+
+    exit_code = ExitCode.CONFIG
+    category = "protocol"
+
+
+class InteractionError(CliError):
+    """The local side of an interactive sign-in failed: the callback port is taken or no browser could be opened."""
+
+    exit_code = ExitCode.CONFIG
+    category = "interaction"
+
+
+class StorageError(CliError):
+    """The OS credential store cannot be used, or a session file is not private."""
+
+    exit_code = ExitCode.CONFIG
+    category = "storage"

@@ -31,7 +31,7 @@ from pydantic import SecretStr
 
 from compose_api.cli.auth.models import AuthTransaction, Identity, TokenGrant
 from compose_api.cli.config import OFFLINE_ACCESS_SCOPE, CliSettings
-from compose_api.cli.errors import AuthError, CliError, NetworkError, ProtocolError
+from compose_api.cli.errors import AuthError, CliError, NetworkError, NotTransmitted, ProtocolError
 from compose_api.version import __version__
 
 # The same contract the API enforces (compose_api.authentication), restated rather than imported: that module
@@ -170,11 +170,14 @@ class Auth0OAuthClient:
         except OAuthErrorResponse as exc:
             raise token_failure(exc, "device sign-in")
 
-    async def device_token(self, device_code: str, scopes: tuple[str, ...]) -> TokenGrant:
-        """Poll once. Pending, slow-down and the other device errors surface as OAuthErrorResponse."""
+    async def poll_device_token(self, device_code: str) -> dict[str, Any]:
+        """Poll once and return the unvalidated answer for `accept_device_grant`. Pending, slow-down and the other
+        device errors surface as OAuthErrorResponse; only a failure here is safe to retry with the same code."""
         metadata = await self.metadata()
         form = {"grant_type": DEVICE_CODE_GRANT, "device_code": device_code, "client_id": self.client_id}
-        payload = await self._oauth_post(metadata.token_endpoint, form)
+        return await self._oauth_post(metadata.token_endpoint, form)
+
+    async def accept_device_grant(self, payload: dict[str, Any], scopes: tuple[str, ...]) -> TokenGrant:
         # Device authorization has no nonce parameter, so none is expected in the ID token.
         return await self._validate_grant(payload, requested_scopes=scopes, nonce=None)
 
@@ -183,7 +186,11 @@ class Auth0OAuthClient:
 
         It is never back-filled with the token just spent: with rotation on, that token is already used up.
         """
-        metadata = await self.metadata()
+        try:
+            # Discovery can fail before the refresh token exists on the wire. That is not an uncertain rotation.
+            metadata = await self.metadata()
+        except CliError as exc:
+            raise NotTransmitted(exc) from None
         form = {
             "grant_type": "refresh_token",
             "client_id": self.client_id,

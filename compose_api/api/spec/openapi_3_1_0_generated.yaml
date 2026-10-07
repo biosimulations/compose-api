@@ -291,6 +291,23 @@ paths:
                   $ref: '#/components/schemas/BiGraphStep'
                 type: array
                 title: Response Get-Steps-List
+  /auth/me:
+    get:
+      tags:
+      - Authentication
+      summary: Get the authenticated caller's identity
+      operationId: get-current-principal
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentPrincipalResponse'
+        '401':
+          description: Missing or invalid bearer credentials
+      security:
+      - BearerAuth: []
   /health:
     get:
       tags:
@@ -435,6 +452,43 @@ components:
       - representation
       - containerization_engine
       title: ContainerizationFileRepr
+    CurrentPrincipalResponse:
+      properties:
+        issuer:
+          type: string
+          title: Issuer
+        subject:
+          type: string
+          title: Subject
+        audience:
+          items:
+            type: string
+          type: array
+          title: Audience
+        roles:
+          items:
+            type: string
+          type: array
+          title: Roles
+        scopes:
+          items:
+            type: string
+          type: array
+          title: Scopes
+        permissions:
+          items:
+            type: string
+          type: array
+          title: Permissions
+      type: object
+      required:
+      - issuer
+      - subject
+      - audience
+      - roles
+      - scopes
+      - permissions
+      title: CurrentPrincipalResponse
     HTTPValidationError:
       properties:
         detail:

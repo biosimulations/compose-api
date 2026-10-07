@@ -98,11 +98,15 @@ async def device_sign_in(
             )
         await sleep(min(interval, remaining))
         try:
-            return await client.device_token(authorization.device_code, scopes)
+            payload = await client.poll_device_token(authorization.device_code)
         except OAuthErrorResponse as exc:
             interval = _next_interval(exc, interval)
+            continue
         except NetworkError:
             interval = min(interval * 2, MAX_INTERVAL_SECONDS)  # transient: back off, still inside the deadline
+            continue
+        # Auth0 has now spent the device code, so a failure from here on is final: polling again cannot succeed.
+        return await client.accept_device_grant(payload, scopes)
 
 
 def _next_interval(exc: OAuthErrorResponse, interval: float) -> float:

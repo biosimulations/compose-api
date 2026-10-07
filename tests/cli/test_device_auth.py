@@ -13,7 +13,7 @@ from compose_api.cli.auth.oauth import DEVICE_CODE_GRANT, Auth0OAuthClient
 from compose_api.cli.auth.signin import ephemeral_session, sign_in
 from compose_api.cli.auth.storage import MemoryCredentialStore
 from compose_api.cli.config import OFFLINE_ACCESS_SCOPE, CliSettings, requested_scopes
-from compose_api.cli.errors import AuthError, ProtocolError
+from compose_api.cli.errors import AuthError, NetworkError, ProtocolError
 from tests.fixtures.auth_fixtures import AUTH0_TEST_AUDIENCE, AUTH0_TEST_ISSUER
 from tests.fixtures.cli_fixtures import (
     CLI_CLIENT_ID,
@@ -121,6 +121,16 @@ async def test_rate_limits_and_outages_back_off_within_the_deadline(fake_tenant:
     await _device_sign_in(fake_tenant, clock, transport=httpx.MockTransport(flaky))
     # 429 adds 5 (to 10); the 503 doubles (to 20); the dropped connection doubles again (to 40).
     assert clock.sleeps == [5, 10, 20, 40]
+
+
+@pytest.mark.asyncio
+async def test_a_failure_after_the_tokens_arrive_is_final(fake_tenant: FakeTenant) -> None:
+    fake_tenant.queue(FakeTenant.DEVICE, fake_tenant.device_response())
+    fake_tenant.queue(FakeTenant.TOKEN, fake_tenant.token_response(), *[PENDING] * 3)
+    fake_tenant.auth0.jwks_available = False
+    with pytest.raises(NetworkError, match="HTTP 503"):
+        await _device_sign_in(fake_tenant, FakeTime())
+    assert len(fake_tenant.forms(FakeTenant.TOKEN)) == 1, "a spent device code is never polled again"
 
 
 @pytest.mark.asyncio
