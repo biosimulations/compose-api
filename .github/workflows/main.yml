@@ -25,6 +25,19 @@ jobs:
       - name: Run checks
         run: make check
 
+  # The production image, built but not pushed: a tag is the first place a broken Dockerfile would otherwise show
+  # (0.7.0's did: the uv workspace member was missing from the dependency layer).
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Build the API image and import it
+        run: |
+          docker build -f Dockerfile-api -t compose-api:ci .
+          docker run --rm compose-api:ci bash -c "source .venv/bin/activate && python -c 'import compose_api.api.main'"
+
   # Split from the SLURM tests below so the common failure modes report in about a
   # minute instead of waiting behind a six-minute container build. Together the two jobs
   # run every test: a test either carries the `slurm` marker or it does not.
