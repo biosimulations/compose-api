@@ -18,6 +18,13 @@ makes, and `tests/api/test_submission_rejection.py` drives the 400 through the a
 `tests/simulation/test_prebuilt.py`. F14's dead override is removed (#181). F3 is unchanged: `main` is still not
 protected.
 
+**And since (2026-10-07).** **162 tests**: 141 in the fast job, 21 in `tests-slurm`. The new ones cover the CLI and
+its spec-coverage guard (`tests/client/`), and run events, datasets and the read-authorization seam
+(`tests/observability/`, `tests/api/test_authorization.py`, `tests/api/test_simulations_list.py`), including the job
+script run under bash with a fake `singularity`. The SLURM end-to-end check now also asserts each run's trace and
+datasets. CI also builds the production image on every pull request (#219), after the 0.7.0 tag's build had failed
+on a Dockerfile no test exercised. F3 is still open.
+
 **Scope.** This repository (`compose-api`) and `pbest` are the subjects. The other repositories in the loop are
 included as context and as sources of practice worth copying or avoiding: `platform`, `sms-api`, `biosim-client`,
 `compose-server`, `process-bigraph`, `bigraph-schema`, `spatio-flux`, `pbg-vcell-fvsolver`, `vivarium-workbench`,

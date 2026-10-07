@@ -1,6 +1,6 @@
 # Strategy
 
-**Status:** draft, opened 2026-09-13, revised 2026-09-22 (decision 5 added) and 2026-09-23 (`registry_env` as a stopgap bundle); progress recorded 2026-10-06. This is how we reach the goals in [goals.md](goals.md): the layering, the
+**Status:** draft, opened 2026-09-13, revised 2026-09-22 (decision 5 added) and 2026-09-23 (`registry_env` as a stopgap bundle); progress recorded 2026-10-06 and 2026-10-07. This is how we reach the goals in [goals.md](goals.md): the layering, the
 decisions taken, the order they land in, and the risks. It changes as decisions land. Each decision cites the
 analysis it rests on rather than repeating it, so this document stays short and the evidence stays where it was
 measured.
@@ -338,8 +338,10 @@ happens in the wrapper repositories and can run in parallel from the start.
 1. **Hosted reliability** (G2). Underway: correct error semantics, the job-monitor fix, and the SLURM and container
    build paths now run in CI on every pull request without a cluster. *2026-10-06:* release 0.6.0 shipped submission
    checks (G6), owner-published simulator images, and the deployment fixes that came with them (#197 sealed
-   secrets, #199 submission through the service-account submit node). `main` is still not branch-protected
-   ([plan-testing.md](plan-testing.md) F3).
+   secrets, #199 submission through the service-account submit node). *2026-10-07:* 0.7.0 and 0.7.1 added run events
+   and traces, datasets, simulation listing, and an authorization seam ready for #192
+   ([plan-observability.md](plan-observability.md)), and the `compose-api` CLI ([plan-cli.md](plan-cli.md)); both are
+   deployed. `main` is still not branch-protected ([plan-testing.md](plan-testing.md) F3).
 2. **Installability** (G1). Blocked by the engine lag, which decision 1 removes, and until this month by a personal
    registry account in the production path, now a setting.
 3. **Reproducibility** (G3). Decision 2. Must precede breadth.
