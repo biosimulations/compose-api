@@ -463,7 +463,7 @@ def results(
 
 # -- finding simulations ------------------------------------------------------------------------------------------
 
-SIMULATION_COLUMNS = ["simulation_id", "created_at", "simulator", "status", "slurm_job_id", "end_time"]
+SIMULATION_COLUMNS = ["simulation_id", "created_at", "simulator_id", "simulator", "status", "slurm_job_id", "end_time"]
 _UNITS = {"m": 60, "h": 3600, "d": 86400, "w": 604800}
 
 

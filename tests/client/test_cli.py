@@ -423,8 +423,9 @@ def test_simulations_list_and_show(service: Callable[..., FakeService]) -> None:
     assert [r["simulation_id"] for r in listed] == [4334, 4333]
     params = fake.requests[-1].url.params
     assert (params["status"], params["limit"]) == ("completed", "2") and params["since"].startswith("20")
-    table = runner.invoke(app, ["--output", "table", "simulations", "list"])
+    table = runner.invoke(app, ["--output", "table", "simulations", "list"], env={"COLUMNS": "200"})
     assert table.exit_code == 0 and "4334" in table.stdout and "of 7" in table.stdout
+    assert "simulator_id" in table.stdout and "138" in table.stdout
     shown = json.loads(invoke("simulations", "show", "4334").stdout)
     assert (shown["event_count"], shown["dataset_count"]) == (21, 2)
     assert invoke("simulations", "list", "--since", "yesterday").exit_code == 2
