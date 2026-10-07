@@ -187,18 +187,22 @@ class ComposeSession:
         )
         return _parsed(r)  # type: ignore[no-any-return]
 
-    def submit_copasi(
-        self, sbml: FileSource, *, start: float, duration: float, points: int
-    ) -> SimulationExperiment:
+    def submit_copasi(self, sbml: FileSource, *, start: float, duration: float, points: int) -> SimulationExperiment:
         r = run_copasi.sync_detailed(
-            client=self.client, body=BodyRunCopasi(sbml=_file(sbml)), start_time=start, duration=duration,
+            client=self.client,
+            body=BodyRunCopasi(sbml=_file(sbml)),
+            start_time=start,
+            duration=duration,
             num_data_points=points,
         )
         return _parsed(r)  # type: ignore[no-any-return]
 
     def submit_tellurium(self, sbml: FileSource, *, start: float, end: float, points: int) -> SimulationExperiment:
         r = run_tellurium.sync_detailed(
-            client=self.client, body=BodyRunTellurium(sbml=_file(sbml)), start_time=start, end_time=end,
+            client=self.client,
+            body=BodyRunTellurium(sbml=_file(sbml)),
+            start_time=start,
+            end_time=end,
             num_data_points=points,
         )
         return _parsed(r)  # type: ignore[no-any-return]
@@ -337,7 +341,10 @@ class AsyncComposeSession:
         self, sbml: FileSource, *, start: float, duration: float, points: int
     ) -> SimulationExperiment:
         r = await run_copasi.asyncio_detailed(
-            client=self.client, body=BodyRunCopasi(sbml=_file(sbml)), start_time=start, duration=duration,
+            client=self.client,
+            body=BodyRunCopasi(sbml=_file(sbml)),
+            start_time=start,
+            duration=duration,
             num_data_points=points,
         )
         return _parsed(r)  # type: ignore[no-any-return]
@@ -346,7 +353,10 @@ class AsyncComposeSession:
         self, sbml: FileSource, *, start: float, end: float, points: int
     ) -> SimulationExperiment:
         r = await run_tellurium.asyncio_detailed(
-            client=self.client, body=BodyRunTellurium(sbml=_file(sbml)), start_time=start, end_time=end,
+            client=self.client,
+            body=BodyRunTellurium(sbml=_file(sbml)),
+            start_time=start,
+            end_time=end,
             num_data_points=points,
         )
         return _parsed(r)  # type: ignore[no-any-return]

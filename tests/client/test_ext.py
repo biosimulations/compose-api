@@ -204,7 +204,8 @@ def test_a_token_selects_the_authenticated_client() -> None:
         seen["auth"] = request.headers.get("authorization")
         return httpx.Response(200, json="0.6.0")
 
-    with ComposeSession("http://compose.test", token="t0k", transport=httpx.MockTransport(handler)) as s:
+    token = "t0k"  # noqa: S105 -- a test value, not a credential
+    with ComposeSession("http://compose.test", token=token, transport=httpx.MockTransport(handler)) as s:
         s.version()
     assert seen["auth"] == "Bearer t0k"
 
