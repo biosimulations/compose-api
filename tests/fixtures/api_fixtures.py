@@ -2,10 +2,10 @@ from collections.abc import AsyncGenerator
 
 import httpx
 import pytest_asyncio
+from compose_api_client import Client
 from fastapi import FastAPI
 from httpx import ASGITransport
 
-from compose_api.api.client import Client
 from compose_api.api.main import app
 
 

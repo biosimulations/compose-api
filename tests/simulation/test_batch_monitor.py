@@ -2,12 +2,12 @@ import asyncio
 import os
 
 import pytest
+from compose_api_client import Client
+from compose_api_client.api.curated import run_copasi
+from compose_api_client.api.results import get_simulations_status_batch
+from compose_api_client.models import BodyRunCopasi, HpcRun, JobStatus, SimulationExperiment
+from compose_api_client.types import File
 
-from compose_api.api.client import Client
-from compose_api.api.client.api.curated import run_copasi
-from compose_api.api.client.api.results import get_simulations_status_batch
-from compose_api.api.client.models import BodyRunCopasi, HpcRun, JobStatus, SimulationExperiment
-from compose_api.api.client.types import File
 from compose_api.db.database_service import DatabaseService, DatabaseServiceSQL
 from compose_api.simulation.data_service import DataService
 from compose_api.simulation.job_monitor import JobMonitor

@@ -3,14 +3,14 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
-from compose_api.api.client import Client
-from compose_api.api.client.api.simulation import run_simulation
-from compose_api.api.client.models import (
+from compose_api_client import Client
+from compose_api_client.api.simulation import run_simulation
+from compose_api_client.models import (
     HTTPValidationError,
 )
-from compose_api.api.client.models.body_run_simulation import BodyRunSimulation
-from compose_api.api.client.types import File, Response
+from compose_api_client.models.body_run_simulation import BodyRunSimulation
+from compose_api_client.types import File, Response
+
 from compose_api.common.gateway.models import ServerMode
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation.data_service import DataService
