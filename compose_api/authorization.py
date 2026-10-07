@@ -15,7 +15,9 @@ one place, so adding auth changes only who the caller is (:func:`get_caller`), n
 from typing import Annotated, Protocol
 
 from fastapi import Depends, HTTPException, Query
+from sqlalchemy import ColumnElement, or_
 
+from compose_api.db.tables.simulator_tables import ORMSimulation
 from compose_api.dependencies import get_required_database_service
 from compose_api.simulation.models import SimulationAccess, Visibility
 
@@ -47,6 +49,14 @@ def can_read(caller: Caller | None, simulation: SimulationAccess) -> bool:
     if caller is None:
         return False
     return ADMIN_ROLE in caller.roles or (simulation.owner_sub is not None and caller.subject == simulation.owner_sub)
+
+
+def readable_clause(caller: Caller | None) -> ColumnElement[bool] | None:
+    """:func:`can_read` as a SQL condition on ``simulation``, for listings; None when every simulation is readable."""
+    if caller is not None and ADMIN_ROLE in caller.roles:
+        return None
+    public = ORMSimulation.visibility == Visibility.PUBLIC.value
+    return public if caller is None else or_(public, ORMSimulation.owner_sub == caller.subject)
 
 
 async def readable_simulation(caller: OptionalCaller, simulation_id: int = Query(...)) -> SimulationAccess:

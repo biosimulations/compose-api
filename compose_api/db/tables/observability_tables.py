@@ -2,12 +2,14 @@
 ``hpcrun`` (O7)."""
 
 import datetime
+import uuid
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, UniqueConstraint, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, UniqueConstraint, Uuid, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from compose_api.db.db_utils import DeclarativeTableBase
+from compose_api.observability.datasets import Dataset, DatasetRow
 from compose_api.observability.events import RunEvent, RunSpan
 
 
@@ -92,4 +94,63 @@ class ORMRunSpan(DeclarativeTableBase):
             duration_s=self.duration_s,
             status=self.status,
             error=self.error,
+        )
+
+
+class ORMDataset(DeclarativeTableBase):
+    """A file a run produced (docs/plan-observability.md O5, O6). Readable by whoever may read its simulation (O7)."""
+
+    __tablename__ = "dataset"
+    __table_args__ = (UniqueConstraint("simulation_id", "path", name="uq_dataset_simulation_path"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    simulation_id: Mapped[int] = mapped_column(
+        ForeignKey("simulation.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    hpcrun_id: Mapped[int | None] = mapped_column(ForeignKey("hpcrun.id", ondelete="SET NULL"), nullable=True)
+    path: Mapped[str] = mapped_column(nullable=False)
+    kind: Mapped[str] = mapped_column(nullable=False, index=True)
+    media_type: Mapped[str] = mapped_column(nullable=False)
+    display_name: Mapped[str] = mapped_column(nullable=False)
+    size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    attributes: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    origin: Mapped[str] = mapped_column(nullable=False)
+    span_id: Mapped[str | None] = mapped_column(nullable=True)
+    available: Mapped[bool] = mapped_column(nullable=False, server_default=text("true"))
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    def to_row(self) -> DatasetRow:
+        return DatasetRow(
+            path=self.path,
+            origin=self.origin,
+            kind=self.kind,
+            media_type=self.media_type,
+            display_name=self.display_name,
+            size_bytes=self.size_bytes,
+            sha256=self.sha256,
+            attributes=dict(self.attributes or {}),
+            span_id=self.span_id,
+            available=self.available,
+        )
+
+    def to_dataset(self) -> Dataset:
+        return Dataset(
+            id=str(self.id),
+            simulation_id=self.simulation_id,
+            path=self.path,
+            kind=self.kind,
+            media_type=self.media_type,
+            display_name=self.display_name,
+            size_bytes=self.size_bytes,
+            sha256=self.sha256,
+            attributes=dict(self.attributes or {}),
+            origin=self.origin,
+            span_id=self.span_id,
+            available=self.available,
+            created_at=_iso(self.created_at),
+            updated_at=_iso(self.updated_at),
         )

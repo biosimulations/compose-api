@@ -149,6 +149,12 @@ engine writes `events/engine.jsonl`. `EventIngester` tails those files on the mo
 `dispatch.*` / `slurm.*` events (`api_events.py`). All events follow process-bigraph's event schema (v1); the
 parsing, span folding and Chrome Trace renderer are ported from viva-core.
 
+**Datasets (`observability/datasets.py`, `api/routers/datasets.py`).** Every `artifact.written` event becomes a
+`dataset` row (`DatasetsDatabaseService.register`, called by the ingester). The job script emits one per file under
+`output/` (kept now) and for `results.zip`, with size and sha256. A simulator's own event (any component but
+`compose_api.job`) wins over that manifest. Paths are relative to the experiment directory, and
+`resolve_content_path` keeps content reads inside it. Listings filter with `authorization.readable_clause`.
+
 **Persistence.** `DatabaseServiceSQL` (async SQLAlchemy + asyncpg) is a facade over three ORM executors:
 `get_simulator_db()`, `get_hpc_db()`, `get_package_db()` (`compose_api/db/services/`, tables in `db/tables/`). Startup
 calls `create_db()`: `metadata.create_all` (new tables), a stamp for a database alembic doesn't track yet (head if it

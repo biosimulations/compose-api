@@ -6,6 +6,8 @@ Besides running the simulator, the script makes the run observable (docs/plan-ob
 - **It records the job itself** in ``events/job.jsonl``: a ``job`` span that every other span of the run hangs from,
   ``job.start``, and ``job.end`` with the exit code. They're written from an ``EXIT`` trap, so a failure that
   ``set -e`` turns into an early exit is recorded too, and SIGTERM (a time limit, ``scancel``) exits through it.
+- **It announces the files the run left** (O5): after the run, success or failure, one ``artifact.written`` event per
+  file under ``output/`` and for ``results.zip``, with its size and sha256. ``output/`` is kept.
 - **It hands the trace context to the simulator** through an env file: ``PBG_TRACEPARENT`` and friends, with the
   engine's events going to ``events/engine.jsonl``. A simulator built on process-bigraph >= 1.8.5 emits there; any
   other ignores the variables.
@@ -46,9 +48,22 @@ emit() {  # emit EVENT LEVEL PAYLOAD_JSON
         "$(now_ts)" "$JOB_SEQ" "$JOB_SOURCE" "$1" "$2" "$TRACE_ID" "$JOB_SPAN" "$3" >> "$EVENTS/job.jsonl" || true
 }
 JOB_ATTRS="{\"slurm_job_id\":\"${SLURM_JOB_ID:-}\",\"host\":\"$(hostname)\"}"
+json_escape() { local s=${1//\\/\\\\}; printf '%s' "${s//\"/\\\"}"; }
+sha256_of() {
+    if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
+}
+manifest() {  # one artifact.written per file the run left: what it wrote under output/, and the results archive
+    local f size sum
+    while IFS= read -r f; do
+        size=$(wc -c < "$EXPERIMENT/$f" | tr -d ' ')
+        sum=$(sha256_of "$EXPERIMENT/$f")
+        emit artifact.written info "{\"uri\":\"$(json_escape "$f")\",\"bytes\":$size,\"sha256\":\"$sum\"}"
+    done < <(cd "$EXPERIMENT" && { find output -type f 2>/dev/null; [ -f results.zip ] && echo results.zip; } | LC_ALL=C sort)
+}
 finish() {
     code=$?
     trap - EXIT
+    manifest || true
     elapsed=$(awk -v a="$JOB_START_S" -v b="$(date +%s.%N)" 'BEGIN { printf "%.3f", b - a }')
     if [ "$code" -eq 0 ]; then status=ok; level=info; error=null
     else status=error; level=error; error="\"exit code $code\""; fi
@@ -79,12 +94,8 @@ singularity run \
     -o "@@OUTPUT_DIR@@" \
     -n @@END_TIME@@
 
-pushd "$EXPERIMENT"
-cd output
-zip -r ../results.zip ./*
-cd ..
-rm -r output
-popd
+# output/ stays: each file in it is a dataset (docs/plan-observability.md O5). results.zip keeps the archive endpoint.
+(cd "$EXPERIMENT/output" && zip -r ../results.zip ./*)
 echo "Simulation run completed. data saved to $EXPERIMENT."
 """
 

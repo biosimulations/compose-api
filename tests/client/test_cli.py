@@ -102,10 +102,14 @@ class FakeService:
             return httpx.Response(200, json=[_run("running", i) for i in ids if i != 99])
         if path == "/results/simulation/results/file":
             return httpx.Response(200, content=self.results)
-        if path.startswith(("/results/simulation/events", "/results/simulation/trace")):
-            return self._observability(request)
-        if path.startswith("/core/"):
-            return self._catalogue(path)
+        routes: list[tuple[tuple[str, ...], Callable[[], httpx.Response]]] = [
+            (("/results/simulation/events", "/results/simulation/trace"), lambda: self._observability(request)),
+            (("/core/",), lambda: self._catalogue(path)),
+            (("/datasets",), lambda: _datasets(path)),
+        ]
+        for prefixes, respond in routes:
+            if path.startswith(prefixes):
+                return respond()
         return httpx.Response(500, text=f"unexpected {path}")
 
     def _catalogue(self, path: str) -> httpx.Response:
@@ -138,6 +142,33 @@ class FakeService:
         if path == "/results/simulation/trace":
             return httpx.Response(200, json={"simulation_id": 7, "trace_id": "t" * 32, "roots": [_job_tree()]})
         return httpx.Response(200, json={"traceEvents": [], "displayTimeUnit": "ms", "otherData": {}})
+
+
+DATASET_ID = "0b6f5d2e-6a39-4d55-9a4e-4b1f0d6c8a11"
+
+
+def _dataset() -> dict[str, Any]:
+    return {
+        "id": DATASET_ID,
+        "simulation_id": 7,
+        "path": "output/a.csv",
+        "kind": "table",
+        "media_type": "text/csv",
+        "display_name": "a.csv",
+        "size_bytes": 4,
+        "origin": "manifest",
+        "available": True,
+    }
+
+
+def _datasets(path: str) -> httpx.Response:
+    if path == "/datasets":
+        return httpx.Response(200, json={"datasets": [_dataset()], "total": 1, "next_offset": None})
+    if path == f"/datasets/{DATASET_ID}":
+        return httpx.Response(200, json=_dataset())
+    if path == f"/datasets/{DATASET_ID}/content":
+        return httpx.Response(200, content=b"a,b\n")
+    return httpx.Response(404, json={"detail": "Dataset not found."})
 
 
 def _event(cursor: int, name: str) -> dict[str, Any]:
@@ -345,3 +376,20 @@ def test_trace_tree_and_chrome_file(service: Callable[..., FakeService], tmp_pat
     out = tmp_path / "t.json"
     saved = json.loads(invoke("trace", "7", "--chrome", str(out)).stdout)
     assert saved["files"] == [str(out)] and json.loads(out.read_text())["displayTimeUnit"] == "ms"
+
+
+def test_datasets_list_show_and_get(service: Callable[..., FakeService], tmp_path: Path) -> None:
+    fake = service()
+    listed = json.loads(invoke("datasets", "list", "--sim", "7", "--kind", "table").stdout)
+    assert [d["path"] for d in listed] == ["output/a.csv"]
+    assert dict(fake.requests[-1].url.params) == {
+        "simulation_id": "7",
+        "kind": "table",
+        "available": "true",
+        "limit": "100",
+        "offset": "0",
+    }
+    assert json.loads(invoke("datasets", "show", DATASET_ID).stdout)["media_type"] == "text/csv"
+    got = json.loads(invoke("datasets", "get", DATASET_ID, "--out", str(tmp_path)).stdout)
+    assert got["files"] == [str(tmp_path / "a.csv")] and (tmp_path / "a.csv").read_bytes() == b"a,b\n"
+    assert invoke("datasets", "show", "00000000-0000-0000-0000-000000000000").exit_code == 4

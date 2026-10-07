@@ -80,6 +80,8 @@ app.add_typer(simulators_app, name="simulators")
 app.add_typer(processes_app, name="processes")
 app.add_typer(steps_app, name="steps")
 app.add_typer(curated_app, name="curated")
+datasets_app = typer.Typer(help="The files runs produced.", no_args_is_help=True)
+app.add_typer(datasets_app, name="datasets")
 
 
 @app.callback()
@@ -481,6 +483,57 @@ def trace(
         err.print(f"simulation {simulation_id} has no spans recorded (yet)")
     else:
         span_tree(tree["roots"])
+
+
+# -- datasets -----------------------------------------------------------------------------------------------------
+
+DATASET_COLUMNS = ["id", "simulation_id", "path", "kind", "size_bytes", "available"]
+
+
+@datasets_app.command("list")
+@claims("datasets list", "list-datasets")
+@handled
+def datasets_list(
+    ctx: typer.Context,
+    simulation: Annotated[int | None, typer.Option("--sim", help="Only this simulation's datasets.")] = None,
+    kind: Annotated[str | None, typer.Option(help="Only this kind: results, table, figure, archive, ...")] = None,
+    q: Annotated[str | None, typer.Option("--match", help="Only paths or names containing this.")] = None,
+    missing: Annotated[bool, typer.Option(help="List datasets whose file is gone instead.")] = False,
+    limit: Annotated[int, typer.Option(help="At most this many.")] = 100,
+) -> None:
+    """The files runs produced: one simulation's, or every one you may read, newest simulations first."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        page = s.datasets(simulation_id=simulation, kind=kind, q=q, available=not missing, limit=limit)
+    rows = [d.to_dict() for d in page.datasets]
+    emit(settings.output, rows, DATASET_COLUMNS, title=f"{len(rows)} of {page.total} datasets")
+
+
+@datasets_app.command("show")
+@claims("datasets show", "get-dataset")
+@handled
+def datasets_show(ctx: typer.Context, dataset_id: Annotated[str, typer.Argument(help="The dataset id.")]) -> None:
+    """Everything recorded about one dataset."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.dataset(dataset_id).to_dict())
+
+
+@datasets_app.command("get")
+@claims("datasets get", "get-dataset-content")
+@handled
+def datasets_get(
+    ctx: typer.Context,
+    dataset_id: Annotated[str, typer.Argument(help="The dataset id.")],
+    out: Annotated[
+        Path | None, typer.Option("--out", "-O", help="Write it here (a file, or a directory). Default: here.")
+    ] = None,
+) -> None:
+    """Download a dataset's file."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        path = s.download_dataset(dataset_id, out if out is not None else Path.cwd())
+    emit(settings.output, {"dataset_id": dataset_id, "files": [str(path)]})
 
 
 @app.command("build-status")

@@ -70,6 +70,21 @@ $ compose-api trace 4195 --chrome t.json   # a file for ui.perfetto.dev
 With `--output json`, `events` prints JSON lines, one event per line. The service reads a run's events while it runs
 and for a few minutes after it ends, so a `--follow` may print a last few events after the job is done.
 
+## What a run produced: datasets
+
+Each file a run leaves in its `output/` directory, and its `results.zip`, is a dataset. The job script records each
+with its size and sha256 when the run ends. A simulator can announce its own files with an `artifact.written` event,
+adding a kind, a name and attributes.
+
+```console
+$ compose-api datasets list --sim 4195            # one run's files
+$ compose-api datasets list --kind results         # every results file you can read
+$ compose-api datasets show <id>
+$ compose-api datasets get <id> -O out/            # just that file, not the whole archive
+```
+
+A dataset is readable by whoever can read its simulation.
+
 ## Exit codes
 
 | Code | Meaning |
@@ -138,6 +153,7 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 * `processes`: Registered process-bigraph processes.
 * `steps`: Registered process-bigraph steps.
 * `curated`: Run an SBML model with a curated simulator.
+* `datasets`: The files runs produced.
 
 ## `compose-api health`
 
@@ -494,4 +510,80 @@ $ compose-api curated tellurium [OPTIONS] SBML
 * `--extract / --no-extract`: With --download: unpack the archive instead of saving the zip.  [default: no-extract]
 * `--poll FLOAT`: Seconds between status checks.  [default: 5.0]
 * `--wait-timeout FLOAT`: Give up waiting after this many seconds (exit 5).
+* `--help`: Show this message and exit.
+
+## `compose-api datasets`
+
+The files runs produced.
+
+**Usage**:
+
+```console
+$ compose-api datasets [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `list`: The files runs produced: one simulation's,...
+* `show`: Everything recorded about one dataset.
+* `get`: Download a dataset's file.
+
+### `compose-api datasets list`
+
+The files runs produced: one simulation's, or every one you may read, newest simulations first.
+
+**Usage**:
+
+```console
+$ compose-api datasets list [OPTIONS]
+```
+
+**Options**:
+
+* `--sim INTEGER`: Only this simulation's datasets.
+* `--kind TEXT`: Only this kind: results, table, figure, archive, ...
+* `--match TEXT`: Only paths or names containing this.
+* `--missing / --no-missing`: List datasets whose file is gone instead.  [default: no-missing]
+* `--limit INTEGER`: At most this many.  [default: 100]
+* `--help`: Show this message and exit.
+
+### `compose-api datasets show`
+
+Everything recorded about one dataset.
+
+**Usage**:
+
+```console
+$ compose-api datasets show [OPTIONS] DATASET_ID
+```
+
+**Arguments**:
+
+* `DATASET_ID`: The dataset id.  [required]
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+### `compose-api datasets get`
+
+Download a dataset's file.
+
+**Usage**:
+
+```console
+$ compose-api datasets get [OPTIONS] DATASET_ID
+```
+
+**Arguments**:
+
+* `DATASET_ID`: The dataset id.  [required]
+
+**Options**:
+
+* `-O, --out PATH`: Write it here (a file, or a directory). Default: here.
 * `--help`: Show this message and exit.

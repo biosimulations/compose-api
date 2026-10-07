@@ -10,6 +10,8 @@ listing:
   the insert and the cursor save is harmless.
 - **Bounded.** Each file gives at most ``max_bytes`` per pass; heartbeats and ``debug`` events are folded but not
   stored.
+- **Datasets ride the same stream.** ``artifact.written`` events, from the job script's manifest or from the
+  simulator, are registered as datasets (``observability.datasets``).
 - **A grace window after the run ends.** A shared filesystem shows a job's last writes late, so the ingester keeps
   reading for ``grace_s`` after it first sees the run terminal, then closes any span still open as ``unknown`` and
   stops.
@@ -25,6 +27,7 @@ from pathlib import Path
 
 from compose_api.db.database_service import DatabaseService
 from compose_api.db.services.events_db import DONE_KEY, TERMINAL_SEEN_KEY, IngestCandidate
+from compose_api.observability.datasets import artifact_records
 from compose_api.observability.events import (
     UNENDED_SPAN_STATUS,
     RunEvent,
@@ -120,6 +123,11 @@ class EventIngester:
             spans = await events_db.get_spans(run.trace_id)
             changed = apply_span_events(spans, read.events)
             await events_db.upsert_spans(run.hpcrun_id, run.trace_id, [spans[i] for i in sorted(changed)])
+            # Before the cursor is saved: if registering fails, the next pass rereads these events (inserts are
+            # idempotent and registration merges), so no artifact is lost.
+            await self.database_service.get_datasets_db().register(
+                run.simulation_id, run.hpcrun_id, artifact_records(read.events)
+            )
             last_event_at = newest_timestamp(read.events)
 
         cursor = read.cursor
