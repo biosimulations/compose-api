@@ -19,6 +19,8 @@ Several documents answer different questions. Start with the one that matches yo
 | which libraries and repositories surround this one, and whether we need them all | [ecosystem-repos.md](ecosystem-repos.md) | analysis | 2026-09-12 |
 | why container identity should be a digest, and which runtime to run on | [plan-container-runtimes.md](plan-container-runtimes.md) | analysis | 2026-09-12 |
 | how testing works, what was broken, what was fixed | [plan-testing.md](plan-testing.md) | analysis, partly implemented | 2026-09-12 |
+| the `compose-api` command line and the generated client it is built on | [plan-cli.md](plan-cli.md) | plan, implemented | 2026-10-07 |
+| run traces from process-bigraph events, datasets a run advertises, and the permission seam for auth | [plan-observability.md](plan-observability.md) | plan | 2026-10-07 |
 
 **Direction** documents say what we intend. **Analysis** documents measure something and lay out options; they are
 dated because measurements go stale. **Record** documents track commitments. When two disagree, the direction
