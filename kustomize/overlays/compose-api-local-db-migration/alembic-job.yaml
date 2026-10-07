@@ -1,3 +1,5 @@
+# Applies pending alembic migrations by hand. The API already does this at startup
+# (compose_api.db.db_utils.create_db); this Job is for migrating before a rollout, or for inspecting a failure.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -10,12 +12,33 @@ spec:
         - name: alembic
           image: ghcr.io/biosimulations/compose-api:latest
           imagePullPolicy: Always
-          command: ["poetry", "run", "alembic", "upgrade", "head"]
-          env:
-            - name: SQLALCHEMY_DATABASE_URL
+          workingDir: /app
+          command: ["/app/.venv/bin/alembic", "upgrade", "head"]
+          env:  # alembic/env.py reads the same settings as the API (compose_api.config)
+            - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
                   name: shared-secrets
-                  key: postgres-uri
+                  key: postgres-user
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shared-secrets
+                  key: postgres-password
+            - name: POSTGRES_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: shared-secrets
+                  key: postgres-database
+            - name: POSTGRES_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: shared-secrets
+                  key: postgres-host
+            - name: POSTGRES_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: shared-secrets
+                  key: postgres-port
       imagePullSecrets:
         - name: ghcr-secret

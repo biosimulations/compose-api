@@ -13,7 +13,10 @@ from compose_api.db.db_utils import DeclarativeTableBase
 
 config = context.config
 
-if config.config_file_name is not None:
+# Configure logging from alembic.ini only from the command line. When the application runs migrations at startup
+# (compose_api.db.db_utils.create_db, which passes a connection), fileConfig would replace the application's logging
+# and silence its existing loggers.
+if config.config_file_name is not None and config.attributes.get("connection") is None:
     fileConfig(config.config_file_name)
 
 target_metadata = DeclarativeTableBase.metadata

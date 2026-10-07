@@ -9,7 +9,9 @@ from compose_api.db.db_utils import DeclarativeTableBase, package_table_name
 from compose_api.simulation.models import (
     ContainerEngine,
     DownloadedContainerImage,
+    SimulationAccess,
     SimulatorVersion,
+    Visibility,
 )
 
 logger = logging.getLogger(__name__)
@@ -74,3 +76,16 @@ class ORMSimulation(DeclarativeTableBase):
     created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
     experiment_id: Mapped[str] = mapped_column(nullable=False, unique=True)
     simulator_id: Mapped[int] = mapped_column(ForeignKey("simulator.id"), nullable=False, index=True)
+
+    # Who may read the simulation and everything it produced (docs/plan-observability.md O7). Its runs, events and
+    # datasets carry no owner of their own: they inherit this through their foreign key.
+    owner_sub: Mapped[str | None] = mapped_column(nullable=True, index=True)
+    visibility: Mapped[str] = mapped_column(nullable=False, server_default=Visibility.PUBLIC.value)
+
+    def to_simulation_access(self) -> SimulationAccess:
+        return SimulationAccess(
+            simulation_id=self.id,
+            experiment_id=self.experiment_id,
+            owner_sub=self.owner_sub,
+            visibility=Visibility(self.visibility),
+        )

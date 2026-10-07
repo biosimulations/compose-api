@@ -158,13 +158,9 @@ async def init_standalone(enable_ssl: bool = True) -> None:
         pool_timeout=PG_POOL_TIMEOUT,
         pool_recycle=PG_POOL_RECYCLE,
     )
-    # upgrade_db runs first but order doesn't matter — both require the postgres database to exist,
-    # and upgrade_db operates on an empty database just as well as create_db does.
     set_postgres_engine(engine)
 
-    logging.warning("running alembic upgrade to apply any pending migrations")
-    # await upgrade_db(engine)
-    logging.warning("calling create_db() to initialize the database tables")
+    logging.warning("calling create_db() to create missing tables and apply pending migrations")
     await create_db(engine)
 
     database = DatabaseServiceSQL(engine)

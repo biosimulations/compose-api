@@ -182,12 +182,13 @@ async def _dispatch_job(
             random_string=random_string_7_hex,
         )
 
+    # Minted before submission so the job can carry the run's trace context (docs/plan-observability.md O1).
+    correlation_id = get_correlation_id(random_string=random_string_7_hex, job_type=JobType.SIMULATION)
     sim_slurmjobid = await simulation_service_slurm.submit_simulation_job(
         simulation=simulation,
         experiment_id=experiment_id,
     )
 
-    correlation_id = get_correlation_id(random_string=random_string_7_hex, job_type=JobType.SIMULATION)
     _hpcrun = await hpc_db.insert_hpcrun(
         slurmjobid=sim_slurmjobid,
         job_type=JobType.SIMULATION,

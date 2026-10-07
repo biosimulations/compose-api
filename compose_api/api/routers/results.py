@@ -1,9 +1,11 @@
 import logging
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.responses import FileResponse
 
+from compose_api.authorization import OptionalCaller, readable_simulation, readable_simulation_ids
 from compose_api.common.gateway.models import Namespace, RouterConfig
 from compose_api.common.gateway.utils import get_hpc_run_status
 from compose_api.common.ssh.ssh_service import get_ssh_service
@@ -11,12 +13,12 @@ from compose_api.config import get_settings
 from compose_api.dependencies import (
     get_data_service,
     get_database_service,
-    get_required_database_service,
     get_simulation_service,
 )
 from compose_api.simulation.models import (
     HpcRun,
     JobType,
+    SimulationAccess,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,6 +28,9 @@ logger = logging.getLogger(__name__)
 # returns a parsed value of None that a caller can mistake for "no data yet". The server
 # has always returned 404 for some of these; the spec simply never said so.
 NOT_FOUND_RESPONSE = {"description": "The requested resource does not exist"}
+
+# The simulation named by the `simulation_id` query parameter, if the caller may read it (404 otherwise).
+ReadableSimulation = Annotated[SimulationAccess, Depends(readable_simulation)]
 
 # -- app components -- #
 
@@ -40,12 +45,13 @@ config = RouterConfig(router=APIRouter(), prefix="/results", dependencies=[])
     dependencies=[Depends(get_database_service)],
     summary="Get simulation status records for a list of IDs",
 )
-async def get_simulations_status_batch(ids: list[int]) -> list[HpcRun]:
+async def get_simulations_status_batch(ids: list[int], caller: OptionalCaller) -> list[HpcRun]:
     db_service = get_database_service()
     if db_service is None:
         raise HTTPException(status_code=500, detail="Database service is not initialized")
     try:
-        return await db_service.get_hpc_db().get_hpcruns_by_refs(ref_ids=ids, job_type=JobType.SIMULATION)
+        readable = await readable_simulation_ids(caller, ids)
+        return await db_service.get_hpc_db().get_hpcruns_by_refs(ref_ids=readable, job_type=JobType.SIMULATION)
     except Exception as e:
         logger.exception(f"Error fetching batch simulation statuses for ids: {ids}.")
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -60,11 +66,11 @@ async def get_simulations_status_batch(ids: list[int]) -> list[HpcRun]:
     dependencies=[Depends(get_database_service)],
     summary="Get the simulation status record by its ID",
 )
-async def get_simulation_status(simulation_id: int = Query(...)) -> HpcRun:
+async def get_simulation_status(simulation: ReadableSimulation) -> HpcRun:
     db_service = get_database_service()
     if db_service is None:
         raise HTTPException(status_code=500, detail="Database service is not initialized")
-    return await get_hpc_run_status(db_service=db_service, ref_id=simulation_id, job_type=JobType.SIMULATION)
+    return await get_hpc_run_status(db_service=db_service, ref_id=simulation.simulation_id, job_type=JobType.SIMULATION)
 
 
 # @config.router.get(
@@ -162,23 +168,13 @@ async def get_simulation_status(simulation_id: int = Query(...)) -> HpcRun:
     dependencies=[Depends(get_simulation_service), Depends(get_ssh_service)],
     summary="Get simulation results as a zip file",
 )
-async def get_results(simulation_id: int = Query()) -> FileResponse:
+async def get_results(simulation: ReadableSimulation) -> FileResponse:
     service = get_data_service()
-    db_service = get_required_database_service()
     if service is None:
         logger.error("Data service is not initialized")
         raise HTTPException(status_code=500, detail="Data service is not initialized")
-    # A simulation that does not exist is the client's mistake, not ours. The database
-    # layer signals it with LookupError, which was previously swallowed into a 500 along
-    # with everything else, so asking for the results of a nonexistent simulation said
-    # "Internal Server Error".
-    try:
-        experiment_id = await db_service.get_simulator_db().get_simulations_experiment_id(simulation_id=simulation_id)
-    except LookupError as e:
-        raise HTTPException(status_code=404, detail=f"Simulation with id {simulation_id} not found.") from e
-    except Exception as e:
-        logger.exception(f"Error resolving experiment id for simulation {simulation_id}.")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    # A simulation that does not exist, or that the caller may not read, is a 404 from ReadableSimulation.
+    simulation_id, experiment_id = simulation.simulation_id, simulation.experiment_id
 
     try:
         zip_path = await service.get_results_zip(experiment_id, Namespace(get_settings().namespace))
