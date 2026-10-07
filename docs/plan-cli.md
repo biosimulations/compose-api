@@ -1,11 +1,11 @@
 # CLI: a `compose-api` command line on a generated httpx client
 
-**Status (2026-10-07): planned and approved by Jim; not started.** Three PRs, each merged on green with a merge
+**Status (2026-10-07): planned and approved by Jim; step A in review.** Three PRs, each merged on green with a merge
 commit. Publishing to PyPI and deploying are separate goes from Jim.
 
 | Step | What | State |
 |---|---|---|
-| A | Generation pipeline: deterministic, in-repo, drift-checked in CI; regenerate the stale client | — |
+| A | Generation pipeline: deterministic, in-repo, drift-checked in CI; regenerate the stale client | **#205** |
 | B | `compose-api-client` as a workspace package: the generated client plus a hand-written application layer (`ext`) | — |
 | C | The `compose-api` CLI on `ext` and the generated client; a spec-coverage test | — |
 | D | Docs (`docs/cli.md`), `CLAUDE.md`, strategy.md 2b; release with 0.7.0 | — |
@@ -121,6 +121,7 @@ verbs: `run`, `status` with several IDs, `results`, `simulators`, `processes`, `
 | C2 | **The generated code is never edited; behaviour goes in `ext`.** | Regeneration must be free. pbest's `utils/run_simulation_and_wait.py` shows what happens otherwise: hand-written code inside a generated tree, with a standing warning not to overwrite it. |
 | C3 | **The CLI is hand-written typer over `ext`, with a spec-coverage test.** | A spec-driven runtime CLI (restish-style) gets coverage for free but has poor UX: raw query and body flags, no `--wait`, no file handling. The CLI's real concerns are presentation, waiting and files. The coverage test gives back what that approach would have guaranteed. |
 | C4 | **`compose-api-client` is a workspace package with an optional `[cli]` extra** (typer, rich). The command is `compose-api`. | The base install is httpx and attrs only, for applications; strategy.md's packaging constraint. The command drives the service; `viva-toolkit` builds and runs documents. They are two tools with two names. |
+| C6 | **`clients/python` comes in from [compose-api-client](https://github.com/biosimulations/compose-api-client) at tag 0.2.0 by `git subtree`, with its history** (30 commits, Ezequiel Valencia), and the root overrides pbest's `compose-api-client==0.2.0` pin so it resolves to the workspace package. *(Found while starting B, 2026-10-07.)* | pbest pins the client exactly, so a workspace package of that name at any other version cannot resolve, and two packages cannot both install `compose_api_client`. The override is safe for the service: it imports only `pbest.utils.input_types` and the containerization code, never `pbest.execution.remote` (the client's one user), and the regenerated client keeps every name that module uses (`Client`, `api.simulation.run_simulation`, `models`, `types.File`, `utils.run_simulation_and_wait`). Bringing it in with history is strategy.md's rule 1 ("merge with history, never by copying") applied to phase 2b. |
 | C5 | **The API is unchanged by this work.** The GET-with-body batch endpoint stays. | Moving `ids` to the query string would change pbest's call signature. That's a separate decision, recorded in §Open questions. |
 
 ## Plan
@@ -149,9 +150,10 @@ verbs: `run`, `status` with several IDs, `results`, `simulators`, `processes`, `
 
 `clients/python/` is a uv workspace member: distribution `compose-api-client`, version locked to the service.
 
-- **`compose_api_client/` (generated):** the client moves here from `compose_api/api/client/`.
-  - `compose_api.api.client` stays one release as a re-export shim, so existing imports keep working.
-  - The server's tests import the new path.
+- **`compose_api_client/` (generated):** the client moves here from `compose_api/api/client/` (C6: by subtree from
+  the external repository, then regenerated in place; its hand-written `utils/` is kept).
+  - Nothing outside this repository imports `compose_api.api.client` (pbest imports `compose_api_client`), so the
+    in-repo copy is deleted rather than shimmed; the server's tests import `compose_api_client`.
 - **`compose_api_client/ext/` (hand-written, outside the generated tree).** Its only dependencies are httpx and attrs.
 
 | Piece | What |
