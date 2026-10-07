@@ -51,8 +51,10 @@ async def _check_run_events(session: AsyncComposeSession, simulation_id: int) ->
     assert tree.roots[0].span.status == "ok"
     datasets = (await session.datasets(simulation_id=simulation_id)).datasets
     paths = {d.path for d in datasets}
-    assert "results.zip" in paths and any(p.startswith("output/") for p in paths), paths
-    assert all(d.sha256 and d.size_bytes is not None for d in datasets)
+    assert {"results.zip", "job.out"} <= paths and any(p.startswith("output/") for p in paths), paths
+    assert all(d.sha256 and d.size_bytes is not None for d in datasets if d.kind != "log")
+    log = next(d for d in datasets if d.path == "job.out")
+    assert log.kind == "log" and b"running" in await session.dataset_content(log.id)
 
 
 def assert_test_sim_results(

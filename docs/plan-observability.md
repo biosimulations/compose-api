@@ -1,6 +1,6 @@
 # Observability: run traces from process-bigraph events, and datasets a run advertises
 
-**Status (2026-10-07): steps 0–4 and 1b merged (#212–#216, viva-pde-particle#49); nothing deployed yet (prod runs 0.6.0); step 5 waits on #192.** One PR per step, each merged on green with a merge commit.
+**Status (2026-10-07): steps 0–4 and 1b merged (#212–#216, viva-pde-particle#49) and deployed in 0.7.0/0.7.1, plus a simulation listing (#220); follow-ups for open questions 2 and 5 in review; step 5 waits on #192.** One PR per step, each merged on green with a merge commit.
 Deploying is a separate go from Jim.
 
 | Step | What | State |
@@ -11,6 +11,7 @@ Deploying is a separate go from Jim.
 | 2 | Events: job-script activation (O2), API and job-script events (O3), the file-tailing ingester (O4), events and trace routes, `ext`, CLI | **done** #214 |
 | 3 | Datasets: job-script manifest and `artifact.written` registrar (O5), store-relative content (O6), dataset routes, `ext`, CLI | **done** #215 |
 | 4 | Producer side in viva-pde-particle: `artifact.written` per result file, inside a `task` span | **done** viva-pde-particle#49; live once its image is rebuilt and the prebuilt pin bumped |
+| 4b | Follow-ups from the first production runs: per-process engine event files (open question 2; process-bigraph#229), the SLURM log as a dataset (open question 5) | **in review** |
 | 5 | Auth hookup after #192: stamp the owner at submit, a real `can_read` policy, visibility | blocked on #192 |
 
 ## Context
@@ -250,17 +251,21 @@ Stamp `owner_sub` from the principal at `POST /simulation/run`; `can_read` becom
 
 ## Open questions
 
-1. **Default visibility once auth lands:** private by default for an authenticated submitter, public for anonymous
-   ones?
-2. **Several processes on one file sink.** Should process-bigraph's `FileSink` accept a `{source}` placeholder in its
-   path (a small upstream PR), or do we accept single-process images for now?
+1. ~~**Default visibility once auth lands**~~ *Decided 2026-10-07: private by default for a signed-in submitter (with
+   a flag to make a simulation public); anonymous submissions stay public.* Step 5 implements it.
+2. ~~**Several processes on one file sink**~~ *Decided 2026-10-07: upstream.* The production smoke run (sim 4334)
+   had three engine processes appending to one `engine.jsonl` on GPFS. process-bigraph#229 lets a file sink's path
+   name `{source}`, `{pid}` or `{host}`; the job script now asks for `engine-{source}.jsonl`, which older
+   process-bigraph releases write as one literally named file, so nothing breaks before images pick it up.
 3. ~~**Retention**~~ *Decided 2026-10-07: keep both `output/` and `results.zip`.* Revisit if cfs15 fills.
 4. ~~**`sha256` in the manifest**~~ *Decided 2026-10-07: always.*
-5. **The SLURM `.out` log:** expose it as a dataset (`kind = log`) or a `/logs` route? Useful for failures, but it can
-   contain host paths.
+5. ~~**The SLURM `.out` log**~~ *Decided 2026-10-07: as a dataset.* A simulation job's log moves from `htclogs/`
+   into its experiment directory as `job.out`, and the job script announces it as kind `log` (no size or checksum:
+   SLURM writes after the trap). `compose-api datasets get` reads it. Container builds still log to `htclogs/`.
 6. **Port or depend on viva-core?** Proposed: port the pure functions now, and depend on viva-core once it is
    published as its own package with a stable event and dataset API.
-7. **Which role reads everything?** `admin` is a placeholder. #192 reads roles from the
-   `https://api.biosimulations.org/roles` claim; the Auth0 tenant decides the real name.
-8. **Before the step-1 deploy:** check the production database's `alembic_version` (expected `eb3903fb35a7`, or no
+7. **Which role reads everything?** *Decided 2026-10-07: settle it with #192.* `admin` stays a placeholder in
+   `compose_api/authorization.py` until the Auth0 tenant's role name is known.
+8. ~~**Before the step-1 deploy**~~ *Done 2026-10-07 (prod was at `eb3903fb35a7`; migrated to `c41f0b7a9d20` on
+   the 0.7.0 deploy).* check the production database's `alembic_version` (expected `eb3903fb35a7`, or no
    table at all). Either is handled, but a different value means someone migrated by hand.
