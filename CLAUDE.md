@@ -51,6 +51,10 @@ formats with the locked ruff and this repo's settings, so the committed client i
 produces. Never hand-edit the client; the plan for its package, the `ext` layer and the CLI is
 [`docs/plan-cli.md`](docs/plan-cli.md).
 
+Client release: publishing a GitHub release also publishes `compose-api-client` (clients/python, same version) to
+PyPI via `.github/workflows/publish-client.yml`, a trusted publisher (OIDC, environment `pypi`; setup in
+[`docs/plan-cli.md`](docs/plan-cli.md) §D).
+
 Release & deploy: `make tag` (`tag.sh` bumps `pyproject.toml` + `compose_api/version.py`, commits, tags, pushes — the tag push triggers the image build workflow); `kustomize/scripts/build_and_push.sh` builds/pushes `ghcr.io/biosimulations/compose-api`; `make deploy` applies `kustomize/overlays/compose-api-rke`. Publishing a GitHub *release* (separate from the tag push) additionally archives it to Zenodo under concept DOI 10.5281/zenodo.21127421 via the reusable `virtualcell/zenodo-maint` workflow; keep `CITATION.cff` and `.zenodo.json` in step with the authors and version, as a weekly drift check flags mismatches.
 
 ## Test environment
