@@ -118,6 +118,15 @@ the authorship.
 | 2c | Rename to `viva-toolkit` (distribution, import package, console script) inside the workspace; update the service's imports. | Tests green under the new name; `import pbest` works through the shim with a deprecation warning. |
 | 5 | Publish `viva-toolkit`, the final `pbest` shim release, `compose-api-client` and the service from the new home, then archive the old repositories. | One release of each from here before any archive. |
 
+**Phase 2b, done 2026-10-07** (#206, then #207 and #208; see [plan-cli.md](plan-cli.md)):
+- `clients/python` is compose-api-client at tag 0.2.0, brought in by `git subtree` with its history.
+- `make clients` now writes only in-repo.
+- **Two departures from the gate above:**
+  - the hand-written `utils/` stays inside the package, and the generation script preserves it;
+  - the gate's "byte-identical to 0.2.0" check was not made, because the client is regenerated from today's spec
+    rather than 0.2.0's.
+- The package also gained the `ext` layer and the `compose-api` command line.
+
 ### Packaging after the merge
 
 One repository, one `uv` workspace, three distributions:
