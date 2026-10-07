@@ -82,6 +82,7 @@ class HpcRun(BaseModel):
     start_time: str | None = None  # ISO format datetime string
     end_time: str | None = None  # ISO format datetime string or None if still running
     error_message: str | None = None  # Error message if the simulation failed
+    trace_id: str | None = None  # W3C trace id of the run's events (plan-observability O1); None for older runs
 
 
 class BiGraphComputeOutline(BaseModel):
@@ -242,6 +243,22 @@ class Simulation(BaseModel):
     database_id: int
     sim_request: SimulationRequest
     simulator_version: SimulatorVersion
+
+
+class Visibility(StrEnum):
+    """Who may read a simulation and everything it produced (plan-observability O7)."""
+
+    PUBLIC = "public"
+    PRIVATE = "private"
+
+
+class SimulationAccess(BaseModel):
+    """What an authorization decision about a simulation needs: its owner and visibility (plan-observability O7, O8)."""
+
+    simulation_id: int
+    experiment_id: str
+    owner_sub: str | None = None  # the submitter's identity-provider subject; None for anonymous and older runs
+    visibility: Visibility = Visibility.PUBLIC
 
 
 class SubmittedSimulation(BaseModel):

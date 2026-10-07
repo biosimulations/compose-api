@@ -27,6 +27,7 @@ class HpcRun:
         start_time (None | str | Unset):
         end_time (None | str | Unset):
         error_message (None | str | Unset):
+        trace_id (None | str | Unset):
     """
 
     database_id: int
@@ -39,6 +40,7 @@ class HpcRun:
     start_time: None | str | Unset = UNSET
     end_time: None | str | Unset = UNSET
     error_message: None | str | Unset = UNSET
+    trace_id: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -82,6 +84,12 @@ class HpcRun:
         else:
             error_message = self.error_message
 
+        trace_id: None | str | Unset
+        if isinstance(self.trace_id, Unset):
+            trace_id = UNSET
+        else:
+            trace_id = self.trace_id
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
@@ -100,6 +108,8 @@ class HpcRun:
             field_dict["end_time"] = end_time
         if error_message is not UNSET:
             field_dict["error_message"] = error_message
+        if trace_id is not UNSET:
+            field_dict["trace_id"] = trace_id
 
         return field_dict
 
@@ -172,6 +182,15 @@ class HpcRun:
 
         error_message = _parse_error_message(d.pop("error_message", UNSET))
 
+        def _parse_trace_id(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        trace_id = _parse_trace_id(d.pop("trace_id", UNSET))
+
         hpc_run = cls(
             database_id=database_id,
             slurmjobid=slurmjobid,
@@ -183,6 +202,7 @@ class HpcRun:
             start_time=start_time,
             end_time=end_time,
             error_message=error_message,
+            trace_id=trace_id,
         )
 
         hpc_run.additional_properties = d

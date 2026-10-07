@@ -1,12 +1,13 @@
 # Observability: run traces from process-bigraph events, and datasets a run advertises
 
-**Status (2026-10-07): planned, nothing built.** One PR per step, each merged on green with a merge commit.
+**Status (2026-10-07): step 1 in review; the rest planned.** One PR per step, each merged on green with a merge commit.
 Deploying is a separate go from Jim.
 
 | Step | What | State |
 |---|---|---|
-| 0 | This document | **in review** |
-| 1 | Trace identity before submission (O1); the authorization seam on every simulation read (O8); schema migration that actually runs; retire NATS / `worker_event` | planned |
+| 0 | This document | **done** #212 |
+| 1 | Trace identity before submission (O1); owner and visibility (O7); the authorization seam on every simulation read (O8); migrations that run at startup | **in review** |
+| 1b | Retire NATS and `worker_event` (the subscriber, settings, the k8s deployment and its public NodePort) | planned |
 | 2 | Events: job-script activation (O2), API and job-script events (O3), the file-tailing ingester (O4), events and trace routes, `ext`, CLI | planned |
 | 3 | Datasets: job-script manifest and `artifact.written` registrar (O5), store-relative content (O6), dataset routes, `ext`, CLI | planned |
 | 4 | Producer side in viva-pde-particle: `artifact.written` per result file, inside a `task` span | planned |
@@ -138,7 +139,15 @@ moves from `poetry run` to `uv run`.
   startup.
 - O7/O8: the `simulation` columns, `readable_simulation` and `can_read`, applied to the existing status and results
   routes. Tests with the allow-all policy and with a test policy that denies (fails closed).
-- Remove the NATS subscriber and settings. Leave the `worker_event` table one release, then drop it.
+- *(Moved to step 1b, because it removes a k8s deployment and a public NodePort.)* Remove the NATS subscriber and
+  settings. Leave the `worker_event` table one release, then drop it.
+- *(Found building it.)* Startup ran `create_all` and a blind `stamp head`, which would have marked a database that
+  alembic never tracked as already migrated, skipping the new columns. `create_db` now stamps an untracked database
+  that already has tables at the pre-tracking baseline (`eb3903fb35a7`), then upgrades. Revisions are idempotent.
+  `alembic/env.py` no longer reconfigures logging when the application runs it, which is the likely reason the startup
+  upgrade had been commented out.
+- *(Decided building it.)* A simulation the caller may not read answers 404, like one that does not exist, so ids
+  reveal nothing. The admin role is named `admin` (`compose_api.authorization.ADMIN_ROLE`); see open question 7.
 
 ### Step 2: events
 - Job script: `--env PBG_*`, the `emit` helper with `trap … EXIT`, an `events/` directory.
@@ -214,3 +223,7 @@ Stamp `owner_sub` from the principal at `POST /simulation/run`; `can_read` becom
    contain host paths.
 6. **Port or depend on viva-core?** Proposed: port the pure functions now, and depend on viva-core once it is
    published as its own package with a stable event and dataset API.
+7. **Which role reads everything?** `admin` is a placeholder. #192 reads roles from the
+   `https://api.biosimulations.org/roles` claim; the Auth0 tenant decides the real name.
+8. **Before the step-1 deploy:** check the production database's `alembic_version` (expected `eb3903fb35a7`, or no
+   table at all). Either is handled, but a different value means someone migrated by hand.

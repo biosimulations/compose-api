@@ -15,6 +15,7 @@ from compose_api.db.tables.hpc_tables import (
     ORMHpcRun,
     ORMWorkerEvent,
 )
+from compose_api.observability.identity import trace_id_from_correlation
 from compose_api.simulation.models import (
     HpcRun,
     JobType,
@@ -135,6 +136,7 @@ class HPCORMExecutor(HPCDatabaseService):
                 simulator_id=simulator_key,
                 start_time=datetime.datetime.now(),
                 correlation_id=correlation_id,
+                trace_id=trace_id_from_correlation(correlation_id),
             )
             session.add(orm_hpc_run)
             await session.flush()

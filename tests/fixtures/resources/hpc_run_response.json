@@ -8,5 +8,6 @@
   "status": "completed",
   "start_time": "2026-01-02 03:04:05",
   "end_time": "2026-01-02 03:14:05",
-  "error_message": null
+  "error_message": null,
+  "trace_id": "484619d379b0ce041de048f7c5b51d95"
 }

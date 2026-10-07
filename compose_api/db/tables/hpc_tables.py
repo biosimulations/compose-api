@@ -2,7 +2,7 @@ import datetime
 import enum
 import logging
 
-from sqlalchemy import ForeignKey, func
+from sqlalchemy import DateTime, ForeignKey, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -74,6 +74,12 @@ class ORMHpcRun(DeclarativeTableBase):
     simulation_id: Mapped[int | None] = mapped_column(ForeignKey("simulation.id"), nullable=True, index=True)
     simulator_id: Mapped[int | None] = mapped_column(ForeignKey("simulator.id"), nullable=True, index=True)
 
+    # Observability (docs/plan-observability.md O1, O4). NULL / empty for runs submitted before it.
+    trace_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    events_cursor: Mapped[dict[str, int]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    last_event_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    exit_code: Mapped[int | None] = mapped_column(nullable=True)
+
     def to_hpc_run(self) -> HpcRun:
         if self.simulation_id is None and self.simulator_id is None:
             raise RuntimeError("ORMHpcRun must have at least one job reference set.")
@@ -88,6 +94,7 @@ class ORMHpcRun(DeclarativeTableBase):
             error_message=self.error_message,
             start_time=str(self.start_time) if self.start_time else None,
             end_time=str(self.end_time) if self.end_time else None,
+            trace_id=self.trace_id,
         )
 
 

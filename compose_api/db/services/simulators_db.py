@@ -21,10 +21,12 @@ from compose_api.simulation.models import (
     RegisteredPackage,
     RemoteContainerImage,
     Simulation,
+    SimulationAccess,
     SimulationRequest,
     SimulationResults,
     SimulatorVersion,
     SubmittedSimulation,
+    Visibility,
 )
 
 logger = logging.getLogger(__name__)
@@ -63,8 +65,18 @@ class SimulatorDatabaseService(ABC):
 
     @abstractmethod
     async def insert_simulation(
-        self, sim_request: SimulationRequest, experiment_id: str, simulator_version: SimulatorVersion
+        self,
+        sim_request: SimulationRequest,
+        experiment_id: str,
+        simulator_version: SimulatorVersion,
+        owner_sub: str | None = None,
+        visibility: Visibility = Visibility.PUBLIC,
     ) -> Simulation:
+        pass
+
+    @abstractmethod
+    async def get_simulations_access(self, simulation_ids: list[int]) -> list[SimulationAccess]:
+        """The owner and visibility of each simulation that exists, in no particular order."""
         pass
 
     @abstractmethod
@@ -263,10 +275,20 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
 
     @override
     async def insert_simulation(
-        self, sim_request: SimulationRequest, experiment_id: str, simulator_version: SimulatorVersion
+        self,
+        sim_request: SimulationRequest,
+        experiment_id: str,
+        simulator_version: SimulatorVersion,
+        owner_sub: str | None = None,
+        visibility: Visibility = Visibility.PUBLIC,
     ) -> Simulation:
         async with self.async_session_maker() as session, session.begin():
-            orm_simulation = ORMSimulation(experiment_id=experiment_id, simulator_id=simulator_version.database_id)
+            orm_simulation = ORMSimulation(
+                experiment_id=experiment_id,
+                simulator_id=simulator_version.database_id,
+                owner_sub=owner_sub,
+                visibility=visibility.value,
+            )
             session.add(orm_simulation)
             await session.flush()  # Ensure the ORM object is inserted and has an ID
 
@@ -297,6 +319,14 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
                 hpc_run=hpc_run,
             )
             return simulation
+
+    @override
+    async def get_simulations_access(self, simulation_ids: list[int]) -> list[SimulationAccess]:
+        if not simulation_ids:
+            return []
+        async with self.async_session_maker() as session:
+            result = await session.execute(select(ORMSimulation).where(ORMSimulation.id.in_(simulation_ids)))
+            return [orm_simulation.to_simulation_access() for orm_simulation in result.scalars().all()]
 
     @override
     async def get_simulations_experiment_id(self, simulation_id: int) -> str:
