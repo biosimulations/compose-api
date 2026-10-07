@@ -1,0 +1,3 @@
+# openapi-python-client settings for scripts/generate-api-client.sh (docs/plan-cli.md, step A).
+# No post-hooks: the script formats the output itself with the locked ruff, so the result is machine-independent.
+post_hooks: []

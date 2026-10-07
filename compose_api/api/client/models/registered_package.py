@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-from ..types import UNSET, Unset
-
 from ..models.package_type import PackageType
-from typing import cast
 
 if TYPE_CHECKING:
     from ..models.bi_graph_process import BiGraphProcess
@@ -38,9 +35,6 @@ class RegisteredPackage:
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.bi_graph_process import BiGraphProcess  # noqa: PLC0415
-        from ..models.bi_graph_step import BiGraphStep  # noqa: PLC0415
-
         database_id = self.database_id
 
         package_type = self.package_type.value

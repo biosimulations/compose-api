@@ -1,41 +1,44 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Generate the Python client from the committed OpenAPI spec (docs/plan-cli.md, step A).
+#
+#   scripts/generate-api-client.sh            # regenerate compose_api/api/client in place
+#   scripts/generate-api-client.sh OUT_DIR    # generate into OUT_DIR instead (make check-clients)
+#   LIB_DIR=../compose-api-client/compose_api_client scripts/generate-api-client.sh
+#                                             # also write the external 0.2.x repository pbest pins
+#
+# The output must be the same on every machine, or the drift check in `make check-clients` cannot work. So the
+# generator's own post-hooks are off (they run whatever `ruff` is on PATH, with its defaults), and the script formats
+# the result itself with this repository's locked ruff and its pyproject settings.
+set -euo pipefail
 
-LIB_DIR="${LIB_DIR:-NOT_SET}"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SPEC="${ROOT_DIR}/compose_api/api/spec/openapi_3_1_0_generated.yaml"
+CONFIG="${ROOT_DIR}/scripts/openapi-python-client.yaml"
+DEST="${1:-${ROOT_DIR}/compose_api/api/client}"
 
-if [ "$LIB_DIR" == "NOT_SET" ]; then
-  echo "Need to specify where the clients will be generated."
-  exit 1
+generate() {
+  local out="$1" work
+  # Generate and format in a scratch directory, then copy into place. Formatting in place would be skipped: the
+  # repository's ruff `exclude` covers compose_api/api/client when ruff walks a directory. The pre-commit hooks pass
+  # the files by name, so they do format the committed client, with the repository's settings, which is why the
+  # same settings are named here (`--config`): `make check` and `make check-clients` then agree on every byte.
+  work="$(mktemp -d)"
+  trap 'rm -rf "${work}"' RETURN
+  uv run --project "${ROOT_DIR}" openapi-python-client generate --path "${SPEC}" --config "${CONFIG}" \
+    --output-path "${work}/client" --meta none --fail-on-warning --overwrite
+  uv run --project "${ROOT_DIR}" ruff check --config "${ROOT_DIR}/pyproject.toml" --quiet --fix --select I,F401 \
+    "${work}/client"
+  uv run --project "${ROOT_DIR}" ruff format --config "${ROOT_DIR}/pyproject.toml" --quiet "${work}/client"
+  rm -rf "${work}/client/.ruff_cache"
+  # The external repository keeps one hand-written module inside the package (utils/run_simulation_and_wait.py);
+  # carry it over rather than deleting it with the old generated tree.
+  if [ -d "${out}/utils" ]; then cp -R "${out}/utils" "${work}/client/utils"; fi
+  rm -rf "${out}"
+  mkdir -p "$(dirname "${out}")"
+  cp -R "${work}/client" "${out}"
+}
+
+generate "${DEST}"
+if [ -n "${LIB_DIR:-}" ]; then
+  generate "${LIB_DIR}"
 fi
-
-
-ROOT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && cd .. && pwd )"
-
-#generatorCliImage=openapitools/openapi-generator-cli:v7.1.0
-
-# make a clean ROOT_DIR without .. (hint, use dirname or something like that)
-SPEC_DIR="${ROOT_DIR}/compose_api/api/spec"
-LOCAL_VERSION="${ROOT_DIR}/compose_api/api/client" # Allows for easy testing
-
-# Generate simdata-api client
-# TODO: improve Python typing for Mypy
-# TODO: make attributes dictionaries - easier to work with
-PACKAGE="compose_api.api.client"
-
-# use openapi-generator-cli if available, else use openapi-generator
-#if command -v openapi-generator-cli &> /dev/null; then
-#    OPENAPI_CMD="openapi-generator-cli"
-#else
-#    OPENAPI_CMD="openapi-generator"
-#fi
-
-#$OPENAPI_CMD generate -i "${SPEC_DIR}/openapi_3_1_0_generated.yaml" -g python -o "${LIB_DIR}" --additional-properties=packageName=${PACKAGE},generateSourceCodeOnly=true
-# --config "${ROOT_DIR}/scripts/openapi-python-client.yaml"
-echo "SPEC_DIR is ${SPEC_DIR}"
-echo "LIB_DIR is ${LIB_DIR}"
-for gen_dest in "$LOCAL_VERSION" "$LIB_DIR"; do
-  openapi-python-client generate --path "${SPEC_DIR}/openapi_3_1_0_generated.yaml" --output-path "${gen_dest}" --meta none --fail-on-warning --overwrite
-  if [ $? -ne 0 ]; then
-      echo "Error: Failed to generate API client."
-      exit 1
-  fi
-done

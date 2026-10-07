@@ -35,9 +35,15 @@ make db-stamp                        # mark existing DB as at head without runni
 Generated API client (checked into `compose_api/api/client/`, excluded from ruff/mypy — never hand-edit):
 
 ```bash
-python3 compose_api/api/openapi_spec.py   # writes compose_api/api/spec/openapi_3_1_0_generated.yaml
-LIB_DIR=<path> make clients               # regenerates client via openapi-python-client
+make clients          # regenerates the spec (compose_api/api/spec/) and the client (compose_api/api/client/)
+make check-clients    # fails if either is stale; part of `make check`, so CI enforces it
+LIB_DIR=<compose-api-client checkout>/compose_api_client make clients   # also writes the external 0.2.x repo
 ```
+
+Generation is deterministic (`scripts/generate-api-client.sh`): the generator's post-hooks are off and the script
+formats with the locked ruff and this repo's settings, so the committed client is byte-for-byte what `make clients`
+produces. Never hand-edit the client; the plan for its package, the `ext` layer and the CLI is
+[`docs/plan-cli.md`](docs/plan-cli.md).
 
 Release & deploy: `make tag` (`tag.sh` bumps `pyproject.toml` + `compose_api/version.py`, commits, tags, pushes — the tag push triggers the image build workflow); `kustomize/scripts/build_and_push.sh` builds/pushes `ghcr.io/biosimulations/compose-api`; `make deploy` applies `kustomize/overlays/compose-api-rke`. Publishing a GitHub *release* (separate from the tag push) additionally archives it to Zenodo under concept DOI 10.5281/zenodo.21127421 via the reusable `virtualcell/zenodo-maint` workflow; keep `CITATION.cff` and `.zenodo.json` in step with the authors and version, as a weekly drift check flags mismatches.
 
@@ -154,10 +160,10 @@ This service is one side of a three-package loop. `../pbest` is checked out next
   `/simulation/run`, and its batch path submits with `batch_submission=True` then polls the batch status endpoint —
   which is why the batch branch in the sbatch template uses the smaller batch partition/QoS and 1 CPU / 1 GB.
 - **Changing a request or response model is a four-step release**: regenerate the spec and client here, publish
-  `compose-api-client`, bump it in pbest, then bump the `pbest` pin here. Note `make clients` writes to two
-  destinations — the in-repo `compose_api/api/client/` and `$LIB_DIR` (the separate compose-api-client repo, not in
-  this workspace) — and the published package additionally carries a hand-written `utils/run_simulation_and_wait.py`
-  that the generator does not produce and must not clobber.
+  `compose-api-client`, bump it in pbest, then bump the `pbest` pin here. `make clients` writes the in-repo
+  `compose_api/api/client/` and, only when `LIB_DIR` is set, the separate
+  [compose-api-client](https://github.com/biosimulations/compose-api-client) repo (PyPI 0.2.x, what pbest uses). That
+  package also carries a hand-written `utils/run_simulation_and_wait.py`; the script preserves it.
 - The production host is `compose.cam.uchc.edu` in all three places that must agree: the RKE ingress
   (`kustomize/overlays/compose-api-rke/ingress.yaml`), `ServerMode.PROD` plus `APP_ORIGINS` here, and pbest's default
   client base URL. Changing it means changing all three.

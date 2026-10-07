@@ -19,13 +19,24 @@ check: ## Run code quality tools.
 	@uv run mypy
 	@echo "🚀 Checking for obsolete dependencies: Running deptry"
 	@uv run deptry .
+	@$(MAKE) --no-print-directory check-clients
 
 .PHONY: clients
-clients: ## Run code quality tools.
+clients: ## Regenerate the OpenAPI spec and the Python client from the app (LIB_DIR=... also writes the external repo)
 	@echo "🚀 Generating OpenAPI Spec"
-	@python3 compose_api/api/openapi_spec.py
+	@uv run python compose_api/api/openapi_spec.py
 	@echo "🚀 Creating HTTPX Clients"
 	@scripts/generate-api-client.sh
+
+.PHONY: check-clients
+check-clients: ## Fail if the committed spec or client differs from a fresh generation (docs/plan-cli.md, step A)
+	@echo "🚀 Checking the OpenAPI spec and the generated client are current"
+	@tmp=$$(mktemp -d) && trap 'rm -rf "$$tmp"' EXIT && \
+	uv run python compose_api/api/openapi_spec.py "$$tmp/spec.yaml" >/dev/null && \
+	diff -u compose_api/api/spec/openapi_3_1_0_generated.yaml "$$tmp/spec.yaml" && \
+	scripts/generate-api-client.sh "$$tmp/client" >/dev/null && \
+	diff -r -x __pycache__ compose_api/api/client "$$tmp/client" || \
+	{ echo "❌ The spec or the client is stale: run 'make clients' and commit the result."; exit 1; }
 
 .PHONY: test
 test: ## Test the code with pytest

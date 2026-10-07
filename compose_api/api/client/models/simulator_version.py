@@ -1,16 +1,13 @@
 from __future__ import annotations
 
+import datetime
 from collections.abc import Mapping
-from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
-
-from ..types import UNSET, Unset
-from typing import cast
-import datetime
 
 if TYPE_CHECKING:
     from ..models.containerization_file_repr import ContainerizationFileRepr
@@ -39,9 +36,6 @@ class SimulatorVersion:
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.containerization_file_repr import ContainerizationFileRepr  # noqa: PLC0415
-        from ..models.registered_package import RegisteredPackage  # noqa: PLC0415
-
         container_def = self.container_def.to_dict()
 
         container_def_hash = self.container_def_hash
