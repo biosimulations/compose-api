@@ -215,6 +215,10 @@ yet. That is the same problem decision 5 solved here with `compose_api/registry/
 structured refusals (`viva-api#982`, `{message, code, ...}`) are also close to this service's 400 shape, which makes
 the error contract a second, cheap one.
 
+**The Year 2 report agrees (2026-10-07).** It describes the SMS project as *"building a parallel Vivarium-based system
+that will be migrated to the process bigraph standard"*, which is this decision's premise in the funder's own record
+([RPPR-C2Y2-review.md](grant/trd3/tracking/RPPR-C2Y2-review.md)).
+
 ---
 
 ## 6. Decision 5 — bring the simulator wrappers in as tiered registry entries
