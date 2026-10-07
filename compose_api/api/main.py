@@ -46,7 +46,14 @@ APP_ORIGINS = [
 #     {"url": ServerMode.PORT_FORWARD_DEV, "description": "Local port-forward"},
 # ]
 APP_SERVERS = None
-APP_ROUTERS = ["curated", "simulation", "results", "compute", "datasets"]  # for now, just referencing core
+APP_ROUTERS = [
+    "curated",
+    "simulation",
+    "simulations",
+    "results",
+    "compute",
+    "datasets",
+]  # for now, just referencing core
 assets_dir = Path(get_settings().assets_dir)
 ACTIVE_URL = ServerMode.detect(assets_dir / "dev" / "config" / ".dev_env")
 
