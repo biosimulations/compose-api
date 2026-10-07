@@ -25,9 +25,12 @@ WORKDIR /app
 # Copy the lockfile and `pyproject.toml` into the image
 COPY --chown=appuser:appgroup uv.lock /app/uv.lock
 COPY --chown=appuser:appgroup pyproject.toml /app/pyproject.toml
+# The workspace member's manifest (compose-api-client, clients/python): uv resolves the workspace from it. Its
+# sources arrive with the project below.
+COPY --chown=appuser:appgroup clients/python/pyproject.toml /app/clients/python/pyproject.toml
 
-# Install dependencies
-RUN uv sync --frozen --no-install-project
+# Install third-party dependencies only (not this project, not the workspace member)
+RUN uv sync --frozen --no-install-workspace
 
 # Copy the project into the image
 COPY --chown=appuser:appgroup . /app
