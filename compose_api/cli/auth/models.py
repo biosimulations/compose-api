@@ -11,7 +11,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Final, Literal
 
-from pydantic import BaseModel, ConfigDict, SecretStr
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, SecretStr
 
 SESSION_SCHEMA_VERSION: Literal[1] = 1
 # How long a browser or device sign-in may wait for the person; a shorter server expiry wins.
@@ -80,12 +80,12 @@ class SessionRecord(BaseModel):
     binding_key: str
     identity: Identity
     access_token: SecretStr
-    access_token_expires_at: datetime
+    access_token_expires_at: AwareDatetime
     refresh_token: SecretStr | None
     scopes: tuple[str, ...]
-    obtained_at: datetime
-    generation: int = 0
-    api_verified_at: datetime | None = None  # None until the Compose API has confirmed this identity
+    obtained_at: AwareDatetime
+    generation: int = Field(default=0, ge=0, strict=True)
+    api_verified_at: AwareDatetime | None = None  # None until the Compose API has confirmed this identity
 
     @classmethod
     def from_grant(cls, grant: TokenGrant, *, binding_key: str, generation: int = 0) -> "SessionRecord":

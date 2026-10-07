@@ -47,6 +47,9 @@ dependencies = [
     "authlib>=1.8.0,<2",
     # The JOSE library Authlib's OIDC claim validation raises from; imported for its error types.
     "joserfc>=1.7.5,<2",
+    "keyring>=25.7,<26",
+    "portalocker>=3.2,<5",
+    "pywin32>=311 ; sys_platform == 'win32'",
 ]
 
 [project.scripts]
@@ -111,7 +114,7 @@ strict = true
 exclude = ['^compose_api/api/client/.*']
 
 [[tool.mypy.overrides]]
-module = ["process_bigraph.*", "authlib.*"]
+module = ["process_bigraph.*", "authlib.*", "win32api", "win32con", "win32security", "win32file", "win32cred"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
@@ -127,6 +130,9 @@ markers = [
 [tool.deptry]
 exclude = [".venv/*", "alembic/*"]
 ignore = ["DEP002", "DEP003", "DEP004"]
+
+[tool.deptry.package_module_name_map]
+pywin32 = ["win32api", "win32con", "win32security", "win32file", "win32cred"]
 
 [tool.ruff]
 target-version = 'py313'  # the floor in requires-python; the runtime is 3.14

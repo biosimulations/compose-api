@@ -16,15 +16,41 @@ import sys
 import threading
 import webbrowser
 from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, NoReturn
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
 import httpx
+import keyring
 import platformdirs
 import pytest
+from fastapi import HTTPException, UploadFile
+from keyring.backends.fail import Keyring as FailKeyring
+from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
+from pydantic import SecretStr
 
-from compose_api.cli.config import ENV_PREFIX, CliSettings, default_config_path
+from compose_api.api.main import app
+from compose_api.api.routers import compute as compute_router
+from compose_api.api.routers import results as results_router
+from compose_api.api.routers import simulation as simulation_router
+from compose_api.authentication import Auth0Verifier, get_auth0_verifier
+from compose_api.cli.auth.models import Identity, SessionRecord, TokenGrant
+from compose_api.cli.auth.session import AuthSession
+from compose_api.cli.auth.storage import MemoryCredentialStore
+from compose_api.cli.commands import api as api_commands
+from compose_api.cli.commands import auth as auth_commands
+from compose_api.cli.commands.common import Wiring
+from compose_api.cli.config import ENV_PREFIX, CliSettings, default_config_path, requested_scopes
+from compose_api.simulation.models import (
+    HpcRun,
+    JobStatus,
+    JobType,
+    RegisteredSimulators,
+    SimulationExperiment,
+    SimulatorVersion,
+)
 from tests.fixtures.auth_fixtures import AUTH0_TEST_AUDIENCE, AUTH0_TEST_DOMAIN, AUTH0_TEST_ISSUER, FakeAuth0
 
 CLI_CLIENT_ID = "CliNativeClient0123456789abcdefAB"
@@ -291,3 +317,148 @@ class FakeBrowser:
 @pytest.fixture
 def fake_tenant(fake_auth0: FakeAuth0) -> FakeTenant:
     return FakeTenant(fake_auth0)
+
+
+@pytest.fixture(autouse=True)
+def no_os_keyring(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test reaches the developer's real credential store. Unless a test injects a store, keyring's refusing
+    `fail` backend is the one the CLI finds, and the CLI rejects it as unsupported."""
+    monkeypatch.setattr(keyring, "get_keyring", FailKeyring)
+
+
+def use_profile(monkeypatch: pytest.MonkeyPatch, settings: CliSettings) -> None:
+    """Point the default profile at `settings` through the environment, as a person's shell would."""
+    for field in ("api_base_url", "auth0_domain", "auth0_audience", "auth0_client_id", "callback_port"):
+        monkeypatch.setenv(f"{ENV_PREFIX}{field.upper()}", str(getattr(settings, field)))
+
+
+def wire(monkeypatch: pytest.MonkeyPatch, wiring: Wiring) -> None:
+    """Make every command reached through `main()` use `wiring` instead of the real store, browser and network."""
+    for module in (api_commands, auth_commands):
+        monkeypatch.setattr(module, "Wiring", lambda: wiring)
+
+
+async def seed_session(
+    settings: CliSettings,
+    tenant: FakeTenant,
+    store: MemoryCredentialStore,
+    *,
+    access: dict[str, Any] | None = None,
+    expires_in: int = 300,
+    refresh_token: str | None = REFRESH_TOKEN,
+) -> SessionRecord:
+    """Store a signed-in session whose access token the fake tenant signed (override claims with `access`)."""
+    now = datetime.now(UTC)
+    grant = TokenGrant(
+        identity=Identity(issuer=AUTH0_TEST_ISSUER, subject=tenant.subject),
+        access_token=SecretStr(tenant.auth0.token(**{"sub": tenant.subject, **(access or {})})),
+        access_token_expires_at=now + timedelta(seconds=expires_in),
+        refresh_token=None if refresh_token is None else SecretStr(refresh_token),
+        scopes=requested_scopes(persistent=True),
+        received_at=now,
+    )
+    session = AuthSession(settings, store)
+    async with session.login_transaction() as snapshot:
+        return await session.commit(grant, snapshot)
+
+
+class RecordingTransport(httpx.AsyncBaseTransport):
+    """Wraps a transport, keeping every request it was asked to send and counting how often it was closed."""
+
+    def __init__(self, inner: httpx.AsyncBaseTransport) -> None:
+        self.inner = inner
+        self.requests: list[httpx.Request] = []
+        self.closed = 0
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        return await self.inner.handle_async_request(request)
+
+    async def aclose(self) -> None:
+        self.closed += 1
+
+    def paths(self) -> list[str]:
+        return [request.url.path for request in self.requests]
+
+
+class FakeComposeApi:
+    """The real FastAPI app over ASGI, verifying real JWTs against `FakeAuth0`'s keys.
+
+    Only the data layer behind the CLI's three business operations is replaced, so routing, authentication, multipart
+    parsing and response models are the server's own -- and a submission stops before anything reaches SLURM.
+    """
+
+    SIMULATION_ID = 41
+    SIMULATOR_ID = 7
+
+    def __init__(self) -> None:
+        self.simulators = RegisteredSimulators(
+            versions=[
+                SimulatorVersion(
+                    container_def=ContainerizationFileRepr(
+                        representation="Bootstrap: docker", containerization_engine=ContainerizationEngine.APPTAINER
+                    ),
+                    container_def_hash="0123456789abcdef0123456789abcdef",
+                    packages=[],
+                    database_id=self.SIMULATOR_ID,
+                    created_at=datetime(2026, 10, 1, 12, tzinfo=UTC),
+                )
+            ]
+        )
+        self.runs = {
+            self.SIMULATION_ID: HpcRun(
+                database_id=3,
+                slurmjobid=4567,
+                correlation_id="correlation-1",
+                job_type=JobType.SIMULATION,
+                sim_id=self.SIMULATION_ID,
+                simulator_id=self.SIMULATOR_ID,
+                status=JobStatus.RUNNING,
+                start_time="2026-10-07T12:00:00",
+            )
+        }
+        self.uploads: list[dict[str, Any]] = []
+        self.created = 0
+        self.transport = RecordingTransport(httpx.ASGITransport(app=app))
+
+    async def simulator_versions(self) -> RegisteredSimulators:
+        return self.simulators
+
+    async def hpc_run_status(self, *, db_service: object, ref_id: int, job_type: JobType) -> HpcRun:
+        if ref_id not in self.runs:
+            raise HTTPException(status_code=404, detail=DESCRIPTION_CANARY)
+        return self.runs[ref_id]
+
+    async def request_from_upload(self, uploaded_file: UploadFile, batch_submission: bool = False) -> SimpleNamespace:
+        self.uploads.append({
+            "file_name": uploaded_file.filename,
+            "content": await uploaded_file.read(),
+            "batch": batch_submission,
+        })
+        return SimpleNamespace(end_time_point=None)
+
+    async def run_simulation(self, *, simulation_request: SimpleNamespace, **_services: object) -> SimulationExperiment:
+        self.created += 1
+        self.uploads[-1]["interval_time"] = simulation_request.end_time_point
+        return SimulationExperiment(simulation_database_id=self.SIMULATION_ID, simulator_database_id=self.SIMULATOR_ID)
+
+
+@pytest.fixture
+def fake_compose_api(auth0_verifier: Auth0Verifier, monkeypatch: pytest.MonkeyPatch) -> Generator[FakeComposeApi]:
+    fake = FakeComposeApi()
+    previous = app.dependency_overrides.get(get_auth0_verifier)
+    app.dependency_overrides[get_auth0_verifier] = lambda: auth0_verifier
+    monkeypatch.setattr(compute_router, "get_simulator_versions", fake.simulator_versions)
+    monkeypatch.setattr(results_router, "get_database_service", object)
+    monkeypatch.setattr(results_router, "get_hpc_run_status", fake.hpc_run_status)
+    for name in ("get_simulation_service", "get_database_service", "get_job_monitor"):
+        monkeypatch.setattr(simulation_router, name, object)
+    monkeypatch.setattr(simulation_router, "get_simulation_request_from_uploaded_file", fake.request_from_upload)
+    monkeypatch.setattr(simulation_router, "run_simulation", fake.run_simulation)
+    try:
+        yield fake
+    finally:
+        if previous is None:
+            app.dependency_overrides.pop(get_auth0_verifier, None)
+        else:
+            app.dependency_overrides[get_auth0_verifier] = previous

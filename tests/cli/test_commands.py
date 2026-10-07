@@ -5,12 +5,13 @@ import shutil
 import subprocess
 import sys
 import tomllib
+import zipfile
 from pathlib import Path
 
 import pytest
 
 import compose_api.cli.config
-from compose_api.cli.config import PROFILE_FIELDS
+from compose_api.cli.config import BUILTIN_PROFILES, PROFILE_FIELDS
 from compose_api.cli.errors import ExitCode
 from compose_api.cli.main import build_parser, main
 from compose_api.config import REPO_ROOT
@@ -18,20 +19,30 @@ from compose_api.version import __version__
 from tests.fixtures.cli_fixtures import write_cli_config
 
 CLIENT_ID = "AbCdEf0123456789AbCdEf0123456789"
+# A profile the person defined themselves, without the client ID or connections the built-in profiles carry.
+BARE_PROFILE = """
+[profiles.dev]
+api_base_url = "https://compose.example.org"
+auth0_domain = "tenant.example.auth0.com"
+auth0_audience = "https://api.compose.example.org"
+"""
 LEAK_CANARY = "server-secret-4c1d"
 
-# Every command in the documented surface, with the options each one takes.
-SIGN_IN_COMMANDS = [
+# Every command in the documented surface, with the options each one takes. The first three sign in; the rest use
+# a session.
+SIGN_IN_FLOW_COMMANDS = [
     ["auth", "signup"],
     ["auth", "signup", "--provider", "google", "--no-browser"],
     ["auth", "login", "--device"],
+]
+SESSION_COMMANDS = [
     ["auth", "status", "--verify"],
-    ["auth", "logout", "--local-only"],
     ["simulators", "list"],
     ["simulators", "list", "--ephemeral-auth", "--device"],
     ["simulations", "status", "123"],
     ["simulations", "submit", "experiment.omex", "--interval-time", "2.5", "--batch", "--ephemeral-auth"],
 ]
+SIGN_IN_COMMANDS = [*SIGN_IN_FLOW_COMMANDS, *SESSION_COMMANDS]
 ALL_COMMANDS = [["config", "show"], *SIGN_IN_COMMANDS]
 
 # Run inside a child process: reports which heavyweight or server modules a command imported, and whether the
@@ -136,7 +147,16 @@ def test_config_show_text(capsys: pytest.CaptureFixture[str], cli_config_path: P
     assert lines[0].split() == ["profile", "production", "(default)"]
     assert lines[1].startswith("config file") and lines[1].endswith(f"{cli_config_path}  (not found)")
     assert [line.split()[0] for line in lines[2:]] == [*PROFILE_FIELDS, "issuer", "redirect_uri"]
-    assert "auth0_client_id is not set, so profile 'production' cannot sign in yet" in captured.err
+    assert lines[5].split() == ["auth0_client_id", BUILTIN_PROFILES["production"]["auth0_client_id"], "(default)"]
+    assert captured.err == "", "the built-in profiles can sign in"
+
+
+def test_config_show_notes_a_profile_that_cannot_sign_in(
+    capsys: pytest.CaptureFixture[str], cli_config_path: Path
+) -> None:
+    write_cli_config(cli_config_path, BARE_PROFILE)
+    assert main(["config", "show", "--profile", "dev"]) == ExitCode.OK
+    assert "auth0_client_id is not set, so profile 'dev' cannot sign in yet" in capsys.readouterr().err
 
 
 def test_config_show_reports_provenance_and_nothing_secret(
@@ -186,12 +206,13 @@ def test_invalid_configuration_fails_before_network_or_browser(
 def test_missing_public_client_id_fails_before_network_or_browser(
     capsys: pytest.CaptureFixture[str], cli_config_path: Path, no_network_or_browser: list[str], argv: list[str]
 ) -> None:
-    assert main(argv) == ExitCode.CONFIG
+    write_cli_config(cli_config_path, BARE_PROFILE)
+    assert main([*argv, "--profile", "dev"]) == ExitCode.CONFIG
     assert "set COMPOSE_API_CLI_AUTH0_CLIENT_ID" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("argv", SIGN_IN_COMMANDS)
-def test_commands_not_carried_out_yet_say_so(
+@pytest.mark.parametrize("argv", SIGN_IN_FLOW_COMMANDS)
+def test_sign_in_stops_before_the_browser_while_there_is_nowhere_to_keep_a_session(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
     cli_config_path: Path,
@@ -199,12 +220,62 @@ def test_commands_not_carried_out_yet_say_so(
     argv: list[str],
 ) -> None:
     monkeypatch.setenv("COMPOSE_API_CLI_AUTH0_CLIENT_ID", CLIENT_ID)
-    assert main(argv) == ExitCode.FAILURE
-    assert f"'{argv[0]} {argv[1]}' is not available in this build" in capsys.readouterr().err
+    monkeypatch.setenv("COMPOSE_API_CLI_GOOGLE_CONNECTION", "google-oauth2")
+    import keyring
+    from keyring.backends.fail import Keyring
+
+    monkeypatch.setattr(keyring, "get_keyring", Keyring)
+    assert main([*argv, "--json"]) == ExitCode.CONFIG
+    captured = capsys.readouterr()
+    error = json.loads(captured.out)["error"]
+    assert error["category"] == "storage"
+    assert "Unsupported OS credential backend" in error["message"]
+
+
+def test_google_sign_in_needs_its_connection_named(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    cli_config_path: Path,
+    no_network_or_browser: list[str],
+) -> None:
+    write_cli_config(cli_config_path, BARE_PROFILE)
+    monkeypatch.setenv("COMPOSE_API_CLI_AUTH0_CLIENT_ID", CLIENT_ID)
+    assert main(["auth", "login", "--provider", "google", "--profile", "dev"]) == ExitCode.CONFIG
+    assert "needs google_connection set for profile 'dev'" in capsys.readouterr().err
+    # With --device the provider is chosen on the hosted page, so no connection is needed; the tests' refusing
+    # credential store is what stops this one, still before any network request.
+    assert main(["auth", "login", "--provider", "google", "--device", "--profile", "dev"]) == ExitCode.CONFIG
+    assert "Unsupported OS credential backend" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("argv", [argv for argv in SESSION_COMMANDS if "--ephemeral-auth" not in argv])
+def test_session_commands_need_a_usable_store_and_never_fall_back(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    cli_config_path: Path,
+    no_network_or_browser: list[str],
+    argv: list[str],
+) -> None:
+    """With no supported OS store (the tests' default) and no --ephemeral-auth, nothing is sent and nothing opens.
+
+    The --ephemeral-auth variants need no store; tests/cli/test_api.py runs them end to end.
+    """
+    monkeypatch.setenv("COMPOSE_API_CLI_AUTH0_CLIENT_ID", CLIENT_ID)
+    if argv[:2] == ["simulations", "submit"]:
+        archive = cli_config_path.parent / "experiment.omex"
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(archive, "w") as contents:
+            contents.writestr("manifest.xml", "<omexManifest/>")
+        argv = [*argv[:2], str(archive), *argv[3:]]
+    assert main([*argv, "--json"]) == ExitCode.CONFIG
+    error = json.loads(capsys.readouterr().out)["error"]
+    assert error["category"] == "storage"
+    assert "--ephemeral-auth" in error["message"], "a host without a store is pointed at the memory-only alternative"
 
 
 def test_json_errors_are_objects_on_stdout(capsys: pytest.CaptureFixture[str], cli_config_path: Path) -> None:
-    assert main(["auth", "login", "--json"]) == ExitCode.CONFIG
+    write_cli_config(cli_config_path, BARE_PROFILE)
+    assert main(["auth", "login", "--json", "--profile", "dev"]) == ExitCode.CONFIG
     captured = capsys.readouterr()
     error = json.loads(captured.out)["error"]
     assert error["category"] == "configuration"
@@ -270,3 +341,22 @@ def test_runs_without_server_settings_or_imports(
     assert report == {"code": 0, "imported": allowed, "server_env_loaded": False}, result.stderr
     assert LEAK_CANARY not in result.stdout + result.stderr
     assert "evil.example" not in result.stdout
+
+
+def test_local_status_and_logout_json(
+    monkeypatch: pytest.MonkeyPatch,
+    cli_config_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    no_network_or_browser: list[str],
+) -> None:
+    from compose_api.cli.auth import storage
+
+    store = storage.MemoryCredentialStore()
+    monkeypatch.setenv("COMPOSE_API_CLI_AUTH0_CLIENT_ID", CLIENT_ID)
+    monkeypatch.setattr(storage, "open_persistent_store", lambda *args, **kwargs: store)
+    assert main(["auth", "status", "--json"]) == ExitCode.AUTH_REQUIRED
+    status = json.loads(capsys.readouterr().out)
+    assert (status["state"], status["checked_with_api"]) == ("missing", False)
+    assert main(["auth", "logout", "--local-only", "--json"]) == ExitCode.OK
+    assert json.loads(capsys.readouterr().out) == {"local_cleared": True, "revocation": "not_attempted"}
+    assert next(iter(store.states.values())).read().generation == 1

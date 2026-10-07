@@ -11,8 +11,10 @@ from tests.fixtures.auth_fixtures import auth0_verifier, authenticated_identity_
 from tests.fixtures.cli_fixtures import (  # noqa: F401
     cli_config_path,
     cli_subprocess_env,
+    fake_compose_api,
     fake_tenant,
     no_network_or_browser,
+    no_os_keyring,
 )
 from tests.fixtures.mongodb_fixtures import (  # noqa: F401
     mongo_test_client,

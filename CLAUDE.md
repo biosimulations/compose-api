@@ -99,16 +99,19 @@ and swallowed — an import error in a router silently drops its endpoints rathe
 (pre-baked copasi/tellurium runs). Every endpoint sets an explicit `operation_id` because those become the generated
 client's method names.
 
-**Authentication** is optional Auth0 bearer, all in `compose_api/authentication.py`. Each of the four routers
+**Authentication** is optional Auth0 bearer on business routes, all in `compose_api/authentication.py`. Each of the four business routers
 sets `dependencies=[Depends(get_optional_principal)]` on its `RouterConfig` (keep its own prefix). A handler that
 wants the identity adds an `OptionalPrincipal` parameter; FastAPI caches the dependency, so the token is still verified
 once. No header means anonymous (`None`); any header that is present but invalid is a 401, never anonymous, which is
 why the header is parsed by hand: `HTTPBearer(auto_error=False)` also returns `None` for a non-Bearer scheme. OpenAPI
-security is document-level only (`_openapi_with_optional_bearer` in `api/main.py`). A per-operation `security`
+security defaults to document-level optional bearer (`_openapi_with_optional_bearer` in `api/main.py`). A per-operation `security`
 entry, even `[{}, ...]`, makes openapi-python-client type that method as requiring `AuthenticatedClient`, a breaking
-change for pbest. `openapi_spec.py` must use `app.openapi()` so the override reaches the checked-in spec. Settings are
+change for pbest. The isolated `/auth/me` operation (`routers/auth.py`) requires `RequiredPrincipal`, has an explicit
+required-bearer OpenAPI override, and returns only verified principal fields with `Cache-Control: no-store`.
+Keep that exception separate from the four optional-auth business routers. `openapi_spec.py` must use `app.openapi()`
+so the override reaches the checked-in spec. Settings are
 `auth0_domain` and `auth0_audience`; the issuer is derived and the algorithm is fixed to RS256. Every active handler
-also takes `principal: OptionalPrincipal` (a structural test enforces it); submission handlers log
+on a business router also takes `principal: OptionalPrincipal` (a structural test enforces it); submission handlers log
 `describe_caller(principal)`. `JwksCache` refreshes an unknown `kid` at most once per 30 s, the same back-off as an
 expired cache, coalescing concurrent refreshes by counting *completed* refreshes. Deployment:
 both API overlays load `config/compose-api-rke`; the local overlay overrides only the Auth0 keys via a
@@ -138,6 +141,47 @@ currently calls `create_db()` (`metadata.create_all` + alembic `stamp head`) rat
 changes still need a matching alembic revision for existing deployments. MongoDB settings and fixtures exist but the
 live path is Postgres.
 
+**CLI.** `compose_api/cli/` is the `compose-api` console script (`project.scripts`; also `python -m compose_api.cli`),
+a client of this API, not part of the server. It must never import `compose_api.config`, or anything that does: that
+module loads the server's dotenv files, `$SECRET_ENV_FILE` included. A subprocess test in `tests/cli/test_commands.py`
+checks which modules `--help` and `config show` import. `main.py` imports only argparse, the version and
+`cli/errors.py` at module level, and commands import the rest when they run. Profiles (`cli/config.py`, a separate
+`CliSettings`) hold public values only. Precedence is `COMPOSE_API_CLI_*`, then `[profiles.<name>]` in the user
+config dir's `config.toml`, then the built-in `production`/`local` defaults. Unknown or secret-looking keys are
+errors, and error messages never repeat a configured value. `cli/errors.py::ExitCode` is a contract scripts rely on.
+
+Sign-in lives in `cli/auth/`. `oauth.py` trusts discovery only on the configured tenant host, never follows
+redirects, and validates access tokens with PyJWT and ID tokens with PyJWT plus Authlib's `CodeIDToken`.
+Its `ALGORITHMS`/`LEEWAY_SECONDS` must match `compose_api/authentication.py`, and a test checks they do.
+`callback.py` is the 127.0.0.1 loopback listener; `browser.py` and `device.py` are the two flows; `signin.py` picks
+one and commits a session only once it is fully valid. Use only Authlib's protocol modules (`authlib.oauth2.rfc6749`,
+`rfc7636`, `authlib.oidc.core`), never `authlib.integrations`. Its clients attach bearers and refresh on their own,
+back-fill a spent refresh token, and want `httpx2`. `auth/storage.py` allowlists OS credential backends;
+`session.py` owns rotation, login generation checks and revoke-then-delete logout. `state.py` persists only non-secret
+journals/tombstones under process locks; never bypass it for a credential mutation. `windows_state.py` enforces
+owner-only ACLs and uses native single-item replacement to avoid keyring's legacy shadow copies. `auth status` is
+local unless `--verify` is given.
+
+`cli/api.py::ComposeApi` is the only code that sends the bearer. It calls the generated client's `asyncio_detailed`
+operations; never hand-write a request or model. Each attempt gets a fresh `AuthenticatedClient` with no redirects,
+`trust_env=False` and finite timeouts. A request hook refuses any origin or path outside `ALLOWED_PATHS`, so a new
+API command means a new `Operation` there. Every status is mapped in `_failure` before `.parsed` is trusted. A read
+gets one renewal and one replay on 401; `Operation.replayable=False` (submit) is never resent, and 403 never renews.
+Commands take a `commands/common.py::Wiring` (store, browser, Auth0 and API transports) instead of patching internals.
+`main()` prints `CliError`s escaped through `output.printable_lines` and anything else as an internal error by type
+only. `tests/cli/test_errors.py` requires every `CliError` subclass to have an entry in its exit-code contract.
+Tests drive real loopback sockets against `FakeTenant` and `FakeBrowser`, and the real FastAPI app over ASGI as
+`FakeComposeApi` (data layer stubbed, real JWT verification), all in `tests/fixtures/cli_fixtures.py`, signing real
+RS256 tokens with `FakeAuth0`'s keys. An autouse `no_os_keyring` fixture keeps every test off the real keychain.
+
+The built-in profiles carry the public native client IDs and connection names. Keep them identical to
+auth0-pulumi's `pulumi stack output cli_profiles` (its `compose-api/CLI_SETUP.md`). `docs/cli.md` is the user guide, and
+`tests/cli/test_documentation.py` fails when a command, `COMPOSE_API_CLI_*` variable, exit code, error category or
+built-in value is missing from it, so update the page with the code. Real OS credential stores are tested only
+on request: `COMPOSE_API_TEST_OS_KEYRING=1` runs `tests/cli/test_os_keyring.py`, which writes and deletes a synthetic
+record. The manual `CLI platforms` workflow runs it on macOS, Windows and Linux. Windows cannot hold a realistic
+session (2560-byte UTF-16 credential limit), and a test pins that measurement.
+
 ## Companion repositories
 
 This service is one side of a three-package loop. `../pbest` is checked out next to this repo
@@ -163,9 +207,11 @@ This service is one side of a three-package loop. `../pbest` is checked out next
   destinations — the in-repo `compose_api/api/client/` and `$LIB_DIR` (the separate compose-api-client repo, not in
   this workspace) — and the published package additionally carries a hand-written `utils/run_simulation_and_wait.py`
   that the generator does not produce and must not clobber.
-- The production host is `compose.cam.uchc.edu` in all three places that must agree: the RKE ingress
-  (`kustomize/overlays/compose-api-rke/ingress.yaml`), `ServerMode.PROD` plus `APP_ORIGINS` here, and pbest's default
-  client base URL. Changing it means changing all three.
+- The production host is `compose.cam.uchc.edu` in all four places that must agree: the RKE ingress
+  (`kustomize/overlays/compose-api-rke/ingress.yaml`), `ServerMode.PROD` plus `APP_ORIGINS` here, the CLI's built-in
+  `production` profile (`compose_api/cli/config.py::BUILTIN_PROFILES`, checked against `ServerMode.PROD` and the
+  kustomize Auth0 values by `tests/cli/test_config.py`), and pbest's default client base URL. Changing it means
+  changing all four.
 
 ## Conventions
 

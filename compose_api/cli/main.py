@@ -4,9 +4,9 @@ Only argparse, the version string and the error types load before a command runs
 offline and without configuration; each command imports what it needs when it runs. Nothing here imports
 `compose_api.config`: that module loads the server's dotenv files, `$SECRET_ENV_FILE` included.
 
-Commands that sign in or call the API are part of the surface already but not yet carried out. They still resolve and
-validate their profile first, so a bad configuration fails the same way it will once they work: before any network
-request or browser.
+All commands resolve and validate their profile before contacting a server or opening a browser. Errors are
+`CliError`s, printed as one escaped line (and a JSON object with --json); anything else is reported as an internal
+error by type only, because a traceback can carry values that must not reach a terminal or a log.
 """
 
 import argparse
@@ -15,7 +15,7 @@ import math
 import sys
 from collections.abc import Callable, Sequence
 
-from compose_api.cli.errors import CliError, CommandUnavailableError, ExitCode
+from compose_api.cli.errors import CliError, ExitCode
 from compose_api.version import __version__
 
 PROG = "compose-api"
@@ -57,13 +57,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         return handler(args)
     except CliError as exc:
-        print(f"{PROG}: error: {exc.message}", file=sys.stderr)
-        if args.json:
-            print(json.dumps({"error": {"category": exc.category, "message": exc.message}}))
-        return int(exc.exit_code)
+        return _report(args, exc.category, exc.message, exc.exit_code)
     except KeyboardInterrupt:
         print(f"{PROG}: cancelled", file=sys.stderr)
         return int(ExitCode.CANCELLED)
+    except Exception as exc:
+        return _report(
+            args, "internal", f"internal error ({type(exc).__name__}); this is a bug in {PROG}", ExitCode.FAILURE
+        )
+
+
+def _report(args: argparse.Namespace, category: str, message: str, code: ExitCode) -> int:
+    from compose_api.cli.output import printable_lines
+
+    print(f"{PROG}: error: {printable_lines(message)}", file=sys.stderr)
+    if args.json:
+        print(json.dumps({"error": {"category": category, "message": message, "exit_code": int(code)}}))
+    return int(code)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -122,7 +132,7 @@ def _add_auth_commands(commands: Subcommands, common: argparse.ArgumentParser) -
     )
     _add_provider_option(signup, default="email")
     _add_interaction_options(signup)
-    signup.set_defaults(handler=_not_yet_available, command="auth signup")
+    signup.set_defaults(handler=_auth_signup)
 
     login = subcommands.add_parser(
         "login",
@@ -132,7 +142,7 @@ def _add_auth_commands(commands: Subcommands, common: argparse.ArgumentParser) -
     )
     _add_provider_option(login, default=None)
     _add_interaction_options(login)
-    login.set_defaults(handler=_not_yet_available, command="auth login")
+    login.set_defaults(handler=_auth_login)
 
     status = subcommands.add_parser(
         "status",
@@ -141,7 +151,7 @@ def _add_auth_commands(commands: Subcommands, common: argparse.ArgumentParser) -
         description="Show the stored session without contacting any server, unless --verify is given.",
     )
     status.add_argument("--verify", action="store_true", help="refresh if needed and confirm the identity with the API")
-    status.set_defaults(handler=_not_yet_available, command="auth status")
+    status.set_defaults(handler=_auth_status)
 
     logout = subcommands.add_parser(
         "logout",
@@ -150,7 +160,7 @@ def _add_auth_commands(commands: Subcommands, common: argparse.ArgumentParser) -
         description="Revoke the refresh token with Auth0 and erase the local session.",
     )
     logout.add_argument("--local-only", action="store_true", help="erase the local session without contacting Auth0")
-    logout.set_defaults(handler=_not_yet_available, command="auth logout")
+    logout.set_defaults(handler=_auth_logout)
 
 
 def _add_api_commands(commands: Subcommands, common: argparse.ArgumentParser) -> None:
@@ -158,7 +168,7 @@ def _add_api_commands(commands: Subcommands, common: argparse.ArgumentParser) ->
     simulator_commands = simulators.add_subparsers(title="commands", metavar="COMMAND", required=True)
     list_simulators = simulator_commands.add_parser("list", parents=[common], help="list the available simulators")
     _add_ephemeral_auth_options(list_simulators)
-    list_simulators.set_defaults(handler=_not_yet_available, command="simulators list")
+    list_simulators.set_defaults(handler=_simulators_list)
 
     simulations = commands.add_parser("simulations", parents=[common], help="submit simulations and check on them")
     simulation_commands = simulations.add_subparsers(title="commands", metavar="COMMAND", required=True)
@@ -166,7 +176,7 @@ def _add_api_commands(commands: Subcommands, common: argparse.ArgumentParser) ->
     status = simulation_commands.add_parser("status", parents=[common], help="show a simulation's status")
     status.add_argument("simulation_id", metavar="ID", type=_positive_int, help="the simulation's numeric ID")
     _add_ephemeral_auth_options(status)
-    status.set_defaults(handler=_not_yet_available, command="simulations status")
+    status.set_defaults(handler=_simulations_status)
 
     submit = simulation_commands.add_parser(
         "submit",
@@ -180,7 +190,7 @@ def _add_api_commands(commands: Subcommands, common: argparse.ArgumentParser) ->
     )
     submit.add_argument("--batch", action="store_true", help="submit as a batch job")
     _add_ephemeral_auth_options(submit)
-    submit.set_defaults(handler=_not_yet_available, command="simulations submit")
+    submit.set_defaults(handler=_simulations_submit)
 
 
 def _add_provider_option(parser: argparse.ArgumentParser, *, default: str | None) -> None:
@@ -255,8 +265,43 @@ def _show_config(args: argparse.Namespace) -> int:
     return int(ExitCode.OK)
 
 
-def _not_yet_available(args: argparse.Namespace) -> int:
-    from compose_api.cli.config import load_cli_settings
+def _auth_signup(args: argparse.Namespace) -> int:
+    from compose_api.cli.commands.auth import signup
 
-    load_cli_settings(args.profile).settings.require_client_id()
-    raise CommandUnavailableError(f"'{args.command}' is not available in this build of {PROG} yet")
+    return signup(args)
+
+
+def _auth_login(args: argparse.Namespace) -> int:
+    from compose_api.cli.commands.auth import login
+
+    return login(args)
+
+
+def _auth_status(args: argparse.Namespace) -> int:
+    from compose_api.cli.commands.auth import status
+
+    return status(args)
+
+
+def _auth_logout(args: argparse.Namespace) -> int:
+    from compose_api.cli.commands.auth import logout
+
+    return logout(args)
+
+
+def _simulators_list(args: argparse.Namespace) -> int:
+    from compose_api.cli.commands.api import list_simulators
+
+    return list_simulators(args)
+
+
+def _simulations_status(args: argparse.Namespace) -> int:
+    from compose_api.cli.commands.api import simulation_status
+
+    return simulation_status(args)
+
+
+def _simulations_submit(args: argparse.Namespace) -> int:
+    from compose_api.cli.commands.api import submit_simulation
+
+    return submit_simulation(args)

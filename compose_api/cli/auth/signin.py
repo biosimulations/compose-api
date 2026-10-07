@@ -10,6 +10,7 @@ from compose_api.cli.auth.browser import BrowserLauncher, browser_sign_in, open_
 from compose_api.cli.auth.device import device_sign_in
 from compose_api.cli.auth.models import Notify, Provider, SessionRecord, SignInRequest, TokenGrant
 from compose_api.cli.auth.oauth import Auth0OAuthClient
+from compose_api.cli.auth.session import AuthSession
 from compose_api.cli.auth.storage import CredentialStore, MemoryCredentialStore
 from compose_api.cli.config import CliSettings
 from compose_api.cli.errors import ConfigError
@@ -61,16 +62,15 @@ async def persistent_sign_in(
 ) -> SessionRecord:
     """Sign in and replace the stored session.
 
-    The previous session is untouched until the new one has passed every check, so cancelling, timing out or failing
-    at any step leaves it exactly as it was.
+    Cancellation or flow failure preserves the previous session. Commit rechecks the generation under lock;
+    an uncertain storage failure invalidates local credentials instead of leaving a partial replacement usable.
     """
-    binding_key = settings.binding_key(persistent=True)
-    grant = await sign_in(
-        settings, replace(request, persistent=True), notify=notify, launcher=launcher, transport=transport
-    )
-    record = SessionRecord.from_grant(grant, binding_key=binding_key)
-    store.save(binding_key, record)
-    return record
+    session = AuthSession(settings, store)
+    async with session.login_transaction() as snapshot:
+        grant = await sign_in(
+            settings, replace(request, persistent=True), notify=notify, launcher=launcher, transport=transport
+        )
+        return await session.commit(grant, snapshot)
 
 
 @asynccontextmanager

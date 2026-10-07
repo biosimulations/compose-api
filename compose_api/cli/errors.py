@@ -37,14 +37,9 @@ class ConfigError(CliError):
     category = "configuration"
 
 
-class CommandUnavailableError(CliError):
-    """The command is part of the CLI surface but this build cannot carry it out yet."""
-
-    category = "unavailable"
-
-
 class AuthError(CliError):
-    """Sign-in did not produce a session: denied, expired, timed out, or a code the tenant rejected."""
+    """There is no usable session: sign-in did not produce one, none is stored, it expired beyond renewal, or the API
+    rejected its credentials."""
 
     exit_code = ExitCode.AUTH_REQUIRED
     category = "authentication"
@@ -70,6 +65,11 @@ class ProtocolError(CliError):
     category = "protocol"
 
 
+class StorageError(CliError):
+    exit_code = ExitCode.CONFIG
+    category = "storage"
+
+
 class InteractionError(CliError):
     """The local side of an interactive sign-in failed: the callback port is taken or no browser could be opened."""
 
@@ -77,8 +77,37 @@ class InteractionError(CliError):
     category = "interaction"
 
 
-class StorageError(CliError):
-    """The OS credential store cannot be used, or a session file is not private."""
+class UsageError(CliError):
+    """A command-line argument names something unusable, such as a file that is not an OMEX archive."""
 
-    exit_code = ExitCode.CONFIG
-    category = "storage"
+    exit_code = ExitCode.USAGE
+    category = "usage"
+
+
+class ForbiddenError(CliError):
+    """The API refused an authenticated request. Signing in again cannot change that, so it is never retried."""
+
+    exit_code = ExitCode.FORBIDDEN
+    category = "forbidden"
+
+
+class RateLimitedError(NetworkError):
+    category = "rate_limited"
+
+
+# Unsuccessful API answers that are neither authentication, authorization nor transport problems: exit 1, each with
+# its own category so scripts can tell them apart without parsing messages.
+class NotFoundError(CliError):
+    category = "not_found"
+
+
+class InvalidRequestError(CliError):
+    category = "invalid_request"
+
+
+class ServerError(CliError):
+    category = "server_error"
+
+
+class ApiError(CliError):
+    category = "api_error"

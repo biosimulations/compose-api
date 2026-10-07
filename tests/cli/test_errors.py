@@ -2,7 +2,6 @@
 
 import asyncio
 import inspect
-import io
 import json
 import logging
 import socket
@@ -10,12 +9,15 @@ import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, BinaryIO
 
 import httpx
 import pytest
 
 import compose_api.cli.config
+from compose_api.api.client.models import SimulationExperiment
 from compose_api.cli import errors
+from compose_api.cli.api import ComposeApi
 from compose_api.cli.auth.storage import MemoryCredentialStore
 from compose_api.cli.commands.common import Wiring
 from compose_api.cli.errors import CliError, ExitCode
@@ -256,8 +258,7 @@ def test_each_failure_in_the_matrix_has_its_code_and_a_safe_next_step(
             FakeTenant.TOKEN,
             fake_tenant.token_response(refresh_token="rt-rotated", include_id_token=False),  # noqa: S106 -- test data
         )
-    if scenario.auth0_down:
-        fake_tenant.handle = _discovery_down(fake_tenant)  # type: ignore[method-assign]
+    fake_tenant.discovery_available = not scenario.auth0_down
     api = fake_compose_api.transport if scenario.api is None else RecordingTransport(httpx.MockTransport(scenario.api))
     browser = FakeBrowser(fake_tenant, outcome=scenario.browser, opens=scenario.browser != "cannot-open")
     if scenario.keyring:
@@ -291,17 +292,6 @@ def test_each_failure_in_the_matrix_has_its_code_and_a_safe_next_step(
     assert DESCRIPTION_CANARY not in captured.out + captured.err
 
 
-def _discovery_down(tenant: FakeTenant) -> Callable[[httpx.Request], httpx.Response]:
-    original = tenant.handle
-
-    def handle(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/.well-known/openid-configuration":
-            return httpx.Response(503)
-        return original(request)
-
-    return handle
-
-
 def test_a_refresh_that_never_left_keeps_the_session(
     monkeypatch: pytest.MonkeyPatch,
     cli_config_path: Path,
@@ -313,7 +303,7 @@ def test_a_refresh_that_never_left_keeps_the_session(
     use_profile(monkeypatch, settings)
     store = MemoryCredentialStore()
     before = asyncio.run(seed_session(settings, fake_tenant, store, expires_in=30))
-    fake_tenant.handle = _discovery_down(fake_tenant)  # type: ignore[method-assign]
+    fake_tenant.discovery_available = False
     wire(
         monkeypatch,
         Wiring(
@@ -400,11 +390,12 @@ def test_text_and_json_report_the_same_facts(
             api_transport=fake_compose_api.transport,
         ),
     )
-    for argv, facts in [
+    cases: list[tuple[list[str], Callable[[dict[str, Any]], list[str]]]] = [
         (["auth", "status"], lambda d: [d["identity"]["subject"], d["identity"]["issuer"], d["state"]]),
         (["simulations", "status", "41"], lambda d: [str(d["sim_id"]), d["status"], str(d["slurmjobid"])]),
         (["simulators", "list"], lambda d: [str(v["database_id"]) for v in d["versions"]]),
-    ]:
+    ]
+    for argv, facts in cases:
         assert main(argv) == ExitCode.OK
         text = capsys.readouterr().out
         assert main([*argv, "--json"]) == ExitCode.OK
@@ -432,15 +423,38 @@ def test_submitting_reads_the_archive_once_and_closes_it(
             api_transport=fake_compose_api.transport,
         ),
     )
-    opened: list[io.BufferedReader] = []
-    original_open = Path.open
+    received: list[BinaryIO] = []
+    upload = ComposeApi.submit_simulation
 
-    def tracking_open(self: Path, *args: object, **kwargs: object) -> object:
-        handle = original_open(self, *args, **kwargs)  # type: ignore[call-overload]
-        if self.suffix == ".omex":
-            opened.append(handle)
-        return handle
+    async def observed(self: ComposeApi, archive: BinaryIO, **options: Any) -> SimulationExperiment:
+        received.append(archive)
+        return await upload(self, archive, **options)
 
-    monkeypatch.setattr(Path, "open", tracking_open)
+    monkeypatch.setattr(ComposeApi, "submit_simulation", observed)
     assert main(["simulations", "submit", str(_archive(tmp_path / "experiment.omex"))]) == ExitCode.OK
-    assert len(opened) == 1 and opened[0].closed
+    assert len(received) == 1 and received[0].closed, "the archive is opened once and closed after the upload"
+
+
+def test_ctrl_c_during_an_api_call_closes_the_client_and_exits_130(
+    monkeypatch: pytest.MonkeyPatch,
+    cli_config_path: Path,
+    fake_tenant: FakeTenant,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    settings = cli_settings(callback_port=8400)
+    use_profile(monkeypatch, settings)
+    store = MemoryCredentialStore()
+    asyncio.run(seed_session(settings, fake_tenant, store))
+
+    def interrupted(_request: httpx.Request) -> httpx.Response:
+        raise KeyboardInterrupt
+
+    api = RecordingTransport(httpx.MockTransport(interrupted))
+    wire(
+        monkeypatch,
+        Wiring(store_factory=lambda _settings: store, auth0_transport=fake_tenant.transport, api_transport=api),
+    )
+    assert main(["simulators", "list"]) == ExitCode.CANCELLED
+    assert capsys.readouterr().err == "compose-api: cancelled\n"
+    assert (len(api.requests), api.closed) == (1, 1)
+    assert store.load(settings.binding_key(persistent=True)) is not None, "cancelling a call is not a sign-out"
