@@ -261,6 +261,38 @@ class SimulationAccess(BaseModel):
     visibility: Visibility = Visibility.PUBLIC
 
 
+class SimulationSummary(BaseModel):
+    """One simulation as a listing shows it: what ran, where, and how it went (its latest SLURM job)."""
+
+    simulation_id: int
+    created_at: str | None = None  # ISO 8601 UTC
+    experiment_id: str
+    simulator_id: int
+    simulator: str | None = None  # the prebuilt simulator's name, or its image; None for a built container
+    container_def_hash: str
+    visibility: Visibility = Visibility.PUBLIC
+    status: str  # a JobStatus, or "submitting" while no SLURM job exists yet
+    slurm_job_id: int | None = None
+    start_time: str | None = None
+    end_time: str | None = None
+    exit_code: int | None = None
+    error_message: str | None = None
+    trace_id: str | None = None
+
+
+class SimulationDetail(SimulationSummary):
+    """A simulation with what its run recorded."""
+
+    event_count: int = 0
+    dataset_count: int = 0
+
+
+class SimulationPage(BaseModel):
+    simulations: list[SimulationSummary]
+    total: int
+    next_offset: int | None = None
+
+
 class SubmittedSimulation(BaseModel):
     database_id: int
     sim_content: SimulationResults

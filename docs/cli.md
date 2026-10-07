@@ -46,6 +46,17 @@ $ compose-api wait 4195
 $ compose-api results 4195 --extract out/
 ```
 
+- **Simulation ids.** A simulation id is what `run` prints (`simulation_database_id`), and what `status`, `wait`,
+  `results`, `events`, `trace` and `datasets list --sim` take. To find one later:
+
+  ```console
+  $ compose-api simulations list                          # newest first, with status and SLURM job
+  $ compose-api simulations list --status running --since 6h
+  $ compose-api simulations list --simulator viva-pde-particle --limit 20
+  $ compose-api simulations show 4334                     # plus how many events and datasets it recorded
+  ```
+
+  The list shows only simulations you can read; once auth is in place, that's yours and the public ones.
 - `--simulator` names a prebuilt simulator image the service is configured with. Without it, the service builds one
   from the document's dependencies, and `build-status <simulator_database_id>` follows that build.
 - `status` takes several ids and asks for them in one call.
@@ -154,6 +165,7 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 * `steps`: Registered process-bigraph steps.
 * `curated`: Run an SBML model with a curated simulator.
 * `datasets`: The files runs produced.
+* `simulations`: Find simulations and their ids.
 
 ## `compose-api health`
 
@@ -586,4 +598,61 @@ $ compose-api datasets get [OPTIONS] DATASET_ID
 **Options**:
 
 * `-O, --out PATH`: Write it here (a file, or a directory). Default: here.
+* `--help`: Show this message and exit.
+
+## `compose-api simulations`
+
+Find simulations and their ids.
+
+**Usage**:
+
+```console
+$ compose-api simulations [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `list`: Simulations you can read, newest first,...
+* `show`: One simulation: its simulator, its latest...
+
+### `compose-api simulations list`
+
+Simulations you can read, newest first, each with its latest SLURM job. The ids are what every other command
+takes.
+
+**Usage**:
+
+```console
+$ compose-api simulations list [OPTIONS]
+```
+
+**Options**:
+
+* `--status TEXT`: Only this state: submitting, running, completed, failed, timeout, ...
+* `--simulator TEXT`: Only this prebuilt simulator (name), or a container-definition hash prefix.
+* `--since TEXT`: Only those created since: 30m, 6h, 2d, 1w, or an ISO time.
+* `--limit INTEGER`: At most this many.  [default: 50]
+* `--offset INTEGER`: Skip this many (for the next page).  [default: 0]
+* `--help`: Show this message and exit.
+
+### `compose-api simulations show`
+
+One simulation: its simulator, its latest SLURM job, and how many events and datasets its run recorded.
+
+**Usage**:
+
+```console
+$ compose-api simulations show [OPTIONS] SIMULATION_ID
+```
+
+**Arguments**:
+
+* `SIMULATION_ID`: The simulation id.  [required]
+
+**Options**:
+
 * `--help`: Show this message and exit.

@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import override
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -66,6 +66,10 @@ class EventsDatabaseService(ABC):
         span_id: str | None = None,
     ) -> list[RunEvent]:
         """Stored events in insertion order, those with a cursor greater than ``after``."""
+
+    @abstractmethod
+    async def count_events(self, trace_id: str) -> int:
+        pass
 
     @abstractmethod
     async def ingest_candidates(self) -> list[IngestCandidate]:
@@ -173,6 +177,12 @@ class EventsORMExecutor(EventsDatabaseService):
         async with self.async_session_maker() as session:
             result = await session.execute(stmt.order_by(ORMRunEvent.id).limit(limit))
             return [row.to_run_event() for row in result.scalars().all()]
+
+    @override
+    async def count_events(self, trace_id: str) -> int:
+        async with self.async_session_maker() as session:
+            stmt = select(func.count()).where(ORMRunEvent.trace_id == trace_id)
+            return int((await session.execute(stmt)).scalar_one())
 
     @override
     async def ingest_candidates(self) -> list[IngestCandidate]:

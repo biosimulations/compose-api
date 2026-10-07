@@ -4,6 +4,7 @@ Commands run through typer's ``CliRunner`` against ``httpx.MockTransport`` (the 
 reached only asynchronously in process; the service-facing behaviour underneath is pinned in ``test_ext*.py``).
 """
 
+import datetime
 import io
 import json
 import logging
@@ -106,6 +107,7 @@ class FakeService:
             (("/results/simulation/events", "/results/simulation/trace"), lambda: self._observability(request)),
             (("/core/",), lambda: self._catalogue(path)),
             (("/datasets",), lambda: _datasets(path)),
+            (("/simulations",), lambda: _simulations(path)),
         ]
         for prefixes, respond in routes:
             if path.startswith(prefixes):
@@ -159,6 +161,26 @@ def _dataset() -> dict[str, Any]:
         "origin": "manifest",
         "available": True,
     }
+
+
+def _summary(sim_id: int, status: str) -> dict[str, Any]:
+    return {
+        "simulation_id": sim_id,
+        "created_at": "2026-10-07T17:27:37Z",
+        "experiment_id": f"abc_{sim_id}",
+        "simulator_id": 138,
+        "simulator": "viva-pde-particle",
+        "container_def_hash": "94e598ed",
+        "visibility": "public",
+        "status": status,
+    }
+
+
+def _simulations(path: str) -> httpx.Response:
+    if path == "/simulations":
+        rows = [_summary(4334, "completed"), _summary(4333, "submitting")]
+        return httpx.Response(200, json={"simulations": rows, "total": 7, "next_offset": 2})
+    return httpx.Response(200, json={**_summary(4334, "completed"), "event_count": 21, "dataset_count": 2})
 
 
 def _datasets(path: str) -> httpx.Response:
@@ -393,3 +415,25 @@ def test_datasets_list_show_and_get(service: Callable[..., FakeService], tmp_pat
     got = json.loads(invoke("datasets", "get", DATASET_ID, "--out", str(tmp_path)).stdout)
     assert got["files"] == [str(tmp_path / "a.csv")] and (tmp_path / "a.csv").read_bytes() == b"a,b\n"
     assert invoke("datasets", "show", "00000000-0000-0000-0000-000000000000").exit_code == 4
+
+
+def test_simulations_list_and_show(service: Callable[..., FakeService]) -> None:
+    fake = service()
+    listed = json.loads(invoke("simulations", "list", "--status", "completed", "--since", "2d", "--limit", "2").stdout)
+    assert [r["simulation_id"] for r in listed] == [4334, 4333]
+    params = fake.requests[-1].url.params
+    assert (params["status"], params["limit"]) == ("completed", "2") and params["since"].startswith("20")
+    table = runner.invoke(app, ["--output", "table", "simulations", "list"])
+    assert table.exit_code == 0 and "4334" in table.stdout and "of 7" in table.stdout
+    shown = json.loads(invoke("simulations", "show", "4334").stdout)
+    assert (shown["event_count"], shown["dataset_count"]) == (21, 2)
+    assert invoke("simulations", "list", "--since", "yesterday").exit_code == 2
+
+
+def test_parse_since() -> None:
+    from compose_api_client.cli.commands import parse_since
+
+    now = datetime.datetime.now(tz=datetime.UTC)
+    assert abs((now - parse_since("6h")).total_seconds() - 6 * 3600) < 5
+    assert parse_since("2026-10-07T12:00:00") == datetime.datetime(2026, 10, 7, 12, tzinfo=datetime.UTC)
+    assert parse_since("2026-10-07T12:00:00Z").tzinfo is not None

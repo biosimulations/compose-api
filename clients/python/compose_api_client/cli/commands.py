@@ -9,6 +9,7 @@ Exit codes: 0 success; 1 the job ended other than completed; 2 usage; 3 API erro
 
 from __future__ import annotations
 
+import datetime
 import functools
 import importlib.resources
 import json
@@ -82,6 +83,8 @@ app.add_typer(steps_app, name="steps")
 app.add_typer(curated_app, name="curated")
 datasets_app = typer.Typer(help="The files runs produced.", no_args_is_help=True)
 app.add_typer(datasets_app, name="datasets")
+simulations_app = typer.Typer(help="Find simulations and their ids.", no_args_is_help=True)
+app.add_typer(simulations_app, name="simulations")
 
 
 @app.callback()
@@ -433,6 +436,69 @@ def results(
         else:
             files = [s.download(simulation_id, out if out is not None else Path.cwd())]
     emit(settings.output, {"simulation_id": simulation_id, "files": [str(f) for f in files]})
+
+
+# -- finding simulations ------------------------------------------------------------------------------------------
+
+SIMULATION_COLUMNS = ["simulation_id", "created_at", "simulator", "status", "slurm_job_id", "end_time"]
+_UNITS = {"m": 60, "h": 3600, "d": 86400, "w": 604800}
+
+
+def parse_since(value: str) -> datetime.datetime:
+    """``30m``, ``6h``, ``2d`` or ``1w`` ago, or an ISO 8601 time (UTC if it names no zone)."""
+    text = value.strip()
+    if text[:-1].isdigit() and text[-1:] in _UNITS:
+        return datetime.datetime.now(tz=datetime.UTC) - datetime.timedelta(seconds=int(text[:-1]) * _UNITS[text[-1]])
+    try:
+        moment = datetime.datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError as e:
+        raise typer.BadParameter(f"{value!r}: use 30m, 6h, 2d, 1w, or an ISO time") from e
+    return moment if moment.tzinfo else moment.replace(tzinfo=datetime.UTC)
+
+
+@simulations_app.command("list")
+@claims("simulations list", "list-simulations")
+@handled
+def simulations_list(
+    ctx: typer.Context,
+    status: Annotated[
+        str | None, typer.Option(help="Only this state: submitting, running, completed, failed, timeout, ...")
+    ] = None,
+    simulator: Annotated[
+        str | None, typer.Option(help="Only this prebuilt simulator (name), or a container-definition hash prefix.")
+    ] = None,
+    since: Annotated[
+        str | None, typer.Option(help="Only those created since: 30m, 6h, 2d, 1w, or an ISO time.")
+    ] = None,
+    limit: Annotated[int, typer.Option(help="At most this many.")] = 50,
+    offset: Annotated[int, typer.Option(help="Skip this many (for the next page).")] = 0,
+) -> None:
+    """Simulations you can read, newest first, each with its latest SLURM job. The ids are what every other command
+    takes."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        page = s.simulations(
+            status=status,
+            simulator=simulator,
+            since=parse_since(since) if since else None,
+            limit=limit,
+            offset=offset,
+        )
+    rows = [sim.to_dict() for sim in page.simulations]
+    shown = f"{offset + 1}-{offset + len(rows)}" if rows else "0"
+    emit(settings.output, rows, SIMULATION_COLUMNS, title=f"simulations {shown} of {page.total}")
+
+
+@simulations_app.command("show")
+@claims("simulations show", "get-simulation")
+@handled
+def simulations_show(
+    ctx: typer.Context, simulation_id: Annotated[int, typer.Argument(help="The simulation id.")]
+) -> None:
+    """One simulation: its simulator, its latest SLURM job, and how many events and datasets its run recorded."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.simulation(simulation_id).to_dict())
 
 
 # -- events and traces --------------------------------------------------------------------------------------------

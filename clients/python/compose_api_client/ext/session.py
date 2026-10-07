@@ -15,6 +15,7 @@ In tests, ``AsyncComposeSession.in_process(app)`` talks to the FastAPI app throu
 from __future__ import annotations
 
 import asyncio
+import datetime
 import io
 import time
 import uuid
@@ -41,6 +42,7 @@ from compose_api_client.api.results import (
     get_simulator_build_status,
 )
 from compose_api_client.api.simulation import run_simulation
+from compose_api_client.api.simulations import get_simulation, list_simulations
 from compose_api_client.ext.errors import ApiTimeout, raise_for
 from compose_api_client.models import (
     BiGraphProcess,
@@ -51,11 +53,14 @@ from compose_api_client.models import (
     Dataset,
     DatasetPage,
     HpcRun,
+    ListSimulationsStatusType0,
     RegisteredSimulators,
     RunEvent,
     RunEventPage,
     RunTraceTree,
+    SimulationDetail,
     SimulationExperiment,
+    SimulationPage,
 )
 from compose_api_client.types import UNSET, File, Response
 
@@ -256,6 +261,28 @@ class ComposeSession:
         on_update: Callable[[JobState], None] | None = None,
     ) -> JobState:
         return _wait_sync(lambda: self.build_status(simulator_id), poll, timeout, on_update)
+
+    # -- finding simulations ----------------------------------------------------------------------------------------
+
+    def simulations(
+        self,
+        *,
+        status: str | None = None,
+        simulator: str | None = None,
+        since: datetime.datetime | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> SimulationPage:
+        """Simulations the caller may read, newest first, each with its latest SLURM job. ``status`` is a job state
+        or ``"submitting"``; ``simulator`` a prebuilt simulator's name or a container-definition hash prefix."""
+        r = list_simulations.sync_detailed(
+            client=self.client, **_simulation_filters(status, simulator, since, limit, offset)
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    def simulation(self, simulation_id: int) -> SimulationDetail:
+        """One simulation: its latest SLURM job and how many events and datasets its run recorded."""
+        return _parsed(get_simulation.sync_detailed(simulation_id, client=self.client))  # type: ignore[no-any-return]
 
     # -- events and traces ----------------------------------------------------------------------------------------
 
@@ -491,6 +518,23 @@ class AsyncComposeSession:
     ) -> JobState:
         return await _wait_async(lambda: self.build_status(simulator_id), poll, timeout, on_update)
 
+    async def simulations(
+        self,
+        *,
+        status: str | None = None,
+        simulator: str | None = None,
+        since: datetime.datetime | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> SimulationPage:
+        r = await list_simulations.asyncio_detailed(
+            client=self.client, **_simulation_filters(status, simulator, since, limit, offset)
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    async def simulation(self, simulation_id: int) -> SimulationDetail:
+        return _parsed(await get_simulation.asyncio_detailed(simulation_id, client=self.client))  # type: ignore[no-any-return]
+
     async def events(
         self,
         simulation_id: int,
@@ -567,6 +611,18 @@ class AsyncComposeSession:
             return sim, state, []
         sid = sim.simulation_database_id
         return sim, state, await self.extract(sid, dest) if extract else [await self.download(sid, dest)]
+
+
+def _simulation_filters(
+    status: str | None, simulator: str | None, since: datetime.datetime | None, limit: int, offset: int
+) -> dict[str, Any]:
+    return {
+        "status": ListSimulationsStatusType0(status) if status is not None else UNSET,
+        "simulator": simulator if simulator is not None else UNSET,
+        "since": since if since is not None else UNSET,
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 def _dataset_filters(
