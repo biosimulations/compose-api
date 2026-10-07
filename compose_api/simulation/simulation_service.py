@@ -17,6 +17,7 @@ from compose_api.simulation.hpc_utils import (
     get_slurm_log_file,
     get_slurm_sim_experiment_dir,
     get_slurm_sim_input_file_path,
+    get_slurm_sim_log_file,
     get_slurm_sim_results_file_path,
     get_slurm_singularity_container_file,
     get_slurm_singularity_def_file,
@@ -102,7 +103,7 @@ class SimulationServiceHpc(SimulationService):
                     file_suffix=simulation.sim_request.simulation_file_type.get_files_suffix(),
                     output_dir=get_settings().containers_output_dir,
                     end_time=simulation.sim_request.end_time_point,
-                    log_file=str(get_slurm_log_file(slurm_job_name=slurm_job_name)),
+                    log_file=str(get_slurm_sim_log_file(experiment_id=slurm_job_name)),
                     is_batch=simulation.sim_request.is_batch,
                     partition=settings.batch_slurm_partition
                     if simulation.sim_request.is_batch

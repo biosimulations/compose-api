@@ -8,9 +8,12 @@ Besides running the simulator, the script makes the run observable (docs/plan-ob
   ``set -e`` turns into an early exit is recorded too, and SIGTERM (a time limit, ``scancel``) exits through it.
 - **It announces the files the run left** (O5): after the run, success or failure, one ``artifact.written`` event per
   file under ``output/`` and for ``results.zip``, with its size and sha256. ``output/`` is kept.
-- **It hands the trace context to the simulator** through an env file: ``PBG_TRACEPARENT`` and friends, with the
-  engine's events going to ``events/engine.jsonl``. A simulator built on process-bigraph >= 1.8.5 emits there; any
-  other ignores the variables.
+- **It hands the trace context to the simulator** through an env file: ``PBG_TRACEPARENT`` and friends. A simulator
+  built on process-bigraph >= 1.8.5 writes its events to ``events/engine-{source}.jsonl``: one file per engine
+  process with releases that expand ``{source}`` (process-bigraph#229), one literally named file with older ones; the
+  ingester reads every ``*.jsonl``. Any other simulator ignores the variables.
+- **Its SLURM log is a dataset** (``job.out`` in the experiment directory, kind ``log``), announced without a size or
+  checksum because SLURM keeps writing it after the trap.
 
 Every line is one JSON object in process-bigraph's event schema (v1), so one ingester reads both files.
 """
@@ -59,6 +62,8 @@ manifest() {  # one artifact.written per file the run left: what it wrote under 
         sum=$(sha256_of "$EXPERIMENT/$f")
         emit artifact.written info "{\"uri\":\"$(json_escape "$f")\",\"bytes\":$size,\"sha256\":\"$sum\"}"
     done < <(cd "$EXPERIMENT" && { find output -type f 2>/dev/null; [ -f results.zip ] && echo results.zip; } | LC_ALL=C sort)
+    # SLURM keeps appending to the log after this trap, so it is announced without a size or checksum.
+    emit artifact.written info '{"uri":"job.out","kind":"log","name":"SLURM log"}'
 }
 finish() {
     code=$?
@@ -80,7 +85,7 @@ cat > "$EVENTS/pbg.env" <<'PBG_ENV'
 PBG_TRACEPARENT=00-@@TRACE_ID@@-@@JOB_SPAN@@-01
 PBG_TRACE_BAGGAGE=simulation_id=@@SIMULATION_ID@@,experiment_id=@@EXPERIMENT_ID@@
 PBG_EVENT_TAGS=backend=slurm
-PBG_EVENT_SINKS=file:/experiment/events/engine.jsonl
+PBG_EVENT_SINKS=file:/experiment/events/engine-{source}.jsonl
 PBG_ENV
 
 echo "Simulation @@JOB_NAME@@ running."

@@ -52,8 +52,10 @@ _KINDS = {
     ".omex": "archive",
     ".txt": "text",
     ".log": "log",
+    ".out": "log",
 }
 _MEDIA_TYPES = {
+    ".out": "text/plain",
     ".pber": "application/x-ndjson",
     ".parquet": "application/vnd.apache.parquet",
     ".npy": "application/x-npy",

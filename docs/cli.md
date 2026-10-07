@@ -100,7 +100,8 @@ $ compose-api datasets show <id>
 $ compose-api datasets get <id> -O out/            # just that file, not the whole archive
 ```
 
-A dataset is readable by whoever can read its simulation.
+A run's SLURM log is a dataset too (`job.out`, kind `log`): `compose-api datasets list --sim 4195 --kind log`, then
+`datasets get` on its id. A dataset is readable by whoever can read its simulation.
 
 ## Exit codes
 

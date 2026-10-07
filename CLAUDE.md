@@ -150,7 +150,8 @@ parsing, span folding and Chrome Trace renderer are ported from viva-core.
 
 **Datasets (`observability/datasets.py`, `api/routers/datasets.py`).** Every `artifact.written` event becomes a
 `dataset` row (`DatasetsDatabaseService.register`, called by the ingester). The job script emits one per file under
-`output/` (kept now) and for `results.zip`, with size and sha256. A simulator's own event (any component but
+`output/` (kept now) and for `results.zip`, with size and sha256, and one for the SLURM log `job.out` (kind
+`log`, which simulation jobs now write in their experiment directory instead of `htclogs/`). A simulator's own event (any component but
 `compose_api.job`) wins over that manifest. Paths are relative to the experiment directory, and
 `resolve_content_path` keeps content reads inside it. Listings filter with `authorization.readable_clause`.
 
