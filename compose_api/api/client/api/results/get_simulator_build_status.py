@@ -1,22 +1,20 @@
 from http import HTTPStatus
 from typing import Any, cast
-from urllib.parse import quote
 
 import httpx
 
-from ...client import AuthenticatedClient, Client
-from ...types import Response, UNSET
 from ... import errors
-
+from ...client import AuthenticatedClient, Client
 from ...models.hpc_run import HpcRun
 from ...models.http_validation_error import HTTPValidationError
-from typing import cast
+from ...types import UNSET, Response
 
 
 def _get_kwargs(
     *,
     simulator_id: int,
 ) -> dict[str, Any]:
+
     params: dict[str, Any] = {}
 
     params["simulator_id"] = simulator_id
@@ -34,11 +32,15 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> HTTPValidationError | HpcRun | None:
+) -> Any | HTTPValidationError | HpcRun | None:
     if response.status_code == 200:
         response_200 = HpcRun.from_dict(response.json())
 
         return response_200
+
+    if response.status_code == 404:
+        response_404 = cast(Any, None)
+        return response_404
 
     if response.status_code == 422:
         response_422 = HTTPValidationError.from_dict(response.json())
@@ -53,7 +55,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[HTTPValidationError | HpcRun]:
+) -> Response[Any | HTTPValidationError | HpcRun]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -66,7 +68,7 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     simulator_id: int,
-) -> Response[HTTPValidationError | HpcRun]:
+) -> Response[Any | HTTPValidationError | HpcRun]:
     """Get the simulator build status record by its ID
 
     Args:
@@ -77,7 +79,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[HTTPValidationError | HpcRun]
+        Response[Any | HTTPValidationError | HpcRun]
     """
 
     kwargs = _get_kwargs(
@@ -95,7 +97,7 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     simulator_id: int,
-) -> HTTPValidationError | HpcRun | None:
+) -> Any | HTTPValidationError | HpcRun | None:
     """Get the simulator build status record by its ID
 
     Args:
@@ -106,7 +108,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        HTTPValidationError | HpcRun
+        Any | HTTPValidationError | HpcRun
     """
 
     return sync_detailed(
@@ -119,7 +121,7 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     simulator_id: int,
-) -> Response[HTTPValidationError | HpcRun]:
+) -> Response[Any | HTTPValidationError | HpcRun]:
     """Get the simulator build status record by its ID
 
     Args:
@@ -130,7 +132,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[HTTPValidationError | HpcRun]
+        Response[Any | HTTPValidationError | HpcRun]
     """
 
     kwargs = _get_kwargs(
@@ -146,7 +148,7 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     simulator_id: int,
-) -> HTTPValidationError | HpcRun | None:
+) -> Any | HTTPValidationError | HpcRun | None:
     """Get the simulator build status record by its ID
 
     Args:
@@ -157,7 +159,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        HTTPValidationError | HpcRun
+        Any | HTTPValidationError | HpcRun
     """
 
     return (
