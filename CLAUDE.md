@@ -20,7 +20,6 @@ Single test / subset:
 
 ```bash
 uv run python -m pytest tests/simulation/test_scheduler.py::test_name -s
-uv run python -m pytest tests/common -k nats
 uv run mypy                  # files/strict config comes from pyproject.toml; do not pass paths
 ```
 
@@ -73,7 +72,7 @@ Release & deploy: `make tag` (`tag.sh` bumps `pyproject.toml` + `compose_api/ver
 - The backend switch is a **settings override**, not an injected object, because three consumers reach for SSH
   independently. Use `override_settings(**fields)` from `compose_api/config.py`; it stacks partial layers removed by
   identity, so two fixtures overriding disjoint settings compose and overlapping ones raise.
-- Postgres, NATS, and MongoDB fixtures use **testcontainers**, so Docker must be running for most of the suite.
+- Postgres and MongoDB fixtures use **testcontainers**, so Docker must be running for most of the suite.
 - All fixtures live in `tests/fixtures/` and are re-exported from `tests/conftest.py`; add new fixtures there too.
 - Service fixtures swap the module-level singletons in `compose_api/dependencies.py` and restore the previous value on
   teardown — follow that save/set/yield/restore pattern.
@@ -136,8 +135,8 @@ catalog wrapper at `listed`; never hand-edit it — raising an entry means addin
 
 **Job tracking.** An `HpcRun` row links a SLURM job id, a `correlation_id`, and a `JobType`
 (`SIMULATION` / `BUILD_CONTAINER`). `JobMonitor` updates status two ways: a 5-second polling loop reconciling
-`squeue`/`sacct` against running `HpcRun` rows, and (only when `hpc_has_messaging` is true) a NATS subscription on
-`nats_worker_event_subject` that correlates `WorkerEvent`s by `correlation_id`. Unparseable SLURM states are coerced to
+`squeue`/`sacct` against running `HpcRun` rows, and the event ingester (below) on the same loop. The NATS path and its
+`WorkerEvent`s were retired (docs/plan-observability.md step 1b); the `worker_event` table stays one release. Unparseable SLURM states are coerced to
 `JobStatus.UNKNOWN` rather than raising. `internal_subscribe(queue, job_id)` lets in-process callers await transitions.
 
 **Run events (`compose_api/observability/`, docs/plan-observability.md).** A run's trace id derives from its

@@ -68,8 +68,6 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     job_monitor = get_job_monitor()
     if not job_monitor:
         raise RuntimeError("JobMonitor is not initialized. Please check your configuration.")
-    if get_settings().hpc_has_messaging:
-        await job_monitor.subscribe_nats()
     await job_monitor.start_polling(interval_seconds=5)  # configurable interval
 
     try:

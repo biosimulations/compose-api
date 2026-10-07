@@ -77,44 +77,6 @@ async def get_simulation_status(simulation: ReadableSimulation) -> HpcRun:
 
 
 # @config.router.get(
-#     path="/simulation/run/events",
-#     response_model=list[WorkerEvent],
-#     operation_id="get-simulation-worker-events",
-#     tags=["Simulations"],
-#     dependencies=[Depends(get_simulation_service), Depends(get_database_service)],
-#     summary="Get the worker events for a simulation by its ID",
-# )
-# async def get_simulation_worker_events(
-#     simulation_id: int = Query(...),
-#     num_events: int | None = Query(default=None),
-#     prev_sequence_number: int | None = Query(default=None),
-# ) -> list[WorkerEvent]:
-#     sim_service = get_simulation_service()
-#     if sim_service is None:
-#         logger.error("Simulation service is not initialized")
-#         raise HTTPException(status_code=500, detail="Simulation service is not initialized")
-#     db_service = get_database_service()
-#     if db_service is None:
-#         logger.error("SSH service is not initialized")
-#         raise HTTPException(status_code=500, detail="SSH service is not initialized")
-#     try:
-#         simulation_hpcrun: HpcRun | None = await db_service.get_hpcrun_by_ref(
-#             ref_id=simulation_id, job_type=JobType.SIMULATION
-#         )
-#         if simulation_hpcrun:
-#             worker_events = await db_service.list_worker_events(
-#                 hpcrun_id=simulation_hpcrun.database_id,
-#                 prev_sequence_number=prev_sequence_number,
-#             )
-#             return worker_events[:num_events] if num_events else worker_events
-#         else:
-#             return []
-#     except Exception as e:
-#         logger.exception(f"Error fetching simulation results for simulation id: {simulation_id}.")
-#         raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-# @config.router.get(
 #     path="/simulation/run/results/chunks",
 #     response_class=ORJSONResponse,
 #     operation_id="get-simulation-results",

@@ -1,16 +1,16 @@
 # Observability: run traces from process-bigraph events, and datasets a run advertises
 
-**Status (2026-10-07): steps 1 and 2 merged (#213, #214), step 3 in review; the rest planned.** One PR per step, each merged on green with a merge commit.
+**Status (2026-10-07): steps 0–4 merged; 1b (#216) in review; nothing deployed yet (prod runs 0.6.0); step 5 waits on #192.** One PR per step, each merged on green with a merge commit.
 Deploying is a separate go from Jim.
 
 | Step | What | State |
 |---|---|---|
 | 0 | This document | **done** #212 |
 | 1 | Trace identity before submission (O1); owner and visibility (O7); the authorization seam on every simulation read (O8); migrations that run at startup | **done** #213 |
-| 1b | Retire NATS and `worker_event` (the subscriber, settings, the k8s deployment and its public NodePort) | planned |
+| 1b | Retire NATS and `worker_event` (the subscriber, settings, the k8s deployment and its public NodePort) | **in review** #216 |
 | 2 | Events: job-script activation (O2), API and job-script events (O3), the file-tailing ingester (O4), events and trace routes, `ext`, CLI | **done** #214 |
-| 3 | Datasets: job-script manifest and `artifact.written` registrar (O5), store-relative content (O6), dataset routes, `ext`, CLI | **in review** |
-| 4 | Producer side in viva-pde-particle: `artifact.written` per result file, inside a `task` span | planned |
+| 3 | Datasets: job-script manifest and `artifact.written` registrar (O5), store-relative content (O6), dataset routes, `ext`, CLI | **done** #215 |
+| 4 | Producer side in viva-pde-particle: `artifact.written` per result file, inside a `task` span | **done** viva-pde-particle#49; live once its image is rebuilt and the prebuilt pin bumped |
 | 5 | Auth hookup after #192: stamp the owner at submit, a real `can_read` policy, visibility | blocked on #192 |
 
 ## Context
@@ -148,6 +148,15 @@ moves from `poetry run` to `uv run`.
   upgrade had been commented out.
 - *(Decided building it.)* A simulation the caller may not read answers 404, like one that does not exist, so ids
   reveal nothing. The admin role is named `admin` (`compose_api.authorization.ADMIN_ROLE`); see open question 7.
+
+### Step 1b: retire NATS
+- Removed: the subscriber and `get_hpcrun_by_correlation_id`, the `hpc_has_messaging` / `nats_*` settings, the client
+  connection at startup, the `nats` k8s deployment and its NodePort 30052 service (base and both overlays), the
+  `NATS_*` lines in `shared.env`, the `nats-py` and `async-lru` dependencies, and the NATS test fixtures and tests.
+- Kept for one release: the `worker_event` table, its ORM class and the two `HPCDatabaseService` methods, so a deploy
+  drops nothing. A later revision drops the table.
+- **On deploy:** `kubectl apply` doesn't prune, so the running NATS objects must be deleted by hand:
+  `kubectl -n compose-api-rke delete deployment/nats service/nats`.
 
 ### Step 2: events
 - Job script: `--env PBG_*`, the `emit` helper with `trap … EXIT`, an `events/` directory.

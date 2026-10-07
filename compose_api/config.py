@@ -69,13 +69,6 @@ class Settings(BaseSettings):
 
     simulation_store_base_path: str = ""
     hpc_sim_config_file: str = "publish.json"
-    hpc_has_messaging: bool = False
-
-    nats_url: str = ""
-    nats_worker_event_subject: str = "worker.events"
-
-    nats_emitter_url: str = ""
-    nats_emitter_magic_word: str = "emitter-magic-word"
 
     dev_mode: str = "0"
     app_dir: str = f"{REPO_ROOT}/app"

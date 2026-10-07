@@ -20,7 +20,6 @@ resources:
   - api-certificate.yaml
   - selfsigned-issuer.yaml
   - api-pvc.yaml
-  - nats-svc.yaml
   - haproxy-ssh-svc.yaml
   - compose-api-home-pv.yaml
   - compose-api-home-pvc.yaml

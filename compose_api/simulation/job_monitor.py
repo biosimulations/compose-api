@@ -1,17 +1,12 @@
 import asyncio
 import logging
 from asyncio import Queue
-from typing import TYPE_CHECKING, Any
-
-from async_lru import alru_cache
-from nats.aio.client import Client as NATSClient
-from nats.aio.msg import Msg
+from typing import TYPE_CHECKING
 
 from compose_api.common.hpc.slurm_service import SlurmService
-from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService
 from compose_api.observability.api_events import record_api_event
-from compose_api.simulation.models import HpcRun, JobStatus, WorkerEvent, WorkerEventMessagePayload
+from compose_api.simulation.models import HpcRun, JobStatus
 
 if TYPE_CHECKING:
     from compose_api.observability.ingest import EventIngester
@@ -29,53 +24,20 @@ _FAILED = frozenset({
 class JobMonitor:
     database_service: DatabaseService
     slurm_service: SlurmService
-    nats_client: NATSClient | None
     internal_listeners: dict[int, Queue[HpcRun]] = {}
     _polling_task: asyncio.Task[None] | None = None
     _stop_event: asyncio.Event
 
     def __init__(
         self,
-        nats_client: NATSClient | None,
         database_service: DatabaseService,
         slurm_service: SlurmService,
         event_ingester: "EventIngester | None" = None,
     ):
-        self.nats_client = nats_client
         self.database_service = database_service
         self.slurm_service = slurm_service
         self.event_ingester = event_ingester
         self._stop_event = asyncio.Event()
-
-    @alru_cache
-    async def get_hpcrun_by_correlation_id(self, correlation_id: str) -> int | None:
-        return await self.database_service.get_hpc_db().get_hpcrun_id_by_correlation_id(correlation_id=correlation_id)
-
-    async def subscribe_nats(self) -> None:
-        if self.nats_client is None:
-            raise Exception("NATS client is not set")
-        subject = get_settings().nats_worker_event_subject
-        logger.info(f"Subscribing to NATS messages for subject '{subject}'")
-
-        async def message_handler(msg: Msg) -> Any:
-            subject = msg.subject
-            data = msg.data.decode("utf-8")
-            logger.info(f"Received message on subject '{subject}': {data}")
-            worker_event_message_payload = WorkerEventMessagePayload.model_validate_json(data)
-            worker_event = WorkerEvent.from_message_payload(worker_event_message_payload=worker_event_message_payload)
-            hpcrun_id = await self.get_hpcrun_by_correlation_id(correlation_id=worker_event.correlation_id)
-            if hpcrun_id is None:
-                logger.error(f"No HpcRun found for correlation ID {worker_event.correlation_id}. Skipping event.")
-                return
-            _updated_worker_event = await self.database_service.get_hpc_db().insert_worker_event(
-                worker_event, hpcrun_id=hpcrun_id
-            )
-
-        await self.nats_client.subscribe(subject=subject, cb=message_handler)
-        if self.nats_client.is_connected:
-            logger.info("NATS client is connected and subscription is set up.")
-        else:
-            logger.error("NATS client is not connected.")
 
     async def start_polling(self, interval_seconds: int = 30) -> None:
         if self._polling_task is not None and not self._polling_task.done():
@@ -169,6 +131,3 @@ class JobMonitor:
 
     async def close(self) -> None:
         await self.stop_polling()
-        logger.debug("Closing NATS client connection")
-        if self.nats_client:
-            await self.nats_client.close()
