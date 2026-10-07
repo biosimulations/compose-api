@@ -1,4 +1,3 @@
-import asyncio
 import math
 import os
 import tempfile
@@ -8,53 +7,21 @@ from zipfile import ZipFile
 
 import numpy
 from compose_api_client import Client
-from compose_api_client.api.results import get_simulation_results_file, get_simulation_status
-from compose_api_client.models import HpcRun, HTTPValidationError, JobStatus, SimulationExperiment
+from compose_api_client.api.results import get_simulation_results_file
+from compose_api_client.ext import AsyncComposeSession
+from compose_api_client.models import HTTPValidationError, SimulationExperiment
 from compose_api_client.types import Response
 
 
 async def check_experiment_run(
     sim_experiment: Any, in_memory_api_client: Client, seconds_to_wait: int = 120
 ) -> Response[HTTPValidationError]:
-    """
-    Checks that the simulation is running, asserts that it does not fail, and returns its results.
-    Args:
-        sim_experiment:
-        in_memory_api_client:
-        seconds_to_wait:
-    Returns:
-
-    """
+    """Wait for the simulation through the client's application layer (``ext``), assert it completed, and return
+    its results response."""
     assert isinstance(sim_experiment, SimulationExperiment)
-
-    current_status = await get_simulation_status.asyncio(
-        client=in_memory_api_client, simulation_id=sim_experiment.simulation_database_id
-    )
-
-    if not isinstance(current_status, HpcRun) or not isinstance(current_status.status, JobStatus):
-        raise TypeError()
-
-    num_loops = 0
-    while current_status.status != JobStatus.COMPLETED and num_loops < (seconds_to_wait / 2):
-        await asyncio.sleep(2)
-        current_status = await get_simulation_status.asyncio(
-            client=in_memory_api_client, simulation_id=sim_experiment.simulation_database_id
-        )
-        num_loops += 1
-
-        if not isinstance(current_status, HpcRun) or not isinstance(current_status.status, JobStatus):
-            raise TypeError()
-        if current_status.status == JobStatus.FAILED:
-            raise RuntimeError("Simulation failed")
-
-    current_status = await get_simulation_status.asyncio(
-        client=in_memory_api_client, simulation_id=sim_experiment.simulation_database_id
-    )
-
-    if not isinstance(current_status, HpcRun) or not isinstance(current_status.status, JobStatus):
-        raise TypeError()
-
-    assert current_status.status == JobStatus.COMPLETED
+    session = AsyncComposeSession(client=in_memory_api_client)
+    state = await session.wait(sim_experiment.simulation_database_id, poll=2, timeout=seconds_to_wait)
+    assert state.ok, f"simulation {sim_experiment.simulation_database_id} ended {state.status}"
 
     results: Response[HTTPValidationError] = await get_simulation_results_file.asyncio_detailed(
         client=in_memory_api_client, simulation_id=sim_experiment.simulation_database_id
