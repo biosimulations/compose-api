@@ -1,13 +1,13 @@
 # CLI: a `compose-api` command line on a generated httpx client
 
-**Status (2026-10-07): planned and approved by Jim; steps A and B1 in review.** Three PRs, each merged on green with a merge
+**Status (2026-10-07): planned and approved by Jim; A merged (#205); B1 (#206) and B2 in review.** Three PRs, each merged on green with a merge
 commit. Publishing to PyPI and deploying are separate goes from Jim.
 
 | Step | What | State |
 |---|---|---|
-| A | Generation pipeline: deterministic, in-repo, drift-checked in CI; regenerate the stale client | **#205** |
-| B1 | `compose-api-client` as a workspace package at `clients/python`, brought in with its history (C6) | **in review** |
-| B2 | The hand-written application layer, `compose_api_client.ext` | — |
+| A | Generation pipeline: deterministic, in-repo, drift-checked in CI; regenerate the stale client | **done** #205 |
+| B1 | `compose-api-client` as a workspace package at `clients/python`, brought in with its history (C6) | **#206** |
+| B2 | The hand-written application layer, `compose_api_client.ext` | **in review** |
 | C | The `compose-api` CLI on `ext` and the generated client; a spec-coverage test | — |
 | D | Docs (`docs/cli.md`), `CLAUDE.md`, strategy.md 2b; release with 0.7.0 | — |
 
@@ -182,7 +182,22 @@ verbs: `run`, `status` with several IDs, `results`, `simulators`, `processes`, `
 | `run_and_wait(...)` | Submit, wait, download. Replaces pbest's helper and the tests' `check_experiment_run`. |
 | Errors | `NotFound`, `BadRequest(detail, violations)`, `ServerError`, `ApiTimeout`, mapped from the `*_detailed` responses. |
 
-`tests/simulators/utils.py::check_experiment_run` moves onto `run_and_wait`. That makes the service's own tests the
+`tests/simulators/utils.py::check_experiment_run` moves onto `run_and_wait`.
+
+*As built (B2, 2026-10-07):*
+- **Results are split:** `download(id, dest) -> Path` saves the zip; `extract(id, dest) -> list[Path]` unpacks it
+  and refuses paths that would escape `dest`. `run_and_wait` returns the files written as a list, empty unless the
+  job completed. Splitting them avoids handing every caller a `Path | list[Path]` union.
+- **`statuses(ids)`** is the batch call.
+- **`token=`** selects `AuthenticatedClient` (a Bearer header) for #192.
+- **Regeneration:** `make clients` carries `ext/` (and `utils/`) across, and `check-clients` ignores both.
+- **Typing:** `ext` is under mypy strict.
+- **Tests:**
+  - `tests/client/test_ext.py`: `httpx.MockTransport`, no service.
+  - `tests/client/test_ext_in_process.py`: the real app through `in_process`, Postgres only. It pins 404 →
+    `submitting` on status, 404 → `NotFound` on results, and the partial batch answer.
+  - `tests/client/test_ext_live.py`: a read-only check of production under `--slurm-backend cluster`.
+  - `check_experiment_run` now waits through `AsyncComposeSession.wait`. That makes the service's own tests the
 first user of `ext`.
 
 **Later, not in this plan:** an ensemble helper (seed blocks, a manifest, resume, retry, splitting on timeout) can

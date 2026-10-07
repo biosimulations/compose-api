@@ -31,9 +31,11 @@ generate() {
   uv run --project "${ROOT_DIR}" ruff format --config "${ROOT_DIR}/pyproject.toml" --quiet "${work}/client"
   rm -rf "${work}/client/.ruff_cache"
   touch "${work}/client/py.typed"  # the generated code is typed (PEP 561), so type checkers use it
-  # The external repository keeps one hand-written module inside the package (utils/run_simulation_and_wait.py);
-  # carry it over rather than deleting it with the old generated tree.
-  if [ -d "${out}/utils" ]; then cp -R "${out}/utils" "${work}/client/utils"; fi
+  # Hand-written code inside the package is carried over, not deleted with the old generated tree: ext/ (the
+  # application layer and CLI, docs/plan-cli.md) and utils/ (the 0.2.0 helper pbest uses).
+  for keep in ext utils; do
+    if [ -d "${out}/${keep}" ]; then cp -R "${out}/${keep}" "${work}/client/${keep}"; fi
+  done
   rm -rf "${out}"
   mkdir -p "$(dirname "${out}")"
   cp -R "${work}/client" "${out}"
