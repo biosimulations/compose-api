@@ -33,6 +33,54 @@ uv run compose-api --help
 uv run python -m compose_api.cli --help   # the same program
 ```
 
+The bare `compose-api` command is available only when its installation is on your shell's `PATH`.
+If it reports `command not found`, use `uv run compose-api` for the examples below, or activate this
+checkout's environment with `source .venv/bin/activate`.
+
+### Running against a local development server
+
+The CLI does not start the API or its PostgreSQL database. Before running `make run`, configure
+`assets/dev/config/.dev_env` using `.dev_env_TEMPLATE` and start PostgreSQL at the configured
+`POSTGRES_HOST` and `POSTGRES_PORT`, with the configured credentials and database. If you already
+have the local container named `compose-api-postgres`, start it with:
+
+```bash
+docker start compose-api-postgres
+```
+
+For the local Auth0 application, set these **server** values in `.dev_env`:
+
+```dotenv
+AUTH0_DOMAIN=dev-bu7yo7484tyxu6a1.us.auth0.com
+AUTH0_AUDIENCE=https://api.compose.local
+```
+
+Start the server with `make run` and wait for `Application startup complete`. In another terminal,
+select the local CLI settings and override the built-in local cluster URL to use this server:
+
+```bash
+export COMPOSE_API_CLI_PROFILE=local
+export COMPOSE_API_CLI_API_BASE_URL=http://localhost:8000
+uv run compose-api config show
+uv run compose-api auth login
+```
+
+Check `config show` for existing environment overrides: the CLI's audience must match the server's
+`AUTH0_AUDIENCE`, and its client ID must belong to that application. Restart the server after changing
+`.dev_env`; the CLI does not read that file. Local simulation execution still requires the configured
+remote SLURM backend.
+
+If startup fails with `Connect call failed` on port 5432, PostgreSQL is unreachable; the API will not
+listen on port 8000 until startup succeeds. A subsequent CLI connection error is a consequence of that
+startup failure. If sign-in already saved a session, recover after starting the server with:
+
+```bash
+uv run compose-api auth status --verify
+```
+
+Use the same CLI settings as the original login to reuse that session. A missing `config.toml` is
+normal when using built-in settings and environment variables.
+
 ## Profiles
 
 A profile says which API to call and how to sign in to it. Two are built in:
