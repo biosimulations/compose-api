@@ -64,6 +64,12 @@ $ compose-api results 4195 --extract out/
 - `simulators list`, `processes list` and `steps list` show what is registered.
 - `openapi --diff` reports whether this client and the live service disagree on the API.
 
+## JSON output
+
+Every command takes `--json`, which prints JSON instead of a table. It's the same as `--output json` before the
+command name, and it overrides that option. JSON is also the default whenever output isn't a terminal, so
+`compose-api simulations list | jq` needs neither.
+
 ## What a run did: events and traces
 
 Every run records events: the service's own (`dispatch.submitted`, then `slurm.<state>` on each change), the job
@@ -179,6 +185,7 @@ $ compose-api health [OPTIONS]
 
 **Options**:
 
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ## `compose-api version`
@@ -193,6 +200,7 @@ $ compose-api version [OPTIONS]
 
 **Options**:
 
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ## `compose-api run`
@@ -219,6 +227,7 @@ $ compose-api run [OPTIONS] DOCUMENT
 * `--extract / --no-extract`: With --download: unpack the archive instead of saving the zip.  [default: no-extract]
 * `--poll FLOAT`: Seconds between status checks.  [default: 5.0]
 * `--wait-timeout FLOAT`: Give up waiting after this many seconds (exit 5).
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ## `compose-api status`
@@ -237,6 +246,7 @@ $ compose-api status [OPTIONS] SIMULATION_IDS...
 
 **Options**:
 
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ## `compose-api wait`
@@ -257,6 +267,7 @@ $ compose-api wait [OPTIONS] SIMULATION_IDS...
 
 * `--poll FLOAT`: Seconds between status checks.  [default: 5.0]
 * `--wait-timeout FLOAT`: Give up waiting after this many seconds (exit 5).
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ## `compose-api results`
@@ -277,6 +288,7 @@ $ compose-api results [OPTIONS] SIMULATION_ID
 
 * `-O, --out PATH`: Write the zip here (a file, or a directory).
 * `--extract PATH`: Unpack the archive into this directory instead.
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ## `compose-api events`
@@ -299,6 +311,7 @@ $ compose-api events [OPTIONS] SIMULATION_ID
 * `--level TEXT`: Only events at this level: debug, info, warning, error.
 * `--event TEXT`: Only events with this name, e.g. job.end.
 * `--poll FLOAT`: Seconds between status checks.  [default: 5.0]
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ## `compose-api trace`
@@ -318,6 +331,7 @@ $ compose-api trace [OPTIONS] SIMULATION_ID
 **Options**:
 
 * `--chrome PATH`: Save the trace as a Chrome Trace Event file instead; open it in ui.perfetto.dev.
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ## `compose-api build-status`
@@ -339,6 +353,7 @@ $ compose-api build-status [OPTIONS] SIMULATOR_ID
 * `-w, --wait`: Wait for the job to finish; exit 1 unless it completed.
 * `--poll FLOAT`: Seconds between status checks.  [default: 5.0]
 * `--wait-timeout FLOAT`: Give up waiting after this many seconds (exit 5).
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ## `compose-api openapi`
@@ -355,6 +370,7 @@ $ compose-api openapi [OPTIONS]
 
 * `--server / --no-server`: Fetch the live service's /openapi.json instead.  [default: no-server]
 * `--diff / --no-diff`: Compare this client's operations with the live service's; exit 1 on skew.  [default: no-diff]
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ## `compose-api simulators`
@@ -387,6 +403,7 @@ $ compose-api simulators list [OPTIONS]
 
 **Options**:
 
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ## `compose-api processes`
@@ -419,6 +436,7 @@ $ compose-api processes list [OPTIONS]
 
 **Options**:
 
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ## `compose-api steps`
@@ -451,6 +469,7 @@ $ compose-api steps list [OPTIONS]
 
 **Options**:
 
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ## `compose-api curated`
@@ -496,6 +515,7 @@ $ compose-api curated copasi [OPTIONS] SBML
 * `--extract / --no-extract`: With --download: unpack the archive instead of saving the zip.  [default: no-extract]
 * `--poll FLOAT`: Seconds between status checks.  [default: 5.0]
 * `--wait-timeout FLOAT`: Give up waiting after this many seconds (exit 5).
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ### `compose-api curated tellurium`
@@ -522,6 +542,7 @@ $ compose-api curated tellurium [OPTIONS] SBML
 * `--extract / --no-extract`: With --download: unpack the archive instead of saving the zip.  [default: no-extract]
 * `--poll FLOAT`: Seconds between status checks.  [default: 5.0]
 * `--wait-timeout FLOAT`: Give up waiting after this many seconds (exit 5).
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ## `compose-api datasets`
@@ -561,6 +582,7 @@ $ compose-api datasets list [OPTIONS]
 * `--match TEXT`: Only paths or names containing this.
 * `--missing / --no-missing`: List datasets whose file is gone instead.  [default: no-missing]
 * `--limit INTEGER`: At most this many.  [default: 100]
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ### `compose-api datasets show`
@@ -579,6 +601,7 @@ $ compose-api datasets show [OPTIONS] DATASET_ID
 
 **Options**:
 
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ### `compose-api datasets get`
@@ -598,6 +621,7 @@ $ compose-api datasets get [OPTIONS] DATASET_ID
 **Options**:
 
 * `-O, --out PATH`: Write it here (a file, or a directory). Default: here.
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ## `compose-api simulations`
@@ -637,6 +661,7 @@ $ compose-api simulations list [OPTIONS]
 * `--since TEXT`: Only those created since: 30m, 6h, 2d, 1w, or an ISO time.
 * `--limit INTEGER`: At most this many.  [default: 50]
 * `--offset INTEGER`: Skip this many (for the next page).  [default: 0]
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ### `compose-api simulations show`
@@ -655,4 +680,5 @@ $ compose-api simulations show [OPTIONS] SIMULATION_ID
 
 **Options**:
 
+* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.

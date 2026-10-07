@@ -16,6 +16,7 @@ dependencies = [
 cli = [
     "typer>=0.16.1",
     "rich>=13.7",
+    "click>=8.1",  # imported directly (click.Context), not only through typer
 ]
 
 [project.scripts]
