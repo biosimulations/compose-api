@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from nats.aio.client import Client as NATSClient
 from pbest.containerization.container_constructor import generate_container_def_file
 from pbest.utils.input_types import (
     ContainerizationEngine,
@@ -39,16 +38,11 @@ async def simulation_service_slurm() -> AsyncGenerator[SimulationServiceHpc]:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def job_monitor(
-    database_service: DatabaseService, slurm_service: SlurmService, nats_subscriber_client: NATSClient
-) -> AsyncGenerator[JobMonitor]:
-    job_service = JobMonitor(
-        nats_client=nats_subscriber_client, database_service=database_service, slurm_service=slurm_service
-    )
+async def job_monitor(database_service: DatabaseService, slurm_service: SlurmService) -> AsyncGenerator[JobMonitor]:
+    job_service = JobMonitor(database_service=database_service, slurm_service=slurm_service)
     saved_job_service = get_job_monitor()
     set_job_monitor(job_service)
 
-    await job_service.subscribe_nats()
     await job_service.start_polling(interval_seconds=2)
 
     yield job_service

@@ -1,7 +1,6 @@
 import logging
 from typing import Any
 
-import nats
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
@@ -170,14 +169,12 @@ async def init_standalone(enable_ssl: bool = True) -> None:
 
     slurm_service = SlurmService(ssh_service=get_ssh_service())
 
-    nats_client = await nats.connect(_settings.nats_url) if get_settings().hpc_has_messaging else None
     namespace = Namespace(_settings.namespace)
     event_ingester = EventIngester(
         database_service=database,
         experiment_dir=lambda experiment_id: get_internal_experiment_dir(experiment_id, namespace),
     )
     job_monitor = JobMonitor(
-        nats_client=nats_client,
         database_service=database,
         slurm_service=slurm_service,
         event_ingester=event_ingester,

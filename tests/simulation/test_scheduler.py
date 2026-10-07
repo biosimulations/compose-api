@@ -7,11 +7,9 @@ import uuid
 from pathlib import Path
 
 import pytest
-from nats.aio.client import Client as NATSClient
 
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
-from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation.hpc_utils import _namespace_path, get_correlation_id, get_experiment_id
 from compose_api.simulation.job_monitor import JobMonitor
@@ -22,7 +20,6 @@ from compose_api.simulation.models import (
     SimulationFileType,
     SimulationRequest,
     SimulatorVersion,
-    WorkerEvent,
 )
 
 
@@ -79,56 +76,13 @@ async def wait_for_status(
 
 @pytest.mark.slurm
 @pytest.mark.asyncio
-async def test_messaging(
-    nats_subscriber_client: NATSClient,
-    nats_producer_client: NATSClient,
-    database_service: DatabaseServiceSQL,
-    slurm_service: SlurmService,
-    simulator: SimulatorVersion,
-) -> None:
-    monitor = JobMonitor(
-        nats_client=nats_subscriber_client, database_service=database_service, slurm_service=slurm_service
-    )
-    await monitor.subscribe_nats()
-
-    # Simulate a job submission and worker event handling
-    hpc_run = await insert_job(database_service=database_service, slurmjobid=1, simulator=simulator)
-
-    # get the initial state of a job
-    sequence_number = 1
-    worker_event = WorkerEvent(
-        sequence_number=sequence_number,
-        correlation_id=hpc_run.correlation_id,
-        time=0.1,
-        mass={"water": 1.0, "glucose": 0.5},
-    )
-
-    # send worker messages to the broker
-    await nats_producer_client.publish(
-        subject=get_settings().nats_worker_event_subject,
-        payload=worker_event.model_dump_json(exclude_unset=True, exclude_none=True).encode("utf-8"),
-    )
-    # get the updated state of the job
-    await asyncio.sleep(0.1)
-    _updated_worker_events = await database_service.get_hpc_db().list_worker_events(
-        hpcrun_id=hpc_run.database_id, prev_sequence_number=sequence_number - 1
-    )
-    assert len(_updated_worker_events) == 1
-
-
-@pytest.mark.slurm
-@pytest.mark.asyncio
 async def test_job_monitor(
-    nats_subscriber_client: NATSClient,
     database_service: DatabaseServiceSQL,
     slurm_service: SlurmService,
     slurm_template_hello_10s: str,
     simulator: SimulatorVersion,
 ) -> None:
-    monitor = JobMonitor(
-        nats_client=nats_subscriber_client, database_service=database_service, slurm_service=slurm_service
-    )
-    await monitor.subscribe_nats()
+    monitor = JobMonitor(database_service=database_service, slurm_service=slurm_service)
     await monitor.start_polling(interval_seconds=1)
 
     # Submit a toy slurm job which takes 10 seconds to run
