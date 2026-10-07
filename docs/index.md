@@ -14,3 +14,9 @@ call. `GET /health` and `GET /version` ignore the header. A valid access token i
 make a simulation private.
 
 How to obtain an access token, which audience to use, and what not to send: [Authentication](authentication.md).
+
+## Command-line client
+
+`compose-api` signs you in through Auth0 and calls this API from a terminal: the simulator catalog, a
+simulation's status, and new submissions. Installation, profiles, sessions and exit codes:
+[Command-line client](cli.md).

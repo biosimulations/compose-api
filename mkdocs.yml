@@ -24,6 +24,7 @@ exclude_docs: |
 nav:
   - Home: index.md
   - Authentication: authentication.md
+  - Command-line client: cli.md
   - Modules: modules.md
 plugins:
   - search
