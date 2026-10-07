@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from asyncio import Queue
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from async_lru import alru_cache
 from nats.aio.client import Client as NATSClient
@@ -10,9 +10,20 @@ from nats.aio.msg import Msg
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService
+from compose_api.observability.api_events import record_api_event
 from compose_api.simulation.models import HpcRun, JobStatus, WorkerEvent, WorkerEventMessagePayload
 
+if TYPE_CHECKING:
+    from compose_api.observability.ingest import EventIngester
+
 logger = logging.getLogger(__name__)
+
+_FAILED = frozenset({
+    JobStatus.FAILED,
+    JobStatus.CANCELLED,
+    JobStatus.OUT_OF_MEMORY,
+    JobStatus.TIMEOUT,
+})
 
 
 class JobMonitor:
@@ -23,10 +34,17 @@ class JobMonitor:
     _polling_task: asyncio.Task[None] | None = None
     _stop_event: asyncio.Event
 
-    def __init__(self, nats_client: NATSClient | None, database_service: DatabaseService, slurm_service: SlurmService):
+    def __init__(
+        self,
+        nats_client: NATSClient | None,
+        database_service: DatabaseService,
+        slurm_service: SlurmService,
+        event_ingester: "EventIngester | None" = None,
+    ):
         self.nats_client = nats_client
         self.database_service = database_service
         self.slurm_service = slurm_service
+        self.event_ingester = event_ingester
         self._stop_event = asyncio.Event()
 
     @alru_cache
@@ -80,6 +98,11 @@ class JobMonitor:
                 await self.update_running_jobs()
             except Exception:
                 logger.exception("Error during job polling")
+            if self.event_ingester is not None:
+                try:
+                    await self.event_ingester.ingest_once()
+                except Exception:
+                    logger.exception("Error during event ingest")
             await asyncio.sleep(interval_seconds)
 
     async def update_running_jobs(self) -> None:
@@ -112,6 +135,18 @@ class JobMonitor:
                         hpcrun_id=hpc_run.database_id, new_slurm_job=slurm_job
                     )
                     logger.info(f"Updated HpcRun {hpc_run.database_id} status to {new_status}")
+                    await record_api_event(
+                        self.database_service,
+                        hpc_run,
+                        f"slurm.{new_status.value}",
+                        {
+                            "slurm_job_id": hpc_run.slurmjobid,
+                            "previous": hpc_run.status.value if hpc_run.status else None,
+                            "start_time": slurm_job.start_time,
+                            "end_time": slurm_job.end_time,
+                        },
+                        level="error" if new_status in _FAILED else "info",
+                    )
             except ValueError as e:
                 logger.exception(
                     f"Error updating HpcRun {hpc_run.database_id} to status {slurm_job.job_state.lower()}."

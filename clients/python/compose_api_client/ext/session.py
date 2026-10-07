@@ -18,7 +18,7 @@ import asyncio
 import io
 import time
 import zipfile
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -30,8 +30,11 @@ from compose_api_client.api.biosim_api import check_health_health_get, get_versi
 from compose_api_client.api.compute import get_processes_list, get_simulator_list, get_steps_list
 from compose_api_client.api.curated import run_copasi, run_tellurium
 from compose_api_client.api.results import (
+    get_simulation_events,
     get_simulation_results_file,
     get_simulation_status,
+    get_simulation_trace,
+    get_simulation_trace_chrome,
     get_simulations_status_batch,
     get_simulator_build_status,
 )
@@ -45,6 +48,9 @@ from compose_api_client.models import (
     BodyRunTellurium,
     HpcRun,
     RegisteredSimulators,
+    RunEvent,
+    RunEventPage,
+    RunTraceTree,
     SimulationExperiment,
 )
 from compose_api_client.types import UNSET, File, Response
@@ -241,6 +247,58 @@ class ComposeSession:
     ) -> JobState:
         return _wait_sync(lambda: self.build_status(simulator_id), poll, timeout, on_update)
 
+    # -- events and traces ----------------------------------------------------------------------------------------
+
+    def events(
+        self,
+        simulation_id: int,
+        *,
+        after: int | None = None,
+        limit: int = 500,
+        level: str | None = None,
+        event: str | None = None,
+        span_id: str | None = None,
+    ) -> RunEventPage:
+        """A page of the run's events, in the order they were recorded. Pass ``page.next_cursor`` as ``after`` for the
+        next page."""
+        r = get_simulation_events.sync_detailed(
+            client=self.client, simulation_id=simulation_id, **_event_filters(after, limit, level, event, span_id)
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    def iter_events(
+        self,
+        simulation_id: int,
+        *,
+        follow: bool = False,
+        poll: float = 5.0,
+        level: str | None = None,
+        event: str | None = None,
+    ) -> Iterator[RunEvent]:
+        """Every event, page by page. ``follow``: keep polling for new ones until the job is terminal and a poll
+        brings nothing new (the service keeps reading a run's last events for a while after it ends)."""
+        after: int | None = None
+        while True:
+            page = self.events(simulation_id, after=after, level=level, event=event)
+            yield from page.events
+            if page.events:
+                after = page.events[-1].cursor if isinstance(page.events[-1].cursor, int) else after
+            if page.next_cursor is not None:
+                continue
+            if not follow or (not page.events and self.status(simulation_id).terminal):
+                return
+            time.sleep(poll)
+
+    def trace(self, simulation_id: int) -> RunTraceTree:
+        """The run's spans as a tree, each span with its own events."""
+        r = get_simulation_trace.sync_detailed(client=self.client, simulation_id=simulation_id)
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    def trace_chrome(self, simulation_id: int) -> dict[str, Any]:
+        """The run's trace as a Chrome Trace Event document: save it as JSON and open it in ui.perfetto.dev."""
+        r = get_simulation_trace_chrome.sync_detailed(client=self.client, simulation_id=simulation_id)
+        return dict(_parsed(r).to_dict())
+
     # -- results ----------------------------------------------------------------------------------------------------
 
     def results(self, simulation_id: int) -> bytes:
@@ -391,6 +449,29 @@ class AsyncComposeSession:
     ) -> JobState:
         return await _wait_async(lambda: self.build_status(simulator_id), poll, timeout, on_update)
 
+    async def events(
+        self,
+        simulation_id: int,
+        *,
+        after: int | None = None,
+        limit: int = 500,
+        level: str | None = None,
+        event: str | None = None,
+        span_id: str | None = None,
+    ) -> RunEventPage:
+        r = await get_simulation_events.asyncio_detailed(
+            client=self.client, simulation_id=simulation_id, **_event_filters(after, limit, level, event, span_id)
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    async def trace(self, simulation_id: int) -> RunTraceTree:
+        r = await get_simulation_trace.asyncio_detailed(client=self.client, simulation_id=simulation_id)
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    async def trace_chrome(self, simulation_id: int) -> dict[str, Any]:
+        r = await get_simulation_trace_chrome.asyncio_detailed(client=self.client, simulation_id=simulation_id)
+        return dict(_parsed(r).to_dict())
+
     async def results(self, simulation_id: int) -> bytes:
         r = await get_simulation_results_file.asyncio_detailed(client=self.client, simulation_id=simulation_id)
         raise_for(r)
@@ -420,6 +501,19 @@ class AsyncComposeSession:
             return sim, state, []
         sid = sim.simulation_database_id
         return sim, state, await self.extract(sid, dest) if extract else [await self.download(sid, dest)]
+
+
+def _event_filters(
+    after: int | None, limit: int, level: str | None, event: str | None, span_id: str | None
+) -> dict[str, Any]:
+    """The events operation's optional query parameters, unset when not given."""
+    return {
+        "after": after if after is not None else UNSET,
+        "limit": limit,
+        "level": level if level is not None else UNSET,
+        "event": event if event is not None else UNSET,
+        "span_id": span_id if span_id is not None else UNSET,
+    }
 
 
 def _wait_sync(

@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.responses import FileResponse
@@ -13,8 +13,11 @@ from compose_api.config import get_settings
 from compose_api.dependencies import (
     get_data_service,
     get_database_service,
+    get_required_database_service,
     get_simulation_service,
 )
+from compose_api.observability.chrome_trace import chrome_trace_document
+from compose_api.observability.events import RunEvent, RunEventPage, RunSpan, RunTraceTree, build_span_tree
 from compose_api.simulation.models import (
     HpcRun,
     JobType,
@@ -205,3 +208,82 @@ async def get_simulator_build_status(simulator_id: int = Query(...)) -> HpcRun:
     if db_service is None:
         raise HTTPException(status_code=500, detail="Database service is not initialized")
     return await get_hpc_run_status(db_service=db_service, ref_id=simulator_id, job_type=JobType.BUILD_CONTAINER)
+
+
+# -- a run's events and trace (docs/plan-observability.md O3, O4) -- #
+
+MAX_TRACE_EVENTS = 20_000
+
+
+@config.router.get(
+    path="/simulation/events",
+    response_model=RunEventPage,
+    operation_id="get-simulation-events",
+    responses={404: NOT_FOUND_RESPONSE},
+    tags=["Results"],
+    summary="Get a page of a simulation's events, in the order they were recorded",
+)
+async def get_simulation_events(
+    simulation: ReadableSimulation,
+    after: int | None = Query(default=None, description="Return events after this cursor (a previous page's next)"),
+    limit: int = Query(default=500, ge=1, le=5000),
+    level: str | None = Query(default=None, description="Only events at this level (debug, info, warning, error)"),
+    event: str | None = Query(default=None, description="Only events with this name, e.g. job.end"),
+    span_id: str | None = Query(default=None, description="Only events inside this span"),
+) -> RunEventPage:
+    events_db = get_required_database_service().get_events_db()
+    run = await events_db.get_run_for_simulation(simulation.simulation_id)
+    if run is None or run.trace_id is None:
+        return RunEventPage(simulation_id=simulation.simulation_id, trace_id=None, events=[])
+    events = await events_db.list_events(
+        run.trace_id, after=after, limit=limit, level=level, event=event, span_id=span_id
+    )
+    return RunEventPage(
+        simulation_id=simulation.simulation_id,
+        trace_id=run.trace_id,
+        events=events,
+        next_cursor=events[-1].cursor if len(events) == limit else None,
+    )
+
+
+async def _trace_of(simulation: SimulationAccess) -> tuple[str | None, bool, list[RunSpan], list[RunEvent]]:
+    events_db = get_required_database_service().get_events_db()
+    run = await events_db.get_run_for_simulation(simulation.simulation_id)
+    if run is None or run.trace_id is None:
+        return None, False, [], []
+    spans = await events_db.get_spans(run.trace_id)
+    events = await events_db.list_events(run.trace_id, limit=MAX_TRACE_EVENTS)
+    return run.trace_id, not run.terminal, list(spans.values()), events
+
+
+@config.router.get(
+    path="/simulation/trace",
+    response_model=RunTraceTree,
+    operation_id="get-simulation-trace",
+    responses={404: NOT_FOUND_RESPONSE},
+    tags=["Results"],
+    summary="Get a simulation's spans as a tree, each span with its own events",
+)
+async def get_simulation_trace(simulation: ReadableSimulation) -> RunTraceTree:
+    trace_id, _live, spans, events = await _trace_of(simulation)
+    return RunTraceTree(simulation_id=simulation.simulation_id, trace_id=trace_id, roots=build_span_tree(spans, events))
+
+
+@config.router.get(
+    path="/simulation/trace/chrome",
+    response_model=dict[str, Any],
+    operation_id="get-simulation-trace-chrome",
+    responses={404: NOT_FOUND_RESPONSE},
+    tags=["Results"],
+    summary="Get a simulation's trace as a Chrome Trace Event document (open it in ui.perfetto.dev)",
+)
+async def get_simulation_trace_chrome(simulation: ReadableSimulation) -> dict[str, Any]:
+    trace_id, live, spans, events = await _trace_of(simulation)
+    document = chrome_trace_document(
+        spans,
+        events,
+        trace_id=trace_id,
+        other_data={"simulation_id": str(simulation.simulation_id)},
+        live=live,
+    )
+    return dict(document)

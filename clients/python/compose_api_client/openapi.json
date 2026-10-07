@@ -412,6 +412,227 @@
         }
       }
     },
+    "/results/simulation/events": {
+      "get": {
+        "tags": [
+          "Results"
+        ],
+        "summary": "Get a page of a simulation's events, in the order they were recorded",
+        "operationId": "get-simulation-events",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return events after this cursor (a previous page's next)",
+              "title": "After"
+            },
+            "description": "Return events after this cursor (a previous page's next)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "default": 500,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only events at this level (debug, info, warning, error)",
+              "title": "Level"
+            },
+            "description": "Only events at this level (debug, info, warning, error)"
+          },
+          {
+            "name": "event",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only events with this name, e.g. job.end",
+              "title": "Event"
+            },
+            "description": "Only events with this name, e.g. job.end"
+          },
+          {
+            "name": "span_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only events inside this span",
+              "title": "Span Id"
+            },
+            "description": "Only events inside this span"
+          },
+          {
+            "name": "simulation_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Simulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunEventPage"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/results/simulation/trace": {
+      "get": {
+        "tags": [
+          "Results"
+        ],
+        "summary": "Get a simulation's spans as a tree, each span with its own events",
+        "operationId": "get-simulation-trace",
+        "parameters": [
+          {
+            "name": "simulation_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Simulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunTraceTree"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/results/simulation/trace/chrome": {
+      "get": {
+        "tags": [
+          "Results"
+        ],
+        "summary": "Get a simulation's trace as a Chrome Trace Event document (open it in ui.perfetto.dev)",
+        "operationId": "get-simulation-trace-chrome",
+        "parameters": [
+          {
+            "name": "simulation_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Simulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get-Simulation-Trace-Chrome"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/core/simulator/list": {
       "get": {
         "tags": [
@@ -901,6 +1122,312 @@
         ],
         "title": "RegisteredSimulators"
       },
+      "RunEvent": {
+        "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cursor"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "ts": {
+            "type": "string",
+            "title": "Ts"
+          },
+          "component": {
+            "type": "string",
+            "title": "Component"
+          },
+          "event": {
+            "type": "string",
+            "title": "Event"
+          },
+          "level": {
+            "type": "string",
+            "title": "Level",
+            "default": "info"
+          },
+          "baggage": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baggage"
+          },
+          "global_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Global Time"
+          },
+          "wall_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wall Time"
+          },
+          "span_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Span Id"
+          },
+          "parent_span_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Span Id"
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "seq",
+          "source",
+          "ts",
+          "component",
+          "event"
+        ],
+        "title": "RunEvent",
+        "description": "One structured event of a run, from the API, the job script or the simulator's engine."
+      },
+      "RunEventPage": {
+        "properties": {
+          "simulation_id": {
+            "type": "integer",
+            "title": "Simulation Id"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/RunEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "simulation_id",
+          "trace_id",
+          "events"
+        ],
+        "title": "RunEventPage",
+        "description": "A page of a simulation's events, in the order they were recorded.\n\n``next_cursor`` is the ``after`` for the next page, None at the end."
+      },
+      "RunSpan": {
+        "properties": {
+          "span_id": {
+            "type": "string",
+            "title": "Span Id"
+          },
+          "parent_span_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Span Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "attrs": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attrs"
+          },
+          "start_ts": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Ts"
+          },
+          "end_ts": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Ts"
+          },
+          "duration_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration S"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "span_id",
+          "name"
+        ],
+        "title": "RunSpan",
+        "description": "A node of a run's trace tree, folded from ``span.start`` / ``span.end`` events. ``end_ts`` is None while open."
+      },
+      "RunTraceTree": {
+        "properties": {
+          "simulation_id": {
+            "type": "integer",
+            "title": "Simulation Id"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          },
+          "roots": {
+            "items": {
+              "$ref": "#/components/schemas/SpanTree"
+            },
+            "type": "array",
+            "title": "Roots"
+          }
+        },
+        "type": "object",
+        "required": [
+          "simulation_id",
+          "trace_id",
+          "roots"
+        ],
+        "title": "RunTraceTree",
+        "description": "A simulation's spans as a forest, each span carrying its own events."
+      },
       "SimulationExperiment": {
         "properties": {
           "simulation_database_id": {
@@ -978,6 +1505,33 @@
           "database_id"
         ],
         "title": "SimulatorVersion"
+      },
+      "SpanTree": {
+        "properties": {
+          "span": {
+            "$ref": "#/components/schemas/RunSpan"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/RunEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/SpanTree"
+            },
+            "type": "array",
+            "title": "Children"
+          }
+        },
+        "type": "object",
+        "required": [
+          "span"
+        ],
+        "title": "SpanTree",
+        "description": "A span with its own events (those whose ``span_id`` is the span's) and its children, by start time."
       },
       "ValidationError": {
         "properties": {

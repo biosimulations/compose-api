@@ -21,6 +21,7 @@ from compose_api.dependencies import (
     get_required_job_monitor,
     get_required_simulation_service,
 )
+from compose_api.observability.api_events import record_api_event
 from compose_api.simulation.hpc_utils import get_correlation_id, get_experiment_id, get_singularity_hash
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import (
@@ -187,13 +188,25 @@ async def _dispatch_job(
     sim_slurmjobid = await simulation_service_slurm.submit_simulation_job(
         simulation=simulation,
         experiment_id=experiment_id,
+        correlation_id=correlation_id,
     )
 
-    _hpcrun = await hpc_db.insert_hpcrun(
+    hpcrun = await hpc_db.insert_hpcrun(
         slurmjobid=sim_slurmjobid,
         job_type=JobType.SIMULATION,
         ref_id=simulation.database_id,
         correlation_id=correlation_id,
+    )
+    await record_api_event(
+        database_service,
+        hpcrun,
+        "dispatch.submitted",
+        {
+            "slurm_job_id": sim_slurmjobid,
+            "simulation_id": simulation.database_id,
+            "simulator_id": simulator_version.database_id,
+            "experiment_id": experiment_id,
+        },
     )
 
 

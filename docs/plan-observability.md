@@ -1,14 +1,14 @@
 # Observability: run traces from process-bigraph events, and datasets a run advertises
 
-**Status (2026-10-07): step 1 in review; the rest planned.** One PR per step, each merged on green with a merge commit.
+**Status (2026-10-07): step 1 merged (#213), step 2 in review; the rest planned.** One PR per step, each merged on green with a merge commit.
 Deploying is a separate go from Jim.
 
 | Step | What | State |
 |---|---|---|
 | 0 | This document | **done** #212 |
-| 1 | Trace identity before submission (O1); owner and visibility (O7); the authorization seam on every simulation read (O8); migrations that run at startup | **in review** |
+| 1 | Trace identity before submission (O1); owner and visibility (O7); the authorization seam on every simulation read (O8); migrations that run at startup | **done** #213 |
 | 1b | Retire NATS and `worker_event` (the subscriber, settings, the k8s deployment and its public NodePort) | planned |
-| 2 | Events: job-script activation (O2), API and job-script events (O3), the file-tailing ingester (O4), events and trace routes, `ext`, CLI | planned |
+| 2 | Events: job-script activation (O2), API and job-script events (O3), the file-tailing ingester (O4), events and trace routes, `ext`, CLI | **in review** |
 | 3 | Datasets: job-script manifest and `artifact.written` registrar (O5), store-relative content (O6), dataset routes, `ext`, CLI | planned |
 | 4 | Producer side in viva-pde-particle: `artifact.written` per result file, inside a `task` span | planned |
 | 5 | Auth hookup after #192: stamp the owner at submit, a real `can_read` policy, visibility | blocked on #192 |
@@ -155,6 +155,20 @@ moves from `poetry run` to `uv run`.
 - `compose_api/observability/`: the ported parsing, span folding, span tree and Chrome Trace renderer; the ingester
   and its tick.
 - `run_event` / `run_span`; the events and trace routes; `ext`; CLI; `docs/cli.md`.
+
+*(Found or decided building step 2.)*
+- **The trace routes are two operations:** `/results/simulation/trace` (the span tree) and
+  `/results/simulation/trace/chrome` (the Perfetto document), so each has one response type in the generated client.
+- **The page field is `next_cursor`, not `next`.** The generator renames `next` to `next_`.
+- **Events are returned in the order they were recorded** (by row id, which is what a cursor pages on), not by `ts`.
+  Within one source that is the source's own order.
+- **The ingester's terminal grace is kept in `events_cursor`** (`__terminal_seen__`, then `__done__`), so it uses no
+  cluster clock and needs no extra column.
+- **The env file, not `--env`.** `singularity --env` splits its value on commas, and `PBG_TRACE_BAGGAGE` has them.
+- **The API's events use a microsecond timestamp as `seq`** (unique within the `api` source), so `run_event.seq` is
+  BIGINT.
+- **The job script traps SIGTERM** (`exit 143`), so a time limit or `scancel` still records `job.end` and closes the
+  job span. A `SIGKILL` (the out-of-memory killer) cannot be trapped; the ingester closes that span as `unknown`.
 
 ### Step 3: datasets
 - Job script: keep `output/`, write `artifacts.jsonl` before the zip.

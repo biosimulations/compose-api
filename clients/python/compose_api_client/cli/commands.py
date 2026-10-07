@@ -21,7 +21,7 @@ from typing import Annotated, Any, TypeVar
 import httpx
 import typer
 
-from compose_api_client.cli.render import Output, emit, err, lines
+from compose_api_client.cli.render import Output, emit, err, event_line, lines, resolve, span_tree
 from compose_api_client.ext import (
     DEFAULT_URL,
     ApiTimeout,
@@ -431,6 +431,56 @@ def results(
         else:
             files = [s.download(simulation_id, out if out is not None else Path.cwd())]
     emit(settings.output, {"simulation_id": simulation_id, "files": [str(f) for f in files]})
+
+
+# -- events and traces --------------------------------------------------------------------------------------------
+
+
+@app.command()
+@claims("events", "get-simulation-events")
+@handled
+def events(
+    ctx: typer.Context,
+    simulation_id: Annotated[int, typer.Argument(help="The simulation id.")],
+    follow: Annotated[
+        bool, typer.Option("--follow", "-f", help="Keep printing new events until the job has finished.")
+    ] = False,
+    level: Annotated[str | None, typer.Option(help="Only events at this level: debug, info, warning, error.")] = None,
+    event: Annotated[str | None, typer.Option(help="Only events with this name, e.g. job.end.")] = None,
+    poll: Poll = 5.0,
+) -> None:
+    """A simulation's events: from the API, the job script and the simulator's engine. JSON output is JSON lines."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        for record in s.iter_events(simulation_id, follow=follow, poll=poll, level=level, event=event):
+            event_line(settings.output, record.to_dict())
+
+
+@app.command()
+@claims("trace", "get-simulation-trace", "get-simulation-trace-chrome")
+@handled
+def trace(
+    ctx: typer.Context,
+    simulation_id: Annotated[int, typer.Argument(help="The simulation id.")],
+    chrome: Annotated[
+        Path | None,
+        typer.Option(help="Save the trace as a Chrome Trace Event file instead; open it in ui.perfetto.dev."),
+    ] = None,
+) -> None:
+    """A simulation's spans as a tree, each with its own events; or, with --chrome, a file for Perfetto."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        if chrome is not None:
+            chrome.write_text(json.dumps(s.trace_chrome(simulation_id)))
+            emit(settings.output, {"simulation_id": simulation_id, "files": [str(chrome)]})
+            return
+        tree = s.trace(simulation_id).to_dict()
+    if resolve(settings.output) is Output.JSON:
+        emit(settings.output, tree)
+    elif not tree.get("roots"):
+        err.print(f"simulation {simulation_id} has no spans recorded (yet)")
+    else:
+        span_tree(tree["roots"])
 
 
 @app.command("build-status")

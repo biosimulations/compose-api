@@ -140,6 +140,15 @@ catalog wrapper at `listed`; never hand-edit it — raising an entry means addin
 `nats_worker_event_subject` that correlates `WorkerEvent`s by `correlation_id`. Unparseable SLURM states are coerced to
 `JobStatus.UNKNOWN` rather than raising. `internal_subscribe(queue, job_id)` lets in-process callers await transitions.
 
+**Run events (`compose_api/observability/`, docs/plan-observability.md).** A run's trace id derives from its
+`correlation_id` (`identity.py`), which is minted before `sbatch`. The job script (`simulation/job_script.py`, a pure
+function with a bash test in `tests/observability/test_job_script.py`) writes the job span and `job.*` events to
+`events/job.jsonl` and passes `PBG_*` variables to the container through an env file, so a process-bigraph >= 1.8.5
+engine writes `events/engine.jsonl`. `EventIngester` tails those files on the mounted store in the `JobMonitor` loop
+(byte cursors in `hpcrun.events_cursor`, deduplicated on `(trace_id, source, seq)`), and the API writes its own
+`dispatch.*` / `slurm.*` events (`api_events.py`). All events follow process-bigraph's event schema (v1); the
+parsing, span folding and Chrome Trace renderer are ported from viva-core.
+
 **Persistence.** `DatabaseServiceSQL` (async SQLAlchemy + asyncpg) is a facade over three ORM executors:
 `get_simulator_db()`, `get_hpc_db()`, `get_package_db()` (`compose_api/db/services/`, tables in `db/tables/`). Startup
 calls `create_db()`: `metadata.create_all` (new tables), a stamp for a database alembic doesn't track yet (head if it
