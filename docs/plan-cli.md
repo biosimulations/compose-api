@@ -1,15 +1,15 @@
 # CLI: a `compose-api` command line on a generated httpx client
 
-**Status (2026-10-07): A and B1 merged (#205, #206); B2 (#207) and C (with D's docs) in review; the 0.7.0 release is what remains.** Three PRs, each merged on green with a merge
+**Status (2026-10-07): A, B1, B2 and C merged (#205–#208), with D's docs; what remains is the 0.7.0 release (and publishing `compose-api-client` to PyPI), each on Jim's go, and the open questions below.** Three PRs, each merged on green with a merge
 commit. Publishing to PyPI and deploying are separate goes from Jim.
 
 | Step | What | State |
 |---|---|---|
 | A | Generation pipeline: deterministic, in-repo, drift-checked in CI; regenerate the stale client | **done** #205 |
 | B1 | `compose-api-client` as a workspace package at `clients/python`, brought in with its history (C6) | **done** #206 |
-| B2 | The hand-written application layer, `compose_api_client.ext` | **#207** |
-| C | The `compose-api` CLI on `ext` and the generated client; a spec-coverage test | **in review** |
-| D | Docs (`docs/cli.md`) — done with C; `CLAUDE.md`, strategy.md 2b; release with 0.7.0 | docs in C; release pending |
+| B2 | The hand-written application layer, `compose_api_client.ext` | **done** #207 |
+| C | The `compose-api` CLI on `ext` and the generated client; a spec-coverage test | **done** #208 |
+| D | Docs (`docs/cli.md`, `CLAUDE.md`) done in #208; strategy.md 2b; release with 0.7.0 | release pending |
 
 ## Context
 
