@@ -1,12 +1,12 @@
 # Observability: run traces from process-bigraph events, and datasets a run advertises
 
-**Status (2026-10-07): step 1 in review (#213), step 2 in review; the rest planned.** One PR per step, each merged on green with a merge commit.
+**Status (2026-10-07): step 1 merged (#213), step 2 in review; the rest planned.** One PR per step, each merged on green with a merge commit.
 Deploying is a separate go from Jim.
 
 | Step | What | State |
 |---|---|---|
 | 0 | This document | **done** #212 |
-| 1 | Trace identity before submission (O1); owner and visibility (O7); the authorization seam on every simulation read (O8); migrations that run at startup | **in review** #213 |
+| 1 | Trace identity before submission (O1); owner and visibility (O7); the authorization seam on every simulation read (O8); migrations that run at startup | **done** #213 |
 | 1b | Retire NATS and `worker_event` (the subscriber, settings, the k8s deployment and its public NodePort) | planned |
 | 2 | Events: job-script activation (O2), API and job-script events (O3), the file-tailing ingester (O4), events and trace routes, `ext`, CLI | **in review** |
 | 3 | Datasets: job-script manifest and `artifact.written` registrar (O5), store-relative content (O6), dataset routes, `ext`, CLI | planned |
