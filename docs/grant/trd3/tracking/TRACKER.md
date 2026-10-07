@@ -31,18 +31,18 @@ A4.1.particle-pde): its TR&D3 activities are quoted against these rows in
 (ReaDDy "initiated" by March 2026, delivered by August), the next-step column says which period each belongs to. No
 status was changed.
 
-## Roll-up (2026-09-09, statuses verified against GitHub)
+## Roll-up (2026-09-09, statuses verified against GitHub; CP-BM added 2026-10-07)
 
 | Status | Rows | of which `?` (inferred, unconfirmed) |
 |---|---|---|
 | delivered | 7 | 0 |
 | in-spirit | 6 | 0 |
-| in-progress | 24 | 1 |
+| in-progress | 25 | 1 |
 | deviated | 1 | 0 |
 | not-started | 6 | 0 |
 | blocked-external | 1 | 0 |
 | unknown (`?` only, needs a person) | 5 | 5 |
-| **total** | **50** | **6** |
+| **total** | **51** | **6** |
 
 The six remaining `?` cannot be settled from code: A3.x.steer, and the five community/collaboration rows
 (A4.3.imag, A4.3.combine, CP1, CP7, CP10). A GitHub search cannot disprove an unrecorded collaboration, so those
@@ -267,6 +267,7 @@ simulators will require more advanced tooling, which will only be available a fe
 | CP7 | SASCO (stress-adapted cancer organelles) | protocol for reaction-diffusion + regulation | condensate reaction methods | ? | none found | User to fill |
 | CP9 | Digital twins for synthetic biology | protocol + ensemble/inference processes | inference process interface | in-progress | `viva-uq` · `viva-torch` surrogates · `viva-ketchup` parameter estimation · `FBAKineticsPrototype` · `pbest` parameter scans | Name the "ensemble of simulations" process |
 | CP10 | Cell-free expression / NIST | interface, tools, models | experimental protocols | ? | none found | User to fill |
+| CP-BM | BioModels (T.J. Sego, University of Florida, the database's new maintainers; with Eran Agmon). *Not a numbered CP in the grant; added 2026-10-07.* | process-bigraph composites of every BioModels model, run locally and on the Center's services (this repository) | the BioModels corpus (1,000+ curated models) as a reproducibility and regression benchmark | in-progress | `vivarium-collective/viva-biomodels` (Oct 2026; BioModels regression workspace) · `biomodels-comparison` (892 models across simulators) · `biosimulations/biomodels-regression` (Aug 2026) · TR&D1's BioModels curation (Year 2 report; PLoS Comp Bio) | Goal G1's Collaborating Project: Sego's group runs a BioModels composite locally and submits it unchanged to compose-api, following the walkthrough themselves; report corpus-wide local/HPC agreement for Year 3 |
 
 ---
 
