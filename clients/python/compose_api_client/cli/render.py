@@ -11,6 +11,7 @@ from typing import Any
 
 from rich.console import Console
 from rich.table import Table
+from rich.tree import Tree
 
 out = Console()
 err = Console(stderr=True)
@@ -79,3 +80,38 @@ def _cell(v: Any) -> str:
 def lines(items: Iterable[str]) -> None:
     for i in items:
         out.print(i)
+
+
+def event_line(fmt: Output, event: dict[str, Any]) -> None:
+    """One event: a JSON line, or ``ts  level  source  event  payload`` on a terminal."""
+    if resolve(fmt) is Output.JSON:
+        sys.stdout.write(json.dumps(event, default=str) + "\n")
+        sys.stdout.flush()
+        return
+    level = str(event.get("level") or "info")
+    style = {"error": "red", "warning": "yellow", "debug": "dim"}.get(level, "")
+    payload = json.dumps(event.get("payload") or {}, default=str, separators=(",", ":"))
+    text = f"{event.get('ts', '')}  {level:<7}  {event.get('source', ''):<14}  {event.get('event', '')}  {payload}"
+    out.print(text, style=style, markup=False, highlight=False, soft_wrap=True)
+
+
+def span_tree(roots: list[dict[str, Any]]) -> None:
+    """The trace as an indented tree: each span with its status and duration, then its own events."""
+    tree = Tree("trace", hide_root=True)
+
+    def add(parent: Tree, node: dict[str, Any]) -> None:
+        span = node["span"]
+        duration = span.get("duration_s")
+        status = span.get("status") or "open"
+        label = f"[bold]{span['name']}[/bold]  {status}" + (f"  {duration:.3f} s" if duration is not None else "")
+        if span.get("error"):
+            label += f"  [red]{span['error']}[/red]"
+        branch = parent.add(label)
+        for event in node.get("events") or []:
+            branch.add(f"[dim]{event.get('ts', '')}[/dim]  {event.get('event', '')}")
+        for child in node.get("children") or []:
+            add(branch, child)
+
+    for root in roots:
+        add(tree, root)
+    out.print(tree)

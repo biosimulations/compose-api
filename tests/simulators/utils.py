@@ -12,6 +12,12 @@ from compose_api_client.ext import AsyncComposeSession
 from compose_api_client.models import HTTPValidationError, SimulationExperiment
 from compose_api_client.types import Response
 
+from compose_api.common.gateway.models import Namespace
+from compose_api.config import get_settings
+from compose_api.dependencies import get_required_database_service
+from compose_api.observability.ingest import EventIngester
+from compose_api.simulation.hpc_utils import get_internal_experiment_dir
+
 
 async def check_experiment_run(
     sim_experiment: Any, in_memory_api_client: Client, seconds_to_wait: int = 120
@@ -27,7 +33,22 @@ async def check_experiment_run(
         client=in_memory_api_client, simulation_id=sim_experiment.simulation_database_id
     )
     assert results.status_code == 200
+    await _check_run_events(session, sim_experiment.simulation_database_id)
     return results
+
+
+async def _check_run_events(session: AsyncComposeSession, simulation_id: int) -> None:
+    """The run has a trace (docs/plan-observability.md O3): the API's dispatch event, and the job script's own
+    events, ingested from the experiment directory the way the service's polling loop does."""
+    namespace = Namespace(get_settings().namespace)
+    ingester = EventIngester(get_required_database_service(), lambda e: get_internal_experiment_dir(e, namespace))
+    await ingester.ingest_once()
+    page = await session.events(simulation_id)
+    names = {e.event for e in page.events}
+    assert {"dispatch.submitted", "job.start", "job.end"} <= names, f"events of simulation {simulation_id}: {names}"
+    tree = await session.trace(simulation_id)
+    assert [root.span.name for root in tree.roots] == ["job"]
+    assert tree.roots[0].span.status == "ok"
 
 
 def assert_test_sim_results(

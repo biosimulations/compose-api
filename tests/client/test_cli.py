@@ -81,6 +81,7 @@ class FakeService:
         self.statuses = list(statuses or ["completed"])
         self.results = final_results if final_results is not None else _zip({"results.pber": b"{}"})
         self.requests: list[httpx.Request] = []
+        self.events = [_event(i, name) for i, name in enumerate(["dispatch.submitted", "job.start", "job.end"], 1)]
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -101,6 +102,13 @@ class FakeService:
             return httpx.Response(200, json=[_run("running", i) for i in ids if i != 99])
         if path == "/results/simulation/results/file":
             return httpx.Response(200, content=self.results)
+        if path.startswith(("/results/simulation/events", "/results/simulation/trace")):
+            return self._observability(request)
+        if path.startswith("/core/"):
+            return self._catalogue(path)
+        return httpx.Response(500, text=f"unexpected {path}")
+
+    def _catalogue(self, path: str) -> httpx.Response:
         if path == "/core/simulator/list":
             return httpx.Response(200, json={"versions": [_simulator()], "timestamp": None})
         if path in ("/core/processes/list", "/core/steps/list"):
@@ -118,6 +126,37 @@ class FakeService:
                 ],
             )
         return httpx.Response(500, text=f"unexpected {path}")
+
+    def _observability(self, request: httpx.Request) -> httpx.Response:
+        path, params = request.url.path, request.url.params
+        if path == "/results/simulation/events":
+            after, limit = int(params.get("after", 0)), int(params.get("limit", 500))
+            page = [e for e in self.events if e["cursor"] > after][:limit]
+            following = page[-1]["cursor"] if len(page) == limit else None
+            body = {"simulation_id": 7, "trace_id": "t" * 32, "events": page, "next_cursor": following}
+            return httpx.Response(200, json=body)
+        if path == "/results/simulation/trace":
+            return httpx.Response(200, json={"simulation_id": 7, "trace_id": "t" * 32, "roots": [_job_tree()]})
+        return httpx.Response(200, json={"traceEvents": [], "displayTimeUnit": "ms", "otherData": {}})
+
+
+def _event(cursor: int, name: str) -> dict[str, Any]:
+    return {
+        "cursor": cursor,
+        "seq": cursor,
+        "source": "job-1",
+        "ts": f"2026-10-07T12:00:0{cursor}.000Z",
+        "component": "compose_api.job",
+        "event": name,
+        "level": "info",
+        "payload": {"n": cursor},
+    }
+
+
+def _job_tree() -> dict[str, Any]:
+    span: dict[str, Any] = {"span_id": "1" * 16, "name": "job", "start_ts": "2026-10-07T12:00:00.000Z"}
+    span.update(status="ok", duration_s=3.0)
+    return {"span": span, "events": [_event(2, "job.start")], "children": []}
 
 
 def _simulator() -> dict[str, Any]:
@@ -274,3 +313,35 @@ def test_openapi_diff_reports_skew(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cli_module, "fetch_spec", lambda settings: bundled_spec())
     assert invoke("openapi", "--diff").exit_code == 0
     assert json.loads(invoke("openapi").stdout)["info"]["title"]
+
+
+def test_events_pages_through_and_prints_json_lines(service: Callable[..., FakeService]) -> None:
+    fake = service()
+    r = runner.invoke(app, ["--output", "json", "events", "7"])
+    assert r.exit_code == 0, r.output
+    assert [json.loads(line)["event"] for line in r.stdout.splitlines()] == [
+        "dispatch.submitted",
+        "job.start",
+        "job.end",
+    ]
+    assert fake.requests[0].url.params["simulation_id"] == "7"
+    table = runner.invoke(app, ["--output", "table", "events", "7", "--level", "info"])
+    assert table.exit_code == 0 and "job.end" in table.stdout
+    assert fake.requests[-1].url.params["level"] == "info"
+
+
+def test_events_follow_stops_when_the_job_is_finished(service: Callable[..., FakeService]) -> None:
+    service(["running", "completed"])
+    r = runner.invoke(app, ["--output", "json", "events", "7", "--follow", "--poll", "0"])
+    assert r.exit_code == 0 and len(r.stdout.splitlines()) == 3
+
+
+def test_trace_tree_and_chrome_file(service: Callable[..., FakeService], tmp_path: Path) -> None:
+    service()
+    tree = json.loads(invoke("trace", "7").stdout)
+    assert tree["roots"][0]["span"]["name"] == "job"
+    shown = runner.invoke(app, ["--output", "table", "trace", "7"])
+    assert shown.exit_code == 0 and "job" in shown.stdout and "job.start" in shown.stdout
+    out = tmp_path / "t.json"
+    saved = json.loads(invoke("trace", "7", "--chrome", str(out)).stdout)
+    assert saved["files"] == [str(out)] and json.loads(out.read_text())["displayTimeUnit"] == "ms"

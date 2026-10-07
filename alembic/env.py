@@ -6,6 +6,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config, AsyncEngine
 
 import compose_api.db.tables.hpc_tables  # noqa: F401
+import compose_api.db.tables.observability_tables  # noqa: F401
 import compose_api.db.tables.package_tables  # noqa: F401
 import compose_api.db.tables.simulator_tables  # noqa: F401
 from alembic import context

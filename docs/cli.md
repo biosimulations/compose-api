@@ -53,6 +53,23 @@ $ compose-api results 4195 --extract out/
 - `simulators list`, `processes list` and `steps list` show what is registered.
 - `openapi --diff` reports whether this client and the live service disagree on the API.
 
+## What a run did: events and traces
+
+Every run records events: the service's own (`dispatch.submitted`, then `slurm.<state>` on each change), the job
+script's (`job.start`, and `job.end` with the exit code, inside a `job` span), and, if the simulator is built on
+process-bigraph 1.8.5 or later, the engine's (`run.start`, `run.end`, `process.exception`, its spans).
+
+```console
+$ compose-api events 4195                  # everything recorded so far
+$ compose-api events 4195 --follow         # and new ones as they arrive, until the job has finished
+$ compose-api events 4195 --level error    # only what went wrong
+$ compose-api trace 4195                   # the spans as a tree, each with its own events
+$ compose-api trace 4195 --chrome t.json   # a file for ui.perfetto.dev
+```
+
+With `--output json`, `events` prints JSON lines, one event per line. The service reads a run's events while it runs
+and for a few minutes after it ends, so a `--follow` may print a last few events after the job is done.
+
 ## Exit codes
 
 | Code | Meaning |
@@ -113,6 +130,8 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 * `status`: Job state of one simulation, or of several...
 * `wait`: Wait until each simulation finishes; exit...
 * `results`: Fetch a finished simulation's results...
+* `events`: A simulation's events: from the API, the...
+* `trace`: A simulation's spans as a tree, each with...
 * `build-status`: State of a simulator's container build.
 * `openapi`: The OpenAPI document: this client's...
 * `simulators`: Registered simulator versions.
@@ -230,6 +249,47 @@ $ compose-api results [OPTIONS] SIMULATION_ID
 
 * `-O, --out PATH`: Write the zip here (a file, or a directory).
 * `--extract PATH`: Unpack the archive into this directory instead.
+* `--help`: Show this message and exit.
+
+## `compose-api events`
+
+A simulation's events: from the API, the job script and the simulator's engine. JSON output is JSON lines.
+
+**Usage**:
+
+```console
+$ compose-api events [OPTIONS] SIMULATION_ID
+```
+
+**Arguments**:
+
+* `SIMULATION_ID`: The simulation id.  [required]
+
+**Options**:
+
+* `-f, --follow`: Keep printing new events until the job has finished.
+* `--level TEXT`: Only events at this level: debug, info, warning, error.
+* `--event TEXT`: Only events with this name, e.g. job.end.
+* `--poll FLOAT`: Seconds between status checks.  [default: 5.0]
+* `--help`: Show this message and exit.
+
+## `compose-api trace`
+
+A simulation's spans as a tree, each with its own events; or, with --chrome, a file for Perfetto.
+
+**Usage**:
+
+```console
+$ compose-api trace [OPTIONS] SIMULATION_ID
+```
+
+**Arguments**:
+
+* `SIMULATION_ID`: The simulation id.  [required]
+
+**Options**:
+
+* `--chrome PATH`: Save the trace as a Chrome Trace Event file instead; open it in ui.perfetto.dev.
 * `--help`: Show this message and exit.
 
 ## `compose-api build-status`
