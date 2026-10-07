@@ -9,7 +9,7 @@ commit. Publishing to PyPI and deploying are separate goes from Jim.
 | B1 | `compose-api-client` as a workspace package at `clients/python`, brought in with its history (C6) | **done** #206 |
 | B2 | The hand-written application layer, `compose_api_client.ext` | **done** #207 |
 | C | The `compose-api` CLI on `ext` and the generated client; a spec-coverage test | **done** #208 |
-| D | Docs (`docs/cli.md`, `CLAUDE.md`) done in #208; strategy.md 2b; release with 0.7.0 | release pending |
+| D | Docs (`docs/cli.md`, `CLAUDE.md`) done in #208; PyPI trusted-publisher workflow; release with 0.7.0 | workflow **in review**; PyPI publisher to add; release pending |
 
 ## Context
 
@@ -294,7 +294,24 @@ Other details:
     `typer compose_api_client.cli utils docs`;
   - a `CLAUDE.md` regeneration section;
   - the strategy.md 2b row.
-- **Release:** with the service, 0.7.0, alongside #192. Publishing `compose-api-client` 0.3.0 to PyPI is a separate go.
+- **Release:** with the service, 0.7.0, alongside #192. Publishing `compose-api-client` to PyPI is a separate go.
+
+*As built (publishing, 2026-10-07):*
+- **The workflow:** `.github/workflows/publish-client.yml` publishes `compose-api-client` to PyPI through a **trusted
+  publisher** (GitHub OIDC; no API token is stored anywhere).
+  - It runs when a GitHub **release** is published (the same go that deploys the docs and archives to Zenodo), or by
+    hand with a tag.
+  - It checks that the client's version is the tag, builds, and smoke-tests the wheel on Python 3.11 (it must import,
+    run `compose-api --help`, and pull in no FastAPI).
+  - It then uploads from the `pypi` environment, which accepts deployments only from tags and `main`. Add required
+    reviewers there for a manual gate.
+- **The PyPI side**, once, by an owner of the existing project (0.1.0–0.2.0 were uploaded with a personal token from
+  the old repository): at <https://pypi.org/manage/project/compose-api-client/settings/publishing/>, add a GitHub
+  publisher with owner `biosimulations`, repository `compose-api`, workflow `publish-client.yml` and environment
+  `pypi`.
+- **The first publishable release is 0.7.0.** Tag 0.6.0 predates `clients/python`.
+- **PyPI goes from 0.2.0 straight to 0.7.0**, because the client now versions with the service. pbest keeps its
+  `==0.2.0` pin until it is bumped (the four-step release in CLAUDE.md).
 
 ## Verification
 

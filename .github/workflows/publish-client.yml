@@ -1,0 +1,77 @@
+name: publish-client
+
+# Publishes the `compose-api-client` distribution (clients/python: the generated client, `ext` and the
+# `compose-api` CLI) to PyPI with a trusted publisher: GitHub's OIDC token, no stored API token.
+#
+# PyPI side (once, by an owner of the PyPI project: https://pypi.org/manage/project/compose-api-client/settings/publishing/):
+#   owner: biosimulations   repository: compose-api   workflow: publish-client.yml   environment: pypi
+#
+# The client versions with the service (tag.sh bumps both), so publishing a GitHub release for a tag publishes the
+# client at that version. `workflow_dispatch` republishes a tag by hand (PyPI refuses a version it already has).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Repository tag to publish (e.g., 0.7.0)"
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: "0.12.12"
+
+      - name: The client's version must be the tag
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          version="$(uv version --package compose-api-client --short)"
+          echo "tag ${TAG}, compose-api-client ${version}"
+          test "${version}" = "${TAG}" || { echo "::error::clients/python version ${version} is not the tag ${TAG}"; exit 1; }
+
+      - name: Build
+        run: uv build --package compose-api-client --out-dir dist
+
+      # Install the wheel alone, outside the repository (the root's uv overrides would otherwise apply), on the
+      # oldest supported Python, and check it imports and its command runs without the server's dependencies.
+      - name: Smoke-test the wheel
+        run: |
+          cd "$RUNNER_TEMP"
+          uv venv --python 3.11 smoke
+          wheel="$(ls "$GITHUB_WORKSPACE"/dist/*.whl)"
+          VIRTUAL_ENV="$RUNNER_TEMP/smoke" uv pip install "compose-api-client[cli] @ file://${wheel}"
+          smoke/bin/python -c "import compose_api_client.ext, compose_api_client.cli; import importlib.util as u; assert u.find_spec('fastapi') is None"
+          smoke/bin/compose-api --help
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/compose-api-client
+    permissions:
+      id-token: write  # the OIDC token PyPI's trusted publisher exchanges for a short-lived upload token
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
