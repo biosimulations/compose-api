@@ -5,7 +5,7 @@ namespace: compose-api-rke
 
 images:
   - name: ghcr.io/biosimulations/compose-api
-    newTag: 0.5.0
+    newTag: 0.7.1
   - name: docker.io/library/mongo
     newTag: 8.3.11
 
@@ -18,7 +18,6 @@ replicas:
 resources:
   - ingress.yaml
   - api-pvc.yaml
-  - nats-svc.yaml
   - haproxy-ssh-svc.yaml
   - compose-api-home-pv.yaml
   - compose-api-home-pvc.yaml

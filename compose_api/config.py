@@ -69,13 +69,6 @@ class Settings(BaseSettings):
 
     simulation_store_base_path: str = ""
     hpc_sim_config_file: str = "publish.json"
-    hpc_has_messaging: bool = False
-
-    nats_url: str = ""
-    nats_worker_event_subject: str = "worker.events"
-
-    nats_emitter_url: str = ""
-    nats_emitter_magic_word: str = "emitter-magic-word"
 
     dev_mode: str = "0"
     app_dir: str = f"{REPO_ROOT}/app"
@@ -95,6 +88,20 @@ class Settings(BaseSettings):
     # build fallback in handlers._download_or_build_container, which is the intended
     # behaviour when a download fails, not an error.
     simulator_image_repository: str = "ghcr.io/biosimulations/registry_env"
+
+    # What /simulation/run does with a process address the registry manifest does not allow
+    # (compose_api/registry/manifest.yaml). "enforce" rejects the submission with a 400; "warn" logs and runs it,
+    # as an escape hatch if enforcement turns out to block a real user. Unsafe addresses -- non-local protocols
+    # and the arbitrary-import `local:!` form -- are rejected under either policy.
+    address_policy: Literal["enforce", "warn"] = "enforce"
+
+    # Simulators published by their owners as OCI images, by name: a request's `simulator`
+    # query parameter selects one and the job runs in that image instead of the shared one
+    # (compose_api/simulation/prebuilt.py). Only these names are accepted, so a request can
+    # never pull an arbitrary image. Pin by digest or an immutable tag: the cached SIF is
+    # keyed on the reference. In the environment, a JSON object:
+    #   PREBUILT_SIMULATORS='{"viva-pde-particle": "ghcr.io/vivarium-collective/viva-pde-particle-compose:sha-abc1234"}'
+    prebuilt_simulators: dict[str, str] = {}
 
     # Auth0 access-token verification (compose_api/authentication.py). Neither is a secret. While either is
     # empty no token can be verified: anonymous requests still work and any supplied bearer token gets a 401.

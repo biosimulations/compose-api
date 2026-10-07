@@ -55,25 +55,17 @@ async def get_simulation_request_from_uploaded_file(
         raise HTTPException(status_code=400, detail="Empty uploaded file")
 
     suffix = Path(uploaded_file.filename).suffix
+    try:
+        file_type = SimulationFileType.get_file_type(suffix)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Unsupported file type `{suffix}`; send .omex, .pbg or .sbml"
+        ) from e
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
         contents = await uploaded_file.read()
         tmp_file.write(contents)
     return SimulationRequest(
         request_file_path=Path(tmp_file.name),
-        simulation_file_type=SimulationFileType.get_file_type(suffix),
+        simulation_file_type=file_type,
         is_batch=batch_submission,
     )
-
-
-allow_list = [
-    "pypi::git+https://github.com/biosimulators/bspil-basico.git@initial_work",
-    "pypi::cobra",
-    "pypi::tellurium",
-    "pypi::copasi-basico",
-    "pypi::smoldyn",
-    "pypi::numpy",
-    "pypi::matplotlib",
-    "pypi::scipy",
-    "pypi::pb_multiscale_actin",
-    "conda::readdy",
-]

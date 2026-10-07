@@ -1,6 +1,7 @@
 import copy
 import json
 import os
+import sys
 from typing import Any
 
 import yaml
@@ -29,7 +30,10 @@ def _restore_binary_format(node: Any) -> None:
             _restore_binary_format(item)
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    """Write the spec to `compose_api/api/spec/`, or to the path given as the first argument
+    (`make check-clients` writes a fresh copy elsewhere and compares)."""
+    argv = sys.argv[1:] if argv is None else argv
     # app.openapi(), not get_openapi(): the app adds the optional bearer scheme in its override.
     # Deep-copied because the fix-up below mutates, and app.openapi() returns the served, cached dict.
     openapi_spec = copy.deepcopy(app.openapi())
@@ -42,7 +46,7 @@ def main() -> None:
 
     # Write the YAML OpenAPI spec to a file in subdirectory spec
     openapi_version = app.openapi_version.replace(".", "_")
-    spec_fp = f"{current_directory}/spec/openapi_{openapi_version}_generated.yaml"
+    spec_fp = argv[0] if argv else f"{current_directory}/spec/openapi_{openapi_version}_generated.yaml"
     if os.path.exists(spec_fp):
         print("Spec exists, overwriting")
         os.remove(spec_fp)

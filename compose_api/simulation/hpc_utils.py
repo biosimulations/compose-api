@@ -20,6 +20,12 @@ def get_slurm_log_file(slurm_job_name: str) -> Path:
     return _namespace_path() / "htclogs" / f"{slurm_job_name}.out"
 
 
+def get_slurm_sim_log_file(experiment_id: str) -> Path:
+    """A simulation job's SLURM log, kept in its experiment directory so it can be served as a dataset (kind ``log``).
+    Container builds still log to ``htclogs/``."""
+    return get_slurm_sim_experiment_dir(experiment_id) / "job.out"
+
+
 def get_slurm_submit_file(slurm_job_name: str) -> Path:
     return _namespace_path() / "slurm_sbatch" / f"{slurm_job_name}.sbatch"
 

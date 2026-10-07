@@ -1,7 +1,6 @@
 import logging
 from typing import Any
 
-import nats
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
@@ -13,7 +12,9 @@ from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService, DatabaseServiceSQL
 from compose_api.db.db_utils import create_db
 from compose_api.log_config import setup_logging
+from compose_api.observability.ingest import EventIngester
 from compose_api.simulation.data_service import DataService, DataServiceHpc
+from compose_api.simulation.hpc_utils import get_internal_experiment_dir
 from compose_api.simulation.job_monitor import JobMonitor
 from tests.fixtures.mocks import TestDataService
 
@@ -159,13 +160,9 @@ async def init_standalone(enable_ssl: bool = True) -> None:
         pool_timeout=PG_POOL_TIMEOUT,
         pool_recycle=PG_POOL_RECYCLE,
     )
-    # upgrade_db runs first but order doesn't matter — both require the postgres database to exist,
-    # and upgrade_db operates on an empty database just as well as create_db does.
     set_postgres_engine(engine)
 
-    logging.warning("running alembic upgrade to apply any pending migrations")
-    # await upgrade_db(engine)
-    logging.warning("calling create_db() to initialize the database tables")
+    logging.warning("calling create_db() to create missing tables and apply pending migrations")
     await create_db(engine)
 
     database = DatabaseServiceSQL(engine)
@@ -173,8 +170,16 @@ async def init_standalone(enable_ssl: bool = True) -> None:
 
     slurm_service = SlurmService(ssh_service=get_ssh_service())
 
-    nats_client = await nats.connect(_settings.nats_url) if get_settings().hpc_has_messaging else None
-    job_monitor = JobMonitor(nats_client=nats_client, database_service=database, slurm_service=slurm_service)
+    namespace = Namespace(_settings.namespace)
+    event_ingester = EventIngester(
+        database_service=database,
+        experiment_dir=lambda experiment_id: get_internal_experiment_dir(experiment_id, namespace),
+    )
+    job_monitor = JobMonitor(
+        database_service=database,
+        slurm_service=slurm_service,
+        event_ingester=event_ingester,
+    )
     set_job_monitor(job_monitor)
 
 

@@ -1,7 +1,9 @@
+# asyncssh looks a default-port host up by its bare name, never by `[host]:22`: spell it `haproxy-ssh`
+# (as sms-api-rke does).
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: ssh-known-hosts
 data:
   known_hosts: |
-    [haproxy-ssh]:22 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF/KyWhClcMVrc8Z/M01uf91xi82tkIrEsa+fvZ9f2vV
+    haproxy-ssh ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF/KyWhClcMVrc8Z/M01uf91xi82tkIrEsa+fvZ9f2vV

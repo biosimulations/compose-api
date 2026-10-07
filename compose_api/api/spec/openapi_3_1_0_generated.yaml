@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: compose-api
-  version: 0.5.0
+  version: 0.7.1
 paths:
   /curated/copasi:
     post:
@@ -96,6 +96,11 @@ paths:
       tags:
       - Simulation
       summary: Run a simulation
+      description: '`simulator` names an owner-published image this deployment lists
+        (settings.prebuilt_simulators);
+
+        the job then runs in that image instead of the shared container. Omitted:
+        the shared container.'
       operationId: run-simulation
       parameters:
       - name: interval_time
@@ -112,6 +117,14 @@ paths:
           type: boolean
           default: false
           title: Batch Submission
+      - name: simulator
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Simulator
       requestBody:
         required: true
         content:
@@ -125,6 +138,124 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SimulationExperiment'
+        '400':
+          description: The submission cannot run. For a problem with the request itself
+            (empty file, unsupported type, interval out of range) `detail` is a string.
+            For a problem with its contents (unreadable archive, or processes the
+            registry does not allow) `detail` is an object with a `message` and a
+            `violations` list naming each address.
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /simulations:
+    get:
+      tags:
+      - Simulations
+      summary: List simulations, newest first, each with its latest SLURM job
+      operationId: list-simulations
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - submitting
+            - waiting
+            - queued
+            - pending
+            - running
+            - completed
+            - failed
+            - cancelled
+            - out_of_memory
+            - suspended
+            - timeout
+            - unknown
+            type: string
+          - type: 'null'
+          description: Only simulations in this state
+          title: Status
+        description: Only simulations in this state
+      - name: simulator
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only this prebuilt simulator (by name), or container definitions
+            with this hash prefix
+          title: Simulator
+        description: Only this prebuilt simulator (by name), or container definitions
+          with this hash prefix
+      - name: since
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          description: Only simulations created at or after this time
+          title: Since
+        description: Only simulations created at or after this time
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationPage'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /simulations/{simulation_id}:
+    get:
+      tags:
+      - Simulations
+      summary: 'Describe one simulation: its latest SLURM job, and how many events
+        and datasets its run recorded'
+      operationId: get-simulation
+      parameters:
+      - name: simulation_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Simulation Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationDetail'
+        '404':
+          description: The simulation does not exist, or the caller may not read it
         '422':
           description: Validation Error
           content:
@@ -246,6 +377,142 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /results/simulation/events:
+    get:
+      tags:
+      - Results
+      summary: Get a page of a simulation's events, in the order they were recorded
+      operationId: get-simulation-events
+      parameters:
+      - name: after
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Return events after this cursor (a previous page's next)
+          title: After
+        description: Return events after this cursor (a previous page's next)
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 5000
+          minimum: 1
+          default: 500
+          title: Limit
+      - name: level
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only events at this level (debug, info, warning, error)
+          title: Level
+        description: Only events at this level (debug, info, warning, error)
+      - name: event
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only events with this name, e.g. job.end
+          title: Event
+        description: Only events with this name, e.g. job.end
+      - name: span_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only events inside this span
+          title: Span Id
+        description: Only events inside this span
+      - name: simulation_id
+        in: query
+        required: true
+        schema:
+          type: integer
+          title: Simulation Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunEventPage'
+        '404':
+          description: The requested resource does not exist
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /results/simulation/trace:
+    get:
+      tags:
+      - Results
+      summary: Get a simulation's spans as a tree, each span with its own events
+      operationId: get-simulation-trace
+      parameters:
+      - name: simulation_id
+        in: query
+        required: true
+        schema:
+          type: integer
+          title: Simulation Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunTraceTree'
+        '404':
+          description: The requested resource does not exist
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /results/simulation/trace/chrome:
+    get:
+      tags:
+      - Results
+      summary: Get a simulation's trace as a Chrome Trace Event document (open it
+        in ui.perfetto.dev)
+      operationId: get-simulation-trace-chrome
+      parameters:
+      - name: simulation_id
+        in: query
+        required: true
+        schema:
+          type: integer
+          title: Simulation Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get-Simulation-Trace-Chrome
+        '404':
+          description: The requested resource does not exist
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /core/simulator/list:
     get:
       tags:
@@ -291,6 +558,145 @@ paths:
                   $ref: '#/components/schemas/BiGraphStep'
                 type: array
                 title: Response Get-Steps-List
+  /datasets:
+    get:
+      tags:
+      - Datasets
+      summary: List the datasets runs advertised, newest simulations first
+      operationId: list-datasets
+      parameters:
+      - name: simulation_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Only this simulation's datasets
+          title: Simulation Id
+        description: Only this simulation's datasets
+      - name: kind
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only this kind, e.g. results, table, figure, archive
+          title: Kind
+        description: Only this kind, e.g. results, table, figure, archive
+      - name: q
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only datasets whose path or name contains this
+          title: Q
+        description: Only datasets whose path or name contains this
+      - name: available
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          description: 'Only files that still exist (false: only missing)'
+          default: true
+          title: Available
+        description: 'Only files that still exist (false: only missing)'
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          default: 100
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetPage'
+        '404':
+          description: The simulation does not exist, or the caller may not read it
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /datasets/{dataset_id}:
+    get:
+      tags:
+      - Datasets
+      summary: Describe one dataset
+      operationId: get-dataset
+      parameters:
+      - name: dataset_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Dataset Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dataset'
+        '404':
+          description: The dataset does not exist, or the caller may not read it
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /datasets/{dataset_id}/content:
+    get:
+      tags:
+      - Datasets
+      summary: Read a dataset's file (supports HTTP Range requests)
+      operationId: get-dataset-content
+      parameters:
+      - name: dataset_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Dataset Id
+      responses:
+        '200':
+          description: The file
+          content:
+            application/octet-stream:
+              schema:
+                format: binary
+        '404':
+          description: The dataset does not exist, the caller may not read it, or
+            its file is gone
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /health:
     get:
       tags:
@@ -435,6 +841,94 @@ components:
       - representation
       - containerization_engine
       title: ContainerizationFileRepr
+    Dataset:
+      properties:
+        id:
+          type: string
+          title: Id
+        simulation_id:
+          type: integer
+          title: Simulation Id
+        path:
+          type: string
+          title: Path
+        kind:
+          type: string
+          title: Kind
+        media_type:
+          type: string
+          title: Media Type
+        display_name:
+          type: string
+          title: Display Name
+        size_bytes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Size Bytes
+        sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sha256
+        attributes:
+          additionalProperties: true
+          type: object
+          title: Attributes
+        origin:
+          type: string
+          title: Origin
+        span_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Span Id
+        available:
+          type: boolean
+          title: Available
+          default: true
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+        updated_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updated At
+      type: object
+      required:
+      - id
+      - simulation_id
+      - path
+      - kind
+      - media_type
+      - display_name
+      - origin
+      title: Dataset
+      description: A file a run produced, readable by anyone who may read its simulation
+        (O7).
+    DatasetPage:
+      properties:
+        datasets:
+          items:
+            $ref: '#/components/schemas/Dataset'
+          type: array
+          title: Datasets
+        total:
+          type: integer
+          title: Total
+        next_offset:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Next Offset
+      type: object
+      required:
+      - datasets
+      - total
+      title: DatasetPage
     HTTPValidationError:
       properties:
         detail:
@@ -486,6 +980,11 @@ components:
           - type: string
           - type: 'null'
           title: Error Message
+        trace_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trace Id
       type: object
       required:
       - database_id
@@ -567,6 +1066,260 @@ components:
       required:
       - versions
       title: RegisteredSimulators
+    RunEvent:
+      properties:
+        cursor:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Cursor
+        seq:
+          type: integer
+          title: Seq
+        source:
+          type: string
+          title: Source
+        ts:
+          type: string
+          title: Ts
+        component:
+          type: string
+          title: Component
+        event:
+          type: string
+          title: Event
+        level:
+          type: string
+          title: Level
+          default: info
+        baggage:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Baggage
+        global_time:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Global Time
+        wall_time:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Wall Time
+        span_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Span Id
+        parent_span_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parent Span Id
+        payload:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Payload
+        tags:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Tags
+      type: object
+      required:
+      - seq
+      - source
+      - ts
+      - component
+      - event
+      title: RunEvent
+      description: One structured event of a run, from the API, the job script or
+        the simulator's engine.
+    RunEventPage:
+      properties:
+        simulation_id:
+          type: integer
+          title: Simulation Id
+        trace_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trace Id
+        events:
+          items:
+            $ref: '#/components/schemas/RunEvent'
+          type: array
+          title: Events
+        next_cursor:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Next Cursor
+      type: object
+      required:
+      - simulation_id
+      - trace_id
+      - events
+      title: RunEventPage
+      description: 'A page of a simulation''s events, in the order they were recorded.
+
+
+        ``next_cursor`` is the ``after`` for the next page, None at the end.'
+    RunSpan:
+      properties:
+        span_id:
+          type: string
+          title: Span Id
+        parent_span_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parent Span Id
+        name:
+          type: string
+          title: Name
+        attrs:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Attrs
+        start_ts:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Start Ts
+        end_ts:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: End Ts
+        duration_s:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Duration S
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      type: object
+      required:
+      - span_id
+      - name
+      title: RunSpan
+      description: A node of a run's trace tree, folded from ``span.start`` / ``span.end``
+        events. ``end_ts`` is None while open.
+    RunTraceTree:
+      properties:
+        simulation_id:
+          type: integer
+          title: Simulation Id
+        trace_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trace Id
+        roots:
+          items:
+            $ref: '#/components/schemas/SpanTree'
+          type: array
+          title: Roots
+      type: object
+      required:
+      - simulation_id
+      - trace_id
+      - roots
+      title: RunTraceTree
+      description: A simulation's spans as a forest, each span carrying its own events.
+    SimulationDetail:
+      properties:
+        simulation_id:
+          type: integer
+          title: Simulation Id
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+        experiment_id:
+          type: string
+          title: Experiment Id
+        simulator_id:
+          type: integer
+          title: Simulator Id
+        simulator:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Simulator
+        container_def_hash:
+          type: string
+          title: Container Def Hash
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+          default: public
+        status:
+          type: string
+          title: Status
+        slurm_job_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Slurm Job Id
+        start_time:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Start Time
+        end_time:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: End Time
+        exit_code:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Exit Code
+        error_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Message
+        trace_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trace Id
+        event_count:
+          type: integer
+          title: Event Count
+          default: 0
+        dataset_count:
+          type: integer
+          title: Dataset Count
+          default: 0
+      type: object
+      required:
+      - simulation_id
+      - experiment_id
+      - simulator_id
+      - container_def_hash
+      - status
+      title: SimulationDetail
+      description: A simulation with what its run recorded.
     SimulationExperiment:
       properties:
         simulation_database_id:
@@ -588,6 +1341,96 @@ components:
       - simulation_database_id
       - simulator_database_id
       title: SimulationExperiment
+    SimulationPage:
+      properties:
+        simulations:
+          items:
+            $ref: '#/components/schemas/SimulationSummary'
+          type: array
+          title: Simulations
+        total:
+          type: integer
+          title: Total
+        next_offset:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Next Offset
+      type: object
+      required:
+      - simulations
+      - total
+      title: SimulationPage
+    SimulationSummary:
+      properties:
+        simulation_id:
+          type: integer
+          title: Simulation Id
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+        experiment_id:
+          type: string
+          title: Experiment Id
+        simulator_id:
+          type: integer
+          title: Simulator Id
+        simulator:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Simulator
+        container_def_hash:
+          type: string
+          title: Container Def Hash
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+          default: public
+        status:
+          type: string
+          title: Status
+        slurm_job_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Slurm Job Id
+        start_time:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Start Time
+        end_time:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: End Time
+        exit_code:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Exit Code
+        error_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Message
+        trace_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trace Id
+      type: object
+      required:
+      - simulation_id
+      - experiment_id
+      - simulator_id
+      - container_def_hash
+      - status
+      title: SimulationSummary
+      description: 'One simulation as a listing shows it: what ran, where, and how
+        it went (its latest SLURM job).'
     SimulatorVersion:
       properties:
         container_def:
@@ -618,6 +1461,26 @@ components:
       - packages
       - database_id
       title: SimulatorVersion
+    SpanTree:
+      properties:
+        span:
+          $ref: '#/components/schemas/RunSpan'
+        events:
+          items:
+            $ref: '#/components/schemas/RunEvent'
+          type: array
+          title: Events
+        children:
+          items:
+            $ref: '#/components/schemas/SpanTree'
+          type: array
+          title: Children
+      type: object
+      required:
+      - span
+      title: SpanTree
+      description: A span with its own events (those whose ``span_id`` is the span's)
+        and its children, by start time.
     ValidationError:
       properties:
         loc:
@@ -644,6 +1507,14 @@ components:
       - msg
       - type
       title: ValidationError
+    Visibility:
+      type: string
+      enum:
+      - public
+      - private
+      title: Visibility
+      description: Who may read a simulation and everything it produced (plan-observability
+        O7).
   securitySchemes:
     BearerAuth:
       type: http

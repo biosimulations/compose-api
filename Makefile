@@ -19,13 +19,29 @@ check: ## Run code quality tools.
 	@uv run mypy
 	@echo "🚀 Checking for obsolete dependencies: Running deptry"
 	@uv run deptry .
+	@$(MAKE) --no-print-directory check-clients
 
 .PHONY: clients
-clients: ## Run code quality tools.
+clients: ## Regenerate the OpenAPI spec and the Python client from the app (LIB_DIR=... also writes the external repo)
 	@echo "🚀 Generating OpenAPI Spec"
-	@python3 compose_api/api/openapi_spec.py
+	@uv run python compose_api/api/openapi_spec.py
 	@echo "🚀 Creating HTTPX Clients"
 	@scripts/generate-api-client.sh
+
+.PHONY: cli-docs
+cli-docs: ## Regenerate the command reference at the end of docs/cli.md
+	@scripts/cli-docs.sh docs/cli.md
+
+.PHONY: check-clients
+check-clients: ## Fail if the committed spec or client differs from a fresh generation (docs/plan-cli.md, step A)
+	@echo "🚀 Checking the OpenAPI spec and the generated client are current"
+	@tmp=$$(mktemp -d) && trap 'rm -rf "$$tmp"' EXIT && \
+	uv run python compose_api/api/openapi_spec.py "$$tmp/spec.yaml" >/dev/null && \
+	diff -u compose_api/api/spec/openapi_3_1_0_generated.yaml "$$tmp/spec.yaml" && \
+	scripts/generate-api-client.sh "$$tmp/client" >/dev/null && \
+	diff -r -x __pycache__ -x utils -x ext -x cli clients/python/compose_api_client "$$tmp/client" && \
+	cp docs/cli.md "$$tmp/cli.md" && scripts/cli-docs.sh "$$tmp/cli.md" && diff -u docs/cli.md "$$tmp/cli.md" || \
+	{ echo "❌ The spec, the client or the CLI reference is stale: run 'make clients cli-docs' and commit."; exit 1; }
 
 .PHONY: test
 test: ## Test the code with pytest

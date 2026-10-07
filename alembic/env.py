@@ -6,6 +6,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config, AsyncEngine
 
 import compose_api.db.tables.hpc_tables  # noqa: F401
+import compose_api.db.tables.observability_tables  # noqa: F401
 import compose_api.db.tables.package_tables  # noqa: F401
 import compose_api.db.tables.simulator_tables  # noqa: F401
 from alembic import context
@@ -13,7 +14,10 @@ from compose_api.db.db_utils import DeclarativeTableBase
 
 config = context.config
 
-if config.config_file_name is not None:
+# Configure logging from alembic.ini only from the command line. When the application runs migrations at startup
+# (compose_api.db.db_utils.create_db, which passes a connection), fileConfig would replace the application's logging
+# and silence its existing loggers.
+if config.config_file_name is not None and config.attributes.get("connection") is None:
     fileConfig(config.config_file_name)
 
 target_metadata = DeclarativeTableBase.metadata

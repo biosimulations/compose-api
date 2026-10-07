@@ -28,13 +28,16 @@ To call anonymously, leave the header out.
 
 A valid access token identifies the caller. It does not attach the simulation to that caller, and it does not hide the simulation from anyone else.
 
-These routes look up a simulation by its numeric id and do not check who submitted it:
+Every route that reads something a simulation owns asks the server's read policy whether the caller may read it, and the verified caller is the one it asks about:
 
 - `GET /results/simulation/status?simulation_id=<id>`
 - `GET /results/simulations/status/batch`
 - `GET /results/simulation/results/file?simulation_id=<id>`
+- `GET /results/simulation/events`, `GET /results/simulation/trace` and `GET /results/simulation/trace/chrome`
+- `GET /simulations` and `GET /simulations/<id>`
+- `GET /datasets`, `GET /datasets/<id>` and `GET /datasets/<id>/content`
 
-Anyone who has the id can read status and, when the results file exists, download it. Anonymous and authenticated callers see the same record. A missing simulation, or results that are not ready yet, is 404.
+The policy lets anyone read a public simulation, and only its owner read a private one. Submitting a simulation does not record an owner yet, so every simulation is public. Anyone who has the id can read its status, events and datasets and, when the results file exists, download it. Anonymous and authenticated callers see the same record. A missing simulation, or results that are not ready yet, is 404.
 
 Do not treat bearer authentication as an access-control boundary for simulation status or results.
 
@@ -90,7 +93,7 @@ A server started from `assets/dev/config/.dev_env` uses whatever `AUTH0_AUDIENCE
 
 A verified caller is recorded with the role `user`. If the access token includes the `https://api.biosimulations.org/roles` claim (tokens for a person signed in through BioSim do; client-credentials tokens do not), those role names are recorded as well. An anonymous caller has no role.
 
-Roles identify the caller. No endpoint checks them. Do not assume a role grants or denies access unless this API later documents that check.
+Roles identify the caller. One role is checked: the read policy lets a caller with the role `admin` read private simulations. No simulation is private yet, so today no role changes what a caller can read. Do not assume any other role grants or denies access unless this API later documents that check.
 
 ## Do not
 

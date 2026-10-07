@@ -17,6 +17,8 @@ echo "Current version is ${VERSION}"
 read -p "Set new version (default is the same): " NEW_VERSION
 NEW_VERSION=${NEW_VERSION:-${VERSION}}
 uv version ${NEW_VERSION}
+# The client package is released in lock-step with the service (docs/plan-cli.md, step B).
+uv version --package compose-api-client ${NEW_VERSION}
 pushd compose_api
 sed -i '' "s/__version__ = .*/__version__ = '${NEW_VERSION}'/" version.py
 popd

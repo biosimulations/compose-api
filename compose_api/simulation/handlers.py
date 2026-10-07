@@ -8,12 +8,11 @@ import zipfile
 from pathlib import Path
 
 from fastapi import BackgroundTasks, HTTPException
-from pbest.containerization.container_constructor import _default_registry_deps, generate_container_def_file
+from pbest.containerization.container_constructor import generate_container_def_file
 from pbest.utils.input_types import (
     ContainerizationEngine,
 )
 
-from compose_api.common.gateway.utils import allow_list
 from compose_api.db.database_service import DatabaseService
 from compose_api.db.services.hpc_db import HPCDatabaseService
 from compose_api.dependencies import (
@@ -22,13 +21,13 @@ from compose_api.dependencies import (
     get_required_job_monitor,
     get_required_simulation_service,
 )
+from compose_api.observability.api_events import record_api_event
 from compose_api.simulation.hpc_utils import get_correlation_id, get_experiment_id, get_singularity_hash
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import (
     HpcRun,
     JobStatus,
     JobType,
-    PBAllowList,
     RegisteredSimulators,
     RemoteContainerImage,
     Simulation,
@@ -37,7 +36,9 @@ from compose_api.simulation.models import (
     SimulationRequest,
     SimulatorVersion,
 )
+from compose_api.simulation.prebuilt import prebuilt_definition, prebuilt_image, prebuilt_image_of
 from compose_api.simulation.simulation_service import SimulationService
+from compose_api.simulation.simulator_registry import registry_dependencies
 
 logger = logging.getLogger(__name__)
 
@@ -63,11 +64,14 @@ async def run_simulation(
     database_service: DatabaseService,
     simulation_service_slurm: SimulationService,
     job_monitor: JobMonitor,
-    pb_allow_list: PBAllowList,
     background_tasks: BackgroundTasks,
 ) -> SimulationExperiment:
     with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
-        singularity_rep = generate_container_def_file(_default_registry_deps(), ContainerizationEngine.APPTAINER)
+        if simulation_request.simulator is not None:
+            # an owner-published image (settings.prebuilt_simulators), instead of the shared container
+            singularity_rep = prebuilt_definition(prebuilt_image(simulation_request.simulator))
+        else:
+            singularity_rep = generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)
         # simulation_request.omex_archive = Path(tmp_dir + f"/{os.path.basename(simulation_request.omex_archive.name)}")
 
     simulator_db = database_service.get_simulator_db()
@@ -145,7 +149,6 @@ async def run_curated_pbif(
                 database_service=db_service,
                 simulation_service_slurm=sim_service,
                 job_monitor=job_monitor,
-                pb_allow_list=PBAllowList(allow_list=allow_list),
                 background_tasks=background_tasks,
             )
         except Exception as e:
@@ -180,17 +183,30 @@ async def _dispatch_job(
             random_string=random_string_7_hex,
         )
 
+    # Minted before submission so the job can carry the run's trace context (docs/plan-observability.md O1).
+    correlation_id = get_correlation_id(random_string=random_string_7_hex, job_type=JobType.SIMULATION)
     sim_slurmjobid = await simulation_service_slurm.submit_simulation_job(
         simulation=simulation,
         experiment_id=experiment_id,
+        correlation_id=correlation_id,
     )
 
-    correlation_id = get_correlation_id(random_string=random_string_7_hex, job_type=JobType.SIMULATION)
-    _hpcrun = await hpc_db.insert_hpcrun(
+    hpcrun = await hpc_db.insert_hpcrun(
         slurmjobid=sim_slurmjobid,
         job_type=JobType.SIMULATION,
         ref_id=simulation.database_id,
         correlation_id=correlation_id,
+    )
+    await record_api_event(
+        database_service,
+        hpcrun,
+        "dispatch.submitted",
+        {
+            "slurm_job_id": sim_slurmjobid,
+            "simulation_id": simulation.database_id,
+            "simulator_id": simulator_version.database_id,
+            "experiment_id": experiment_id,
+        },
     )
 
 
@@ -202,9 +218,13 @@ async def _download_or_build_container(
     random_string: str,
 ) -> None:
     download_succeeded = False
+    # a prebuilt simulator is pulled from its own image; any other from the shared repository by hash
+    prebuilt = prebuilt_image_of(simulator_version.container_def)
     try:
         await simulation_service_slurm.download_container(
-            RemoteContainerImage.from_container_version(simulator_version)
+            RemoteContainerImage.from_container_version(
+                simulator_version, source_url=f"docker://{prebuilt}" if prebuilt else None
+            )
         )
         download_succeeded = True
     except Exception as e:

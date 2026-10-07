@@ -82,6 +82,7 @@ class HpcRun(BaseModel):
     start_time: str | None = None  # ISO format datetime string
     end_time: str | None = None  # ISO format datetime string or None if still running
     error_message: str | None = None  # Error message if the simulation failed
+    trace_id: str | None = None  # W3C trace id of the run's events (plan-observability O1); None for older runs
 
 
 class BiGraphComputeOutline(BaseModel):
@@ -215,6 +216,8 @@ class SimulationRequest(BaseModel):
     simulation_file_type: SimulationFileType
     end_time_point: float = 1.0
     is_batch: bool
+    # A prebuilt simulator by name (settings.prebuilt_simulators); None runs the shared container.
+    simulator: str | None = None
 
 
 class SimulationResults(BaseModel):
@@ -242,15 +245,59 @@ class Simulation(BaseModel):
     simulator_version: SimulatorVersion
 
 
+class Visibility(StrEnum):
+    """Who may read a simulation and everything it produced (plan-observability O7)."""
+
+    PUBLIC = "public"
+    PRIVATE = "private"
+
+
+class SimulationAccess(BaseModel):
+    """What an authorization decision about a simulation needs: its owner and visibility (plan-observability O7, O8)."""
+
+    simulation_id: int
+    experiment_id: str
+    owner_sub: str | None = None  # the submitter's identity-provider subject; None for anonymous and older runs
+    visibility: Visibility = Visibility.PUBLIC
+
+
+class SimulationSummary(BaseModel):
+    """One simulation as a listing shows it: what ran, where, and how it went (its latest SLURM job)."""
+
+    simulation_id: int
+    created_at: str | None = None  # ISO 8601 UTC
+    experiment_id: str
+    simulator_id: int
+    simulator: str | None = None  # the prebuilt simulator's name, or its image; None for a built container
+    container_def_hash: str
+    visibility: Visibility = Visibility.PUBLIC
+    status: str  # a JobStatus, or "submitting" while no SLURM job exists yet
+    slurm_job_id: int | None = None
+    start_time: str | None = None
+    end_time: str | None = None
+    exit_code: int | None = None
+    error_message: str | None = None
+    trace_id: str | None = None
+
+
+class SimulationDetail(SimulationSummary):
+    """A simulation with what its run recorded."""
+
+    event_count: int = 0
+    dataset_count: int = 0
+
+
+class SimulationPage(BaseModel):
+    simulations: list[SimulationSummary]
+    total: int
+    next_offset: int | None = None
+
+
 class SubmittedSimulation(BaseModel):
     database_id: int
     sim_content: SimulationResults
     simulator_version: SimulatorVersion
     hpc_run: HpcRun | None
-
-
-class PBAllowList(BaseModel):
-    allow_list: list[str]
 
 
 class SimulationExperiment(BaseModel):

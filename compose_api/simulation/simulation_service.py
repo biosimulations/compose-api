@@ -1,4 +1,3 @@
-# ruff: noqa: E501
 import logging
 import random
 import string
@@ -18,11 +17,13 @@ from compose_api.simulation.hpc_utils import (
     get_slurm_log_file,
     get_slurm_sim_experiment_dir,
     get_slurm_sim_input_file_path,
+    get_slurm_sim_log_file,
     get_slurm_sim_results_file_path,
     get_slurm_singularity_container_file,
     get_slurm_singularity_def_file,
     get_slurm_submit_file,
 )
+from compose_api.simulation.job_script import SimulationJob, simulation_job_script
 from compose_api.simulation.models import HpcRun, JobType, RemoteContainerImage, Simulation, SimulatorVersion
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ class SimulationService(ABC):
         self,
         simulation: Simulation,
         experiment_id: str,
+        correlation_id: str,
     ) -> int:
         pass
 
@@ -71,6 +73,7 @@ class SimulationServiceHpc(SimulationService):
         self,
         simulation: Simulation,
         experiment_id: str,
+        correlation_id: str,
     ) -> int:
         if simulation.sim_request.request_file_path is None:
             raise RuntimeError("Simulation.sim_request.omex_archive is not available. Cannot submit Simulation job.")
@@ -89,39 +92,27 @@ class SimulationServiceHpc(SimulationService):
 
             local_submit_file = Path(tmpdir) / f"{slurm_job_name}.sbatch"
             # --compat forces isolation similar to docker, https://docs.sylabs.io/guides/latest/user-guide/cli/singularity_exec.html
+            script_content = simulation_job_script(
+                SimulationJob(
+                    job_name=slurm_job_name,
+                    experiment_id=experiment_id,
+                    simulation_id=simulation.database_id,
+                    correlation_id=correlation_id,
+                    experiment_dir=str(experiment_path),
+                    container=str(singularity_container_path),
+                    file_suffix=simulation.sim_request.simulation_file_type.get_files_suffix(),
+                    output_dir=get_settings().containers_output_dir,
+                    end_time=simulation.sim_request.end_time_point,
+                    log_file=str(get_slurm_sim_log_file(experiment_id=slurm_job_name)),
+                    is_batch=simulation.sim_request.is_batch,
+                    partition=settings.batch_slurm_partition
+                    if simulation.sim_request.is_batch
+                    else settings.slurm_partition,
+                    qos=settings.batch_slurm_qos if simulation.sim_request.is_batch else settings.slurm_qos,
+                    node_list=settings.slurm_node_list,
+                )
+            )
             with open(local_submit_file, "w") as f:
-                script_content = dedent(f"""\
-                    #!/bin/bash
-                    #SBATCH --job-name={slurm_job_name}
-                    #SBATCH --time=30:00
-                    #SBATCH --cpus-per-task {"1" if simulation.sim_request.is_batch else "2"}
-                    #SBATCH --mem={"1GB" if simulation.sim_request.is_batch else "8GB"}
-                    #SBATCH --partition={settings.batch_slurm_partition if simulation.sim_request.is_batch else settings.slurm_partition}
-                    #SBATCH --qos={settings.batch_slurm_qos if simulation.sim_request.is_batch else settings.slurm_qos}
-                    #SBATCH --output={get_slurm_log_file(slurm_job_name=slurm_job_name)}
-                    {f"#SBATCH --nodelist={settings.slurm_node_list}" if len(settings.slurm_node_list) != 0 else ""}
-
-                    set -e
-
-                    mkdir {experiment_path}/output
-                    echo "Simulation {slurm_job_name} running."
-                    singularity run \
-                        --compat \
-                        --bind {experiment_path}:/experiment \
-                        {singularity_container_path} \
-                        run \
-                        /experiment/{slurm_job_name}.{simulation.sim_request.simulation_file_type.get_files_suffix()} \
-                        -o "{get_settings().containers_output_dir}" \
-                        -n {simulation.sim_request.end_time_point}
-
-                    pushd {experiment_path}
-                    cd output
-                    zip -r ../results.zip ./*
-                    cd ..
-                    rm -r output
-                    popd
-                    echo "Simulation run completed. data saved to {experiment_path!s}."
-                    """)
                 f.write(script_content)
 
             await ssh_service.run_command(f"mkdir {experiment_path}")

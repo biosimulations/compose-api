@@ -48,7 +48,14 @@ APP_ORIGINS = [
 #     {"url": ServerMode.PORT_FORWARD_DEV, "description": "Local port-forward"},
 # ]
 APP_SERVERS = None
-APP_ROUTERS = ["curated", "simulation", "results", "compute"]  # for now, just referencing core
+APP_ROUTERS = [
+    "curated",
+    "simulation",
+    "simulations",
+    "results",
+    "compute",
+    "datasets",
+]  # for now, just referencing core
 assets_dir = Path(get_settings().assets_dir)
 ACTIVE_URL = ServerMode.detect(assets_dir / "dev" / "config" / ".dev_env")
 
@@ -70,8 +77,6 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     job_monitor = get_job_monitor()
     if not job_monitor:
         raise RuntimeError("JobMonitor is not initialized. Please check your configuration.")
-    if get_settings().hpc_has_messaging:
-        await job_monitor.subscribe_nats()
     await job_monitor.start_polling(interval_seconds=5)  # configurable interval
 
     try:

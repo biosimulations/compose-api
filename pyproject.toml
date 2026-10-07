@@ -1,6 +1,6 @@
 [project]
 name = "compose-api"
-version = "0.5.0"
+version = "0.7.1"
 description = "An API server for reproducible biological workflows and cosimulations."
 authors = [{ name = "Jim Schaff", email = "schaff@uchc.edu" }]
 requires-python = ">=3.13.2,<4.0"
@@ -18,9 +18,7 @@ dependencies = [
     "pymongo>=4.13.0,<5",
     "sqlalchemy[asyncio]>=2.0.41,<3",
     "asyncpg>=0.31,<0.32",
-    "nats-py>=2.10.0,<3",
     "alembic>=1.16.2,<2",
-    "async-lru>=2.0.5,<3",
     "httpx>=0.28.1,<0.29",
     "polars-lts-cpu[pyarrow]>=1.31.0,<2",
     "python-multipart>=0.0.32,<0.0.33",
@@ -56,10 +54,12 @@ dev = [
     "types-requests>=2.32.0.20250602,<3",
     "types-pyyaml>=6.0.12.20250516,<7",
     "pytest-asyncio>=1.0.0,<2",
-    "testcontainers[nats, postgres]>=4.10.0,<5",
+    "testcontainers[postgres]>=4.10.0,<5",
     "types-tqdm>=4.67.0.20250516,<5",
     "openapi-python-client>=0.29.1,<0.30",
-    "types-python-dateutil>=2.9.0.20250708,<3"
+    "types-python-dateutil>=2.9.0.20250708,<3",
+    # The client is a workspace package (clients/python): the service never calls it, its tests do.
+    "compose-api-client[cli]",
 ]
 docs = [
     "mkdocs>=1.4.2,<2",
@@ -72,9 +72,16 @@ default-groups = [
     "dev",
     "docs",
 ]
+# pbest pins compose-api-client==0.2.0, the release of the package that now lives at clients/python. Resolve every
+# requirement on it to the workspace copy (docs/plan-cli.md, decision C6). The service imports none of pbest's
+# client-using code (pbest.execution.remote), and the workspace copy keeps every name that code uses.
+override-dependencies = ["compose-api-client"]
+
+[tool.uv.workspace]
+members = ["clients/python"]
 
 [tool.uv.sources]
-bsander = { git = "https://github.com/biosimulators/bsander.git" }
+compose-api-client = { workspace = true }
 
 
 [tool.hatch.build.targets.sdist]
@@ -94,9 +101,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.mypy]
-files = ["compose_api", "tests"]
+files = ["compose_api", "tests", "clients/python/compose_api_client/ext", "clients/python/compose_api_client/cli"]
 strict = true
-exclude = ['^compose_api/api/client/.*']
+# The generated client (and the 0.2.0 helper it carries); hand-written client code (compose_api_client.ext) is checked.
+exclude = ['^clients/python/compose_api_client/(api|models|utils)/', '^clients/python/compose_api_client/(__init__|client|errors|types)\.py$']
 
 [[tool.mypy.overrides]]
 module = ["process_bigraph.*"]
@@ -225,7 +233,14 @@ ignore = [
 #    # UP035 `typing.Dict` is deprecated, use `dict` instead
 #    "UP035",
 ]
-exclude = [".venv/*", "compose_api/api/client/*", "documentation/*", "alembic/*"]
+exclude = [
+    ".venv/*", "documentation/*", "alembic/*",
+    # The generated client (formatted by scripts/generate-api-client.sh, never linted) and the 0.2.0 helper it carries.
+    "clients/python/compose_api_client/api/*", "clients/python/compose_api_client/models/*",
+    "clients/python/compose_api_client/utils/*", "clients/python/compose_api_client/__init__.py",
+    "clients/python/compose_api_client/client.py", "clients/python/compose_api_client/errors.py",
+    "clients/python/compose_api_client/types.py",
+]
 
 [tool.ruff.format]
 preview = true

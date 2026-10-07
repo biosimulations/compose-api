@@ -4,19 +4,21 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFi
 
 from compose_api.authentication import OptionalPrincipal, describe_caller, get_optional_principal
 from compose_api.common.gateway.models import RouterConfig
-from compose_api.common.gateway.utils import allow_list, get_simulation_request_from_uploaded_file
+from compose_api.common.gateway.utils import get_simulation_request_from_uploaded_file
+from compose_api.config import get_settings
 from compose_api.dependencies import (
     get_database_service,
     get_job_monitor,
     get_simulation_service,
 )
+from compose_api.registry.validation import AddressPolicy, SubmissionRejectedError, validate_submission
 from compose_api.simulation.handlers import (
     run_simulation,
 )
 from compose_api.simulation.models import (
-    PBAllowList,
     SimulationExperiment,
 )
+from compose_api.simulation.prebuilt import UnknownSimulatorError, prebuilt_image
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +26,12 @@ logger = logging.getLogger(__name__)
 # -- app components -- #
 
 config = RouterConfig(router=APIRouter(), prefix="/simulation", dependencies=[Depends(get_optional_principal)])
+
+REJECTED_RESPONSE = {
+    "description": "The submission cannot run. For a problem with the request itself (empty file, unsupported type, "
+    "interval out of range) `detail` is a string. For a problem with its contents (unreadable archive, or processes "
+    "the registry does not allow) `detail` is an object with a `message` and a `violations` list naming each address."
+}
 
 
 @config.router.post(
@@ -33,6 +41,7 @@ config = RouterConfig(router=APIRouter(), prefix="/simulation", dependencies=[De
     tags=["Simulation"],
     dependencies=[Depends(get_simulation_service), Depends(get_database_service)],
     summary="Run a simulation",
+    responses={400: REJECTED_RESPONSE},
 )
 async def submit_simulation(
     background_tasks: BackgroundTasks,
@@ -40,8 +49,42 @@ async def submit_simulation(
     principal: OptionalPrincipal,
     interval_time: float = 1.0,
     batch_submission: bool = False,
+    simulator: str | None = None,
 ) -> SimulationExperiment:
+    """`simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);
+    the job then runs in that image instead of the shared container. Omitted: the shared container."""
     logger.info("Simulation submission from %s", describe_caller(principal))
+    if simulator is not None:
+        try:
+            prebuilt_image(simulator)
+        except UnknownSimulatorError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+    if interval_time < 0 or interval_time > 1000:
+        raise HTTPException(status_code=400, detail="Invalid interval time, it has to be between 0 and 1000")
+
+    simulation_request = await get_simulation_request_from_uploaded_file(
+        uploaded_file=uploaded_file, batch_submission=batch_submission
+    )
+    simulation_request.end_time_point = interval_time
+    simulation_request.simulator = simulator
+    # Checked before anything is recorded or submitted: the container resolves addresses itself, and will import
+    # whatever module it is told to, so this is the only point a submission is checked. A prebuilt simulator's
+    # image brings its own processes, which this registry does not describe, so its documents are not checked here:
+    # the deployment vouches for the image by listing it (settings.prebuilt_simulators).
+    if simulator is None:
+        try:
+            validate_submission(
+                simulation_request.request_file_path,
+                simulation_request.simulation_file_type,
+                AddressPolicy(get_settings().address_policy),
+            )
+        except SubmissionRejectedError as e:
+            simulation_request.request_file_path.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=400,
+                detail={"message": e.message, "violations": [v.model_dump() for v in e.violations]},
+            ) from e
+
     sim_service = get_simulation_service()
     if sim_service is None:
         logger.error("Simulation service is not initialized")
@@ -55,19 +98,6 @@ async def submit_simulation(
         logger.error("Job Monitor service is not initialized")
         raise HTTPException(status_code=500, detail="Job Monitor service is not initialized")
 
-    # TODO ################################################################################
-    # !!! Input validation for Omex file, preferably converting it to an internal type !!!#
-    #######################################################################################
-    logger.warning("NO VALIDATION YET")
-    # Tmp file for future implementation
-    if interval_time < 0 or interval_time > 1000:
-        raise HTTPException(status_code=400, detail="Invalid interval time, it has to be between 0 and 1000")
-
-    simulation_request = await get_simulation_request_from_uploaded_file(
-        uploaded_file=uploaded_file, batch_submission=batch_submission
-    )
-    simulation_request.end_time_point = interval_time
-
     try:
         return await run_simulation(
             simulation_request=simulation_request,
@@ -75,8 +105,6 @@ async def submit_simulation(
             simulation_service_slurm=sim_service,
             background_tasks=background_tasks,
             job_monitor=job_monitor,
-            # TODO: Put/Get actual allow list
-            pb_allow_list=PBAllowList(allow_list=allow_list),
         )
     except Exception as e:
         logger.exception("Error running simulation")

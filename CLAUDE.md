@@ -20,7 +20,6 @@ Single test / subset:
 
 ```bash
 uv run python -m pytest tests/simulation/test_scheduler.py::test_name -s
-uv run python -m pytest tests/common -k nats
 uv run mypy                  # files/strict config comes from pyproject.toml; do not pass paths
 ```
 
@@ -32,12 +31,28 @@ make db-upgrade                      # alembic upgrade head
 make db-stamp                        # mark existing DB as at head without running migrations
 ```
 
-Generated API client (checked into `compose_api/api/client/`, excluded from ruff/mypy — never hand-edit):
+Generated API client (checked into `clients/python/compose_api_client/`, the `compose-api-client` workspace package; excluded from ruff/mypy — never hand-edit):
 
 ```bash
-python3 compose_api/api/openapi_spec.py   # writes compose_api/api/spec/openapi_3_1_0_generated.yaml
-LIB_DIR=<path> make clients               # regenerates client via openapi-python-client
+make clients          # regenerates the spec (compose_api/api/spec/) and the client (clients/python/compose_api_client/)
+make check-clients    # fails if either is stale; part of `make check`, so CI enforces it
+LIB_DIR=<compose-api-client checkout>/compose_api_client make clients   # also writes the external 0.2.x repo
 ```
+
+Command line: `uv run compose-api --help` (the `compose-api-client[cli]` extra; guide and reference in
+[`docs/cli.md`](docs/cli.md), `make cli-docs` regenerates the reference). Every API operation must be claimed by a
+command (`@claims` in `compose_api_client/cli/commands.py`); `tests/client/test_cli.py` fails otherwise, so a new
+endpoint needs a command in the same PR. Hand-written client code lives in `compose_api_client/ext/` and `cli/`,
+which `make clients` preserves.
+
+Generation is deterministic (`scripts/generate-api-client.sh`): the generator's post-hooks are off and the script
+formats with the locked ruff and this repo's settings, so the committed client is byte-for-byte what `make clients`
+produces. Never hand-edit the client; the plan for its package, the `ext` layer and the CLI is
+[`docs/plan-cli.md`](docs/plan-cli.md).
+
+Client release: publishing a GitHub release also publishes `compose-api-client` (clients/python, same version) to
+PyPI via `.github/workflows/publish-client.yml`, a trusted publisher (OIDC, environment `pypi`; setup in
+[`docs/plan-cli.md`](docs/plan-cli.md) §D).
 
 Release & deploy: `make tag` (`tag.sh` bumps `pyproject.toml` + `compose_api/version.py`, commits, tags, pushes — the tag push triggers the image build workflow); `kustomize/scripts/build_and_push.sh` builds/pushes `ghcr.io/biosimulations/compose-api`; `make deploy` applies `kustomize/overlays/compose-api-rke`. Publishing a GitHub *release* (separate from the tag push) additionally archives it to Zenodo under concept DOI 10.5281/zenodo.21127421 via the reusable `virtualcell/zenodo-maint` workflow; keep `CITATION.cff` and `.zenodo.json` in step with the authors and version, as a weekly drift check flags mismatches.
 
@@ -57,7 +72,7 @@ Release & deploy: `make tag` (`tag.sh` bumps `pyproject.toml` + `compose_api/ver
 - The backend switch is a **settings override**, not an injected object, because three consumers reach for SSH
   independently. Use `override_settings(**fields)` from `compose_api/config.py`; it stacks partial layers removed by
   identity, so two fixtures overriding disjoint settings compose and overlapping ones raise.
-- Postgres, NATS, and MongoDB fixtures use **testcontainers**, so Docker must be running for most of the suite.
+- Postgres and MongoDB fixtures use **testcontainers**, so Docker must be running for most of the suite.
 - All fixtures live in `tests/fixtures/` and are re-exported from `tests/conftest.py`; add new fixtures there too.
 - Service fixtures swap the module-level singletons in `compose_api/dependencies.py` and restore the previous value on
   teardown — follow that save/set/yield/restore pattern.
@@ -95,11 +110,11 @@ themselves when the service is `None`. Two consequences worth knowing:
 **Routers** are registered by name from `APP_ROUTERS` in `api/main.py` via `importlib`, and each module must expose a
 module-level `config = RouterConfig(router=APIRouter(), prefix=..., dependencies=[])`. Registration failures are logged
 and swallowed — an import error in a router silently drops its endpoints rather than failing startup. Prefixes:
-`/simulation` (submit), `/results` (status, results file), `/core` (simulator/process/step catalogs), `/curated`
-(pre-baked copasi/tellurium runs). Every endpoint sets an explicit `operation_id` because those become the generated
+`/simulation` (submit), `/results` (status, results file, events, trace), `/core` (simulator/process/step catalogs),
+`/curated` (pre-baked copasi/tellurium runs), `/simulations` (listing), `/datasets` (a run's files). Every endpoint sets an explicit `operation_id` because those become the generated
 client's method names.
 
-**Authentication** is optional Auth0 bearer, all in `compose_api/authentication.py`. Each of the four routers
+**Authentication** is optional Auth0 bearer, all in `compose_api/authentication.py`. Every router in `APP_ROUTERS`
 sets `dependencies=[Depends(get_optional_principal)]` on its `RouterConfig` (keep its own prefix). A handler that
 wants the identity adds an `OptionalPrincipal` parameter; FastAPI caches the dependency, so the token is still verified
 once. No header means anonymous (`None`); any header that is present but invalid is a 401, never anonymous, which is
@@ -108,15 +123,17 @@ security is document-level only (`_openapi_with_optional_bearer` in `api/main.py
 entry, even `[{}, ...]`, makes openapi-python-client type that method as requiring `AuthenticatedClient`, a breaking
 change for pbest. `openapi_spec.py` must use `app.openapi()` so the override reaches the checked-in spec. Settings are
 `auth0_domain` and `auth0_audience`; the issuer is derived and the algorithm is fixed to RS256. Every active handler
-also takes `principal: OptionalPrincipal` (a structural test enforces it); submission handlers log
-`describe_caller(principal)`. `JwksCache` refreshes an unknown `kid` at most once per 30 s, the same back-off as an
+also reaches the principal through a parameter of its own: `principal: OptionalPrincipal` where it only needs the
+identity, or `caller: OptionalCaller` / `ReadableSimulation` where it reads through the authorization seam (a
+structural test over `APP_ROUTERS` enforces it); submission handlers log `describe_caller(principal)`. `JwksCache` refreshes an unknown `kid` at most once per 30 s, the same back-off as an
 expired cache, coalescing concurrent refreshes by counting *completed* refreshes. Deployment:
 both API overlays load `config/compose-api-rke`; the local overlay overrides only the Auth0 keys via a
 `behavior: merge` generator (`overlays/compose-api-local/auth0.env`); `config/compose-api-local` is used only by the
 migration job. Every principal carries `roles`: always `DEFAULT_ROLE` ("user", the tenant role owned by auth0-pulumi's
 biosim-platform stack) plus any names in the `ROLES_CLAIM` (`https://api.biosimulations.org/roles`) claim written by
-the tenant's post-login "BioSim Roles" Action. Anonymous is `principal is None`, so no role. Roles gate nothing yet;
-keep the role and claim names in step with auth0-pulumi.
+the tenant's post-login "BioSim Roles" Action. Anonymous is `principal is None`, so no role. The only role checked is
+`authorization.ADMIN_ROLE` ("admin"), which reads private simulations; none exist until submissions stamp an owner, so
+it changes nothing yet. Keep the role and claim names in step with auth0-pulumi.
 
 **HPC layer.** `SSHService` (asyncssh: `run_command`, `scp_upload`, `scp_download`) → `SlurmService`
 (`sbatch --parsable`, `squeue`, `sacct` parsing into `SlurmJob`) → `SimulationServiceHpc`, which writes sbatch scripts
@@ -126,17 +143,53 @@ inline as f-string heredocs in `simulation_service.py` (one for simulation runs,
 The container definition is generated by `pbest`, hashed (`get_singularity_hash`, md5 of the def file), and that hash
 is the identity of a `SimulatorVersion` — an unseen hash triggers a container build job before the simulation runs.
 
+**Registry and submission checks.** `compose_api/registry/manifest.yaml` is the registry of record (strategy
+decision 5): pinned entries, each with `module_roots`, a curation `level` and `evidence`. `/simulation/run` calls
+`registry.validation.validate_submission` before anything is recorded: it opens every composite document in the
+upload (nested bundle archives included) and refuses any process address that is not `local:<module>.<Class>` under
+a registered entry at level `tested` or higher in the `registry_env` bundle, with a 400 listing each address.
+Non-`local` protocols and the arbitrary-import `local:!` form are refused even under `address_policy=warn`. The
+container would otherwise run whatever it is sent, so this is the only check. Adding a simulator to what the service
+runs means a manifest entry *and* the library in `simulation/simulator_registry.json`. `registry/catalog.yaml` is
+generated (`uv run python -m compose_api.registry.catalog`, read-only against GitHub) and lists every vivarium-collective
+catalog wrapper at `listed`; never hand-edit it — raising an entry means adding it to `manifest.yaml`, which wins.
+
 **Job tracking.** An `HpcRun` row links a SLURM job id, a `correlation_id`, and a `JobType`
 (`SIMULATION` / `BUILD_CONTAINER`). `JobMonitor` updates status two ways: a 5-second polling loop reconciling
-`squeue`/`sacct` against running `HpcRun` rows, and (only when `hpc_has_messaging` is true) a NATS subscription on
-`nats_worker_event_subject` that correlates `WorkerEvent`s by `correlation_id`. Unparseable SLURM states are coerced to
+`squeue`/`sacct` against running `HpcRun` rows, and the event ingester (below) on the same loop. The NATS path and its
+`WorkerEvent`s were retired (docs/plan-observability.md step 1b); the `worker_event` table stays one release. Unparseable SLURM states are coerced to
 `JobStatus.UNKNOWN` rather than raising. `internal_subscribe(queue, job_id)` lets in-process callers await transitions.
+
+**Run events (`compose_api/observability/`, docs/plan-observability.md).** A run's trace id derives from its
+`correlation_id` (`identity.py`), which is minted before `sbatch`. The job script (`simulation/job_script.py`, a pure
+function with a bash test in `tests/observability/test_job_script.py`) writes the job span and `job.*` events to
+`events/job.jsonl` and passes `PBG_*` variables to the container through an env file, so a process-bigraph >= 1.8.5
+engine writes `events/engine.jsonl`. `EventIngester` tails those files on the mounted store in the `JobMonitor` loop
+(byte cursors in `hpcrun.events_cursor`, deduplicated on `(trace_id, source, seq)`), and the API writes its own
+`dispatch.*` / `slurm.*` events (`api_events.py`). All events follow process-bigraph's event schema (v1); the
+parsing, span folding and Chrome Trace renderer are ported from viva-core.
+
+**Datasets (`observability/datasets.py`, `api/routers/datasets.py`).** Every `artifact.written` event becomes a
+`dataset` row (`DatasetsDatabaseService.register`, called by the ingester). The job script emits one per file under
+`output/` (kept now) and for `results.zip`, with size and sha256, and one for the SLURM log `job.out` (kind
+`log`, which simulation jobs now write in their experiment directory instead of `htclogs/`). A simulator's own event (any component but
+`compose_api.job`) wins over that manifest. Paths are relative to the experiment directory, and
+`resolve_content_path` keeps content reads inside it. Listings filter with `authorization.readable_clause`.
 
 **Persistence.** `DatabaseServiceSQL` (async SQLAlchemy + asyncpg) is a facade over three ORM executors:
 `get_simulator_db()`, `get_hpc_db()`, `get_package_db()` (`compose_api/db/services/`, tables in `db/tables/`). Startup
-currently calls `create_db()` (`metadata.create_all` + alembic `stamp head`) rather than `upgrade_db()`, so schema
-changes still need a matching alembic revision for existing deployments. MongoDB settings and fixtures exist but the
-live path is Postgres.
+calls `create_db()`: `metadata.create_all` (new tables), a stamp for a database alembic doesn't track yet (head if it
+was empty, else the pre-tracking baseline), then `alembic upgrade head`. `create_all` never adds a column, so **a new
+column on an existing table needs an alembic revision**; write it idempotently (`ADD COLUMN IF NOT EXISTS`), because a
+fresh database already has it (`tests/common/test_migrations.py`). MongoDB settings and fixtures exist but the live path
+is Postgres.
+
+**Authorization.** Every route that reads something a simulation owns resolves it through
+`compose_api.authorization.readable_simulation` (or `readable_simulation_ids`), which applies `can_read`. Ownership
+(`simulation.owner_sub`, `visibility`) lives on the simulation only; runs, events and datasets inherit it. A simulation
+the caller may not read is a 404. The caller is `get_caller`, which returns the verified principal from
+`compose_api.authentication` (None when anonymous); tests override `get_caller` to pick one. Nothing stamps an owner
+at submit yet (plan-observability step 5), so every simulation is public. See `docs/plan-observability.md` (O7, O8).
 
 ## Companion repositories
 
@@ -146,10 +199,13 @@ This service is one side of a three-package loop. `../pbest` is checked out next
 - **compose-api imports pbest at runtime.** `pbest.utils.input_types` supplies domain types used here directly —
   `ContainerizationFileRepr` (persisted in `db/tables/simulator_tables.py` and carried on `Simulator`),
   `ContainerizationEngine`, `ExperimentPrimaryDependencies`. `handlers.run_simulation` calls
-  `generate_container_def_file(_default_registry_deps(), ContainerizationEngine.APPTAINER)`; that def file's md5 is the
+  `generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)`; that def file's md5 is the
   `SimulatorVersion` identity, so **bumping the `pbest==0.6.3` pin changes the hash and triggers a fresh container
-  build** on the next run (pbest's release script rewrites the `pbest_tag` baked into the generated def file).
-  The pin is exact and resolves from PyPI — the local `../pbest` working copy is *not* what compose-api runs against
+  build** on the next run (pbest's release script rewrites the `pbest_tag` baked into the generated def file). So
+  does editing `compose_api/simulation/simulator_registry.json`, the library list baked into that image: a copy of
+  `biosimulations/registry`'s `registry.json` pinned at the commit in `simulator_registry.py`, deliberately not
+  pbest's `_default_registry_deps()`, which fetches the file live from that repo's `dev` branch.
+  The pbest pin is exact and resolves from PyPI — the local `../pbest` working copy is *not* what compose-api runs against
   unless you deliberately install it editable, and it can sit on a different version than the pin.
 - **pbest calls back over HTTP** using the published `compose-api-client` package (imported as `compose_api_client`,
   currently 0.2.0), generated from this repo's OpenAPI spec, defaulting to `https://compose.cam.uchc.edu`. It uses
@@ -159,10 +215,10 @@ This service is one side of a three-package loop. `../pbest` is checked out next
   `/simulation/run`, and its batch path submits with `batch_submission=True` then polls the batch status endpoint —
   which is why the batch branch in the sbatch template uses the smaller batch partition/QoS and 1 CPU / 1 GB.
 - **Changing a request or response model is a four-step release**: regenerate the spec and client here, publish
-  `compose-api-client`, bump it in pbest, then bump the `pbest` pin here. Note `make clients` writes to two
-  destinations — the in-repo `compose_api/api/client/` and `$LIB_DIR` (the separate compose-api-client repo, not in
-  this workspace) — and the published package additionally carries a hand-written `utils/run_simulation_and_wait.py`
-  that the generator does not produce and must not clobber.
+  `compose-api-client`, bump it in pbest, then bump the `pbest` pin here. `make clients` writes the in-repo
+  `clients/python/compose_api_client/` and, only when `LIB_DIR` is set, the separate
+  [compose-api-client](https://github.com/biosimulations/compose-api-client) repo (PyPI 0.2.x, what pbest uses). That
+  package also carries a hand-written `utils/run_simulation_and_wait.py`; the script preserves it.
 - The production host is `compose.cam.uchc.edu` in all three places that must agree: the RKE ingress
   (`kustomize/overlays/compose-api-rke/ingress.yaml`), `ServerMode.PROD` plus `APP_ORIGINS` here, and pbest's default
   client base URL. Changing it means changing all three.
@@ -170,7 +226,7 @@ This service is one side of a three-package loop. `../pbest` is checked out next
 ## Conventions
 
 - ruff, line length 120, with a broad rule set (bandit `S`, bugbear `B`, tryceratops `TRY`, …); `make check` must be
-  clean. `alembic/`, `documentation/`, and `compose_api/api/client/` are excluded.
+  clean. `alembic/`, `documentation/`, and the generated parts of `clients/python/compose_api_client/` are excluded.
 - mypy runs `--strict` over `compose_api` and `tests`; use `typing.override` on interface implementations, as the
   existing services do. (It moved from `typing_extensions` when the ruff target went to `py313`; the floor in
   `requires-python` is 3.13.2 and the runtime is 3.14.)

@@ -1,12 +1,14 @@
+import datetime
 import logging
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import override
 
 from pbest.utils.input_types import ContainerizationFileRepr
-from sqlalchemy import Result, Row, and_, select
+from sqlalchemy import ColumnElement, Result, Row, Select, Subquery, and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from compose_api.db.tables.hpc_tables import ORMHpcRun
+from compose_api.db.tables.hpc_tables import JobStatusDB, JobTypeDB, ORMHpcRun
 from compose_api.db.tables.simulator_tables import (
     ORMDownloadedContainers,
     ORMSimulation,
@@ -21,10 +23,12 @@ from compose_api.simulation.models import (
     RegisteredPackage,
     RemoteContainerImage,
     Simulation,
+    SimulationAccess,
     SimulationRequest,
     SimulationResults,
     SimulatorVersion,
     SubmittedSimulation,
+    Visibility,
 )
 
 logger = logging.getLogger(__name__)
@@ -63,8 +67,28 @@ class SimulatorDatabaseService(ABC):
 
     @abstractmethod
     async def insert_simulation(
-        self, sim_request: SimulationRequest, experiment_id: str, simulator_version: SimulatorVersion
+        self,
+        sim_request: SimulationRequest,
+        experiment_id: str,
+        simulator_version: SimulatorVersion,
+        owner_sub: str | None = None,
+        visibility: Visibility = Visibility.PUBLIC,
     ) -> Simulation:
+        pass
+
+    @abstractmethod
+    async def page_simulations(
+        self, query: "SimulationQuery", readable: ColumnElement[bool] | None = None
+    ) -> tuple[list["SimulationRow"], int]:
+        """Simulations matching ``query`` and ``readable``, newest first, each with its latest run; and the total."""
+
+    @abstractmethod
+    async def get_simulation_row(self, simulation_id: int) -> "SimulationRow | None":
+        """One simulation with its simulator and latest run, for a listing's detail view."""
+
+    @abstractmethod
+    async def get_simulations_access(self, simulation_ids: list[int]) -> list[SimulationAccess]:
+        """The owner and visibility of each simulation that exists, in no particular order."""
         pass
 
     @abstractmethod
@@ -263,10 +287,20 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
 
     @override
     async def insert_simulation(
-        self, sim_request: SimulationRequest, experiment_id: str, simulator_version: SimulatorVersion
+        self,
+        sim_request: SimulationRequest,
+        experiment_id: str,
+        simulator_version: SimulatorVersion,
+        owner_sub: str | None = None,
+        visibility: Visibility = Visibility.PUBLIC,
     ) -> Simulation:
         async with self.async_session_maker() as session, session.begin():
-            orm_simulation = ORMSimulation(experiment_id=experiment_id, simulator_id=simulator_version.database_id)
+            orm_simulation = ORMSimulation(
+                experiment_id=experiment_id,
+                simulator_id=simulator_version.database_id,
+                owner_sub=owner_sub,
+                visibility=visibility.value,
+            )
             session.add(orm_simulation)
             await session.flush()  # Ensure the ORM object is inserted and has an ID
 
@@ -297,6 +331,24 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
                 hpc_run=hpc_run,
             )
             return simulation
+
+    @override
+    async def page_simulations(
+        self, query: "SimulationQuery", readable: ColumnElement[bool] | None = None
+    ) -> tuple[list["SimulationRow"], int]:
+        return await _page_simulations(self.async_session_maker, query, readable)
+
+    @override
+    async def get_simulation_row(self, simulation_id: int) -> "SimulationRow | None":
+        return await _get_simulation_row(self.async_session_maker, simulation_id)
+
+    @override
+    async def get_simulations_access(self, simulation_ids: list[int]) -> list[SimulationAccess]:
+        if not simulation_ids:
+            return []
+        async with self.async_session_maker() as session:
+            result = await session.execute(select(ORMSimulation).where(ORMSimulation.id.in_(simulation_ids)))
+            return [orm_simulation.to_simulation_access() for orm_simulation in result.scalars().all()]
 
     @override
     async def get_simulations_experiment_id(self, simulation_id: int) -> str:
@@ -357,3 +409,73 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
     @override
     async def close(self) -> None:
         pass
+
+
+# -- listing simulations (GET /simulations) ---------------------------------------------------------------------------
+
+SUBMITTING = "submitting"
+
+
+@dataclass(frozen=True)
+class SimulationQuery:
+    status: str | None = None  # a JobStatus value, or "submitting" (no SLURM job yet)
+    container_def_hash: str | None = None
+    since: datetime.datetime | None = None  # created at or after (UTC)
+    limit: int = 50
+    offset: int = 0
+
+
+@dataclass(frozen=True)
+class SimulationRow:
+    simulation: ORMSimulation
+    simulator: ORMSimulator
+    run: ORMHpcRun | None
+
+
+def _latest_runs() -> Subquery:
+    return (
+        select(ORMHpcRun.simulation_id, func.max(ORMHpcRun.id).label("hpcrun_id"))
+        .where(ORMHpcRun.job_type == JobTypeDB.SIMULATION)
+        .group_by(ORMHpcRun.simulation_id)
+        .subquery()
+    )
+
+
+def _simulation_rows() -> Select[tuple[ORMSimulation, ORMSimulator, ORMHpcRun]]:
+    latest = _latest_runs()
+    return (
+        select(ORMSimulation, ORMSimulator, ORMHpcRun)
+        .join(ORMSimulator, ORMSimulator.id == ORMSimulation.simulator_id)
+        .outerjoin(latest, latest.c.simulation_id == ORMSimulation.id)
+        .outerjoin(ORMHpcRun, ORMHpcRun.id == latest.c.hpcrun_id)
+    )
+
+
+async def _page_simulations(
+    session_maker: async_sessionmaker[AsyncSession], query: SimulationQuery, readable: ColumnElement[bool] | None
+) -> tuple[list[SimulationRow], int]:
+    """Simulations matching ``query`` and ``readable``, newest first, each with its latest run; and the total."""
+    stmt = _simulation_rows()
+    if readable is not None:
+        stmt = stmt.where(readable)
+    if query.status == SUBMITTING:
+        stmt = stmt.where(ORMHpcRun.id.is_(None))
+    elif query.status is not None:
+        stmt = stmt.where(ORMHpcRun.status == JobStatusDB(query.status))
+    if query.container_def_hash is not None:
+        stmt = stmt.where(ORMSimulator.container_def_hash.startswith(query.container_def_hash))
+    if query.since is not None:
+        stmt = stmt.where(ORMSimulation.created_at >= query.since.astimezone(datetime.UTC).replace(tzinfo=None))
+    async with session_maker() as session:
+        total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
+        result = await session.execute(stmt.order_by(ORMSimulation.id.desc()).limit(query.limit).offset(query.offset))
+        rows = [SimulationRow(sim, simulator, run) for sim, simulator, run in result.all()]
+    return rows, int(total)
+
+
+async def _get_simulation_row(
+    session_maker: async_sessionmaker[AsyncSession], simulation_id: int
+) -> SimulationRow | None:
+    async with session_maker() as session:
+        found = (await session.execute(_simulation_rows().where(ORMSimulation.id == simulation_id))).one_or_none()
+    return SimulationRow(*found) if found is not None else None

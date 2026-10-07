@@ -1,6 +1,6 @@
 # Strategy
 
-**Status:** draft, opened 2026-09-13, revised 2026-09-22 (decision 5 added). This is how we reach the goals in [goals.md](goals.md): the layering, the
+**Status:** draft, opened 2026-09-13, revised 2026-09-22 (decision 5 added) and 2026-09-23 (`registry_env` as a stopgap bundle); progress recorded 2026-10-06 and 2026-10-07. This is how we reach the goals in [goals.md](goals.md): the layering, the
 decisions taken, the order they land in, and the risks. It changes as decisions land. Each decision cites the
 analysis it rests on rather than repeating it, so this document stays short and the evidence stays where it was
 measured.
@@ -67,7 +67,9 @@ So the consolidation is a decision to own and ship that product, not a decision 
 `process-bigraph 1.0.5`, released 2025-12-27, while the ecosystem runs 1.8.4: thirty-seven releases and 251 days
 behind. The cause is mechanical. This repository pins `pbest==0.6.3` exactly; pbest pins `process-bigraph==1.0.5`
 and `bigraph-schema==1.0.14` exactly; so the pin on the toolkit freezes the engine beneath it. Goal G8 cannot be met
-while that chain exists.
+while that chain exists. *(2026-10-06: the gap keeps growing. `process-bigraph` 1.8.5 and `bigraph-schema` 1.7.0 have
+since been released; the latter adds process contracts and contract-subsumption matching, which decision 5's
+adapters will want.)*
 
 **The separate-product case has not yet arrived.** The workbench ecosystem depends on the foundation directly and on
 pbest not at all. pbest's one external consumer takes it as an optional extra behind a lazy import, with a comment
@@ -117,6 +119,15 @@ the authorship.
 | 4 | Upgrade the engine, alone, in its own pull request. | Phase 2a tests green; phase 3 decided; one composite end to end on the containerised SLURM backend. |
 | 2c | Rename to `viva-toolkit` (distribution, import package, console script) inside the workspace; update the service's imports. | Tests green under the new name; `import pbest` works through the shim with a deprecation warning. |
 | 5 | Publish `viva-toolkit`, the final `pbest` shim release, `compose-api-client` and the service from the new home, then archive the old repositories. | One release of each from here before any archive. |
+
+**Phase 2b, done 2026-10-07** (#206, then #207 and #208; see [plan-cli.md](plan-cli.md)):
+- `clients/python` is compose-api-client at tag 0.2.0, brought in by `git subtree` with its history.
+- `make clients` now writes only in-repo.
+- **Two departures from the gate above:**
+  - the hand-written `utils/` stays inside the package, and the generation script preserves it;
+  - the gate's "byte-identical to 0.2.0" check was not made, because the client is regenerated from today's spec
+    rather than 0.2.0's.
+- The package also gained the `ext` layer and the `compose-api` command line.
 
 ### Packaging after the merge
 
@@ -197,6 +208,17 @@ organisation are read-only for this work.
 
 No timeline is claimed beyond that, and no change to `viva-api` is proposed here.
 
+**Related work in `viva-api` (2026-10-06).** Its open proposal `viva-api#975` would derive *its* compose allow-list
+from a reviewed, versioned registry file of workspace repositories, and notes that no such published registry exists
+yet. That is the same problem decision 5 solved here with `compose_api/registry/manifest.yaml`, the generated
+`catalog.yaml`, and the curation ladder, so the registry is the most concrete convergence point to raise first. Its
+structured refusals (`viva-api#982`, `{message, code, ...}`) are also close to this service's 400 shape, which makes
+the error contract a second, cheap one.
+
+**The Year 2 report agrees (2026-10-07).** It describes the SMS project as *"building a parallel Vivarium-based system
+that will be migrated to the process bigraph standard"*, which is this decision's premise in the funder's own record
+([RPPR-C2Y2-review.md](grant/trd3/tracking/RPPR-C2Y2-review.md)).
+
 ---
 
 ## 6. Decision 5 — bring the simulator wrappers in as tiered registry entries
@@ -264,17 +286,45 @@ independently. In order of preference:
 
 Namespacing process addresses by entry removes the flat-name collision as a side effect.
 
+**Today's `registry_env` is the first bundle, and a stopgap.** The service currently runs every composite in one
+image, `registry_env`, holding every library in its pinned list (COPASI, Tellurium, ReaDDy, multiscale actin) plus
+the toolkit. That is an all-in-one environment, the shape this section rejects at scale. It stays, for now, because
+those four coexist and cover the composites people actually submit today, the likely first G1 composite included. In
+the terms above it is simply the first pre-built bundle (rule 2) arrived at before rule 1 exists. Three rules keep it
+from becoming the registry by default:
+
+- **It grows only while additions are conflict-free.** The first library that will not co-install is the signal to
+  build the per-composite resolver, not to force the library in.
+- **It is not the registry.** Entries are registered and curated individually; membership of the bundle confers no
+  curation level.
+- **It is retired into rule 1, not replaced beside it.** Once the resolver exists, this image becomes one cached
+  resolution among many, identified by digest like the rest.
+
 ### Adapters
 
 Adapters are a category of the same registry, on the same ladder. They cannot reach *curated* without declared port
 types and units, which is also what lets a checker suggest them later. Seed the category from code that already
 exists: `viva-basic-processes`' expression step and `spatio-flux`'s count/concentration conversion (goal G5).
 
+### Simulators that bring their own image
+
+Some simulators cannot be expressed as a library list at all. `viva-pde-particle` needs dolfinx, netgen and a Smoldyn
+module built from source. Since 0.6.0 a deployment can list an owner-published image by name
+(`prebuilt_simulators`, `POST /simulation/run?simulator=<name>`; PR #190), and that image is the environment. This is
+rule 3 above (a component in its own container), reached before the resolver. It is also the first concrete G4
+candidate: a spatial **and** particle-based simulator with validation studies against a published reference (Schaff
+et al. 2016). Two gaps remain:
+
+- `viva-pde-particle` carries no `viva-marketplace` topic, so it is absent from the catalog and from `catalog.yaml`.
+- Documents submitted to a prebuilt image skip the address check entirely, *including* the unsafe forms (`local:!`,
+  non-`local` protocols). The deployment vouches for the image, not for every document sent to it, so the unsafe-form
+  check should still apply.
+
 ### The phases
 
 | Phase | What | Gate |
 |---|---|---|
-| A | Manifest schema; ingest the catalog; every wrapper appears at *listed*. Enforce the allow-list the service already receives. | Service rejects unlisted addresses (G6); registry lists every catalog wrapper. |
+| A | Manifest schema; ingest the catalog; every wrapper appears at *listed*. Enforce the allow-list the service already receives. | Service rejects unlisted addresses (G6); registry lists every catalog wrapper. **Landed 2026-09-23 in `compose_api/registry/`: the manifest, enforcement at submission, and the catalog ingest, which lists all 50 catalog wrappers at *listed*.** |
 | B | CI that builds each entry's environment and runs its tests; levels 2 and 3 computed, not asserted. | A nightly report of every entry's level, and why. |
 | C | The per-composite resolver, after digest identity (decision 2). | Two wrappers from different entries run in one composite on HPC. |
 | D | Container splitting for conflicting components. | One composite with processes in two containers (`A3.4.docker`). |
@@ -290,7 +340,12 @@ happens in the wrapper repositories and can run in parallel from the start.
 **The four qualities, in the order they land.** Each earlier one is a precondition for the next.
 
 1. **Hosted reliability** (G2). Underway: correct error semantics, the job-monitor fix, and the SLURM and container
-   build paths now run in CI on every pull request without a cluster.
+   build paths now run in CI on every pull request without a cluster. *2026-10-06:* release 0.6.0 shipped submission
+   checks (G6), owner-published simulator images, and the deployment fixes that came with them (#197 sealed
+   secrets, #199 submission through the service-account submit node). *2026-10-07:* 0.7.0 and 0.7.1 added run events
+   and traces, datasets, simulation listing, and an authorization seam ready for #192
+   ([plan-observability.md](plan-observability.md)), and the `compose-api` CLI ([plan-cli.md](plan-cli.md)); both are
+   deployed. `main` is still not branch-protected ([plan-testing.md](plan-testing.md) F3).
 2. **Installability** (G1). Blocked by the engine lag, which decision 1 removes, and until this month by a personal
    registry account in the production path, now a setting.
 3. **Reproducibility** (G3). Decision 2. Must precede breadth.

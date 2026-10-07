@@ -5,8 +5,10 @@ contract: the intent is to deliver the majority of items, and where we deviate, 
 [DEVIATIONS.md](DEVIATIONS.md). Grant text lives in `../` (git-ignored); quotes below are taken from
 `TR&D3 - Research Strategy.md` unless noted.
 
-**Grant clock.** Project period 03/01/2024 – 02/28/2029. Y1 = Mar 2024–Feb 2025 · Y2 = Mar 2025–Feb 2026 ·
-**Y3 = Mar 2026–Feb 2027 (now)** · Y4 = Mar 2027–Feb 2028 · Y5 = Mar 2028–Feb 2029.
+**Grant clock.** Budget years run April to March: Y1 = Apr 2024–Mar 2025 · Y2 = Apr 2025–Mar 2026 ·
+**Y3 = Apr 2026–Mar 2027 (now)** · Y4 = Apr 2027–Mar 2028 · Y5 = Apr 2028–Mar 2029 (the award ends 03/31/2029).
+*Corrected 2026-10-07* from March-to-February years, against the Year 2 progress report's cover page (reporting
+period 04/01/2025–03/31/2026, budget period 04/01/2026–03/31/2027); see [RPPR-C2Y2-review.md](RPPR-C2Y2-review.md).
 
 **Status legend.** `not-started` · `in-progress` · `delivered` · `in-spirit` (delivered in a different form, see
 DEVIATIONS) · `deviated` (consciously replaced or descoped, see DEVIATIONS) · `dropped` (see DEVIATIONS) ·
@@ -19,18 +21,28 @@ evidence on 2026-09-09 and has not been confirmed by a person.
 **Evidence sources.** GitHub orgs `biosimulations`, `biosimulators`, `vivarium-collective` (plus `cam-center` and
 `virtualcell` where a named simulator lives there). Repo names are `org/repo`; dates are last push as of 2026-09-09.
 
-## Roll-up (2026-09-09, statuses verified against GitHub)
+**Evidence added 2026-10-06** (rows A3.3e, A3.4.docker, A3.4.oci, A4.1.particle-pde): from the GitHub sync of that
+date. No status was changed; where the evidence suggests a change, the next-step column says so for a person to
+confirm.
+
+**Checked against the final Year 2 report, 2026-10-07** (rows A1.1.sed, A1.2.readdy, A1.3.verify, A3.2.hosted,
+A4.1.particle-pde): its TR&D3 activities are quoted against these rows in
+[RPPR-C2Y2-review.md](RPPR-C2Y2-review.md). A status is the status *now*; where the report described an earlier state
+(ReaDDy "initiated" by March 2026, delivered by August), the next-step column says which period each belongs to. No
+status was changed.
+
+## Roll-up (2026-09-09, statuses verified against GitHub; CP-BM added 2026-10-07)
 
 | Status | Rows | of which `?` (inferred, unconfirmed) |
 |---|---|---|
 | delivered | 7 | 0 |
 | in-spirit | 6 | 0 |
-| in-progress | 24 | 1 |
+| in-progress | 25 | 1 |
 | deviated | 1 | 0 |
 | not-started | 6 | 0 |
 | blocked-external | 1 | 0 |
 | unknown (`?` only, needs a person) | 5 | 5 |
-| **total** | **50** | **6** |
+| **total** | **51** | **6** |
 
 The six remaining `?` cannot be settled from code: A3.x.steer, and the five community/collaboration rows
 (A4.3.imag, A4.3.combine, CP1, CP7, CP10). A GitHub search cannot disprove an unrecorded collaboration, so those
@@ -58,7 +70,7 @@ to `viva-fenics` wiring closes A4.1.ode-pde.
 | Id | Commitment | Kind | Promised | Status | Evidence | Next |
 |---|---|---|---|---|---|---|
 | A1.1 | Many more published simulations in a publish/browse/search database; deposit tooling for developers and model repositories | infra + collab (TR&D2 curation) | Y1–5 | in-progress | `biosimulations/biosimulations` v9.65.4 · `biosimulations-bigg` 0.0.5 · `biosimulations-modeldb` 0.0.4 · `biosimulations-runutils` 0.1.0 · `biomodels-qc` 0.0.3 · `biomodels-regression` · `vivarium-collective/biomodels-comparison` (892 BioModels, multi-simulator) | Record current project count vs. the "500 + 1000 expected" baseline; confirm whether TR&D2 semantic search is wired in |
-| A1.1.sed | "Revisit SED-ML as proposed to develop the next generation of the simulation description language" | standard | Y1–5 | in-progress | `biosimulations/sed` (Aug 2026, "new SED standard") · `biosimulators/bscose` (SED2 builder) · `vivarium-collective/sed2` (2023) | Decide whether SED2 goes to COMBINE as a proposal; link to A2.2 |
+| A1.1.sed | "Revisit SED-ML as proposed to develop the next generation of the simulation description language" | standard | Y1–5 | in-progress | `biosimulations/sed` (Aug 2026, "new SED standard") · `biosimulators/bscose` (SED2 builder) · `vivarium-collective/sed2` (2023) | Decide whether SED2 goes to COMBINE as a proposal; link to A2.2 · *2026-10-07:* the Year 2 report calls SED2 TR&D3's biggest 2026 project and lists *"Enabled execution of SED2-style simulation experiments on the HPC"* under the Compose-API kernel; nothing in compose-api documents or tests that yet. Year 3 evidence: one SED2 document run through compose-api, or a dated note why not ([goals.md §4](../../../goals.md)). |
 
 <details><summary>Grant wording</summary>
 
@@ -83,7 +95,7 @@ the more useful form for Aims 3–4 and is recorded as [D3](DEVIATIONS.md#d3) ra
 | A1.2.medyan | MEDYAN (mesoscale actin) | infra + collab (CP4) | Y1–3 | in-progress | `vivarium-collective/viva-medyan` (Jul 2026; pure-Python re-implementation + subprocess bridge) | Validate against upstream MEDYAN output |
 | A1.2.mem3dg | Mem3DG (deformable membranes) | infra + collab | Y1–3 | in-progress | real `pymem3dg` bridge (`pbg_mem3dg/processes.py` drives `dg.System`/`dg.Euler`), but smoke tests only and no CI; `viva-membrane-actin-composite` grades itself "WORKFLOW-READY, NOT YET VALIDATED" and its per-vertex force coupling is blocked by a pymem3dg segfault | Add a validation case against a Mem3DG reference; chase the upstream applied-force segfault |
 | A1.2.cellpack | cellPACK (molecular structures) | infra + collab (CP4) | Y1–3 | in-progress | `vivarium-collective/viva-cellpack` (May 2026) · alternative packing engine `parsimony` / `viva-parsimony` / `3d-ecoli` (Aug 2026) | Decide whether parsimony supersedes cellPACK (in-spirit candidate) |
-| A1.2.readdy | ReaDDy (nanometer-scale filaments, motors) | infra + collab (CP4) | Y1–3 | delivered | `vivarium-collective/viva-readdy` (Aug 2026) · runs on HPC via this repo, `tests/simulators/test_readdy.py` | — |
+| A1.2.readdy | ReaDDy (nanometer-scale filaments, motors) | infra + collab (CP4) | Y1–3 | delivered | `vivarium-collective/viva-readdy` (Aug 2026) · runs on HPC via this repo, `tests/simulators/test_readdy.py` | *2026-10-07:* the Year 2 report (to March 2026) says integration was *initiated*; `delivered` is the August 2026 state, so it is Year 3 evidence. |
 | A1.2.cpm | A cellular Potts model (CC3D, Morpheus, Artistoo, or compatible) | infra + collab | Y1–3 | delivered | `viva-cpm` (own Rust engine) reproduces Glazier & Graner 1993 across 11 completed studies and benchmarks at parity with CompuCell3D 4.10 · `viva-artistoo` drives real Artistoo with sorting/checkerboard behaviour tests (Node-gated) · `viva-compucell3d` is a real CC3D wrapper, smoke tests only | Morpheus not wrapped; optional |
 | A1.2.cahn | A Cahn-Hilliard PDE solver | infra | Y1–3 | in-progress | `meta-modelers-guide` ships `composites/condensate-cahn-hilliard.composite.json` with `tests/test_cahn_hilliard.py` · adjacent PDE processes: `viva-fenics` (real dolfinx), `viva-vcell-fvsolver`, `virtualcell/vcell-mbsolver` | Promote the condensate composite into a named solver/template, or record FEniCS as the substitute |
 
@@ -102,7 +114,7 @@ and Mem3DG (one at a time, years 1-3)."
 
 | Id | Commitment | Kind | Promised | Status | Evidence | Next |
 |---|---|---|---|---|---|---|
-| A1.3.verify | Verification side: check simulations across simulators, link each study to a report | infra | Y3–4 | in-progress | `biosimulations/platform` = "Biological Simulation Verification Service (BSVS)", `biosim.biosimulations.org`, frontend-v0.2.2 (Sep 2026) · `biosimulators/bsvs` client · `biomodels-comparison` · `viva-uq` (PCE + Sobol UQ) | Define what the BSVS report covers vs. the grant's "credibility report" |
+| A1.3.verify | Verification side: check simulations across simulators, link each study to a report | infra | Y3–4 | in-progress | `biosimulations/platform` = "Biological Simulation Verification Service (BSVS)", `biosim.biosimulations.org`, frontend-v0.2.2 (Sep 2026) · `biosimulators/bsvs` client · `biomodels-comparison` · `viva-uq` (PCE + Sobol UQ) | Define what the BSVS report covers vs. the grant's "credibility report" · *2026-10-07:* the Year 2 report's Activity 1 is this Verification API (`biosim-server`, `biosim-client`), used to verify hundreds of BioModels. |
 | A1.3.cred | Credibility side: drag-and-drop model → report from TR&D1 Aim 3 libraries (IMAG ten rules, biophysical soundness, validation tests) | infra + collab (TR&D1) | Y3–4 | blocked-external | no TR&D1 credibility library integration found in any org | Ask TR&D1 what library exists; BSVS is the natural host |
 
 <details><summary>Grant wording</summary>
@@ -173,7 +185,7 @@ XML and JSON-based formats for declaring a composite simulator with the CIP (yea
 | Id | Commitment | Kind | Promised | Status | Evidence | Next |
 |---|---|---|---|---|---|---|
 | A3.2 | Vivarium 2.0 ingests the exchange format and returns an executable composite; multi-timestep + workflow orchestration | infra | Y1 | delivered | `process-bigraph` v1.8.4 (Sep 2026) · `pbest run file.pbg` · `vivarium-interface` | — |
-| A3.2.hosted | "Integrated with runBioSimulations as its underlying orchestration engine, to support running composite simulations online" | infra | Y1 | deviated | online execution exists via this repo (`compose.cam.uchc.edu`, SLURM) and `viva-api` (`sms.cam.uchc.edu`), not via runBioSimulations | See [D2](DEVIATIONS.md#d2) |
+| A3.2.hosted | "Integrated with runBioSimulations as its underlying orchestration engine, to support running composite simulations online" | infra | Y1 | deviated | online execution exists via this repo (`compose.cam.uchc.edu`, SLURM) and `viva-api` (`sms.cam.uchc.edu`), not via runBioSimulations | See [D2](DEVIATIONS.md#d2) · *2026-10-07:* the Year 2 report lists the Compose API (`compose.cam.uchc.edu/docs`) as a product. Since then: releases 0.6.0–0.7.1 with run events, traces, datasets, a simulation listing and the `compose-api` CLI ([plan-observability.md](../../../plan-observability.md), [plan-cli.md](../../../plan-cli.md)). |
 | A3.2.engines | "Work with collaborators to build additional execution engines that support the standard" | collab | Y1+ | not-started | no second orchestrator exists: `viva-compiler`, `SimpleProcessBigraphRuntime`, `pbest` and `bsew` all delegate to `process_bigraph.Composite`; the `*-process` repos are single-process language bridges, not orchestrators | Name a collaborator engine or record as descoped in DEVIATIONS |
 
 ### Task 3.3 Methods for composite specification
@@ -184,15 +196,15 @@ XML and JSON-based formats for declaring a composite simulator with the CIP (yea
 | A3.3b | Python scripting API for building, inspecting, running, evaluating composites; export to exchange format | infra | Y2–3 | delivered | `vivarium-interface` (Jun 2026) · `pbest` `CompositeBuilder` incl. parameter scans · `viva-superpowers` / `pbg-superpowers` | — |
 | A3.3c | In-line visualization of composites | infra | Y2 | delivered | `bigraph-viz` (Jul 2026) · bigraph-loom renderer (`vivarium-guide`) · workbench composite views | — |
 | A3.3d | Annotation-based semi-automated composition (units, UniProt, adapter insertion) with TR&D2 | infra + collab (TR&D2) | unspecified | in-progress | unit-dimension types in `bigraph-schema` (visible in `rest-process /list-types`) · `viva-compiler` | Ontology/UniProt matching not evidenced; needs TR&D2 input |
-| A3.3e | Adapter registry: registry of type/unit converters; checker suggests adapters | infra + standard | begin Y1 | in-progress | adapters exist but are not a registry category: `viva-simularium` (generic output adapters) · `viva-basic-processes` (MathExpression, Clock, Intervention) · registries: `viva-catalog` ecosystem index, `biosimulations/registry` | Add an `adapter` tag/category to `viva-catalog` and seed counts↔concentrations, current↔molar flow |
+| A3.3e | Adapter registry: registry of type/unit converters; checker suggests adapters | infra + standard | begin Y1 | in-progress | adapters exist but are not a registry category: `viva-simularium` (generic output adapters) · `viva-basic-processes` (MathExpression, Clock, Intervention) · registries: `viva-catalog` ecosystem index, `biosimulations/registry` · *2026-10-06:* this repo's registry manifest exists (`compose_api/registry/`, curation ladder, every catalog wrapper at *listed*), with an adapter category planned (strategy decision 5) · `bigraph-schema` 1.7.0 adds process contracts and `find_candidates` (contract subsumption), the engine half of "checker suggests adapters" | Add the `adapter` category to this repo's manifest with declared port types; seed counts↔concentrations, current↔molar flow |
 
 ### Task 3.4 Methods for composite deployment
 
 | Id | Commitment | Kind | Promised | Status | Evidence | Next |
 |---|---|---|---|---|---|---|
 | A3.4.pypi | Biosimulators released as PyPI packages usable from notebooks | infra | unspecified | delivered | `process-bigraph`, `bigraph-schema`, `vivarium-interface`, `pbest`, `biosimulator-processes`, and the `viva-*` family on PyPI; `ecoli-notebooks` | — |
-| A3.4.docker | Docker API for composition: each simulator in its own container exposing the Process Interface with repeated-call comms | infra | unspecified | in-progress | `docker-process` runs **one** containerized process from a host orchestrator (`test_docker_process`), no CI · repeated-call protocol is CI-verified only over REST (`rest-process` `test_rest_protocol_drives_grow_process`) · `pbest containerize` and `bsew` put the **whole** composite in one container · upstream `process_bigraph/protocols/` has ray/rest/pool/session, no docker | Build one composite with processes in separate containers |
-| A3.4.oci | *(not a grant commitment; recorded here because it bears on A3.4.docker)* Explore OCI-native container runtimes on HPC, rootless for trusted images and microVM-isolated for untrusted ones | infra | — | not-started | direction set 2026-09-11; see [plan-container-runtimes.md](../../../plan-container-runtimes.md) | Ask the cluster administrators what runtimes they support |
+| A3.4.docker | Docker API for composition: each simulator in its own container exposing the Process Interface with repeated-call comms | infra | unspecified | in-progress | `docker-process` runs **one** containerized process from a host orchestrator (`test_docker_process`), no CI · repeated-call protocol is CI-verified only over REST (`rest-process` `test_rest_protocol_drives_grow_process`) · `pbest containerize` and `bsew` put the **whole** composite in one container · upstream `process_bigraph/protocols/` has ray/rest/pool/session, no docker · *2026-10-06:* this repo runs a submission in an owner-published per-simulator image (#190, release 0.6.0; first user `viva-pde-particle`), but each composite still runs whole in one container | Build one composite with processes in separate containers |
+| A3.4.oci | *(not a grant commitment; recorded here because it bears on A3.4.docker)* Explore OCI-native container runtimes on HPC, rootless for trusted images and microVM-isolated for untrusted ones | infra | — | not-started | direction set 2026-09-11; see [plan-container-runtimes.md](../../../plan-container-runtimes.md) · *2026-10-06:* OCI images now reach the cluster by reference (#190, pulled as `docker://` by Apptainer), which is not yet an OCI-native runtime | Ask the cluster administrators what runtimes they support |
 | A3.4.mixed | Mixed local / cloud / HPC processes in one composite | infra | unspecified | in-progress | `process_bigraph/protocols/` ships `ray.py`, `pool.py`, `session.py`, `clusters/ec2_ssm.py` with `docs/distributed_lifecycles.md` · local (`pbest run`) + HPC (this repo) + cloud (`viva-api`, `sms-cdk`) exist as separate paths | Demonstrate one composite spanning two backends |
 | A3.x.steer | Semi-automation: simulation steering module | exploratory | — | in-progress? | `viva-basic-processes` Intervention process | Optional |
 
@@ -216,7 +228,7 @@ types (begin year 1, and gradually add more adapters)."
 | A4.1.ode-ssa | ODE/SSA hybrid (high-count species deterministic, low-count stochastic) | infra + science | **Y2** | not-started | `bio-bundles` has Vilar ODE/SSA *fixtures* only; no composite found | Build from `viva-tellurium` + `viva-copasi` SSA + a counts↔concentrations adapter (also seeds A3.3e) |
 | A4.1.ode-fba | ODE/FBA (fluxes constrain FBA) | infra + science | **Y2** | delivered | `spatio-flux` (spatial dFBA) · `cdFBA` · `CRM-FBA` · `viva-comets` · `bio-bundles/dfba` | Publish one as the canonical template in `viva-template` |
 | A4.1.fba-bool | FBA/Boolean (Boolean network gates FBA reactions) | infra + science | **Y2** | not-started | none | Needs a Boolean process (BoolNet/GINsim were cycle-1 Biosimulators) |
-| A4.1.particle-pde | Particle-based/PDE (Smoldyn + VCell PDE coupling) | infra + science | Y1–5 | in-progress | `viva-smoldyn` and `viva-vcell-fvsolver` exist separately; `viva-membrane-actin-composite` couples particles to mechanics | Compose the two; reproduce ref [4] |
+| A4.1.particle-pde | Particle-based/PDE (Smoldyn + VCell PDE coupling) | infra + science | Y1–5 | in-progress | `viva-smoldyn` and `viva-vcell-fvsolver` exist separately; `viva-membrane-actin-composite` couples particles to mechanics · *2026-10-06:* `vivarium-collective/viva-pde-particle` (Sept–Oct 2026) couples a PDE process (finite volume, FEniCSx, VCell-FV geometry) to Smoldyn as process-bigraph co-simulation, benchmarks it against the hybrid solver embedded in `vcell-fvsolver`, and reproduces Schaff et al. 2016 Tests 1–5 (studies C1–C3); it runs on this service from its own image (#190) | Confirm ref [4] is Schaff et al. 2016 and, if the C1–C3 studies are accepted as the reproduction, mark `delivered` · *2026-10-07:* `viva-pde-particle` runs in production as a prebuilt simulator (compose-api 0.7.x); its full single-channel ensemble (Tests 3–5, 138 SLURM jobs) ran on mantis and reproduced the local metrics exactly. Year 3 evidence for G4 as well. |
 | A4.1.ode-pde | ODE/PDE region variables on membranes/volumes | infra + science | Y1–5 | in-progress | `viva-fenics` couples a reaction process to real dolfinx PDEs via shared stores in `composites/reaction_diffusion.py` (Fisher–KPP) and `composites/turing_patterns.py`, both unit-tested; its studies are still `planned`. The reaction side is hand-written, not a wrapped ODE simulator | Wire `viva-tellurium`/`viva-copasi` to fenics or fvsolver; no simulator-to-simulator ODE/PDE composite exists |
 | A4.1.rbm-ode | RBM/ODE (NFSim observables feed ODEs) | infra + science | Y1–5 | in-progress | `viva-nfsim` (Jul 2026) · `viva-composite-nfsim-caspule` couples NFSim to MD instead of ODE | Add the ODE pairing |
 | A4.1.compartment | Compartment models with permeability, volume/shape, motility (with CP6) | science + collab (CP6) | Y1–5 | in-progress | `viva-autopoiesis` covers all three properties at toy fidelity: `processes_spatial.py::SpatialContainment` (permeability-gated transport), `Boundary` (volume derived from membrane lipids), `Chemotaxis` (motility); five completed studies including adversarial probes | CP6 involvement: none found, this is solo work. Raise fidelity beyond the self-described "toy metabolism" |
@@ -255,6 +267,7 @@ simulators will require more advanced tooling, which will only be available a fe
 | CP7 | SASCO (stress-adapted cancer organelles) | protocol for reaction-diffusion + regulation | condensate reaction methods | ? | none found | User to fill |
 | CP9 | Digital twins for synthetic biology | protocol + ensemble/inference processes | inference process interface | in-progress | `viva-uq` · `viva-torch` surrogates · `viva-ketchup` parameter estimation · `FBAKineticsPrototype` · `pbest` parameter scans | Name the "ensemble of simulations" process |
 | CP10 | Cell-free expression / NIST | interface, tools, models | experimental protocols | ? | none found | User to fill |
+| CP-BM | BioModels (T.J. Sego, University of Florida, the database's new maintainers; with Eran Agmon). *Not a numbered CP in the grant; added 2026-10-07.* | process-bigraph composites of every BioModels model, run locally and on the Center's services (this repository) | the BioModels corpus (1,000+ curated models) as a reproducibility and regression benchmark | in-progress | `vivarium-collective/viva-biomodels` (Oct 2026; BioModels regression workspace) · `biomodels-comparison` (892 models across simulators) · `biosimulations/biomodels-regression` (Aug 2026) · TR&D1's BioModels curation (Year 2 report; PLoS Comp Bio) | Goal G1's Collaborating Project: Sego's group runs a BioModels composite locally and submits it unchanged to compose-api, following the walkthrough themselves; report corpus-wide local/HPC agreement for Year 3 |
 
 ---
 

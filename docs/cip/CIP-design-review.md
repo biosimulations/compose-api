@@ -642,6 +642,19 @@ let a workbench browse the ecosystem, and neither was asked to describe an inter
 5. As 2 or 3, plus a specified checker output format (a list of findings with a suggested adapter per mismatch).
    Costs: the checker itself, and its integration with the language server and portability lints (tooling).
 
+**Update 2026-10-06.** Three facts bear on this decision without making it.
+- This repository now has a registry of record of its own, separate from the Postgres catalog above:
+  `compose_api/registry/manifest.yaml` plus a generated `catalog.yaml` listing every catalog wrapper, each pinned to
+  a commit and carrying a curation level (strategy decision 5). The service refuses unregistered addresses at
+  submission. It stores module roots, not port types, so it does not yet answer the adapter question either; it is
+  the natural host for option 3 without the Postgres write path.
+- `bigraph-schema` 1.7.0 added process contracts (conditions, an expression language, a static audit) and
+  `find_candidates` (contract subsumption). That is the engine half of option 2: a contract field and a matching
+  query now exist upstream.
+- `viva-api#975` (open) proposes deriving `viva-api`'s compose allow-list from a reviewed registry file and notes
+  that none is published. A shared registry is now a convergence question between the two backends (strategy
+  decision 4), not only a protocol one.
+
 **Your call.**
 
 ### D-G. How a model artifact travels with a document

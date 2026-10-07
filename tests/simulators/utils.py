@@ -1,4 +1,3 @@
-import asyncio
 import math
 import os
 import tempfile
@@ -7,61 +6,55 @@ from typing import Any
 from zipfile import ZipFile
 
 import numpy
+from compose_api_client import Client
+from compose_api_client.api.results import get_simulation_results_file
+from compose_api_client.ext import AsyncComposeSession
+from compose_api_client.models import HTTPValidationError, SimulationExperiment
+from compose_api_client.types import Response
 
-from compose_api.api.client import Client
-from compose_api.api.client.api.results import get_simulation_results_file, get_simulation_status
-from compose_api.api.client.models import HpcRun, HTTPValidationError, JobStatus, SimulationExperiment
-from compose_api.api.client.types import Response
+from compose_api.common.gateway.models import Namespace
+from compose_api.config import get_settings
+from compose_api.dependencies import get_required_database_service
+from compose_api.observability.ingest import EventIngester
+from compose_api.simulation.hpc_utils import get_internal_experiment_dir
 
 
 async def check_experiment_run(
     sim_experiment: Any, in_memory_api_client: Client, seconds_to_wait: int = 120
 ) -> Response[HTTPValidationError]:
-    """
-    Checks that the simulation is running, asserts that it does not fail, and returns its results.
-    Args:
-        sim_experiment:
-        in_memory_api_client:
-        seconds_to_wait:
-    Returns:
-
-    """
+    """Wait for the simulation through the client's application layer (``ext``), assert it completed, and return
+    its results response."""
     assert isinstance(sim_experiment, SimulationExperiment)
-
-    current_status = await get_simulation_status.asyncio(
-        client=in_memory_api_client, simulation_id=sim_experiment.simulation_database_id
-    )
-
-    if not isinstance(current_status, HpcRun) or not isinstance(current_status.status, JobStatus):
-        raise TypeError()
-
-    num_loops = 0
-    while current_status.status != JobStatus.COMPLETED and num_loops < (seconds_to_wait / 2):
-        await asyncio.sleep(2)
-        current_status = await get_simulation_status.asyncio(
-            client=in_memory_api_client, simulation_id=sim_experiment.simulation_database_id
-        )
-        num_loops += 1
-
-        if not isinstance(current_status, HpcRun) or not isinstance(current_status.status, JobStatus):
-            raise TypeError()
-        if current_status.status == JobStatus.FAILED:
-            raise RuntimeError("Simulation failed")
-
-    current_status = await get_simulation_status.asyncio(
-        client=in_memory_api_client, simulation_id=sim_experiment.simulation_database_id
-    )
-
-    if not isinstance(current_status, HpcRun) or not isinstance(current_status.status, JobStatus):
-        raise TypeError()
-
-    assert current_status.status == JobStatus.COMPLETED
+    session = AsyncComposeSession(client=in_memory_api_client)
+    state = await session.wait(sim_experiment.simulation_database_id, poll=2, timeout=seconds_to_wait)
+    assert state.ok, f"simulation {sim_experiment.simulation_database_id} ended {state.status}"
 
     results: Response[HTTPValidationError] = await get_simulation_results_file.asyncio_detailed(
         client=in_memory_api_client, simulation_id=sim_experiment.simulation_database_id
     )
     assert results.status_code == 200
+    await _check_run_events(session, sim_experiment.simulation_database_id)
     return results
+
+
+async def _check_run_events(session: AsyncComposeSession, simulation_id: int) -> None:
+    """The run has a trace and datasets (docs/plan-observability.md O3, O5): the API's dispatch event, the job
+    script's own events and its manifest, ingested from the experiment directory as the service's polling loop does."""
+    namespace = Namespace(get_settings().namespace)
+    ingester = EventIngester(get_required_database_service(), lambda e: get_internal_experiment_dir(e, namespace))
+    await ingester.ingest_once()
+    page = await session.events(simulation_id)
+    names = {e.event for e in page.events}
+    assert {"dispatch.submitted", "job.start", "job.end"} <= names, f"events of simulation {simulation_id}: {names}"
+    tree = await session.trace(simulation_id)
+    assert [root.span.name for root in tree.roots] == ["job"]
+    assert tree.roots[0].span.status == "ok"
+    datasets = (await session.datasets(simulation_id=simulation_id)).datasets
+    paths = {d.path for d in datasets}
+    assert {"results.zip", "job.out"} <= paths and any(p.startswith("output/") for p in paths), paths
+    assert all(d.sha256 and d.size_bytes is not None for d in datasets if d.kind != "log")
+    log = next(d for d in datasets if d.path == "job.out")
+    assert log.kind == "log" and b"running" in await session.dataset_content(log.id)
 
 
 def assert_test_sim_results(

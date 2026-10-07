@@ -11,6 +11,20 @@ replaced by `slurm` and `cluster_only` markers over a parameterized backend. The
 Section F carries an **As built** note for each part. The exercise paid for itself immediately: the container
 backend exposed a production bug, recorded as F13.
 
+**Since then (2026-10-06).** The suite has roughly doubled: **95 tests**, 74 in the fast job and 21 in `tests-slurm`
+(it was 26 + 21 on 2026-09-12). Most of the growth is the registry work (strategy decision 5), which needs no
+services at all: `tests/registry/` covers the manifest, the catalog ingest and every refusal the submission check
+makes, and `tests/api/test_submission_rejection.py` drives the 400 through the app. #190 added
+`tests/simulation/test_prebuilt.py`. F14's dead override is removed (#181). F3 is unchanged: `main` is still not
+protected.
+
+**And since (2026-10-07).** **162 tests**: 141 in the fast job, 21 in `tests-slurm`. The new ones cover the CLI and
+its spec-coverage guard (`tests/client/`), and run events, datasets and the read-authorization seam
+(`tests/observability/`, `tests/api/test_authorization.py`, `tests/api/test_simulations_list.py`), including the job
+script run under bash with a fake `singularity`. The SLURM end-to-end check now also asserts each run's trace and
+datasets. CI also builds the production image on every pull request (#219), after the 0.7.0 tag's build had failed
+on a Dockerfile no test exercised. F3 is still open.
+
 **Scope.** This repository (`compose-api`) and `pbest` are the subjects. The other repositories in the loop are
 included as context and as sources of practice worth copying or avoiding: `platform`, `sms-api`, `biosim-client`,
 `compose-server`, `process-bigraph`, `bigraph-schema`, `spatio-flux`, `pbg-vcell-fvsolver`, `vivarium-workbench`,
@@ -231,7 +245,7 @@ The worst-covered modules are the ones the HPC gate hides: `slurm_service` at 18
 
 `gh api repos/biosimulations/compose-api/branches/main/protection` returns "Branch not protected", and so does
 pbest's. Every check on every pull request in both repositories is advisory. A red pull request can be merged, and
-a direct push to `main` is possible.
+a direct push to `main` is possible. *Still true on 2026-10-06.*
 
 `pbest/CLAUDE.md` states that `main` "is protected: no direct pushes, changes land through a PR". That is not true
 today, and a stale instruction is worse than none because it stops people checking.
@@ -273,7 +287,8 @@ suite from roughly two minutes to over six per job. Runner time per push goes fr
 | `tests` | `-m "not slurm"` | 3.13 and 3.14 | ~1m |
 | `tests-slurm` | `-m slurm` | 3.14 only | ~6m |
 
-The two selections cover every test exactly once, verified by collection count: 26 + 21 = 47.
+The two selections cover every test exactly once, verified by collection count: 26 + 21 = 47. *(2026-10-06: 74 +
+21 = 95; the growth is all in the fast job.)*
 
 Three things fall out of the split.
 
@@ -564,6 +579,10 @@ delete, and deleting it removes a line that would silently become load-bearing t
 
 Size S. The action is two things: drop the dead override here, and add a wheel-installability preflight to the
 client repository, not to this one.
+
+**Update 2026-09-22:** the dead override is removed. `uv lock` was unchanged by the removal, which confirms it was
+inert. The client-side preflight remains open, and moves into this repository when the client does (strategy
+decision 1).
 
 ## Part 3. Candidate actions
 

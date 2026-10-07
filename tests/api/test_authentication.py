@@ -5,21 +5,25 @@ import importlib
 import inspect
 import json
 import time
-from collections.abc import AsyncGenerator
+import uuid
+from collections.abc import AsyncGenerator, Callable
+from pathlib import Path
 from typing import Any
 
 import httpx
 import jwt
 import pytest
 import pytest_asyncio
+import yaml
+from compose_api_client import AuthenticatedClient, Client
+from compose_api_client.api.results import get_simulation_status
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.dependencies.models import Dependant
 from fastapi.routing import APIRoute
 from httpx import ASGITransport
 
-from compose_api.api.client.api.results import get_simulation_status
-from compose_api.api.client.client import AuthenticatedClient, Client
-from compose_api.api.main import app
+from compose_api.api.main import APP_ROUTERS, app
 from compose_api.authentication import (
     DEFAULT_ROLE,
     JWKS_MAX_STALE_SECONDS,
@@ -35,8 +39,10 @@ from compose_api.authentication import (
     get_auth0_verifier,
     get_optional_principal,
 )
-from compose_api.config import override_settings
+from compose_api.authorization import Caller
+from compose_api.config import REPO_ROOT, override_settings
 from compose_api.db.database_service import DatabaseService
+from compose_api.simulation.models import JobType, SimulationRequest, SimulatorVersion, Visibility
 from tests.fixtures.auth_fixtures import AUTH0_TEST_AUDIENCE, AUTH0_TEST_DOMAIN, FakeAuth0
 
 MALFORMED_HEADERS = ["Basic dXNlcjpwYXNz", "Bearer", "", "Bearer a b", "Bearer not-a-jwt", "Token abc"]
@@ -481,11 +487,24 @@ async def app_with_test_auth0(auth0_verifier: Auth0Verifier) -> AsyncGenerator[N
 @pytest.mark.usefixtures("app_with_test_auth0")
 @pytest.mark.parametrize("header", MALFORMED_HEADERS)
 async def test_every_router_rejects_bad_credentials(http_api_client: httpx.AsyncClient, header: str) -> None:
+    # At least one route per router, and every route that reads through the authorization seam: the 401 must come
+    # from the router-level dependency, before any lookup that could answer 404 instead.
     for method, path in [
         ("GET", "/core/simulator/list"),
         ("GET", "/results/simulation/status?simulation_id=1"),
+        ("GET", "/results/simulations/status/batch"),
+        ("GET", "/results/simulation/results/file?simulation_id=1"),
+        ("GET", "/results/simulation/events?simulation_id=1"),
+        ("GET", "/results/simulation/trace?simulation_id=1"),
+        ("GET", "/results/simulation/trace/chrome?simulation_id=1"),
+        ("GET", "/results/simulator/build/status?simulator_id=1"),
         ("POST", "/simulation/run"),
         ("POST", "/curated/copasi"),
+        ("GET", "/simulations"),
+        ("GET", "/simulations/1"),
+        ("GET", "/datasets"),
+        ("GET", f"/datasets/{uuid.uuid4()}"),
+        ("GET", f"/datasets/{uuid.uuid4()}/content"),
     ]:
         response = await http_api_client.request(method, path, headers={"Authorization": header})
         assert response.status_code == 401, (method, path)
@@ -538,19 +557,30 @@ async def test_health_and_version_ignore_credentials(http_api_client: httpx.Asyn
         assert response.status_code == 200, path
 
 
-BUSINESS_ROUTERS = ["compute", "curated", "results", "simulation"]
+# Every registered router is a business router; /health and /version live on the app itself.
+BUSINESS_ROUTERS = APP_ROUTERS
+
+
+def _reaches(dependant: Dependant, target: Callable[..., Any]) -> bool:
+    return any(d.call is target or _reaches(d, target) for d in dependant.dependencies)
 
 
 @pytest.mark.parametrize("router_name", BUSINESS_ROUTERS)
-def test_every_active_handler_receives_the_principal(router_name: str) -> None:
-    """Router-level validation alone discards the principal; each handler must also take it as a parameter."""
+def test_every_active_handler_receives_the_caller_identity(router_name: str) -> None:
+    """Router-level validation alone discards the principal. Each handler must also reach it through a parameter of
+    its own: directly (`principal: OptionalPrincipal`), or through the authorization seam (`caller: OptionalCaller`,
+    `ReadableSimulation`), whose get_caller depends on get_optional_principal. Reaching get_caller is not enough on its
+    own: the chain has to end at the verified principal."""
     config = importlib.import_module(f"compose_api.api.routers.{router_name}").config
     assert [d.dependency for d in config.dependencies or []] == [get_optional_principal]
     routes = [route for route in config.router.routes if isinstance(route, APIRoute)]
     assert routes
     for route in routes:
-        parameters = {d.name: d.call for d in route.dependant.dependencies if d.name is not None}
-        assert parameters.get("principal") is get_optional_principal, route.path
+        # Named dependencies are the handler's parameters; unnamed ones come from `dependencies=[...]` on the route.
+        parameters = [d for d in route.dependant.dependencies if d.name is not None]
+        assert any(d.call is get_optional_principal or _reaches(d, get_optional_principal) for d in parameters), (
+            route.path
+        )
 
 
 @pytest.mark.asyncio
@@ -651,7 +681,74 @@ def test_describe_caller() -> None:
     assert describe_caller(None) == "anonymous"
 
 
+# -- the authorization seam -- #
+
+
+def test_a_principal_is_a_caller() -> None:
+    principal = AuthenticatedPrincipal("auth0|abc", "i", ("a",), frozenset(), frozenset(), frozenset({"user"}))
+    caller: Caller = principal  # mypy checks the principal against compose_api.authorization's protocol
+    assert caller.subject == "auth0|abc"
+    assert caller.roles == {"user"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("app_with_test_auth0")
+async def test_a_verified_token_reaches_the_authorization_seam(
+    http_api_client: httpx.AsyncClient,
+    fake_auth0: FakeAuth0,
+    database_service: DatabaseService,
+    simulation_request: SimulationRequest,
+    simulator: SimulatorVersion,
+) -> None:
+    """No get_caller override here: the caller can_read sees must be the principal the token verified to."""
+    sim_db, hpc_db = database_service.get_simulator_db(), database_service.get_hpc_db()
+    private = await sim_db.insert_simulation(
+        sim_request=simulation_request,
+        experiment_id="experiment-auth-seam",
+        simulator_version=simulator,
+        owner_sub="auth0|test-user",
+        visibility=Visibility.PRIVATE,
+    )
+    run = await hpc_db.insert_hpcrun(
+        slurmjobid=7201, job_type=JobType.SIMULATION, ref_id=private.database_id, correlation_id="corr-auth-seam"
+    )
+    params = {"simulation_id": private.database_id}
+    try:
+        owner = await http_api_client.get(
+            "/results/simulation/status", params=params, headers={"Authorization": f"Bearer {fake_auth0.token()}"}
+        )
+        assert owner.status_code == 200
+        assert owner.json()["trace_id"] == run.trace_id
+
+        stranger = fake_auth0.token(sub="auth0|someone-else")
+        other = await http_api_client.get(
+            "/results/simulation/status", params=params, headers={"Authorization": f"Bearer {stranger}"}
+        )
+        assert other.status_code == 404
+
+        assert (await http_api_client.get("/results/simulation/status", params=params)).status_code == 404
+
+        invalid = await http_api_client.get(
+            "/results/simulation/status", params=params, headers={"Authorization": "Bearer not-a-jwt"}
+        )
+        assert invalid.status_code == 401
+    finally:
+        await hpc_db.delete_hpcrun(run.database_id)
+        await sim_db.delete_simulation(private.database_id)
+
+
 # -- OpenAPI -- #
+
+
+def test_committed_spec_carries_the_optional_bearer() -> None:
+    """The checked-in spec must be built from app.openapi(). Built with get_openapi() it would lose the bearer scheme,
+    and `make check-clients` would not notice, because the committed and the regenerated copy would both lack it."""
+    spec_path = Path(REPO_ROOT) / "compose_api" / "api" / "spec" / "openapi_3_1_0_generated.yaml"
+    spec = yaml.safe_load(spec_path.read_text())
+    assert spec["security"] == [{}, {"BearerAuth": []}]
+    assert spec["components"]["securitySchemes"] == app.openapi()["components"]["securitySchemes"]
+    operations = [op for path in spec["paths"].values() for op in path.values()]
+    assert all("security" not in op for op in operations), "per-operation security retypes the generated client"
 
 
 def test_openapi_documents_optional_bearer() -> None:

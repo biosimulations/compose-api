@@ -34,7 +34,8 @@ hash identifies a recipe that does not reproduce — but here it is concrete and
 
 **`bsander` reaches us through a dead override.** `pyproject.toml` redirects it to a git URL, but it appears in no
 dependency list and no lock entry, so the override is inert. It is F14 in [plan-testing.md](plan-testing.md), and
-removing it is one of the open follow-ups.
+removing it is one of the open follow-ups. *Removed 2026-09-23 (#181); `uv lock` was unchanged, confirming it was
+inert.*
 
 **Where they appear in the grant record.** `bsander` is cited under `A2.2` for the `.pbif` format and under `A3.3a`
 as one of four partial static checkers. `bsew` is cited under `A3.2.engines` as delegating to
@@ -69,6 +70,13 @@ weeks and would compete with the generated one. What is worth recording is how t
 reach:
 
 - 51 repositories carry the topic; the generated index held 49 entries when checked, so it lags slightly.
+- *Update 2026-10-06.* The catalog's package was renamed from `viva_marketplace` to `viva_catalog`
+  (`viva-catalog#6`), which moved `modules.json` to `viva_catalog/modules.json`. It lists 48 repositories; `v2ecoli`
+  and `viva-uq` have left it. This repository now ingests it (strategy decision 5: `compose_api/registry/catalog.py`
+  writes `catalog.yaml`, every entry pinned to a commit at level *listed*). Two observations from doing so:
+  `vivarium-collective/viva-pde-particle`, the first simulator to run here from its own image, carries no topic and
+  so is absent; and the daily bot refresh rewrote `viva-cpm`'s package back to `viva_cpm` after `viva-catalog#8`
+  corrected it to `cpm`, so a hand fix to `modules.json` does not survive the next refresh.
 - Of 53 non-archived `viva-`/`pbg-` repositories, 7 are absent from the index: `viva-api`, `viva-catalog`,
   `viva-compiler`, `viva-demo`, `viva-superpowers`, `viva-template`, `viva-workspace`. Every one is **tooling**
   rather than simulator content, so the omission looks deliberate rather than accidental. It does mean the index
