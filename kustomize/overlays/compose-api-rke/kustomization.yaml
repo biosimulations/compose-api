@@ -5,7 +5,7 @@ namespace: compose-api-rke
 
 images:
   - name: ghcr.io/biosimulations/compose-api
-    newTag: 0.6.0
+    newTag: 0.7.0
   - name: docker.io/library/mongo
     newTag: 8.3.11
 
