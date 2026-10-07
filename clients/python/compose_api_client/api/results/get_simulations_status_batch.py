@@ -1,5 +1,5 @@
 from http import HTTPStatus
-from typing import Any, Optional, Union
+from typing import Any
 
 import httpx
 
@@ -30,8 +30,8 @@ def _get_kwargs(
 
 
 def _parse_response(
-    *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Optional[Union[HTTPValidationError, list["HpcRun"]]]:
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> HTTPValidationError | list[HpcRun] | None:
     if response.status_code == 200:
         response_200 = []
         _response_200 = response.json()
@@ -41,10 +41,12 @@ def _parse_response(
             response_200.append(response_200_item)
 
         return response_200
+
     if response.status_code == 422:
         response_422 = HTTPValidationError.from_dict(response.json())
 
         return response_422
+
     if client.raise_on_unexpected_status:
         raise errors.UnexpectedStatus(response.status_code, response.content)
     else:
@@ -52,8 +54,8 @@ def _parse_response(
 
 
 def _build_response(
-    *, client: Union[AuthenticatedClient, Client], response: httpx.Response
-) -> Response[Union[HTTPValidationError, list["HpcRun"]]]:
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> Response[HTTPValidationError | list[HpcRun]]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -64,9 +66,9 @@ def _build_response(
 
 def sync_detailed(
     *,
-    client: Union[AuthenticatedClient, Client],
+    client: AuthenticatedClient | Client,
     body: list[int],
-) -> Response[Union[HTTPValidationError, list["HpcRun"]]]:
+) -> Response[HTTPValidationError | list[HpcRun]]:
     """Get simulation status records for a list of IDs
 
     Args:
@@ -77,7 +79,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[HTTPValidationError, list['HpcRun']]]
+        Response[HTTPValidationError | list[HpcRun]]
     """
 
     kwargs = _get_kwargs(
@@ -93,9 +95,9 @@ def sync_detailed(
 
 def sync(
     *,
-    client: Union[AuthenticatedClient, Client],
+    client: AuthenticatedClient | Client,
     body: list[int],
-) -> Optional[Union[HTTPValidationError, list["HpcRun"]]]:
+) -> HTTPValidationError | list[HpcRun] | None:
     """Get simulation status records for a list of IDs
 
     Args:
@@ -106,7 +108,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[HTTPValidationError, list['HpcRun']]
+        HTTPValidationError | list[HpcRun]
     """
 
     return sync_detailed(
@@ -117,9 +119,9 @@ def sync(
 
 async def asyncio_detailed(
     *,
-    client: Union[AuthenticatedClient, Client],
+    client: AuthenticatedClient | Client,
     body: list[int],
-) -> Response[Union[HTTPValidationError, list["HpcRun"]]]:
+) -> Response[HTTPValidationError | list[HpcRun]]:
     """Get simulation status records for a list of IDs
 
     Args:
@@ -130,7 +132,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Union[HTTPValidationError, list['HpcRun']]]
+        Response[HTTPValidationError | list[HpcRun]]
     """
 
     kwargs = _get_kwargs(
@@ -144,9 +146,9 @@ async def asyncio_detailed(
 
 async def asyncio(
     *,
-    client: Union[AuthenticatedClient, Client],
+    client: AuthenticatedClient | Client,
     body: list[int],
-) -> Optional[Union[HTTPValidationError, list["HpcRun"]]]:
+) -> HTTPValidationError | list[HpcRun] | None:
     """Get simulation status records for a list of IDs
 
     Args:
@@ -157,7 +159,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Union[HTTPValidationError, list['HpcRun']]
+        HTTPValidationError | list[HpcRun]
     """
 
     return (

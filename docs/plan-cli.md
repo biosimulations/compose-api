@@ -1,12 +1,13 @@
 # CLI: a `compose-api` command line on a generated httpx client
 
-**Status (2026-10-07): planned and approved by Jim; step A in review.** Three PRs, each merged on green with a merge
+**Status (2026-10-07): planned and approved by Jim; steps A and B1 in review.** Three PRs, each merged on green with a merge
 commit. Publishing to PyPI and deploying are separate goes from Jim.
 
 | Step | What | State |
 |---|---|---|
 | A | Generation pipeline: deterministic, in-repo, drift-checked in CI; regenerate the stale client | **#205** |
-| B | `compose-api-client` as a workspace package: the generated client plus a hand-written application layer (`ext`) | — |
+| B1 | `compose-api-client` as a workspace package at `clients/python`, brought in with its history (C6) | **in review** |
+| B2 | The hand-written application layer, `compose_api_client.ext` | — |
 | C | The `compose-api` CLI on `ext` and the generated client; a spec-coverage test | — |
 | D | Docs (`docs/cli.md`), `CLAUDE.md`, strategy.md 2b; release with 0.7.0 | — |
 
@@ -146,7 +147,22 @@ verbs: `run`, `status` with several IDs, `results`, `simulators`, `processes`, `
   relied on a 404 raising.
 - Delete `openapitools.json` and the commented-out openapi-generator lines.
 
-### B. The `compose-api-client` package (PR 2)
+### B. The `compose-api-client` package (PR 2, split into B1 and B2)
+
+*As built (B1, 2026-10-07):*
+- `git subtree add` of compose-api-client at tag 0.2.0 into `clients/python`, then the old repository's tooling is
+  dropped (its own uv.lock, pre-commit, Makefile, `publish.sh`, `main.py`, `.idea`), and a test that submitted to
+  production is dropped too. That test returns in B2 as a `cluster_only` test of `ext.run_and_wait`.
+- **Version:** follows the service (0.6.0 now). `tag.sh` bumps both.
+- **The wheel:** built alone, it installs on Python 3.11 with httpx, attrs and dateutil only, with no FastAPI or
+  SQLAlchemy.
+- **Typing:** the script adds a `py.typed`, so mypy reads the generated types in the service's tests.
+- **The root project:**
+  - depends on the package only in its dev group (the service never calls the client; its tests do);
+  - overrides pbest's pin (C6);
+  - keeps the generated files out of ruff and mypy, by path.
+- **Gotcha:** `uv pip install` run from the repository root applies that override and fetches 0.2.0 from PyPI. Run
+  ad-hoc installs from outside the repository.
 
 `clients/python/` is a uv workspace member: distribution `compose-api-client`, version locked to the service.
 

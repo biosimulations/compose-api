@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import Mapping
 from typing import Any, TypeVar
 
@@ -9,11 +11,10 @@ T = TypeVar("T", bound="CheckHealthHealthGetResponseCheckHealthHealthGet")
 
 @_attrs_define
 class CheckHealthHealthGetResponseCheckHealthHealthGet:
-    """ """
-
     additional_properties: dict[str, str] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
 

@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 from collections.abc import Mapping
 from typing import Any, TypeVar
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
+
+from ..models.containerization_engine import ContainerizationEngine
 
 T = TypeVar("T", bound="ContainerizationFileRepr")
 
@@ -12,21 +16,24 @@ class ContainerizationFileRepr:
     """
     Attributes:
         representation (str):
+        containerization_engine (ContainerizationEngine):
     """
 
     representation: str
+    containerization_engine: ContainerizationEngine
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         representation = self.representation
 
+        containerization_engine = self.containerization_engine.value
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update(
-            {
-                "representation": representation,
-            }
-        )
+        field_dict.update({
+            "representation": representation,
+            "containerization_engine": containerization_engine,
+        })
 
         return field_dict
 
@@ -35,8 +42,11 @@ class ContainerizationFileRepr:
         d = dict(src_dict)
         representation = d.pop("representation")
 
+        containerization_engine = ContainerizationEngine(d.pop("containerization_engine"))
+
         containerization_file_repr = cls(
             representation=representation,
+            containerization_engine=containerization_engine,
         )
 
         containerization_file_repr.additional_properties = d

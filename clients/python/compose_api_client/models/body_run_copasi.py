@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import Mapping
 from io import BytesIO
 from typing import Any, TypeVar
@@ -26,11 +28,9 @@ class BodyRunCopasi:
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update(
-            {
-                "sbml": sbml,
-            }
-        )
+        field_dict.update({
+            "sbml": sbml,
+        })
 
         return field_dict
 

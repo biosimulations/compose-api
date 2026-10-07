@@ -4,11 +4,11 @@ import tempfile
 import zipfile
 
 import pytest
+from compose_api_client import Client
+from compose_api_client.api.simulation import run_simulation
+from compose_api_client.models import BodyRunSimulation
+from compose_api_client.types import File
 
-from compose_api.api.client import Client
-from compose_api.api.client.api.simulation import run_simulation
-from compose_api.api.client.models import BodyRunSimulation
-from compose_api.api.client.types import File
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation.data_service import DataService
 from compose_api.simulation.job_monitor import JobMonitor

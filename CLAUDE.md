@@ -32,10 +32,10 @@ make db-upgrade                      # alembic upgrade head
 make db-stamp                        # mark existing DB as at head without running migrations
 ```
 
-Generated API client (checked into `compose_api/api/client/`, excluded from ruff/mypy — never hand-edit):
+Generated API client (checked into `clients/python/compose_api_client/`, the `compose-api-client` workspace package; excluded from ruff/mypy — never hand-edit):
 
 ```bash
-make clients          # regenerates the spec (compose_api/api/spec/) and the client (compose_api/api/client/)
+make clients          # regenerates the spec (compose_api/api/spec/) and the client (clients/python/compose_api_client/)
 make check-clients    # fails if either is stale; part of `make check`, so CI enforces it
 LIB_DIR=<compose-api-client checkout>/compose_api_client make clients   # also writes the external 0.2.x repo
 ```
@@ -161,7 +161,7 @@ This service is one side of a three-package loop. `../pbest` is checked out next
   which is why the batch branch in the sbatch template uses the smaller batch partition/QoS and 1 CPU / 1 GB.
 - **Changing a request or response model is a four-step release**: regenerate the spec and client here, publish
   `compose-api-client`, bump it in pbest, then bump the `pbest` pin here. `make clients` writes the in-repo
-  `compose_api/api/client/` and, only when `LIB_DIR` is set, the separate
+  `clients/python/compose_api_client/` and, only when `LIB_DIR` is set, the separate
   [compose-api-client](https://github.com/biosimulations/compose-api-client) repo (PyPI 0.2.x, what pbest uses). That
   package also carries a hand-written `utils/run_simulation_and_wait.py`; the script preserves it.
 - The production host is `compose.cam.uchc.edu` in all three places that must agree: the RKE ingress
@@ -171,7 +171,7 @@ This service is one side of a three-package loop. `../pbest` is checked out next
 ## Conventions
 
 - ruff, line length 120, with a broad rule set (bandit `S`, bugbear `B`, tryceratops `TRY`, …); `make check` must be
-  clean. `alembic/`, `documentation/`, and `compose_api/api/client/` are excluded.
+  clean. `alembic/`, `documentation/`, and the generated parts of `clients/python/compose_api_client/` are excluded.
 - mypy runs `--strict` over `compose_api` and `tests`; use `typing.override` on interface implementations, as the
   existing services do. (It moved from `typing_extensions` when the ruff target went to `py313`; the floor in
   `requires-python` is 3.13.2 and the runtime is 3.14.)

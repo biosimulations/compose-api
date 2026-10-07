@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Generate the Python client from the committed OpenAPI spec (docs/plan-cli.md, step A).
 #
-#   scripts/generate-api-client.sh            # regenerate compose_api/api/client in place
+#   scripts/generate-api-client.sh            # regenerate clients/python/compose_api_client in place
 #   scripts/generate-api-client.sh OUT_DIR    # generate into OUT_DIR instead (make check-clients)
 #   LIB_DIR=../compose-api-client/compose_api_client scripts/generate-api-client.sh
 #                                             # also write the external 0.2.x repository pbest pins
@@ -14,7 +14,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SPEC="${ROOT_DIR}/compose_api/api/spec/openapi_3_1_0_generated.yaml"
 CONFIG="${ROOT_DIR}/scripts/openapi-python-client.yaml"
-DEST="${1:-${ROOT_DIR}/compose_api/api/client}"
+DEST="${1:-${ROOT_DIR}/clients/python/compose_api_client}"
 
 generate() {
   local out="$1" work
@@ -30,6 +30,7 @@ generate() {
     "${work}/client"
   uv run --project "${ROOT_DIR}" ruff format --config "${ROOT_DIR}/pyproject.toml" --quiet "${work}/client"
   rm -rf "${work}/client/.ruff_cache"
+  touch "${work}/client/py.typed"  # the generated code is typed (PEP 561), so type checkers use it
   # The external repository keeps one hand-written module inside the package (utils/run_simulation_and_wait.py);
   # carry it over rather than deleting it with the old generated tree.
   if [ -d "${out}/utils" ]; then cp -R "${out}/utils" "${work}/client/utils"; fi

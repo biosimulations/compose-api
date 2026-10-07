@@ -7,11 +7,10 @@ from typing import Any
 from zipfile import ZipFile
 
 import numpy
-
-from compose_api.api.client import Client
-from compose_api.api.client.api.results import get_simulation_results_file, get_simulation_status
-from compose_api.api.client.models import HpcRun, HTTPValidationError, JobStatus, SimulationExperiment
-from compose_api.api.client.types import Response
+from compose_api_client import Client
+from compose_api_client.api.results import get_simulation_results_file, get_simulation_status
+from compose_api_client.models import HpcRun, HTTPValidationError, JobStatus, SimulationExperiment
+from compose_api_client.types import Response
 
 
 async def check_experiment_run(

@@ -35,7 +35,7 @@ check-clients: ## Fail if the committed spec or client differs from a fresh gene
 	uv run python compose_api/api/openapi_spec.py "$$tmp/spec.yaml" >/dev/null && \
 	diff -u compose_api/api/spec/openapi_3_1_0_generated.yaml "$$tmp/spec.yaml" && \
 	scripts/generate-api-client.sh "$$tmp/client" >/dev/null && \
-	diff -r -x __pycache__ compose_api/api/client "$$tmp/client" || \
+	diff -r -x __pycache__ -x utils clients/python/compose_api_client "$$tmp/client" || \
 	{ echo "❌ The spec or the client is stale: run 'make clients' and commit the result."; exit 1; }
 
 .PHONY: test
