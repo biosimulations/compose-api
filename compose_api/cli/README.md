@@ -150,6 +150,372 @@ compose_api/cli/
 
 ---
 
+## Running the CLI from a Checkout
+
+From the repository root, use the project environment:
+
+```bash
+uv run compose-api --help
+uv run python -m compose_api.cli --help   # Equivalent entry point
+```
+
+If the bare `compose-api` command reports `zsh: command not found`, use `uv run compose-api`
+for the examples below. Alternatively, activate the environment first:
+
+```bash
+source .venv/bin/activate
+compose-api --help
+```
+
+The repeated `Uninstalled 1 package` / `Installed 1 package` messages seen during local runs
+come from `uv` synchronizing the environment (observed here for `antimony`). They do not
+indicate an authentication or API connection failure.
+
+### Local Server and PostgreSQL Setup
+
+The CLI is a client: it does not start the API, PostgreSQL, or a simulation runner.
+Configure the server using `assets/dev/config/.dev_env_TEMPLATE` as a starting point for
+`assets/dev/config/.dev_env`. If `.dev_env` already exists, edit it while preserving its
+existing settings.
+
+PostgreSQL must be running at `POSTGRES_HOST` and `POSTGRES_PORT`, with the configured
+`POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DATABASE`. If the existing local
+database container is named `compose-api-postgres`, start it with:
+
+```bash
+docker start compose-api-postgres
+```
+
+This command starts an existing container; it does not create a database container.
+A startup traceback ending in `Connect call failed` for `::1:5432` and `127.0.0.1:5432`
+means PostgreSQL is unreachable. The API cannot finish startup or serve requests on
+port 8000 until the database connection succeeds.
+
+For the local Auth0 application, set these **server** values in `.dev_env`:
+
+```dotenv
+AUTH0_DOMAIN=dev-bu7yo7484tyxu6a1.us.auth0.com
+AUTH0_AUDIENCE=https://api.compose.local
+```
+
+Start the API in one terminal and wait for `Application startup complete`:
+
+```bash
+make run
+```
+
+In another terminal, choose the local CLI profile and override its built-in cluster URL
+to use the development server:
+
+```bash
+export COMPOSE_API_CLI_PROFILE=local
+export COMPOSE_API_CLI_API_BASE_URL=http://localhost:8000
+uv run compose-api config show
+uv run compose-api auth login
+```
+
+The built-in `local` profile uses audience `https://api.compose.local` and native client ID
+`Fp3QmULWNIhdutlBRVFm2HjPGapqdnKV`. Its default API URL is `https://api.compose-api-local`,
+so the loopback URL override above is needed for `make run`.
+
+Check `config show` for pre-existing `COMPOSE_API_CLI_AUTH0_AUDIENCE` and
+`COMPOSE_API_CLI_AUTH0_CLIENT_ID` overrides. The audience must match the server's
+`AUTH0_AUDIENCE`, and the client ID must identify the corresponding native application.
+Selecting a profile does not override explicit setting environment variables. A profile
+shown as `production` can therefore still point at localhost when environment overrides
+are present.
+
+The CLI does not read the server's `.dev_env`. Restart the API after changing that file.
+A user `config.toml` reported as `(not found)` is normal when using built-in settings and
+environment variables. On macOS, that optional file lives at
+`~/Library/Application Support/compose-api/config.toml`.
+
+### Remote SLURM Configuration for Simulations
+
+Starting PostgreSQL and the API enables database-backed requests and authentication.
+Simulation execution additionally requires a configured remote SLURM backend; the server
+currently has no local simulation execution path.
+
+Configure the following server settings in `.dev_env` with your cluster's actual values:
+
+```dotenv
+SLURM_SUBMIT_HOST=<cluster-submit-host>
+SLURM_SUBMIT_USER=<cluster-user>
+SLURM_SUBMIT_KEY_PATH=<absolute-path-to-ssh-key>
+SLURM_SUBMIT_KNOWN_HOSTS=<absolute-path-to-known-hosts>
+SLURM_PARTITION=<partition>
+SLURM_QOS=<cluster-qos>
+SLURM_BUILD_NODE=<build-node>
+SIMULATION_STORE_BASE_PATH=<writable-cluster-storage-path>
+```
+
+Replace the placeholders before restarting the API. The configured user needs SSH access,
+permission to submit jobs, writable storage, and the cluster's required Apptainer/Singularity
+environment. Batch submissions also use `BATCH_SLURM_PARTITION` and `BATCH_SLURM_QOS`.
+Use the appropriate `NAMESPACE` for the cluster's storage subtree.
+
+## Command Reference
+
+The command hierarchy consists of global flags, configuration inspection, authentication lifecycle management, and API domain actions.
+
+### Global Options
+
+Options valid across all commands (accepted before or after the subcommand):
+
+| Option | Description |
+|---|---|
+| `--profile NAME` | Selects profile: `production` (default), `local`, or a custom profile from `config.toml`. |
+| `--json` | Formats stdout output as a stable JSON document. Errors emit `{"error": {"category", "message", "exit_code"}}`. |
+| `--version` | Displays `compose_api` package version and exits. |
+| `-h`, `--help` | Displays help message and exits (runs offline without dependencies). |
+
+---
+
+### Configuration Commands
+
+#### `compose-api config show`
+Prints effective configuration parameters and their provenance (defaults, `config.toml`, or environment variables).
+
+```bash
+compose-api config show
+compose-api config show --profile local
+compose-api config show --json
+```
+
+---
+
+### Authentication Commands (`compose-api auth`)
+
+#### `compose-api auth signup`
+Initiates sign-up on Auth0 hosted pages, completes S256 PKCE exchange (or Device Flow), stores credentials in OS credential manager, and confirms identity with `GET /auth/me`.
+
+```bash
+compose-api auth signup                     # Hosted email/password signup
+compose-api auth signup --provider google   # First-time Google social authentication
+compose-api auth signup --device            # Headless / SSH device authorization flow
+compose-api auth signup --no-browser        # Print authorization URL instead of launching browser
+```
+
+#### `compose-api auth login`
+Initiates sign-in for returning users via Auth0 Universal Login, stores tokens in OS credential manager, and confirms identity with `GET /auth/me`.
+
+```bash
+compose-api auth login
+compose-api auth login --provider email
+compose-api auth login --provider google
+compose-api auth login --device             # RFC 8628 device flow for remote/headless terminals
+compose-api auth login --no-browser
+```
+
+If login reports `signed in and saved the session, but the Compose API did not confirm it`,
+Auth0 sign-in completed and the session was saved. Browser and device login both finish by
+calling the API's `GET /auth/me`, so switching to `--device` does not fix an unreachable API.
+Check the API URL, database availability, and server startup first, then verify the saved
+session without signing in again:
+
+```bash
+uv run compose-api auth status
+uv run compose-api auth status --verify
+```
+
+Keep the same effective CLI settings as the original login. Changing the issuer, client ID,
+audience, API origin, or scopes selects a different session binding. When verification succeeds,
+the CLI reports `API: confirmed this identity just now`. A valid local session with
+`API: never confirmed` means the stored session has not yet been confirmed by the API;
+a connection failure during verification does not sign you out.
+
+#### `compose-api auth status`
+Inspects stored session information. Without flags, runs offline and reads only the local OS credential store.
+
+```bash
+compose-api auth status            # Offline check: state, expiration, renewable status, last confirmed time
+compose-api auth status --verify   # Online check: refreshes token if needed and re-verifies with GET /auth/me
+compose-api auth status --json     # Emits structured session status
+```
+
+#### `compose-api auth logout`
+Revokes the refresh token at Auth0 and deletes stored credentials and state files on the local machine.
+
+```bash
+compose-api auth logout              # Revokes refresh token at Auth0, then purges local credentials
+compose-api auth logout --local-only # Skips network call and purges local credentials immediately
+```
+
+---
+
+### API Commands
+
+All API commands require an active session. If none is present, they exit with code `3` (`AUTH_REQUIRED`) without making network requests.
+
+#### `compose-api simulators list`
+Lists all available simulation engines registered in the API (`GET /core/simulator/list`).
+
+```bash
+compose-api simulators list
+compose-api simulators list --json
+```
+
+#### `compose-api simulations status ID`
+Queries the status and execution details of a simulation by its numeric ID (`GET /results/simulation/status?simulation_id=ID`).
+
+```bash
+compose-api simulations status 123
+compose-api simulations status 123 --json
+```
+
+`ID` is required. Running `simulations status` without it produces an argparse usage error;
+this command does not list simulations.
+
+#### Troubleshooting: Submission Succeeds but Status Reports No Simulation
+
+The current server saves the simulation and returns its database ID before a background task
+dispatches the SLURM job. The status endpoint looks for the associated HPC job record. If
+dispatch has not created that record, the CLI reports `there is no simulation ID on this server`,
+even when the simulation database row exists. This can occur while preparing the simulator or
+after a dispatch failure; the message alone does not establish that the simulation is missing.
+
+For example, the local submission of `MODEL1610100004.5.omex` returned simulation 2, and the
+database contained simulation 2 but no HPC job records. The server's SLURM host, username,
+SSH key path, and partition were unset, leaving execution unconfigured.
+
+To resolve this:
+
+1. Confirm submit and status use the same effective API configuration with `uv run compose-api config show`.
+2. Check the server logs for errors from the background dispatch, container download/build, or SSH connection.
+3. Configure the remote backend described in [Remote SLURM Configuration for Simulations](#remote-slurm-configuration-for-simulations).
+4. Restart the API. If the earlier dispatch failed, resubmit and check the newly returned ID:
+
+   ```bash
+   uv run compose-api simulations submit ~/Downloads/MODEL1610100004.5.omex
+   uv run compose-api simulations status <new-id>
+   ```
+
+Restarting the API does not automatically retry the earlier submission. Verify that dispatch
+failed before resubmitting, since a new submission can create a duplicate when the original
+is still preparing or running. The CLI does not automatically replay submissions.
+
+#### `compose-api simulations submit FILE`
+Validates and uploads an OMEX archive (ZIP file) to execute a simulation (`POST /simulation/run`). Multipart upload is not automatically replayed on failure to protect against duplicate runs.
+
+```bash
+compose-api simulations submit experiment.omex
+compose-api simulations submit experiment.omex --interval-time 2.5
+compose-api simulations submit experiment.omex --batch
+compose-api simulations submit experiment.omex --batch --json
+```
+
+---
+
+### Ephemeral Mode for Headless / Container Hosts (`--ephemeral-auth`)
+
+On environments where no supported OS credential store is available (e.g., Docker containers, minimal CI runners), API commands support `--ephemeral-auth`. This executes a one-time interactive login into process memory without storing credentials on disk or in keyrings:
+
+```bash
+compose-api simulators list --ephemeral-auth --device
+compose-api simulations status 123 --ephemeral-auth --device
+compose-api simulations submit model.omex --ephemeral-auth --no-browser
+```
+---
+
+## Packaging and Global Installation
+
+`compose-api` is configured as a standalone console script in `pyproject.toml`:
+
+```toml
+[project.scripts]
+compose-api = "compose_api.cli.main:main"
+```
+
+When installed via an isolated tool manager like `uv tool` or `pipx`, the executable binary is placed into the user's tool bin directory (`~/.local/bin` on Linux/macOS, `%LOCALAPPDATA%\bin` on Windows). Once that directory is on `$PATH`, `compose-api` can be invoked from any directory on the computer without prefixing `uv run`.
+
+### 1. Local Installation (For Developers / Contributors)
+
+To install the CLI from this local checkout so that `compose-api` is available globally in your shell:
+
+#### Editable Installation (Recommended for Development)
+Links the global command directly to your working tree. Code edits take effect immediately without reinstallation:
+
+```bash
+uv tool install --editable .
+```
+
+*(For a standard non-editable install of the current working directory: `uv tool install .`)*
+
+#### Ensure Binary Directory is on `$PATH`
+If invoking `compose-api` returns `command not found`, ensure your shell includes the tool directory:
+
+```bash
+uv tool update-shell
+```
+Then restart your shell or reload your environment (`source ~/.zshrc` or `source ~/.bashrc`).
+
+---
+
+### 2. Building Distribution Artifacts (Packaging)
+
+To package the CLI and server into standalone distribution archives (wheel `.whl` and source distribution `.tar.gz`):
+
+```bash
+uv build
+```
+
+This compiles and outputs the distribution artifacts into `dist/`:
+- `dist/compose_api-0.5.0-py3-none-any.whl`
+- `dist/compose_api-0.5.0.tar.gz`
+
+---
+
+### 3. How Other Users Can Install and Run It Globally
+
+End users do not need to clone the git repository, install developer dependencies, or manage virtual environments manually.
+
+#### Option A: Direct Installation via `uv tool` from Git (Recommended)
+Users with `uv` installed can install directly from GitHub using a tag or branch:
+
+```bash
+# Install from a release tag
+uv tool install "git+https://github.com/biosimulations/compose-api.git@<tag>"
+
+# Install from a branch
+uv tool install "git+https://github.com/biosimulations/compose-api.git@feature/cli-client"
+```
+
+#### Option B: Installation from a Built Wheel (`.whl`)
+If distributing a pre-built wheel file from `dist/`:
+
+```bash
+uv tool install ./compose_api-0.5.0-py3-none-any.whl
+```
+
+#### Option C: Installation via `pipx` (For Users Without `uv`)
+Users using standard Python tooling with `pipx`:
+
+```bash
+# Install from GitHub
+pipx install "git+https://github.com/biosimulations/compose-api.git@<tag>"
+
+# Or from a pre-built wheel
+pipx install ./compose_api-0.5.0-py3-none-any.whl
+```
+
+#### Option D: Standard Virtual Environment (`pip`)
+Inside an existing virtual environment with Python $\ge$ 3.13.2:
+
+```bash
+pip install ./compose_api-0.5.0-py3-none-any.whl
+```
+
+---
+
+### 4. Installation Maintenance & Constraints
+
+- **Python Floor:** Requires Python **3.13.2 or newer**. `uv tool` downloads and provisions a compliant Python runtime automatically if one is not present on the host.
+- **Footprint:** The tool environment installs server scientific packages (NumPy, Polars, LibSBML) totaling $\approx 1\text{ GB}$. The CLI startup path lazy-loads modules and executes help and config commands in milliseconds without importing those scientific libraries.
+- **Upgrades:** Run `uv tool upgrade compose-api` (or `pipx upgrade compose-api`).
+- **Uninstallation:** Run `uv tool uninstall compose-api` (or `pipx uninstall compose-api`).
+
+---
+
 ## Testing & Dependency Injection
 
 The CLI is engineered for complete test isolation without requiring live networks, browser windows, or real OS keyrings during automated runs.
