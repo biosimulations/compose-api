@@ -1,0 +1,1013 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "compose-api",
+    "version": "0.6.0"
+  },
+  "paths": {
+    "/curated/copasi": {
+      "post": {
+        "tags": [
+          "Curated"
+        ],
+        "summary": "Use the tool copasi.",
+        "operationId": "run-copasi",
+        "parameters": [
+          {
+            "name": "start_time",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Start Time"
+            }
+          },
+          {
+            "name": "duration",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Duration"
+            }
+          },
+          {
+            "name": "num_data_points",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Num Data Points"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_run-copasi"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimulationExperiment"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/curated/tellurium": {
+      "post": {
+        "tags": [
+          "Curated"
+        ],
+        "summary": "Use the tool tellurium.",
+        "operationId": "run-tellurium",
+        "parameters": [
+          {
+            "name": "start_time",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Start Time"
+            }
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "End Time"
+            }
+          },
+          {
+            "name": "num_data_points",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Num Data Points"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_run-tellurium"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimulationExperiment"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/simulation/run": {
+      "post": {
+        "tags": [
+          "Simulation"
+        ],
+        "summary": "Run a simulation",
+        "description": "`simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);\nthe job then runs in that image instead of the shared container. Omitted: the shared container.",
+        "operationId": "run-simulation",
+        "parameters": [
+          {
+            "name": "interval_time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 1.0,
+              "title": "Interval Time"
+            }
+          },
+          {
+            "name": "batch_submission",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Batch Submission"
+            }
+          },
+          {
+            "name": "simulator",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Simulator"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_run-simulation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimulationExperiment"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The submission cannot run. For a problem with the request itself (empty file, unsupported type, interval out of range) `detail` is a string. For a problem with its contents (unreadable archive, or processes the registry does not allow) `detail` is an object with a `message` and a `violations` list naming each address."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/results/simulations/status/batch": {
+      "get": {
+        "tags": [
+          "Results"
+        ],
+        "summary": "Get simulation status records for a list of IDs",
+        "operationId": "get-simulations-status-batch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array",
+                "title": "Ids"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HpcRun"
+                  },
+                  "type": "array",
+                  "title": "Response Get-Simulations-Status-Batch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/results/simulation/status": {
+      "get": {
+        "tags": [
+          "Results"
+        ],
+        "summary": "Get the simulation status record by its ID",
+        "operationId": "get-simulation-status",
+        "parameters": [
+          {
+            "name": "simulation_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Simulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HpcRun"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/results/simulation/results/file": {
+      "get": {
+        "tags": [
+          "Results"
+        ],
+        "summary": "Get simulation results as a zip file",
+        "operationId": "get-simulation-results-file",
+        "parameters": [
+          {
+            "name": "simulation_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Simulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Simulation result zip file",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The simulation does not exist, or its results are not available"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/results/simulator/build/status": {
+      "get": {
+        "tags": [
+          "Results"
+        ],
+        "summary": "Get the simulator build status record by its ID",
+        "operationId": "get-simulator-build-status",
+        "parameters": [
+          {
+            "name": "simulator_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Simulator Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HpcRun"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource does not exist"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/core/simulator/list": {
+      "get": {
+        "tags": [
+          "Compute"
+        ],
+        "summary": "Get the list of simulators",
+        "operationId": "get-simulator-list",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisteredSimulators"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/core/processes/list": {
+      "get": {
+        "tags": [
+          "Compute"
+        ],
+        "summary": "Get the list of processes",
+        "operationId": "get-processes-list",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BiGraphProcess"
+                  },
+                  "type": "array",
+                  "title": "Response Get-Processes-List"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/core/steps/list": {
+      "get": {
+        "tags": [
+          "Compute"
+        ],
+        "summary": "Get the list of processes",
+        "operationId": "get-steps-list",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BiGraphStep"
+                  },
+                  "type": "array",
+                  "title": "Response Get-Steps-List"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "BIOSIM API"
+        ],
+        "summary": "Check Health",
+        "operationId": "check_health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Check Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/version": {
+      "get": {
+        "tags": [
+          "BIOSIM API"
+        ],
+        "summary": "Get Version",
+        "operationId": "get_version_version_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "title": "Response Get Version Version Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BiGraphComputeType": {
+        "type": "string",
+        "enum": [
+          "process",
+          "step"
+        ],
+        "title": "BiGraphComputeType"
+      },
+      "BiGraphProcess": {
+        "properties": {
+          "module": {
+            "type": "string",
+            "title": "Module"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "compute_type": {
+            "$ref": "#/components/schemas/BiGraphComputeType"
+          },
+          "inputs": {
+            "type": "string",
+            "title": "Inputs"
+          },
+          "outputs": {
+            "type": "string",
+            "title": "Outputs"
+          },
+          "database_id": {
+            "type": "integer",
+            "title": "Database Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "module",
+          "name",
+          "compute_type",
+          "inputs",
+          "outputs",
+          "database_id"
+        ],
+        "title": "BiGraphProcess"
+      },
+      "BiGraphStep": {
+        "properties": {
+          "module": {
+            "type": "string",
+            "title": "Module"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "compute_type": {
+            "$ref": "#/components/schemas/BiGraphComputeType"
+          },
+          "inputs": {
+            "type": "string",
+            "title": "Inputs"
+          },
+          "outputs": {
+            "type": "string",
+            "title": "Outputs"
+          },
+          "database_id": {
+            "type": "integer",
+            "title": "Database Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "module",
+          "name",
+          "compute_type",
+          "inputs",
+          "outputs",
+          "database_id"
+        ],
+        "title": "BiGraphStep"
+      },
+      "Body_run-copasi": {
+        "properties": {
+          "sbml": {
+            "type": "string",
+            "title": "Sbml",
+            "format": "binary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sbml"
+        ],
+        "title": "Body_run-copasi"
+      },
+      "Body_run-simulation": {
+        "properties": {
+          "uploaded_file": {
+            "type": "string",
+            "title": "Uploaded File",
+            "format": "binary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "uploaded_file"
+        ],
+        "title": "Body_run-simulation"
+      },
+      "Body_run-tellurium": {
+        "properties": {
+          "sbml": {
+            "type": "string",
+            "title": "Sbml",
+            "format": "binary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sbml"
+        ],
+        "title": "Body_run-tellurium"
+      },
+      "ContainerizationEngine": {
+        "type": "integer",
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "title": "ContainerizationEngine"
+      },
+      "ContainerizationFileRepr": {
+        "properties": {
+          "representation": {
+            "type": "string",
+            "title": "Representation"
+          },
+          "containerization_engine": {
+            "$ref": "#/components/schemas/ContainerizationEngine"
+          }
+        },
+        "type": "object",
+        "required": [
+          "representation",
+          "containerization_engine"
+        ],
+        "title": "ContainerizationFileRepr"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HpcRun": {
+        "properties": {
+          "database_id": {
+            "type": "integer",
+            "title": "Database Id"
+          },
+          "slurmjobid": {
+            "type": "integer",
+            "title": "Slurmjobid"
+          },
+          "correlation_id": {
+            "type": "string",
+            "title": "Correlation Id"
+          },
+          "job_type": {
+            "$ref": "#/components/schemas/JobType"
+          },
+          "sim_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sim Id"
+          },
+          "simulator_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simulator Id"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Time"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "database_id",
+          "slurmjobid",
+          "correlation_id",
+          "job_type",
+          "sim_id",
+          "simulator_id"
+        ],
+        "title": "HpcRun"
+      },
+      "JobStatus": {
+        "type": "string",
+        "enum": [
+          "waiting",
+          "queued",
+          "running",
+          "completed",
+          "failed",
+          "pending",
+          "cancelled",
+          "out_of_memory",
+          "suspended",
+          "timeout",
+          "unknown"
+        ],
+        "title": "JobStatus"
+      },
+      "JobType": {
+        "type": "string",
+        "enum": [
+          "simulation",
+          "build_container"
+        ],
+        "title": "JobType"
+      },
+      "PackageType": {
+        "type": "string",
+        "enum": [
+          "pypi",
+          "conda"
+        ],
+        "title": "PackageType"
+      },
+      "RegisteredPackage": {
+        "properties": {
+          "database_id": {
+            "type": "integer",
+            "title": "Database Id"
+          },
+          "package_type": {
+            "$ref": "#/components/schemas/PackageType"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "processes": {
+            "items": {
+              "$ref": "#/components/schemas/BiGraphProcess"
+            },
+            "type": "array",
+            "title": "Processes"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/BiGraphStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "database_id",
+          "package_type",
+          "name",
+          "processes",
+          "steps"
+        ],
+        "title": "RegisteredPackage"
+      },
+      "RegisteredSimulators": {
+        "properties": {
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/SimulatorVersion"
+            },
+            "type": "array",
+            "title": "Versions"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "versions"
+        ],
+        "title": "RegisteredSimulators"
+      },
+      "SimulationExperiment": {
+        "properties": {
+          "simulation_database_id": {
+            "type": "integer",
+            "title": "Simulation Database Id"
+          },
+          "simulator_database_id": {
+            "type": "integer",
+            "title": "Simulator Database Id"
+          },
+          "last_updated": {
+            "type": "string",
+            "title": "Last Updated"
+          },
+          "metadata": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Metadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "simulation_database_id",
+          "simulator_database_id"
+        ],
+        "title": "SimulationExperiment"
+      },
+      "SimulatorVersion": {
+        "properties": {
+          "container_def": {
+            "$ref": "#/components/schemas/ContainerizationFileRepr"
+          },
+          "container_def_hash": {
+            "type": "string",
+            "title": "Container Def Hash"
+          },
+          "packages": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/RegisteredPackage"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Packages"
+          },
+          "database_id": {
+            "type": "integer",
+            "title": "Database Id"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "container_def",
+          "container_def_hash",
+          "packages",
+          "database_id"
+        ],
+        "title": "SimulatorVersion"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

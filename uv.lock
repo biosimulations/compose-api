@@ -625,7 +625,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "compose-api-client", editable = "clients/python" },
+    { name = "compose-api-client", extras = ["cli"], editable = "clients/python" },
     { name = "deptry", specifier = ">=0.25.1,<0.26" },
     { name = "mypy", specifier = ">=2.3.1,<3" },
     { name = "openapi-python-client", specifier = ">=0.29.1,<0.30" },
@@ -661,7 +661,10 @@ requires-dist = [
     { name = "attrs", specifier = ">=25.4.0" },
     { name = "httpx", specifier = ">=0.28.1,<0.29" },
     { name = "python-dateutil", specifier = ">=2.9.0.post0" },
+    { name = "rich", marker = "extra == 'cli'", specifier = ">=13.7" },
+    { name = "typer", marker = "extra == 'cli'", specifier = ">=0.16.1" },
 ]
+provides-extras = ["cli"]
 
 [[package]]
 name = "contourpy"

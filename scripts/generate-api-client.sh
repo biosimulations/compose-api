@@ -31,9 +31,13 @@ generate() {
   uv run --project "${ROOT_DIR}" ruff format --config "${ROOT_DIR}/pyproject.toml" --quiet "${work}/client"
   rm -rf "${work}/client/.ruff_cache"
   touch "${work}/client/py.typed"  # the generated code is typed (PEP 561), so type checkers use it
-  # Hand-written code inside the package is carried over, not deleted with the old generated tree: ext/ (the
-  # application layer and CLI, docs/plan-cli.md) and utils/ (the 0.2.0 helper pbest uses).
-  for keep in ext utils; do
+  # The spec the client was generated from, shipped with it as JSON: `compose-api openapi --diff` compares it with
+  # the live service. Written as the pre-commit pretty-format-json hook would (indent 2, key order kept).
+  uv run --project "${ROOT_DIR}" python -c 'import json, sys, yaml; json.dump(yaml.safe_load(open(sys.argv[1])), open(sys.argv[2], "w"), indent=2); open(sys.argv[2], "a").write("\n")' \
+    "${SPEC}" "${work}/client/openapi.json"
+  # Hand-written code inside the package is carried over, not deleted with the old generated tree: ext/ and cli/
+  # (the application layer and the command line, docs/plan-cli.md) and utils/ (the 0.2.0 helper pbest uses).
+  for keep in ext cli utils; do
     if [ -d "${out}/${keep}" ]; then cp -R "${out}/${keep}" "${work}/client/${keep}"; fi
   done
   rm -rf "${out}"

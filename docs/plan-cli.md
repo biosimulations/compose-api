@@ -1,15 +1,15 @@
 # CLI: a `compose-api` command line on a generated httpx client
 
-**Status (2026-10-07): planned and approved by Jim; A merged (#205); B1 (#206) and B2 in review.** Three PRs, each merged on green with a merge
+**Status (2026-10-07): A and B1 merged (#205, #206); B2 (#207) and C (with D's docs) in review; the 0.7.0 release is what remains.** Three PRs, each merged on green with a merge
 commit. Publishing to PyPI and deploying are separate goes from Jim.
 
 | Step | What | State |
 |---|---|---|
 | A | Generation pipeline: deterministic, in-repo, drift-checked in CI; regenerate the stale client | **done** #205 |
-| B1 | `compose-api-client` as a workspace package at `clients/python`, brought in with its history (C6) | **#206** |
-| B2 | The hand-written application layer, `compose_api_client.ext` | **in review** |
-| C | The `compose-api` CLI on `ext` and the generated client; a spec-coverage test | — |
-| D | Docs (`docs/cli.md`), `CLAUDE.md`, strategy.md 2b; release with 0.7.0 | — |
+| B1 | `compose-api-client` as a workspace package at `clients/python`, brought in with its history (C6) | **done** #206 |
+| B2 | The hand-written application layer, `compose_api_client.ext` | **#207** |
+| C | The `compose-api` CLI on `ext` and the generated client; a spec-coverage test | **in review** |
+| D | Docs (`docs/cli.md`) — done with C; `CLAUDE.md`, strategy.md 2b; release with 0.7.0 | docs in C; release pending |
 
 ## Context
 
@@ -251,6 +251,31 @@ generalise viva-pde-particle's `compose_client.EnsembleRun` once this ships on P
 - **Registry:** commands declare their operationIds with a decorator, `@claims("run-simulation")`. The coverage test
   reads that registry.
 
+*As built (C, 2026-10-07)*, with three deviations from the design above:
+- **`--output` is `auto|table|json`, with no YAML.** YAML would add a PyYAML dependency for little gain.
+- **Exit code 5** means a `--wait-timeout` passed. The plan had folded that into 1, but scripts want to tell "the job
+  failed" from "I gave up waiting".
+- **The CLI tests run over `httpx.MockTransport`, not the in-process app.** The CLI is synchronous, and the app is
+  reachable in process only through an async transport, with fixtures bound to pytest's event loop. The CLI's own
+  concerns (output, exit codes, files, error rendering) are tested over the mock. What the service actually answers is
+  pinned one layer down, in `tests/client/test_ext_in_process.py`.
+
+Other details:
+- **Layout:**
+  - The module is `compose_api_client/cli/commands.py` (named so it doesn't shadow the exported `app`).
+  - `results` takes `--out FILE|DIR` or `--extract DIR`.
+  - The spec ships inside the package as `openapi.json`, generated with the client. It is what `openapi` prints and
+    what `--diff` compares.
+  - The client package's ruff target is Python 3.11, extending the root config.
+- **Tested on production 0.6.0** (2026-10-07):
+  - `health`, `version`, `simulators list`, `status` (single and batch), `results --extract` and `openapi --diff`
+    (no skew) all behave as documented.
+  - `run experiment.omex --simulator viva-pde-particle --wait --download out/ --extract` ran simulation 4195 (SLURM
+    job 4137519) to `completed` in 31 s and unpacked its `.pber`.
+  - The wheel with `[cli]` installs and runs on Python 3.11 without FastAPI.
+- **Docs:** `docs/cli.md` is a guide followed by a command reference. `make cli-docs` generates the reference from
+  the typer app; `make check-clients` fails when it is stale.
+
 ### D. Tests, docs, release
 
 - **Coverage test.** It fails CI on drift in either direction:
@@ -310,4 +335,8 @@ generalise viva-pde-particle's `compose_client.EnsembleRun` once this ships on P
 2. **The command name:** `compose-api` (proposed: names the service), or `compose`, which is shorter but generic and
    collides with `docker compose` muscle memory?
 3. **When the 0.2.x external repository stops being written:** at strategy phase 5 (proposed), or as soon as pbest pins
-   the in-repo 0.3?
+   a release from this repository (0.7.0 or later; the client now versions with the service)?
+4. **Prebuilt simulators can't be discovered through the API.** *(Found building C.)* `simulators list` returns
+   container definitions, with no names. The names `run --simulator` accepts (`PREBUILT_SIMULATORS`, for example
+   `viva-pde-particle`) exist only in the deployment config. Proposed: a `GET /core/simulator/prebuilt`
+   (name → image digest), and a `compose-api simulators prebuilt` command for it.

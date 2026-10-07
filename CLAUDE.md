@@ -40,6 +40,12 @@ make check-clients    # fails if either is stale; part of `make check`, so CI en
 LIB_DIR=<compose-api-client checkout>/compose_api_client make clients   # also writes the external 0.2.x repo
 ```
 
+Command line: `uv run compose-api --help` (the `compose-api-client[cli]` extra; guide and reference in
+[`docs/cli.md`](docs/cli.md), `make cli-docs` regenerates the reference). Every API operation must be claimed by a
+command (`@claims` in `compose_api_client/cli/commands.py`); `tests/client/test_cli.py` fails otherwise, so a new
+endpoint needs a command in the same PR. Hand-written client code lives in `compose_api_client/ext/` and `cli/`,
+which `make clients` preserves.
+
 Generation is deterministic (`scripts/generate-api-client.sh`): the generator's post-hooks are off and the script
 formats with the locked ruff and this repo's settings, so the committed client is byte-for-byte what `make clients`
 produces. Never hand-edit the client; the plan for its package, the `ext` layer and the CLI is
