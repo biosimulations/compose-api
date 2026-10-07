@@ -1,6 +1,6 @@
 # Observability: run traces from process-bigraph events, and datasets a run advertises
 
-**Status (2026-10-07): step 1 merged (#213), step 2 in review; the rest planned.** One PR per step, each merged on green with a merge commit.
+**Status (2026-10-07): steps 1 and 2 merged (#213, #214), step 3 in review; the rest planned.** One PR per step, each merged on green with a merge commit.
 Deploying is a separate go from Jim.
 
 | Step | What | State |
@@ -8,8 +8,8 @@ Deploying is a separate go from Jim.
 | 0 | This document | **done** #212 |
 | 1 | Trace identity before submission (O1); owner and visibility (O7); the authorization seam on every simulation read (O8); migrations that run at startup | **done** #213 |
 | 1b | Retire NATS and `worker_event` (the subscriber, settings, the k8s deployment and its public NodePort) | planned |
-| 2 | Events: job-script activation (O2), API and job-script events (O3), the file-tailing ingester (O4), events and trace routes, `ext`, CLI | **in review** |
-| 3 | Datasets: job-script manifest and `artifact.written` registrar (O5), store-relative content (O6), dataset routes, `ext`, CLI | planned |
+| 2 | Events: job-script activation (O2), API and job-script events (O3), the file-tailing ingester (O4), events and trace routes, `ext`, CLI | **done** #214 |
+| 3 | Datasets: job-script manifest and `artifact.written` registrar (O5), store-relative content (O6), dataset routes, `ext`, CLI | **in review** |
 | 4 | Producer side in viva-pde-particle: `artifact.written` per result file, inside a `task` span | planned |
 | 5 | Auth hookup after #192: stamp the owner at submit, a real `can_read` policy, visibility | blocked on #192 |
 
@@ -176,6 +176,21 @@ moves from `poetry run` to `uv run`.
   is gone.
 - The `dataset` table and routes; content streaming behind the containment check; `ext`; CLI; docs.
 
+*(Decided building step 3.)*
+- **Q3, retention: keep `output/` and `results.zip` both** (Jim, 2026-10-07).
+- **Q4, checksums: always.**
+- **The manifest is events, not a separate `artifacts.jsonl`.** The job script emits one `artifact.written` per file
+  (component `compose_api.job`) into `events/job.jsonl`, so the manifest and a simulator's own announcements take one
+  path through the ingester. "Origin" is the component: `compose_api.job` is the manifest, anything else is an event.
+- **`results.zip` is a dataset too** (kind `archive`), and a failed run's partial outputs are announced as well.
+- **A dataset is registered before the ingester saves its cursor**, so a failed registration is retried on the next
+  pass.
+- **Routes:** `GET /datasets` (filters `simulation_id`, `kind`, `q`, `available`; `limit`/`offset`, with `total` and
+  `next_offset`), `GET /datasets/{id}` and `GET /datasets/{id}/content` (Starlette's `FileResponse`, so `Range` works).
+  A file that is gone answers 404 and marks the row `available = false`.
+- **Listings apply the policy in SQL** (`authorization.readable_clause`), so a page never holds rows the caller can't
+  see and `total` counts only readable ones.
+
 ### Step 4: a producer that emits (viva-pde-particle)
 The ensemble entry point (`viva_pde_particle.benchmarks.fokker_planck:trial_rho`, run through
 `compose_client.EnsembleRun`) emits `artifact.written` for each result file and runs inside a `task` span. This proves
@@ -230,9 +245,8 @@ Stamp `owner_sub` from the principal at `POST /simulation/run`; `can_read` becom
    ones?
 2. **Several processes on one file sink.** Should process-bigraph's `FileSink` accept a `{source}` placeholder in its
    path (a small upstream PR), or do we accept single-process images for now?
-3. **Retention:** keep both `output/` and `results.zip`, build the zip on demand from `output/`, or delete the zip
-   after N days?
-4. **`sha256` in the manifest:** always, or skipped above a size threshold to save time on cfs15?
+3. ~~**Retention**~~ *Decided 2026-10-07: keep both `output/` and `results.zip`.* Revisit if cfs15 fills.
+4. ~~**`sha256` in the manifest**~~ *Decided 2026-10-07: always.*
 5. **The SLURM `.out` log:** expose it as a dataset (`kind = log`) or a `/logs` route? Useful for failures, but it can
    contain host paths.
 6. **Port or depend on viva-core?** Proposed: port the pure functions now, and depend on viva-core once it is

@@ -446,6 +446,145 @@ paths:
                   $ref: '#/components/schemas/BiGraphStep'
                 type: array
                 title: Response Get-Steps-List
+  /datasets:
+    get:
+      tags:
+      - Datasets
+      summary: List the datasets runs advertised, newest simulations first
+      operationId: list-datasets
+      parameters:
+      - name: simulation_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Only this simulation's datasets
+          title: Simulation Id
+        description: Only this simulation's datasets
+      - name: kind
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only this kind, e.g. results, table, figure, archive
+          title: Kind
+        description: Only this kind, e.g. results, table, figure, archive
+      - name: q
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only datasets whose path or name contains this
+          title: Q
+        description: Only datasets whose path or name contains this
+      - name: available
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          description: 'Only files that still exist (false: only missing)'
+          default: true
+          title: Available
+        description: 'Only files that still exist (false: only missing)'
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          default: 100
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetPage'
+        '404':
+          description: The simulation does not exist, or the caller may not read it
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /datasets/{dataset_id}:
+    get:
+      tags:
+      - Datasets
+      summary: Describe one dataset
+      operationId: get-dataset
+      parameters:
+      - name: dataset_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Dataset Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dataset'
+        '404':
+          description: The dataset does not exist, or the caller may not read it
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /datasets/{dataset_id}/content:
+    get:
+      tags:
+      - Datasets
+      summary: Read a dataset's file (supports HTTP Range requests)
+      operationId: get-dataset-content
+      parameters:
+      - name: dataset_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Dataset Id
+      responses:
+        '200':
+          description: The file
+          content:
+            application/octet-stream:
+              schema:
+                format: binary
+        '404':
+          description: The dataset does not exist, the caller may not read it, or
+            its file is gone
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /health:
     get:
       tags:
@@ -590,6 +729,94 @@ components:
       - representation
       - containerization_engine
       title: ContainerizationFileRepr
+    Dataset:
+      properties:
+        id:
+          type: string
+          title: Id
+        simulation_id:
+          type: integer
+          title: Simulation Id
+        path:
+          type: string
+          title: Path
+        kind:
+          type: string
+          title: Kind
+        media_type:
+          type: string
+          title: Media Type
+        display_name:
+          type: string
+          title: Display Name
+        size_bytes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Size Bytes
+        sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sha256
+        attributes:
+          additionalProperties: true
+          type: object
+          title: Attributes
+        origin:
+          type: string
+          title: Origin
+        span_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Span Id
+        available:
+          type: boolean
+          title: Available
+          default: true
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+        updated_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updated At
+      type: object
+      required:
+      - id
+      - simulation_id
+      - path
+      - kind
+      - media_type
+      - display_name
+      - origin
+      title: Dataset
+      description: A file a run produced, readable by anyone who may read its simulation
+        (O7).
+    DatasetPage:
+      properties:
+        datasets:
+          items:
+            $ref: '#/components/schemas/Dataset'
+          type: array
+          title: Datasets
+        total:
+          type: integer
+          title: Total
+        next_offset:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Next Offset
+      type: object
+      required:
+      - datasets
+      - total
+      title: DatasetPage
     HTTPValidationError:
       properties:
         detail:

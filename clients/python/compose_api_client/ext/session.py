@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import io
 import time
+import uuid
 import zipfile
 from collections.abc import Awaitable, Callable, Iterator, Sequence
 from pathlib import Path
@@ -29,6 +30,7 @@ from compose_api_client import AuthenticatedClient, Client
 from compose_api_client.api.biosim_api import check_health_health_get, get_version_version_get
 from compose_api_client.api.compute import get_processes_list, get_simulator_list, get_steps_list
 from compose_api_client.api.curated import run_copasi, run_tellurium
+from compose_api_client.api.datasets import get_dataset, get_dataset_content, list_datasets
 from compose_api_client.api.results import (
     get_simulation_events,
     get_simulation_results_file,
@@ -46,6 +48,8 @@ from compose_api_client.models import (
     BodyRunCopasi,
     BodyRunSimulation,
     BodyRunTellurium,
+    Dataset,
+    DatasetPage,
     HpcRun,
     RegisteredSimulators,
     RunEvent,
@@ -107,10 +111,16 @@ def _state(response: Response[Any]) -> JobState:
 
 
 def _save(content: bytes, sim_id: int, dest: str | Path) -> Path:
+    return _save_named(content, f"simulation_{sim_id}_results.zip", dest)
+
+
+def _save_named(content: bytes, name: str, dest: str | Path) -> Path:
+    """Write ``content`` to ``dest``, or to ``dest/name`` when ``dest`` is a directory (existing, or given with a
+    trailing slash)."""
     path = Path(dest)
     if path.is_dir() or str(dest).endswith(("/", "\\")):
         path.mkdir(parents=True, exist_ok=True)
-        path = path / f"simulation_{sim_id}_results.zip"
+        path = path / Path(name).name
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(content)
     return path
@@ -299,6 +309,38 @@ class ComposeSession:
         r = get_simulation_trace_chrome.sync_detailed(client=self.client, simulation_id=simulation_id)
         return dict(_parsed(r).to_dict())
 
+    # -- datasets ---------------------------------------------------------------------------------------------------
+
+    def datasets(
+        self,
+        *,
+        simulation_id: int | None = None,
+        kind: str | None = None,
+        q: str | None = None,
+        available: bool | None = True,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> DatasetPage:
+        """The files runs advertised: one simulation's, or all those the caller may read. ``page.next_offset`` pages."""
+        r = list_datasets.sync_detailed(
+            client=self.client, **_dataset_filters(simulation_id, kind, q, available, limit, offset)
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    def dataset(self, dataset_id: str | uuid.UUID) -> Dataset:
+        return _parsed(get_dataset.sync_detailed(uuid.UUID(str(dataset_id)), client=self.client))  # type: ignore[no-any-return]
+
+    def dataset_content(self, dataset_id: str | uuid.UUID) -> bytes:
+        r = get_dataset_content.sync_detailed(uuid.UUID(str(dataset_id)), client=self.client)
+        raise_for(r)
+        return r.content
+
+    def download_dataset(self, dataset_id: str | uuid.UUID, dest: str | Path) -> Path:
+        """Save a dataset's file to ``dest``: a file, or a directory (existing, or written with a trailing slash) for
+        the file's own name. The path written."""
+        info = self.dataset(dataset_id)
+        return _save_named(self.dataset_content(dataset_id), Path(info.path).name, dest)
+
     # -- results ----------------------------------------------------------------------------------------------------
 
     def results(self, simulation_id: int) -> bytes:
@@ -472,6 +514,30 @@ class AsyncComposeSession:
         r = await get_simulation_trace_chrome.asyncio_detailed(client=self.client, simulation_id=simulation_id)
         return dict(_parsed(r).to_dict())
 
+    async def datasets(
+        self,
+        *,
+        simulation_id: int | None = None,
+        kind: str | None = None,
+        q: str | None = None,
+        available: bool | None = True,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> DatasetPage:
+        r = await list_datasets.asyncio_detailed(
+            client=self.client, **_dataset_filters(simulation_id, kind, q, available, limit, offset)
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    async def dataset(self, dataset_id: str | uuid.UUID) -> Dataset:
+        r = await get_dataset.asyncio_detailed(uuid.UUID(str(dataset_id)), client=self.client)
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    async def dataset_content(self, dataset_id: str | uuid.UUID) -> bytes:
+        r = await get_dataset_content.asyncio_detailed(uuid.UUID(str(dataset_id)), client=self.client)
+        raise_for(r)
+        return r.content
+
     async def results(self, simulation_id: int) -> bytes:
         r = await get_simulation_results_file.asyncio_detailed(client=self.client, simulation_id=simulation_id)
         raise_for(r)
@@ -501,6 +567,19 @@ class AsyncComposeSession:
             return sim, state, []
         sid = sim.simulation_database_id
         return sim, state, await self.extract(sid, dest) if extract else [await self.download(sid, dest)]
+
+
+def _dataset_filters(
+    simulation_id: int | None, kind: str | None, q: str | None, available: bool | None, limit: int, offset: int
+) -> dict[str, Any]:
+    return {
+        "simulation_id": simulation_id if simulation_id is not None else UNSET,
+        "kind": kind if kind is not None else UNSET,
+        "q": q if q is not None else UNSET,
+        "available": available,
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 def _event_filters(

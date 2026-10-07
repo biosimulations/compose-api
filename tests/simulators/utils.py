@@ -38,8 +38,8 @@ async def check_experiment_run(
 
 
 async def _check_run_events(session: AsyncComposeSession, simulation_id: int) -> None:
-    """The run has a trace (docs/plan-observability.md O3): the API's dispatch event, and the job script's own
-    events, ingested from the experiment directory the way the service's polling loop does."""
+    """The run has a trace and datasets (docs/plan-observability.md O3, O5): the API's dispatch event, the job
+    script's own events and its manifest, ingested from the experiment directory as the service's polling loop does."""
     namespace = Namespace(get_settings().namespace)
     ingester = EventIngester(get_required_database_service(), lambda e: get_internal_experiment_dir(e, namespace))
     await ingester.ingest_once()
@@ -49,6 +49,10 @@ async def _check_run_events(session: AsyncComposeSession, simulation_id: int) ->
     tree = await session.trace(simulation_id)
     assert [root.span.name for root in tree.roots] == ["job"]
     assert tree.roots[0].span.status == "ok"
+    datasets = (await session.datasets(simulation_id=simulation_id)).datasets
+    paths = {d.path for d in datasets}
+    assert "results.zip" in paths and any(p.startswith("output/") for p in paths), paths
+    assert all(d.sha256 and d.size_bytes is not None for d in datasets)
 
 
 def assert_test_sim_results(

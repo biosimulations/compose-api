@@ -3,6 +3,7 @@
 trace context to the simulator through the env file, and records a failure with its exit code
 (docs/plan-observability.md O2, O3)."""
 
+import hashlib
 import os
 import shutil
 import stat
@@ -77,9 +78,23 @@ def test_a_successful_job_records_its_span_and_passes_the_trace_on(tmp_path: Pat
     result, experiment = _run(tmp_path, 0)
     assert result.returncode == 0, result.stderr
     job = _read(experiment / "events" / "job.jsonl")
-    assert [e.event for e in job] == ["span.start", "job.start", "job.end", "span.end"]
+    assert [e.event for e in job] == [
+        "span.start",
+        "job.start",
+        "artifact.written",
+        "artifact.written",
+        "job.end",
+        "span.end",
+    ]
     assert all(e.span_id == job_span_id(CORRELATION) and e.source == "job-4242" for e in job)
-    assert job[2].payload == {"exit_code": 0, "wall_s": job[2].payload["wall_s"]}
+    assert [e.seq for e in job] == list(range(1, 7))  # the manifest loop must not run in a subshell
+    artifacts = {e.payload["uri"]: e.payload for e in job if e.event == "artifact.written"}
+    assert set(artifacts) == {"output/out.txt", "results.zip"}
+    out = experiment / "output" / "out.txt"
+    assert out.exists()  # output/ is kept: its files are datasets
+    assert artifacts["output/out.txt"]["bytes"] == out.stat().st_size
+    assert artifacts["output/out.txt"]["sha256"] == hashlib.sha256(out.read_bytes()).hexdigest()
+    assert job[4].payload == {"exit_code": 0, "wall_s": job[4].payload["wall_s"]}
     spans: dict[str, RunSpan] = {}
     apply_span_events(spans, job)
     assert spans[job_span_id(CORRELATION)].status == "ok"
@@ -94,8 +109,10 @@ def test_a_failed_job_records_its_exit_code(tmp_path: Path) -> None:
     result, experiment = _run(tmp_path, 3)
     assert result.returncode == 3
     job = _read(experiment / "events" / "job.jsonl")
-    assert [e.event for e in job] == ["span.start", "job.start", "job.end", "span.end"]
-    assert job[2].level == "error" and job[2].payload["exit_code"] == 3
+    # What the run wrote before failing is still announced; there is no archive.
+    assert [e.event for e in job] == ["span.start", "job.start", "artifact.written", "job.end", "span.end"]
+    assert job[2].payload["uri"] == "output/out.txt"
+    assert job[3].level == "error" and job[3].payload["exit_code"] == 3
     spans: dict[str, RunSpan] = {}
     apply_span_events(spans, job)
     span = spans[job_span_id(CORRELATION)]
