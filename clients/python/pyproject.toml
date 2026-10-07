@@ -12,6 +12,15 @@ dependencies = [
     "python-dateutil>=2.9.0.post0",
 ]
 
+[project.optional-dependencies]
+cli = [
+    "typer>=0.16.1",
+    "rich>=13.7",
+]
+
+[project.scripts]
+compose-api = "compose_api_client.cli:main"
+
 [project.urls]
 Repository = "https://github.com/biosimulations/compose-api"
 Documentation = "https://github.com/biosimulations/compose-api/blob/main/docs/plan-cli.md"
@@ -22,3 +31,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["compose_api_client"]
+
+[tool.ruff]
+# The repository's settings, but this package supports Python 3.11 (the service needs 3.13).
+extend = "../../pyproject.toml"
+target-version = "py311"

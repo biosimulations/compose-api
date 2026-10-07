@@ -60,7 +60,7 @@ dev = [
     "openapi-python-client>=0.29.1,<0.30",
     "types-python-dateutil>=2.9.0.20250708,<3",
     # The client is a workspace package (clients/python): the service never calls it, its tests do.
-    "compose-api-client",
+    "compose-api-client[cli]",
 ]
 docs = [
     "mkdocs>=1.4.2,<2",
@@ -102,7 +102,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.mypy]
-files = ["compose_api", "tests", "clients/python/compose_api_client/ext"]
+files = ["compose_api", "tests", "clients/python/compose_api_client/ext", "clients/python/compose_api_client/cli"]
 strict = true
 # The generated client (and the 0.2.0 helper it carries); hand-written client code (compose_api_client.ext) is checked.
 exclude = ['^clients/python/compose_api_client/(api|models|utils)/', '^clients/python/compose_api_client/(__init__|client|errors|types)\.py$']
