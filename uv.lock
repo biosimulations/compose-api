@@ -646,6 +646,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "attrs", specifier = ">=25.4.0" },
+    { name = "click", marker = "extra == 'cli'", specifier = ">=8.1" },
     { name = "httpx", specifier = ">=0.28.1,<0.29" },
     { name = "python-dateutil", specifier = ">=2.9.0.post0" },
     { name = "rich", marker = "extra == 'cli'", specifier = ">=13.7" },

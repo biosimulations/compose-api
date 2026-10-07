@@ -9,9 +9,11 @@ Exit codes: 0 success; 1 the job ended other than completed; 2 usage; 3 API erro
 
 from __future__ import annotations
 
+import dataclasses
 import datetime
 import functools
 import importlib.resources
+import inspect
 import json
 import time
 from collections.abc import Callable
@@ -19,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any, TypeVar
 
+import click
 import httpx
 import typer
 
@@ -110,7 +113,7 @@ def root(
         logging.getLogger("httpx").setLevel(logging.INFO)
 
 
-def _settings(ctx: typer.Context) -> Settings:
+def _settings(ctx: click.Context) -> Settings:
     obj = ctx.find_root().obj
     return obj if isinstance(obj, Settings) else Settings()
 
@@ -143,13 +146,28 @@ def _report(e: BaseException, settings: Settings) -> int | None:
     return None
 
 
+#: ``--json`` on every command: the same as ``--output json`` before the command name.
+JSON_OPTION = inspect.Parameter(
+    "json_output",
+    inspect.Parameter.KEYWORD_ONLY,
+    default=False,
+    annotation=Annotated[bool, typer.Option("--json", help="Print JSON (the same as --output json).")],
+)
+
+
 def handled(fn: F) -> F:
-    """Map exceptions to a message on stderr and the documented exit code (``--verbose`` re-raises)."""
+    """Map exceptions to a message on stderr and the documented exit code (``--verbose`` re-raises), and give the
+    command a ``--json`` option. Every command goes through here, so every command's help shows it."""
 
     @functools.wraps(fn)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
-        ctx = next((a for a in args if isinstance(a, typer.Context)), kwargs.get("ctx"))
-        settings = _settings(ctx) if isinstance(ctx, typer.Context) else Settings()
+    def wrapper(*args: Any, json_output: bool = False, **kwargs: Any) -> Any:
+        # Typer passes a plain click.Context, so test for that: a typer.Context check never matched, and the
+        # --verbose re-raise below never saw the real settings.
+        ctx = next((a for a in args if isinstance(a, click.Context)), kwargs.get("ctx"))
+        if json_output and isinstance(ctx, click.Context):
+            root = ctx.find_root()
+            root.obj = dataclasses.replace(_settings(ctx), output=Output.JSON)
+        settings = _settings(ctx) if isinstance(ctx, click.Context) else Settings()
         try:
             return fn(*args, **kwargs)
         except typer.Exit:
@@ -160,6 +178,11 @@ def handled(fn: F) -> F:
                 raise
             raise typer.Exit(code) from None
 
+    signature = inspect.signature(fn, eval_str=True)
+    wrapper.__signature__ = signature.replace(  # type: ignore[attr-defined]
+        parameters=[*signature.parameters.values(), JSON_OPTION]
+    )
+    wrapper.__annotations__ = {**fn.__annotations__, "json_output": JSON_OPTION.annotation}
     return wrapper  # type: ignore[return-value]
 
 

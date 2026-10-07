@@ -437,3 +437,22 @@ def test_parse_since() -> None:
     assert abs((now - parse_since("6h")).total_seconds() - 6 * 3600) < 5
     assert parse_since("2026-10-07T12:00:00") == datetime.datetime(2026, 10, 7, 12, tzinfo=datetime.UTC)
     assert parse_since("2026-10-07T12:00:00Z").tzinfo is not None
+
+
+def test_every_command_takes_json(service: Callable[..., FakeService]) -> None:
+    """--json, given after the command, overrides --output table: added to every command by ``handled``."""
+    from compose_api_client.cli.commands import app as cli_app
+    from typer.main import get_command
+
+    group = get_command(cli_app)
+    commands = [
+        (name, sub)
+        for name, cmd in group.commands.items()  # type: ignore[attr-defined]
+        for name, sub in ([(name, cmd)] if not hasattr(cmd, "commands") else cmd.commands.items())
+    ]
+    assert commands and all(any(p.name == "json_output" for p in sub.params) for _, sub in commands)
+
+    service()
+    r = runner.invoke(app, ["--output", "table", "simulations", "show", "4334", "--json"])
+    assert r.exit_code == 0 and json.loads(r.stdout)["event_count"] == 21
+    assert json.loads(runner.invoke(app, ["--output", "table", "version", "--json"]).stdout) == "0.6.0"
