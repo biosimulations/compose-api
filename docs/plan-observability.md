@@ -1,13 +1,13 @@
 # Observability: run traces from process-bigraph events, and datasets a run advertises
 
-**Status (2026-10-07): steps 0–4 merged; 1b (#216) in review; nothing deployed yet (prod runs 0.6.0); step 5 waits on #192.** One PR per step, each merged on green with a merge commit.
+**Status (2026-10-07): steps 0–4 and 1b merged (#212–#216, viva-pde-particle#49); nothing deployed yet (prod runs 0.6.0); step 5 waits on #192.** One PR per step, each merged on green with a merge commit.
 Deploying is a separate go from Jim.
 
 | Step | What | State |
 |---|---|---|
 | 0 | This document | **done** #212 |
 | 1 | Trace identity before submission (O1); owner and visibility (O7); the authorization seam on every simulation read (O8); migrations that run at startup | **done** #213 |
-| 1b | Retire NATS and `worker_event` (the subscriber, settings, the k8s deployment and its public NodePort) | **in review** #216 |
+| 1b | Retire NATS and `worker_event` (the subscriber, settings, the k8s deployment and its public NodePort) | **done** #216 |
 | 2 | Events: job-script activation (O2), API and job-script events (O3), the file-tailing ingester (O4), events and trace routes, `ext`, CLI | **done** #214 |
 | 3 | Datasets: job-script manifest and `artifact.written` registrar (O5), store-relative content (O6), dataset routes, `ext`, CLI | **done** #215 |
 | 4 | Producer side in viva-pde-particle: `artifact.written` per result file, inside a `task` span | **done** viva-pde-particle#49; live once its image is rebuilt and the prebuilt pin bumped |
