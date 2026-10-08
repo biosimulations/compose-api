@@ -271,22 +271,23 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
     @override
     @asynccontextmanager
     async def container_lock(self, container_def_hash: str, poll_s: float = 2.0) -> AsyncIterator[None]:
-        """A Postgres session-level advisory lock on the hash, held on one connection until exit.
+        """A Postgres transaction-level advisory lock on the hash, held by an open transaction until exit.
 
-        A fetch takes minutes, so waiters poll with ``pg_try_advisory_lock`` and give their connection
+        A fetch takes minutes, so waiters poll with ``pg_try_advisory_xact_lock`` and give their connection
         back between tries: only the holder keeps one, however many submissions are waiting.
+
+        Transaction-level, so there is no unlock step: the lock ends with the transaction, which the session
+        commits or rolls back on exit, cancellation included. If the API's connection is lost, Postgres ends
+        the session and the lock with it (``SESSION_KEEPALIVES`` sets how soon).
         """
         key = {"key": f"compose_api.container:{container_def_hash}"}
         while True:
-            async with self.async_session_maker() as session:
+            async with self.async_session_maker() as session, session.begin():
                 acquired = (
-                    await session.execute(text("SELECT pg_try_advisory_lock(hashtextextended(:key, 0))"), key)
+                    await session.execute(text("SELECT pg_try_advisory_xact_lock(hashtextextended(:key, 0))"), key)
                 ).scalar_one()
                 if acquired:
-                    try:
-                        yield
-                    finally:
-                        await session.execute(text("SELECT pg_advisory_unlock(hashtextextended(:key, 0))"), key)
+                    yield
                     return
             await asyncio.sleep(poll_s)
 
