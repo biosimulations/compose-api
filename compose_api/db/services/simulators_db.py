@@ -1,11 +1,14 @@
+import asyncio
 import datetime
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from typing import override
 
 from pbest.utils.input_types import ContainerizationFileRepr
-from sqlalchemy import ColumnElement, Result, Row, Select, Subquery, and_, func, select
+from sqlalchemy import ColumnElement, Result, Row, Select, Subquery, and_, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from compose_api.db.tables.hpc_tables import JobStatusDB, JobTypeDB, ORMHpcRun
@@ -51,6 +54,15 @@ class SimulatorDatabaseService(ABC):
 
     @abstractmethod
     async def get_downloaded_simulator(self, simulator_id: int) -> DownloadedContainerImage | None:
+        pass
+
+    @abstractmethod
+    def container_lock(self, container_def_hash: str, poll_s: float = 2.0) -> AbstractAsyncContextManager[None]:
+        """Held while a container is fetched or built, so one hash is fetched once.
+
+        Every fetch starts in the API, so the lock lives in the database rather than on the shared
+        filesystem (file locks are unreliable across NFS clients) and holds across API replicas.
+        """
         pass
 
     @abstractmethod
@@ -199,24 +211,37 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
             return new_orm_simulator.to_simulator_version()
 
     async def insert_downloaded_simulator(self, remote_container_image: RemoteContainerImage) -> SimulatorVersion:
-        async with self.async_session_maker() as session, session.begin():
-            new_simulator = ORMSimulator(
-                container_def=remote_container_image.container_def.representation,
-                container_def_hash=remote_container_image.container_def_hash,
-                container_engine=ContainerEngine[remote_container_image.container_def.containerization_engine.name],
-            )
-            session.add(new_simulator)
+        """Record that the container is on the cluster, against the simulator with its definition hash.
 
-            await session.flush()
+        The submission path looks the record up by that simulator's id. A record attached to a new row
+        is never found, and every submission then fetched the image again, over the file running jobs
+        were mounting. A new simulator row is made only when none has the hash.
+        """
+        async with self.async_session_maker() as session, session.begin():
+            stmt = (
+                select(ORMSimulator)
+                .where(ORMSimulator.container_def_hash == remote_container_image.container_def_hash)
+                .order_by(ORMSimulator.id)
+                .limit(1)
+            )
+            simulator: ORMSimulator | None = (await session.execute(stmt)).scalars().one_or_none()
+            if simulator is None:
+                simulator = ORMSimulator(
+                    container_def=remote_container_image.container_def.representation,
+                    container_def_hash=remote_container_image.container_def_hash,
+                    container_engine=ContainerEngine[remote_container_image.container_def.containerization_engine.name],
+                )
+                session.add(simulator)
+                await session.flush()
             session.add(
                 ORMDownloadedContainers(
-                    simulator_id=new_simulator.id,
+                    simulator_id=simulator.id,
                     source_url=remote_container_image.source_url,
                     image_name_and_tag=remote_container_image.image_name_and_tag,
                 )
             )
 
-            return new_simulator.to_simulator_version()
+            return simulator.to_simulator_version()
 
     async def get_downloaded_simulator(self, simulator_id: int) -> DownloadedContainerImage | None:
         async with self.async_session_maker() as session, session.begin():
@@ -244,9 +269,37 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
             return orm_simulator.to_simulator_version()
 
     @override
+    @asynccontextmanager
+    async def container_lock(self, container_def_hash: str, poll_s: float = 2.0) -> AsyncIterator[None]:
+        """A Postgres session-level advisory lock on the hash, held on one connection until exit.
+
+        A fetch takes minutes, so waiters poll with ``pg_try_advisory_lock`` and give their connection
+        back between tries: only the holder keeps one, however many submissions are waiting.
+        """
+        key = {"key": f"compose_api.container:{container_def_hash}"}
+        while True:
+            async with self.async_session_maker() as session:
+                acquired = (
+                    await session.execute(text("SELECT pg_try_advisory_lock(hashtextextended(:key, 0))"), key)
+                ).scalar_one()
+                if acquired:
+                    try:
+                        yield
+                    finally:
+                        await session.execute(text("SELECT pg_advisory_unlock(hashtextextended(:key, 0))"), key)
+                    return
+            await asyncio.sleep(poll_s)
+
+    @override
     async def get_simulator_by_def_hash(self, singularity_def_hash: str) -> SimulatorVersion | None:
         async with self.async_session_maker() as session, session.begin():
-            stmt1 = select(ORMSimulator).where(ORMSimulator.container_def_hash == singularity_def_hash).limit(1)
+            # the oldest row: earlier releases could add rows that repeat a hash
+            stmt1 = (
+                select(ORMSimulator)
+                .where(ORMSimulator.container_def_hash == singularity_def_hash)
+                .order_by(ORMSimulator.id)
+                .limit(1)
+            )
             result1: Result[tuple[ORMSimulator]] = await session.execute(stmt1)
             orm_simulator: ORMSimulator | None = result1.scalars().one_or_none()
             if orm_simulator is None:
