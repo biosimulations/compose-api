@@ -17,6 +17,7 @@ cli = [
     "typer>=0.16.1",
     "rich>=13.7",
     "click>=8.1",  # imported directly (click.Context), not only through typer
+    "platformdirs>=4.3.6,<5",  # user config dir; auth protocol deps arrive with the flow that imports them
 ]
 
 [project.scripts]

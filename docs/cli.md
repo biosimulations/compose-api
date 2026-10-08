@@ -26,6 +26,37 @@ dependencies. In this repository, `uv run compose-api ...` works with no install
 Global options go before the command: `compose-api -o json status 4192`. Results go to stdout; progress lines and
 errors go to stderr, so `compose-api -o json ... | jq` always sees clean JSON.
 
+## Auth profiles
+
+Sign-in uses a public profile: issuer, native client ID, audience, API base URL, scopes, callback ports, a login
+deadline, and the Auth0 network timeout. Nothing in the profile is a secret. `COMPOSE_API_TOKEN` / `--token` stays a
+one-shot bearer for that invocation; it is not written into a profile and is not refreshed.
+
+| Field | Option | Environment | Built-in (`production` / `local`) |
+|---|---|---|---|
+| Profile | `--profile` | `COMPOSE_API_PROFILE` | `production` |
+| API | `--url` | `COMPOSE_API_URL` | `https://compose.cam.uchc.edu` / `https://api.compose-api-local` |
+| Issuer | `--auth0-issuer` | `COMPOSE_API_AUTH0_ISSUER` | `https://dev-bu7yo7484tyxu6a1.us.auth0.com/` |
+| Client ID | `--auth0-client-id` | `COMPOSE_API_AUTH0_CLIENT_ID` | public native client for that environment |
+| Audience | `--auth0-audience` | `COMPOSE_API_AUTH0_AUDIENCE` | `https://api.compose.cam.uchc.edu` / `https://api.compose.local` |
+| Scopes | `--auth0-scopes` | `COMPOSE_API_AUTH0_SCOPES` | `openid profile email offline_access` |
+| Callback ports | `--callback-ports` | `COMPOSE_API_AUTH0_CALLBACK_PORTS` | `51111,52111,53111` |
+| Login deadline | `--login-deadline` | `COMPOSE_API_AUTH0_LOGIN_DEADLINE` | 180 s |
+| Auth0 timeout | `--auth-timeout` | `COMPOSE_API_AUTH0_NETWORK_TIMEOUT` | 10 s |
+
+Each field resolves from the flag, then the environment, then `[profiles.<name>]` in the user config file
+(`platformdirs` user config dir, `config.toml`), then the built-in profile. A named profile does not inherit another
+profile's client ID. The audience values are API identifiers, not network addresses.
+
+`--url` pointing at a different API does not keep the profile's issuer, client ID, or audience. Set those three as
+well, or pick the profile whose API already matches. Stored sessions bind to the normalized issuer, client ID,
+audience, API URL including any path prefix, and the sorted scope set. JWKS is always
+`{issuer}.well-known/jwks.json` from that configuration, never a token `jku` or `iss` claim.
+
+Anonymous commands do not open that file or a credential store. Browser login is not wired yet; `auth whoami` still
+sends `--token`. The callback ports match the compose-api Auth0 stack change; the live tenant still lists port
+8400 until that change is applied.
+
 ## A run, start to finish
 
 ```console
@@ -148,7 +179,15 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 * `--url TEXT`: Service base URL.  [env var: COMPOSE_API_URL; default: https://compose.cam.uchc.edu]
 * `--timeout FLOAT`: HTTP timeout, seconds.  [env var: COMPOSE_API_TIMEOUT; default: 300.0]
 * `-o, --output [auto|table|json]`: auto: table on a terminal, else json.  [env var: COMPOSE_API_OUTPUT; default: auto]
-* `--token TEXT`: Bearer token (when auth is on).  [env var: COMPOSE_API_TOKEN]
+* `--token TEXT`: Bearer token for this invocation. Not stored.  [env var: COMPOSE_API_TOKEN]
+* `--profile TEXT`: Auth profile: production, local, or a name in the config file.  [env var: COMPOSE_API_PROFILE]
+* `--auth0-issuer TEXT`: Auth0 issuer URL (https). Selects JWKS; not taken from a token.  [env var: COMPOSE_API_AUTH0_ISSUER]
+* `--auth0-client-id TEXT`: Public native client ID. Not a secret.  [env var: COMPOSE_API_AUTH0_CLIENT_ID]
+* `--auth0-audience TEXT`: API audience identifier, not the service URL.  [env var: COMPOSE_API_AUTH0_AUDIENCE]
+* `--auth0-scopes TEXT`: Space-separated OIDC scopes for sign-in.  [env var: COMPOSE_API_AUTH0_SCOPES]
+* `--callback-ports TEXT`: Comma-separated loopback callback ports registered with Auth0.  [env var: COMPOSE_API_AUTH0_CALLBACK_PORTS]
+* `--login-deadline TEXT`: Seconds to wait for a browser login.  [env var: COMPOSE_API_AUTH0_LOGIN_DEADLINE]
+* `--auth-timeout TEXT`: Seconds for Auth0 and JWKS requests.  [env var: COMPOSE_API_AUTH0_NETWORK_TIMEOUT]
 * `-v, --verbose`: Log HTTP requests; tracebacks on errors.
 * `-q, --quiet`: No progress lines.
 * `--install-completion`: Install completion for the current shell.

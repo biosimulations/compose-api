@@ -17,14 +17,16 @@ import inspect
 import json
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated, Any, TypeVar
 
 import click
 import httpx
 import typer
+from click.core import ParameterSource
 
+from compose_api_client.cli.config import AuthOverrides
 from compose_api_client.cli.render import Output, emit, err, event_line, lines, resolve, span_tree
 from compose_api_client.ext import (
     DEFAULT_URL,
@@ -63,6 +65,8 @@ class Settings:
     token: str | None = None
     verbose: bool = False
     quiet: bool = False
+    # Command-line auth flags only. Resolution (env, profile file, defaults) waits until sign-in.
+    auth_overrides: AuthOverrides = field(default_factory=AuthOverrides)
 
 
 def make_session(settings: Settings) -> ComposeSession:
@@ -102,17 +106,91 @@ def root(
         typer.Option("--output", "-o", envvar="COMPOSE_API_OUTPUT", help="auto: table on a terminal, else json."),
     ] = Output.AUTO,
     token: Annotated[
-        str | None, typer.Option(envvar="COMPOSE_API_TOKEN", help="Bearer token (when auth is on).")
+        str | None, typer.Option(envvar="COMPOSE_API_TOKEN", help="Bearer token for this invocation. Not stored.")
+    ] = None,
+    profile: Annotated[
+        str | None,
+        typer.Option(
+            envvar="COMPOSE_API_PROFILE",
+            help="Auth profile: production, local, or a name in the config file.",
+        ),
+    ] = None,
+    auth0_issuer: Annotated[
+        str | None,
+        typer.Option(
+            envvar="COMPOSE_API_AUTH0_ISSUER",
+            help="Auth0 issuer URL (https). Selects JWKS; not taken from a token.",
+        ),
+    ] = None,
+    auth0_client_id: Annotated[
+        str | None,
+        typer.Option(envvar="COMPOSE_API_AUTH0_CLIENT_ID", help="Public native client ID. Not a secret."),
+    ] = None,
+    auth0_audience: Annotated[
+        str | None,
+        typer.Option(envvar="COMPOSE_API_AUTH0_AUDIENCE", help="API audience identifier, not the service URL."),
+    ] = None,
+    auth0_scopes: Annotated[
+        str | None,
+        typer.Option(envvar="COMPOSE_API_AUTH0_SCOPES", help="Space-separated OIDC scopes for sign-in."),
+    ] = None,
+    callback_ports: Annotated[
+        str | None,
+        typer.Option(
+            envvar="COMPOSE_API_AUTH0_CALLBACK_PORTS",
+            help="Comma-separated loopback callback ports registered with Auth0.",
+        ),
+    ] = None,
+    login_deadline: Annotated[
+        str | None,
+        typer.Option(envvar="COMPOSE_API_AUTH0_LOGIN_DEADLINE", help="Seconds to wait for a browser login."),
+    ] = None,
+    auth_timeout: Annotated[
+        str | None,
+        typer.Option(envvar="COMPOSE_API_AUTH0_NETWORK_TIMEOUT", help="Seconds for Auth0 and JWKS requests."),
     ] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Log HTTP requests; tracebacks on errors.")] = False,
     quiet: Annotated[bool, typer.Option("--quiet", "-q", help="No progress lines.")] = False,
 ) -> None:
-    ctx.obj = Settings(url=url, timeout=timeout, output=output, token=token, verbose=verbose, quiet=quiet)
+    ctx.obj = Settings(
+        url=url,
+        timeout=timeout,
+        output=output,
+        token=token,
+        verbose=verbose,
+        quiet=quiet,
+        auth_overrides=_command_line_auth(ctx),
+    )
     if verbose:
         import logging
 
         logging.basicConfig(level=logging.INFO, format="%(message)s")
         logging.getLogger("httpx").setLevel(logging.INFO)
+
+
+def _command_line_auth(ctx: click.Context) -> AuthOverrides:
+    """Flags only. Typer has already merged environment variables; those stay out of this object."""
+
+    def taken(name: str) -> str | None:
+        if ctx.get_parameter_source(name) is not ParameterSource.COMMANDLINE:
+            return None
+        value = ctx.params.get(name)
+        if not isinstance(value, str):
+            return None
+        text = value.strip()
+        return text or None
+
+    return AuthOverrides(
+        profile=taken("profile"),
+        api_base_url=taken("url"),
+        issuer=taken("auth0_issuer"),
+        client_id=taken("auth0_client_id"),
+        audience=taken("auth0_audience"),
+        scopes=taken("auth0_scopes"),
+        callback_ports=taken("callback_ports"),
+        login_deadline=taken("login_deadline"),
+        network_timeout=taken("auth_timeout"),
+    )
 
 
 def _settings(ctx: click.Context) -> Settings:
