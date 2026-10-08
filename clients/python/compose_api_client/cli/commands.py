@@ -88,6 +88,8 @@ datasets_app = typer.Typer(help="The files runs produced.", no_args_is_help=True
 app.add_typer(datasets_app, name="datasets")
 simulations_app = typer.Typer(help="Find simulations and their ids.", no_args_is_help=True)
 app.add_typer(simulations_app, name="simulations")
+auth_app = typer.Typer(help="Who the service sees behind this machine's credentials.", no_args_is_help=True)
+app.add_typer(auth_app, name="auth")
 
 
 @app.callback()
@@ -649,6 +651,18 @@ def build_status(
     emit(settings.output, rec)
     if wait and not state.ok:
         raise typer.Exit(EXIT_JOB)
+
+
+# -- identity -------------------------------------------------------------------------------------------------------
+
+
+@auth_app.command("whoami")
+@claims("auth whoami", "get-auth-me")
+@handled
+def auth_whoami(ctx: typer.Context) -> None:
+    """Who the service sees: the identity behind --token (or COMPOSE_API_TOKEN)."""
+    with make_session(_settings(ctx)) as s:
+        emit(_settings(ctx).output, s.whoami())
 
 
 # -- the spec -----------------------------------------------------------------------------------------------------

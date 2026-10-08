@@ -529,6 +529,7 @@ async def test_every_router_rejects_bad_credentials(http_api_client: httpx.Async
     # from the router-level dependency, before any lookup that could answer 404 instead.
     for method, path in [
         ("GET", "/core/simulator/list"),
+        ("GET", "/auth/me"),
         ("GET", "/results/simulation/status?simulation_id=1"),
         ("GET", "/results/simulations/status/batch"),
         ("GET", "/results/simulation/results/file?simulation_id=1"),
@@ -785,8 +786,11 @@ def test_committed_spec_carries_the_optional_bearer() -> None:
     spec = yaml.safe_load(spec_path.read_text())
     assert spec["security"] == [{}, {"BearerAuth": []}]
     assert spec["components"]["securitySchemes"] == app.openapi()["components"]["securitySchemes"]
-    operations = [op for path in spec["paths"].values() for op in path.values()]
-    assert all("security" not in op for op in operations), "per-operation security retypes the generated client"
+    by_operation_id = {op["operationId"]: op for path in spec["paths"].values() for op in path.values()}
+    # The identity endpoint requires its bearer token; every other operation stays document-level optional.
+    assert by_operation_id["get-auth-me"]["security"] == [{"BearerAuth": []}]
+    rest = [op for op_id, op in by_operation_id.items() if op_id != "get-auth-me"]
+    assert all("security" not in op for op in rest), "per-operation security retypes the generated client"
 
 
 def test_openapi_documents_optional_bearer() -> None:
@@ -798,8 +802,11 @@ def test_openapi_documents_optional_bearer() -> None:
         "description": "Optional Auth0 access token for this API. Omit it to call anonymously.",
     }
     assert schema["security"] == [{}, {"BearerAuth": []}]
-    operations = [op for path in schema["paths"].values() for op in path.values()]
-    assert all("security" not in op for op in operations), "per-operation security retypes the generated client"
+    by_operation_id = {op["operationId"]: op for path in schema["paths"].values() for op in path.values()}
+    # The identity endpoint requires its bearer token; every other operation stays document-level optional.
+    assert by_operation_id["get-auth-me"]["security"] == [{"BearerAuth": []}]
+    rest = [op for op_id, op in by_operation_id.items() if op_id != "get-auth-me"]
+    assert all("security" not in op for op in rest), "per-operation security retypes the generated client"
 
 
 def test_pbest_operations_keep_their_paths() -> None:

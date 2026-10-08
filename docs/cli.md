@@ -173,6 +173,7 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 * `curated`: Run an SBML model with a curated simulator.
 * `datasets`: The files runs produced.
 * `simulations`: Find simulations and their ids.
+* `auth`: Who the service sees behind this machine's...
 
 ## `compose-api health`
 
@@ -678,6 +679,39 @@ $ compose-api simulations show [OPTIONS] SIMULATION_ID
 **Arguments**:
 
 * `SIMULATION_ID`: The simulation id.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+## `compose-api auth`
+
+Who the service sees behind this machine's credentials.
+
+**Usage**:
+
+```console
+$ compose-api auth [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `whoami`: Who the service sees: the identity behind...
+
+### `compose-api auth whoami`
+
+Who the service sees: the identity behind --token (or COMPOSE_API_TOKEN).
+
+**Usage**:
+
+```console
+$ compose-api auth whoami [OPTIONS]
+```
 
 **Options**:
 

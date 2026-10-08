@@ -105,6 +105,7 @@ class FakeService:
             return httpx.Response(200, content=self.results)
         routes: list[tuple[tuple[str, ...], Callable[[], httpx.Response]]] = [
             (("/results/simulation/events", "/results/simulation/trace"), lambda: self._observability(request)),
+            (("/auth/me",), lambda: self._identity(request)),
             (("/core/",), lambda: self._catalogue(path)),
             (("/datasets",), lambda: _datasets(path)),
             (("/simulations",), lambda: _simulations(path)),
@@ -113,6 +114,21 @@ class FakeService:
             if path.startswith(prefixes):
                 return respond()
         return httpx.Response(500, text=f"unexpected {path}")
+
+    def _identity(self, request: httpx.Request) -> httpx.Response:
+        if request.headers.get("authorization") != "Bearer test-token":
+            return httpx.Response(401, json={"detail": "Invalid authentication credentials"})
+        return httpx.Response(
+            200,
+            json={
+                "issuer": "https://compose-test.example.auth0.com/",
+                "subject": "auth0|test-user",
+                "audience": ["https://compose-api.test"],
+                "roles": ["user"],
+                "scopes": ["openid", "profile"],
+                "permissions": [],
+            },
+        )
 
     def _catalogue(self, path: str) -> httpx.Response:
         if path == "/core/simulator/list":
@@ -238,6 +254,19 @@ def service(monkeypatch: pytest.MonkeyPatch) -> Iterator[Callable[..., FakeServi
 
 def invoke(*args: str) -> Any:
     return runner.invoke(app, ["--output", "json", "--quiet", *args])
+
+
+def test_auth_whoami_reports_the_service_identity(service: Callable[..., FakeService]) -> None:
+    service()
+    r = runner.invoke(app, ["--output", "json", "auth", "whoami"], env={"COMPOSE_API_TOKEN": "test-token"})
+    assert r.exit_code == 0, r.output
+    assert json.loads(r.stdout)["subject"] == "auth0|test-user"
+
+
+def test_auth_whoami_without_credentials_exits_3(service: Callable[..., FakeService]) -> None:
+    service()
+    r = invoke("auth", "whoami")
+    assert r.exit_code == 3 and "401" in r.stderr
 
 
 def test_health_version_and_catalogue(service: Callable[..., FakeService]) -> None:

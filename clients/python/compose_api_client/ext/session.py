@@ -22,12 +22,13 @@ import uuid
 import zipfile
 from collections.abc import Awaitable, Callable, Iterator, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from attrs import define
 
 from compose_api_client import AuthenticatedClient, Client
+from compose_api_client.api.authentication import get_auth_me
 from compose_api_client.api.biosim_api import check_health_health_get, get_version_version_get
 from compose_api_client.api.compute import get_processes_list, get_simulator_list, get_steps_list
 from compose_api_client.api.curated import run_copasi, run_tellurium
@@ -45,6 +46,7 @@ from compose_api_client.api.simulation import run_simulation
 from compose_api_client.api.simulations import get_simulation, list_simulations
 from compose_api_client.ext.errors import ApiTimeout, raise_for
 from compose_api_client.models import (
+    AuthMeResponse,
     BiGraphProcess,
     BiGraphStep,
     BodyRunCopasi,
@@ -183,6 +185,16 @@ class ComposeSession:
 
     def version(self) -> str:
         return str(_parsed(get_version_version_get.sync_detailed(client=self.client)))
+
+    def whoami(self) -> AuthMeResponse:
+        """The identity the service sees for this session's bearer token (GET /auth/me).
+
+        Without a valid token the service answers 401, which surfaces as :class:`ComposeApiError`.
+        The cast is type-level only: the spec marks this operation as requiring bearer auth, so the
+        generator types it as ``AuthenticatedClient``, but the wire request is identical for a plain
+        ``Client`` and the service rejects either one the same way when the credential is missing.
+        """
+        return _parsed(get_auth_me.sync_detailed(client=cast(AuthenticatedClient, self.client)))  # type: ignore[no-any-return]
 
     def simulators(self) -> RegisteredSimulators:
         return _parsed(get_simulator_list.sync_detailed(client=self.client))  # type: ignore[no-any-return]
@@ -442,6 +454,10 @@ class AsyncComposeSession:
 
     async def version(self) -> str:
         return str(_parsed(await get_version_version_get.asyncio_detailed(client=self.client)))
+
+    async def whoami(self) -> AuthMeResponse:
+        """The async twin of :meth:`ComposeSession.whoami`."""
+        return _parsed(await get_auth_me.asyncio_detailed(client=cast(AuthenticatedClient, self.client)))  # type: ignore[no-any-return]
 
     async def simulators(self) -> RegisteredSimulators:
         return _parsed(await get_simulator_list.asyncio_detailed(client=self.client))  # type: ignore[no-any-return]

@@ -1098,6 +1098,35 @@
         }
       }
     },
+    "/auth/me": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Get the authenticated caller's identity",
+        "operationId": "get-auth-me",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthMeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer credentials"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -1148,6 +1177,57 @@
   },
   "components": {
     "schemas": {
+      "AuthMeResponse": {
+        "properties": {
+          "issuer": {
+            "type": "string",
+            "title": "Issuer"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "audience": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Audience"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Roles"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Scopes"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Permissions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "issuer",
+          "subject",
+          "audience",
+          "roles",
+          "scopes",
+          "permissions"
+        ],
+        "title": "AuthMeResponse",
+        "description": "What the service verified about the bearer token: identity, audience, scopes, permissions and roles.\n\nNo bearer credential and no unnecessary personal data (no email, no profile): the access token authorizes\nAPI calls, and this endpoint only echoes what the service verified in it."
+      },
       "BiGraphComputeType": {
         "type": "string",
         "enum": [
