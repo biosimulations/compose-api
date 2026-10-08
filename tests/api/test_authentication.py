@@ -311,6 +311,44 @@ async def test_expired_cache_backs_off_during_an_outage(fake_auth0: FakeAuth0) -
 
 
 @pytest.mark.asyncio
+async def test_cold_outage_inside_backoff_is_reported_as_unavailable(
+    fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier
+) -> None:
+    """With no keys ever fetched, a request inside the back-off is an outage, not an unknown kid."""
+    fake_auth0.jwks_available = False
+    for _ in range(2):
+        with pytest.raises(AuthenticationError, match="jwks_unavailable"):
+            await auth0_verifier.verify(fake_auth0.token())
+    assert fake_auth0.jwks_requests == 1
+
+
+@pytest.mark.asyncio
+async def test_cached_keys_survive_a_jwks_with_no_usable_keys(fake_auth0: FakeAuth0) -> None:
+    """A fetch that succeeds but holds no RS256 signing key is handled like a failed fetch: the cache is kept."""
+    unusable = False
+
+    def jwks(request: httpx.Request) -> httpx.Response:
+        response = fake_auth0.handle_jwks(request)
+        if not unusable:
+            return response
+        return httpx.Response(200, json={"keys": [{**key, "use": "enc"} for key in response.json()["keys"]]})
+
+    cache = JwksCache(
+        "https://unused/jwks",
+        transport=httpx.MockTransport(jwks),
+        ttl_seconds=0,  # every lookup is past its TTL, so every lookup attempts a refresh
+        min_refresh_interval_seconds=0,
+    )
+    verifier = Auth0Verifier(domain=AUTH0_TEST_DOMAIN, audience=AUTH0_TEST_AUDIENCE, jwks=cache)
+    await verifier.verify(fake_auth0.token())
+    unusable = True
+    principal = await verifier.verify(fake_auth0.token())
+    assert principal.subject == "auth0|test-user"
+    assert fake_auth0.jwks_requests == 2
+    await verifier.aclose()
+
+
+@pytest.mark.asyncio
 async def test_small_clock_skew_is_tolerated(fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier) -> None:
     """Auth0's clock a few seconds ahead of ours must not reject a token it has just issued."""
     now = int(time.time())

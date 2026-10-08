@@ -1,9 +1,11 @@
 import time
+from collections.abc import AsyncGenerator
 from typing import Any
 
 import httpx
 import jwt
 import pytest
+import pytest_asyncio
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 from compose_api.authentication import Auth0Verifier, JwksCache
@@ -57,8 +59,10 @@ def fake_auth0() -> FakeAuth0:
     return FakeAuth0()
 
 
-@pytest.fixture
-def auth0_verifier(fake_auth0: FakeAuth0) -> Auth0Verifier:
+@pytest_asyncio.fixture
+async def auth0_verifier(fake_auth0: FakeAuth0) -> AsyncGenerator[Auth0Verifier]:
     """A verifier against the fake tenant, with the production cache TTL and refresh settings."""
     jwks = JwksCache(f"{AUTH0_TEST_ISSUER}.well-known/jwks.json", transport=httpx.MockTransport(fake_auth0.handle_jwks))
-    return Auth0Verifier(domain=AUTH0_TEST_DOMAIN, audience=AUTH0_TEST_AUDIENCE, jwks=jwks)
+    verifier = Auth0Verifier(domain=AUTH0_TEST_DOMAIN, audience=AUTH0_TEST_AUDIENCE, jwks=jwks)
+    yield verifier
+    await verifier.aclose()  # the cache built its own client around the mock transport

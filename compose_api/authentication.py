@@ -101,9 +101,10 @@ class JwksCache:
             return key
         if key is not None and not self._is_usable() and not self._may_refresh():
             raise AuthenticationError("jwks_unavailable")
-        # Same interval as a stale known key. A different forged kid must not start its own fetch.
+        # Same interval as a stale known key. A different forged kid must not start its own fetch. With nothing
+        # cached the last fetch failed, so report the outage rather than blaming the token's kid.
         if key is None and not self._may_refresh():
-            raise AuthenticationError("unknown_kid")
+            raise AuthenticationError("unknown_kid" if self._keys else "jwks_unavailable")
         attempts_seen = self._refresh_attempts
         async with self._lock:
             # Coalesce: if a refresh ran while this request waited for the lock, use its result.
@@ -166,8 +167,11 @@ class JwksCache:
         }
 
         if not keys:
-            logger.warning("Auth0 JWKS contained no usable signing keys")
-            raise AuthenticationError("jwks_unavailable")
+            # Treated like a failed fetch: keep serving the cached keys until they go stale.
+            logger.warning("Auth0 JWKS contained no usable signing keys; keeping %d cached key(s)", len(self._keys))
+            if not self._keys:
+                raise AuthenticationError("jwks_unavailable")
+            return
         self._keys = keys
         self._fetched_at = time.monotonic()
 
