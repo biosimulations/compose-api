@@ -123,9 +123,18 @@ def get_data_service() -> DataService | None:
 # ------ initialized standalone application (standalone) ------
 
 
+# Server-side TCP keepalives for the API's sessions: Postgres probes an idle client after 60 s and drops it
+# after 6 unanswered probes 10 s apart. A session's advisory locks (SimulatorDatabaseService.container_lock)
+# end with it, so a pod lost with its node (no FIN or RST) frees them in about 2 minutes, not the OS
+# default of about 2 hours.
+SESSION_KEEPALIVES = {"tcp_keepalives_idle": "60", "tcp_keepalives_interval": "10", "tcp_keepalives_count": "6"}
+
+
 def get_async_engine(url: str, enable_ssl: bool = True, **engine_params: Any) -> AsyncEngine:
+    connect_args: dict[str, Any] = {"server_settings": dict(SESSION_KEEPALIVES)}
     if not enable_ssl:
-        engine_params["connect_args"] = {"ssl": "disable"}
+        connect_args["ssl"] = "disable"
+    engine_params["connect_args"] = {**connect_args, **engine_params.get("connect_args", {})}
     return create_async_engine(url, **engine_params)
 
 

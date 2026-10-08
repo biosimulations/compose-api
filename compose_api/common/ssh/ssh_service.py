@@ -1,5 +1,6 @@
 import logging
 import tempfile
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 
@@ -129,9 +130,14 @@ class SSHService:
                         def_path, get_slurm_singularity_def_file(remote_container_image.container_def_hash)
                     )
                     sif_name = get_slurm_singularity_container_file(remote_container_image.container_def_hash).name
-                    # --force overwrites existing file
+                    # Never write over an existing .sif: jobs on other nodes may be running from it, and an
+                    # NFS client's open file goes stale when the server replaces it. The pull goes to a
+                    # temporary name that is renamed into place, so a .sif that exists is complete.
+                    tmp = f".{sif_name}.{uuid.uuid4().hex[:8]}.tmp"
                     await self.run_command(
-                        f"cd {_namespace_path() / 'images'} && singularity pull --force {sif_name} {remote_container_image.source_url}"  # NOQA: E501
+                        f"cd {_namespace_path() / 'images'} && {{ test -s {sif_name} || "
+                        f"{{ singularity pull --force {tmp} {remote_container_image.source_url} && "
+                        f"mv -f {tmp} {sif_name}; }}; }}; rc=$?; rm -f {tmp}; exit $rc"
                     )
             case ContainerizationEngine.DOCKER:
                 await self.run_command(f"docker image pull {remote_container_image.image_name_and_tag}")

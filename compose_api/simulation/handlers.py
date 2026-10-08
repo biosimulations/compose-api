@@ -165,23 +165,25 @@ async def _dispatch_job(
 ) -> None:
     simulator_version = simulation.simulator_version
     hpc_db = database_service.get_hpc_db()
-    simulator_download_id = await database_service.get_simulator_db().get_downloaded_simulator(
-        simulator_id=simulator_version.database_id
-    )
+    simulator_db = database_service.get_simulator_db()
     random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
 
-    if simulator_download_id is None:
-        logger.info(
-            f"Simulator {simulator_version.database_id} is being downloaded from "
-            f"{RemoteContainerImage.from_container_version(simulator_version)}."
-        )
-        await _download_or_build_container(
-            simulation_service_slurm=simulation_service_slurm,
-            simulator_version=simulator_version,
-            hpc_db=hpc_db,
-            job_monitor=job_monitor,
-            random_string=random_string_7_hex,
-        )
+    # Check, then fetch under the hash's lock and check again: submissions that arrive while the image
+    # is fetched wait for it instead of fetching it over the file the first one's jobs are mounting.
+    if await simulator_db.get_downloaded_simulator(simulator_id=simulator_version.database_id) is None:
+        async with simulator_db.container_lock(simulator_version.container_def_hash):
+            if await simulator_db.get_downloaded_simulator(simulator_id=simulator_version.database_id) is None:
+                logger.info(
+                    f"Simulator {simulator_version.database_id} is being downloaded from "
+                    f"{RemoteContainerImage.from_container_version(simulator_version)}."
+                )
+                await _download_or_build_container(
+                    simulation_service_slurm=simulation_service_slurm,
+                    simulator_version=simulator_version,
+                    hpc_db=hpc_db,
+                    job_monitor=job_monitor,
+                    random_string=random_string_7_hex,
+                )
 
     # Minted before submission so the job can carry the run's trace context (docs/plan-observability.md O1).
     correlation_id = get_correlation_id(random_string=random_string_7_hex, job_type=JobType.SIMULATION)
