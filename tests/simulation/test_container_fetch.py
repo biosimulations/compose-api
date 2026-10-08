@@ -6,13 +6,15 @@ file that earlier submissions' jobs were mounting, and those jobs failed (squash
 """
 
 import asyncio
+import contextlib
 from typing import Any, cast
 
 import pytest
+from sqlalchemy import text
 
 from compose_api.config import override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
-from compose_api.dependencies import get_postgres_engine
+from compose_api.dependencies import SESSION_KEEPALIVES, get_async_engine, get_postgres_engine
 from compose_api.simulation import handlers
 from compose_api.simulation.models import RemoteContainerImage, SimulationRequest
 from compose_api.simulation.prebuilt import prebuilt_definition
@@ -89,3 +91,42 @@ async def test_concurrent_submissions_fetch_the_container_once(
     assert service.fetches == 1
     # the seven waiting submissions hold no connection; only the lock's holder does
     assert service.connections_during_fetch == 1
+
+
+@pytest.mark.asyncio
+async def test_the_container_lock_excludes_and_is_freed_by_cancellation(database_service: DatabaseServiceSQL) -> None:
+    """A second holder waits while the first holds the lock, and gets it once the first is cancelled."""
+    simulator_db = database_service.get_simulator_db()
+    held = asyncio.Event()
+
+    async def hold_forever() -> None:
+        async with simulator_db.container_lock("cancelled-holder", poll_s=0.05):
+            held.set()
+            await asyncio.sleep(3600)
+
+    holder = asyncio.create_task(hold_forever())
+    await held.wait()
+
+    async def take() -> None:
+        async with simulator_db.container_lock("cancelled-holder", poll_s=0.05):
+            pass
+
+    with pytest.raises(TimeoutError):
+        await asyncio.wait_for(take(), timeout=0.5)
+
+    holder.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await holder
+    await asyncio.wait_for(take(), timeout=5)
+
+
+@pytest.mark.asyncio
+async def test_api_sessions_set_tcp_keepalives(postgres_url: str) -> None:
+    """Postgres drops a lost API pod's session, and with it any advisory lock, in minutes, not hours."""
+    engine = get_async_engine(postgres_url, enable_ssl=False)
+    try:
+        async with engine.connect() as conn:
+            for name, value in SESSION_KEEPALIVES.items():
+                assert (await conn.execute(text(f"SHOW {name}"))).scalar_one() in (value, f"{value}s")
+    finally:
+        await engine.dispose()
