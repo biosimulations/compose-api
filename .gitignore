@@ -229,3 +229,9 @@ assets/dev/config/compose_known_hosts
 !/docs/grant/trd3/
 !/docs/grant/trd3/tracking/
 !/docs/grant/trd3/tracking/**
+
+# Agentic Framework
+.kilo/
+.agents/
+.crush/
+.freebuff/

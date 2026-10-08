@@ -1,10 +1,10 @@
+import copy
 import json
 import os
 import sys
 from typing import Any
 
 import yaml
-from fastapi.openapi.utils import get_openapi
 
 from compose_api.api.main import app
 
@@ -34,14 +34,9 @@ def main(argv: list[str] | None = None) -> None:
     """Write the spec to `compose_api/api/spec/`, or to the path given as the first argument
     (`make check-clients` writes a fresh copy elsewhere and compares)."""
     argv = sys.argv[1:] if argv is None else argv
-    openapi_spec = get_openapi(
-        title=app.title,
-        version=app.version,
-        openapi_version=app.openapi_version,
-        description=app.description,
-        routes=app.routes,
-        servers=app.servers,
-    )
+    # app.openapi(), not get_openapi(): the app adds the optional bearer scheme in its override.
+    # Deep-copied because the fix-up below mutates, and app.openapi() returns the served, cached dict.
+    openapi_spec = copy.deepcopy(app.openapi())
     _restore_binary_format(openapi_spec)
 
     # Convert the JSON OpenAPI spec to YAML

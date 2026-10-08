@@ -6,3 +6,11 @@
 [![License](https://img.shields.io/github/license/biosimulations/compose-api)](https://img.shields.io/github/license/biosimulations/compose-api)
 
 An API server for reproducible biological workflows and cosimulations.
+
+## Authentication
+
+Optional. Omitting `Authorization` leaves the request anonymous. A bad bearer token is `401`, not an anonymous
+call. `GET /health` and `GET /version` ignore the header. A valid access token identifies the caller and does not
+make a simulation private.
+
+How to obtain an access token, which audience to use, and what not to send: [Authentication](authentication.md).

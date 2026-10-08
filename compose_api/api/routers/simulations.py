@@ -7,8 +7,9 @@ is what ``POST /simulation/run`` returned as ``simulation_database_id``, and wha
 import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from compose_api.authentication import get_optional_principal
 from compose_api.authorization import OptionalCaller, can_read, readable_clause
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.config import get_settings
@@ -24,7 +25,7 @@ from compose_api.simulation.models import (
 )
 from compose_api.simulation.prebuilt import prebuilt_definition, prebuilt_image_of
 
-config = RouterConfig(router=APIRouter(), prefix="/simulations", dependencies=[])
+config = RouterConfig(router=APIRouter(), prefix="/simulations", dependencies=[Depends(get_optional_principal)])
 
 StatusFilter = Literal[
     "submitting",

@@ -110,9 +110,30 @@ themselves when the service is `None`. Two consequences worth knowing:
 **Routers** are registered by name from `APP_ROUTERS` in `api/main.py` via `importlib`, and each module must expose a
 module-level `config = RouterConfig(router=APIRouter(), prefix=..., dependencies=[])`. Registration failures are logged
 and swallowed — an import error in a router silently drops its endpoints rather than failing startup. Prefixes:
-`/simulation` (submit), `/results` (status, results file), `/core` (simulator/process/step catalogs), `/curated`
-(pre-baked copasi/tellurium runs). Every endpoint sets an explicit `operation_id` because those become the generated
+`/simulation` (submit), `/results` (status, results file, events, trace), `/core` (simulator/process/step catalogs),
+`/curated` (pre-baked copasi/tellurium runs), `/simulations` (listing), `/datasets` (a run's files). Every endpoint sets an explicit `operation_id` because those become the generated
 client's method names.
+
+**Authentication** is optional Auth0 bearer, all in `compose_api/authentication.py`. Every router in `APP_ROUTERS`
+sets `dependencies=[Depends(get_optional_principal)]` on its `RouterConfig` (keep its own prefix). A handler that
+wants the identity adds an `OptionalPrincipal` parameter; FastAPI caches the dependency, so the token is still verified
+once. No header means anonymous (`None`); any header that is present but invalid is a 401, never anonymous, which is
+why the header is parsed by hand: `HTTPBearer(auto_error=False)` also returns `None` for a non-Bearer scheme. OpenAPI
+security is document-level only (`_openapi_with_optional_bearer` in `api/main.py`). A per-operation `security`
+entry, even `[{}, ...]`, makes openapi-python-client type that method as requiring `AuthenticatedClient`, a breaking
+change for pbest. `openapi_spec.py` must use `app.openapi()` so the override reaches the checked-in spec. Settings are
+`auth0_domain` and `auth0_audience`; the issuer is derived and the algorithm is fixed to RS256. Every active handler
+also reaches the principal through a parameter of its own: `principal: OptionalPrincipal` where it only needs the
+identity, or `caller: OptionalCaller` / `ReadableSimulation` where it reads through the authorization seam (a
+structural test over `APP_ROUTERS` enforces it); submission handlers log `describe_caller(principal)`. `JwksCache` refreshes an unknown `kid` at most once per 30 s, the same back-off as an
+expired cache, coalescing concurrent refreshes by counting *completed* refreshes. Deployment:
+both API overlays load `config/compose-api-rke`; the local overlay overrides only the Auth0 keys via a
+`behavior: merge` generator (`overlays/compose-api-local/auth0.env`); `config/compose-api-local` is used only by the
+migration job. Every principal carries `roles`: always `DEFAULT_ROLE` ("user", the tenant role owned by auth0-pulumi's
+biosim-platform stack) plus any names in the `ROLES_CLAIM` (`https://api.biosimulations.org/roles`) claim written by
+the tenant's post-login "BioSim Roles" Action. Anonymous is `principal is None`, so no role. The only role checked is
+`authorization.ADMIN_ROLE` ("admin"), which reads private simulations; none exist until submissions stamp an owner, so
+it changes nothing yet. Keep the role and claim names in step with auth0-pulumi.
 
 **HPC layer.** `SSHService` (asyncssh: `run_command`, `scp_upload`, `scp_download`) → `SlurmService`
 (`sbatch --parsable`, `squeue`, `sacct` parsing into `SlurmJob`) → `SimulationServiceHpc`, which writes sbatch scripts
@@ -166,7 +187,9 @@ is Postgres.
 **Authorization.** Every route that reads something a simulation owns resolves it through
 `compose_api.authorization.readable_simulation` (or `readable_simulation_ids`), which applies `can_read`. Ownership
 (`simulation.owner_sub`, `visibility`) lives on the simulation only; runs, events and datasets inherit it. A simulation
-the caller may not read is a 404. See `docs/plan-observability.md` (O7, O8).
+the caller may not read is a 404. The caller is `get_caller`, which returns the verified principal from
+`compose_api.authentication` (None when anonymous); tests override `get_caller` to pick one. Nothing stamps an owner
+at submit yet (plan-observability step 5), so every simulation is public. See `docs/plan-observability.md` (O7, O8).
 
 ## Companion repositories
 

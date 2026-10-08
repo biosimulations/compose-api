@@ -7,7 +7,7 @@ install: ## Install the virtual environment and install the pre-commit hooks
 .PHONY: run
 run: ##
 	@echo "🚀 Run local server."
-	@uvicorn compose_api.api.main:app --host 0.0.0.0 --port 8000 --reload
+	@uv run uvicorn compose_api.api.main:app --host 0.0.0.0 --port 8000 --reload
 
 .PHONY: check
 check: ## Run code quality tools.

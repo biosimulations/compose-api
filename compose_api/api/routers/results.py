@@ -5,6 +5,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.responses import FileResponse
 
+from compose_api.authentication import OptionalPrincipal, get_optional_principal
 from compose_api.authorization import OptionalCaller, readable_simulation, readable_simulation_ids
 from compose_api.common.gateway.models import Namespace, RouterConfig
 from compose_api.common.gateway.utils import get_hpc_run_status
@@ -37,7 +38,7 @@ ReadableSimulation = Annotated[SimulationAccess, Depends(readable_simulation)]
 
 # -- app components -- #
 
-config = RouterConfig(router=APIRouter(), prefix="/results", dependencies=[])
+config = RouterConfig(router=APIRouter(), prefix="/results", dependencies=[Depends(get_optional_principal)])
 
 
 @config.router.get(
@@ -165,7 +166,7 @@ async def get_results(simulation: ReadableSimulation) -> FileResponse:
     dependencies=[Depends(get_database_service)],
     summary="Get the simulator build status record by its ID",
 )
-async def get_simulator_build_status(simulator_id: int = Query(...)) -> HpcRun:
+async def get_simulator_build_status(principal: OptionalPrincipal, simulator_id: int = Query(...)) -> HpcRun:
     db_service = get_database_service()
     if db_service is None:
         raise HTTPException(status_code=500, detail="Database service is not initialized")

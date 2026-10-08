@@ -4,6 +4,7 @@ import os
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 from jinja2 import Template
 
+from compose_api.authentication import OptionalPrincipal, describe_caller, get_optional_principal
 from compose_api.common.gateway.models import RouterConfig, ServerMode
 from compose_api.common.gateway.utils import get_simulation_request_from_uploaded_file
 from compose_api.config import get_settings
@@ -27,7 +28,7 @@ def get_server_url(dev: bool = True) -> ServerMode:
 
 # -- app components -- #
 
-config = RouterConfig(router=APIRouter(), prefix="/curated", dependencies=[])
+config = RouterConfig(router=APIRouter(), prefix="/curated", dependencies=[Depends(get_optional_principal)])
 
 
 @config.router.post(
@@ -39,8 +40,14 @@ config = RouterConfig(router=APIRouter(), prefix="/curated", dependencies=[])
     summary="Use the tool copasi.",
 )
 async def run_copasi(
-    background_tasks: BackgroundTasks, sbml: UploadFile, start_time: float, duration: float, num_data_points: float
+    background_tasks: BackgroundTasks,
+    sbml: UploadFile,
+    start_time: float,
+    duration: float,
+    num_data_points: float,
+    principal: OptionalPrincipal,
 ) -> SimulationExperiment:
+    logger.info("Curated copasi run from %s", describe_caller(principal))
     with open(os.path.dirname(__file__) + "/templates/copasi.jinja") as f:
         template = Template(f.read())
         render = template.render(
@@ -70,8 +77,14 @@ async def run_copasi(
     summary="Use the tool tellurium.",
 )
 async def run_tellurium(
-    background_tasks: BackgroundTasks, sbml: UploadFile, start_time: float, end_time: float, num_data_points: float
+    background_tasks: BackgroundTasks,
+    sbml: UploadFile,
+    start_time: float,
+    end_time: float,
+    num_data_points: float,
+    principal: OptionalPrincipal,
 ) -> SimulationExperiment:
+    logger.info("Curated tellurium run from %s", describe_caller(principal))
     with open(os.path.dirname(__file__) + "/templates/tellurium.jinja") as f:
         template = Template(f.read())
         render = template.render(

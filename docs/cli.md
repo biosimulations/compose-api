@@ -21,7 +21,7 @@ dependencies. In this repository, `uv run compose-api ...` works with no install
 | Service | `--url` | `COMPOSE_API_URL` | `https://compose.cam.uchc.edu` |
 | HTTP timeout | `--timeout` | `COMPOSE_API_TIMEOUT` | 300 s |
 | Output | `-o/--output auto\|table\|json` | `COMPOSE_API_OUTPUT` | `auto`: a table on a terminal, JSON when piped |
-| Token | `--token` | `COMPOSE_API_TOKEN` | none (the service has no auth yet) |
+| Token | `--token` | `COMPOSE_API_TOKEN` | none: anonymous. An Auth0 access token for this API identifies you ([authentication](authentication.md)) |
 
 Global options go before the command: `compose-api -o json status 4192`. Results go to stdout; progress lines and
 errors go to stderr, so `compose-api -o json ... | jq` always sees clean JSON.

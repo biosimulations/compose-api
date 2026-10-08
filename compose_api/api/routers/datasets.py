@@ -7,9 +7,10 @@ import logging
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.responses import FileResponse
 
+from compose_api.authentication import get_optional_principal
 from compose_api.authorization import OptionalCaller, can_read, readable_clause
 from compose_api.common.gateway.models import Namespace, RouterConfig
 from compose_api.config import get_settings
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 NOT_FOUND_RESPONSE = {"description": "The dataset does not exist, or the caller may not read it"}
 
-config = RouterConfig(router=APIRouter(), prefix="/datasets", dependencies=[])
+config = RouterConfig(router=APIRouter(), prefix="/datasets", dependencies=[Depends(get_optional_principal)])
 
 
 async def _readable_dataset(dataset_id: uuid.UUID, caller: OptionalCaller) -> Dataset:

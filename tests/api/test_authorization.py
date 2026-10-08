@@ -1,7 +1,9 @@
 """The read policy and the seam every simulation read goes through (docs/plan-observability.md O7, O8).
 
 A private simulation is invisible, as not found, to anyone but its owner and admins: its status, its place in a batch
-status and its results. Until auth lands every caller is anonymous and every simulation public, so nothing changes.
+status and its results. The caller is the verified bearer-token principal (#192); these tests override get_caller to
+choose one. No submission stamps an owner yet, so every real simulation is public and these tests create private ones
+directly.
 """
 
 from collections.abc import AsyncGenerator

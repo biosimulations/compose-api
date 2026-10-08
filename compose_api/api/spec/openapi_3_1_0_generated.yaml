@@ -1515,3 +1515,12 @@ components:
       title: Visibility
       description: Who may read a simulation and everything it produced (plan-observability
         O7).
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Optional Auth0 access token for this API. Omit it to call anonymously.
+security:
+- {}
+- BearerAuth: []

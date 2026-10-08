@@ -7,9 +7,9 @@ one place, so adding auth changes only who the caller is (:func:`get_caller`), n
 - **Ownership lives on the simulation.** Runs, events and datasets inherit it through their foreign keys.
 - **A simulation the caller may not read is reported as not found**, the same as one that does not exist, so its id
   reveals nothing.
-- **Until auth lands every caller is anonymous and every simulation is public**, so behaviour is unchanged. When #192
-  merges, :func:`get_caller` returns its verified principal, which already has the ``subject`` and ``roles`` that
-  :class:`Caller` asks for.
+- **The caller is the verified bearer-token principal** (:mod:`compose_api.authentication`, #192), or None when the
+  request is anonymous. Until submissions stamp an owner (plan-observability step 5) every simulation is public, so
+  what a caller can read is unchanged.
 """
 
 from typing import Annotated, Protocol
@@ -17,6 +17,7 @@ from typing import Annotated, Protocol
 from fastapi import Depends, HTTPException, Query
 from sqlalchemy import ColumnElement, or_
 
+from compose_api.authentication import OptionalPrincipal
 from compose_api.db.tables.simulator_tables import ORMSimulation
 from compose_api.dependencies import get_required_database_service
 from compose_api.simulation.models import SimulationAccess, Visibility
@@ -34,9 +35,10 @@ class Caller(Protocol):
     def roles(self) -> frozenset[str]: ...
 
 
-async def get_caller() -> Caller | None:
-    """The caller, or None if anonymous. Always anonymous until auth (#192) is wired in here."""
-    return None
+async def get_caller(principal: OptionalPrincipal) -> Caller | None:
+    """The verified caller, or None if anonymous. A bearer token that is present but invalid never gets here:
+    get_optional_principal has already answered it with 401."""
+    return principal
 
 
 OptionalCaller = Annotated[Caller | None, Depends(get_caller)]

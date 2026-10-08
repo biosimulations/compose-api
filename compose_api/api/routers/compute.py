@@ -2,6 +2,10 @@ import logging
 
 from fastapi import APIRouter, Depends
 
+from compose_api.authentication import (
+    OptionalPrincipal,
+    get_optional_principal,
+)
 from compose_api.common.gateway.models import RouterConfig, ServerMode
 from compose_api.dependencies import (
     get_database_service,
@@ -26,7 +30,7 @@ def get_server_url(dev: bool = True) -> ServerMode:
 
 # -- app components -- #
 
-config = RouterConfig(router=APIRouter(), prefix="/core", dependencies=[])
+config = RouterConfig(router=APIRouter(), prefix="/core", dependencies=[Depends(get_optional_principal)])
 
 
 @config.router.get(
@@ -37,7 +41,7 @@ config = RouterConfig(router=APIRouter(), prefix="/core", dependencies=[])
     dependencies=[Depends(get_database_service)],
     summary="Get the list of simulators",
 )
-async def get_simulator_list() -> RegisteredSimulators:
+async def get_simulator_list(principal: OptionalPrincipal) -> RegisteredSimulators:
     return await get_simulator_versions()
 
 
@@ -49,7 +53,7 @@ async def get_simulator_list() -> RegisteredSimulators:
     dependencies=[Depends(get_database_service)],
     summary="Get the list of processes",
 )
-async def get_processes_list() -> list[BiGraphProcess]:
+async def get_processes_list(principal: OptionalPrincipal) -> list[BiGraphProcess]:
     res: list[BiGraphProcess] = (
         await get_required_database_service().get_package_db().list_all_computes(BiGraphComputeType.PROCESS)
     )
@@ -64,7 +68,7 @@ async def get_processes_list() -> list[BiGraphProcess]:
     dependencies=[Depends(get_database_service)],
     summary="Get the list of processes",
 )
-async def get_steps_list() -> list[BiGraphStep]:
+async def get_steps_list(principal: OptionalPrincipal) -> list[BiGraphStep]:
     res: list[BiGraphStep] = (
         await get_required_database_service().get_package_db().list_all_computes(BiGraphComputeType.STEP)
     )
