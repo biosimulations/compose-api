@@ -21,41 +21,44 @@ dependencies. In this repository, `uv run compose-api ...` works with no install
 | Service | `--url` | `COMPOSE_API_URL` | `https://compose.cam.uchc.edu` |
 | HTTP timeout | `--timeout` | `COMPOSE_API_TIMEOUT` | 300 s |
 | Output | `-o/--output auto\|table\|json` | `COMPOSE_API_OUTPUT` | `auto`: a table on a terminal, JSON when piped |
-| Token | `--token` | `COMPOSE_API_TOKEN` | none: anonymous. An Auth0 access token for this API identifies you ([authentication](authentication.md)) |
+| Token | `--token` | `COMPOSE_API_TOKEN` | your stored login ([Log in](#log-in)), else anonymous. An Auth0 access token for this API identifies you ([authentication](authentication.md)) |
 
 Global options go before the command: `compose-api -o json status 4192`. Results go to stdout; progress lines and
 errors go to stderr, so `compose-api -o json ... | jq` always sees clean JSON.
 
-## Auth profiles
+## Log in
 
-Sign-in uses a public profile: issuer, native client ID, audience, API base URL, scopes, callback ports, a login
-deadline, and the Auth0 network timeout. Nothing in the profile is a secret. `COMPOSE_API_TOKEN` / `--token` stays a
-one-shot bearer for that invocation; it is not written into a profile and is not refreshed.
+```console
+$ compose-api auth signup     # opens the BioSimulations portal: choose Sign Up there
+$ compose-api auth login      # the portal, then a separate authorization for this CLI
+$ compose-api auth whoami     # who the service sees
+$ compose-api auth logout
+```
 
-| Field | Option | Environment | Built-in (`production` / `local`) |
-|---|---|---|---|
-| Profile | `--profile` | `COMPOSE_API_PROFILE` | `production` |
-| API | `--url` | `COMPOSE_API_URL` | `https://compose.cam.uchc.edu` / `https://api.compose-api-local` |
-| Issuer | `--auth0-issuer` | `COMPOSE_API_AUTH0_ISSUER` | `https://dev-bu7yo7484tyxu6a1.us.auth0.com/` |
-| Client ID | `--auth0-client-id` | `COMPOSE_API_AUTH0_CLIENT_ID` | public native client for that environment |
-| Audience | `--auth0-audience` | `COMPOSE_API_AUTH0_AUDIENCE` | `https://api.compose.cam.uchc.edu` / `https://api.compose.local` |
-| Scopes | `--auth0-scopes` | `COMPOSE_API_AUTH0_SCOPES` | `openid profile email offline_access` |
-| Callback ports | `--callback-ports` | `COMPOSE_API_AUTH0_CALLBACK_PORTS` | `51111,52111,53111` |
-| Login deadline | `--login-deadline` | `COMPOSE_API_AUTH0_LOGIN_DEADLINE` | 180 s |
-| Auth0 timeout | `--auth-timeout` | `COMPOSE_API_AUTH0_NETWORK_TIMEOUT` | 10 s |
+The CLI cannot create accounts and never asks for a password. `auth signup` and `auth login` both open
+<https://biosim.biosimulations.org/login> (the URL is printed too, for when no browser opens). `auth signup` stops there:
+choose Sign Up, finish any verification, then run `auth login`. It does not log the CLI in.
 
-Each field resolves from the flag, then the environment, then `[profiles.<name>]` in the user config file
-(`platformdirs` user config dir, `config.toml`), then the built-in profile. A named profile does not inherit another
-profile's client ID. The audience values are API identifiers, not network addresses.
+Signing in on the website does not log the CLI in either; the website hands nothing back to the terminal. So `auth
+login` asks you to come back and confirm, then opens a separate Auth0 authorization for the Compose CLI (authorization
+code with S256 PKCE, answered on `http://127.0.0.1:8400/callback`). It reports success only after the service's
+`GET /auth/me` has accepted the new access token. Exit codes: 130 cancelled, 5 timed out, 3 failed (nothing is saved),
+2 for a `--url` with no Auth0 application.
 
-`--url` pointing at a different API does not keep the profile's issuer, client ID, or audience. Set those three as
-well, or pick the profile whose API already matches. Stored sessions bind to the normalized issuer, client ID,
-audience, API URL including any path prefix, and the sorted scope set. JWKS is always
-`{issuer}.well-known/jwks.json` from that configuration, never a token `jku` or `iss` claim.
+`auth whoami` asks the service who it sees behind your credentials.
 
-Anonymous commands do not open that file or a credential store. Browser login is not wired yet; `auth whoami` still
-sends `--token`. The callback ports match the compose-api Auth0 stack change; the live tenant still lists port
-8400 until that change is applied.
+The login is stored per `--url` in `~/.compose-api/tokens.json` (directory 0700, file 0600; POSIX only). Every command
+sends it, renewing it before each request when needed, including during `wait` and `run --wait`. A stored login that
+cannot be used stops the command with exit 3 and the hint to run `auth login` (or `auth logout` to continue
+anonymously); it never falls back to anonymous.
+
+`auth logout` deletes that `--url`'s entry first, then tries to revoke the refresh token, and says if it could not
+confirm the revocation. It does not sign you out of the website, and access tokens already issued may stay valid
+until they expire.
+
+For scripts, pass an access token with `--token` or `COMPOSE_API_TOKEN`. It wins over a stored login and is never
+stored or renewed; an empty `--token` is a usage error. How to get one, and the audiences each deployment accepts:
+[authentication](authentication.md).
 
 ## A run, start to finish
 
@@ -140,10 +143,10 @@ A run's SLURM log is a dataset too (`job.out`, kind `log`): `compose-api dataset
 |---|---|
 | 0 | Success; with `--wait`, the job completed |
 | 1 | The job ended failed, timed out, out of memory or cancelled (or `openapi --diff` found skew) |
-| 2 | Usage error (a bad option, a missing file) |
-| 3 | The service rejected the request or failed (the reason and any document violations are printed) |
+| 2 | Usage error (a bad option, a missing file, an empty `--token`, `auth login` for a `--url` with no Auth0 application) |
+| 3 | The service rejected the request or failed (the reason and any document violations are printed), a stored login cannot be used, or `auth login` failed |
 | 4 | Not found (an unknown id, or results that do not exist yet) |
-| 5 | `--wait-timeout` passed before the job finished |
+| 5 | `--wait-timeout` passed before the job finished, or `auth login` timed out |
 | 130 | Interrupted |
 
 So `compose-api run x.omex --wait && next-step` runs `next-step` only if the simulation completed.
@@ -179,15 +182,7 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 * `--url TEXT`: Service base URL.  [env var: COMPOSE_API_URL; default: https://compose.cam.uchc.edu]
 * `--timeout FLOAT`: HTTP timeout, seconds.  [env var: COMPOSE_API_TIMEOUT; default: 300.0]
 * `-o, --output [auto|table|json]`: auto: table on a terminal, else json.  [env var: COMPOSE_API_OUTPUT; default: auto]
-* `--token TEXT`: Bearer token for this invocation. Not stored.  [env var: COMPOSE_API_TOKEN]
-* `--profile TEXT`: Auth profile: production, local, or a name in the config file.  [env var: COMPOSE_API_PROFILE]
-* `--auth0-issuer TEXT`: Auth0 issuer URL (https). Selects JWKS; not taken from a token.  [env var: COMPOSE_API_AUTH0_ISSUER]
-* `--auth0-client-id TEXT`: Public native client ID. Not a secret.  [env var: COMPOSE_API_AUTH0_CLIENT_ID]
-* `--auth0-audience TEXT`: API audience identifier, not the service URL.  [env var: COMPOSE_API_AUTH0_AUDIENCE]
-* `--auth0-scopes TEXT`: Space-separated OIDC scopes for sign-in.  [env var: COMPOSE_API_AUTH0_SCOPES]
-* `--callback-ports TEXT`: Comma-separated loopback callback ports registered with Auth0.  [env var: COMPOSE_API_AUTH0_CALLBACK_PORTS]
-* `--login-deadline TEXT`: Seconds to wait for a browser login.  [env var: COMPOSE_API_AUTH0_LOGIN_DEADLINE]
-* `--auth-timeout TEXT`: Seconds for Auth0 and JWKS requests.  [env var: COMPOSE_API_AUTH0_NETWORK_TIMEOUT]
+* `--token TEXT`: Bearer token (when auth is on).  [env var: COMPOSE_API_TOKEN]
 * `-v, --verbose`: Log HTTP requests; tracebacks on errors.
 * `-q, --quiet`: No progress lines.
 * `--install-completion`: Install completion for the current shell.
@@ -212,7 +207,7 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 * `curated`: Run an SBML model with a curated simulator.
 * `datasets`: The files runs produced.
 * `simulations`: Find simulations and their ids.
-* `auth`: Who the service sees behind this machine's...
+* `auth`: Sign in through BioSimulations, sign out,...
 
 ## `compose-api health`
 
@@ -726,7 +721,7 @@ $ compose-api simulations show [OPTIONS] SIMULATION_ID
 
 ## `compose-api auth`
 
-Who the service sees behind this machine's credentials.
+Sign in through BioSimulations, sign out, and see who the service sees.
 
 **Usage**:
 
@@ -740,11 +735,59 @@ $ compose-api auth [OPTIONS] COMMAND [ARGS]...
 
 **Commands**:
 
+* `login`: Sign in through BioSimulations, then...
+* `signup`: Open BioSimulations registration; this...
+* `logout`: Remove local credentials and attempt...
 * `whoami`: Who the service sees: the identity behind...
+
+### `compose-api auth login`
+
+Sign in through BioSimulations, then authorize the CLI separately with Auth0 PKCE.
+
+**Usage**:
+
+```console
+$ compose-api auth login [OPTIONS]
+```
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api auth signup`
+
+Open BioSimulations registration; this does not establish a CLI session.
+
+**Usage**:
+
+```console
+$ compose-api auth signup [OPTIONS]
+```
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api auth logout`
+
+Remove local credentials and attempt refresh-token revocation; browser sessions remain signed in.
+
+**Usage**:
+
+```console
+$ compose-api auth logout [OPTIONS]
+```
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
 
 ### `compose-api auth whoami`
 
-Who the service sees: the identity behind --token (or COMPOSE_API_TOKEN).
+Who the service sees: the identity behind --token, COMPOSE_API_TOKEN, or auth login.
 
 **Usage**:
 

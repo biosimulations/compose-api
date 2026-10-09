@@ -74,8 +74,9 @@ default-groups = [
 ]
 # pbest pins compose-api-client==0.2.0, the release of the package that now lives at clients/python. Resolve every
 # requirement on it to the workspace copy (docs/plan-cli.md, decision C6). The service imports none of pbest's
-# client-using code (pbest.execution.remote), and the workspace copy keeps every name that code uses.
-override-dependencies = ["compose-api-client"]
+# client-using code (pbest.execution.remote), and the workspace copy keeps every name that code uses. An override
+# replaces the whole requirement, extras included, so it names [cli] or the CLI's own dependencies drop out.
+override-dependencies = ["compose-api-client[cli]"]
 
 [tool.uv.workspace]
 members = ["clients/python"]

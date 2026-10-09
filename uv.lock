@@ -12,7 +12,7 @@ members = [
     "compose-api",
     "compose-api-client",
 ]
-overrides = [{ name = "compose-api-client", editable = "clients/python" }]
+overrides = [{ name = "compose-api-client", extras = ["cli"], editable = "clients/python" }]
 
 [[package]]
 name = "alembic"
@@ -289,6 +289,18 @@ wheels = [
 ]
 
 [[package]]
+name = "binapy"
+version = "0.8.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bb/12/64a6df32e9bf0eea5dd2a448d37bbfe49b4aae0acb20b46381bf76304a0a/binapy-0.8.0.tar.gz", hash = "sha256:570c5098d42f037ffb3d2e563998f3cff69ad25ca1f43f9c3815432dccd08233", size = 20315, upload-time = "2024-01-19T11:57:20.096Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/94/50/a2ca5609cffc918a339be4ec5070c6d1d9fab600e6d9164df18040137383/binapy-0.8.0-py3-none-any.whl", hash = "sha256:8af1e1e856900ef8b79ef32236e296127c9cf26414ec355982ff7ce5f173504d", size = 16993, upload-time = "2024-01-19T11:57:18.876Z" },
+]
+
+[[package]]
 name = "biopython"
 version = "1.86"
 source = { registry = "https://pypi.org/simple" }
@@ -558,7 +570,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "compose-api-client" },
+    { name = "compose-api-client", extra = ["cli"] },
     { name = "deptry" },
     { name = "mypy" },
     { name = "openapi-python-client" },
@@ -645,13 +657,25 @@ dependencies = [
     { name = "python-dateutil" },
 ]
 
+[package.optional-dependencies]
+cli = [
+    { name = "click" },
+    { name = "pydantic" },
+    { name = "requests" },
+    { name = "requests-oauth2client" },
+    { name = "rich" },
+    { name = "typer" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "attrs", specifier = ">=25.4.0" },
     { name = "click", marker = "extra == 'cli'", specifier = ">=8.1" },
     { name = "httpx", specifier = ">=0.28.1,<0.29" },
-    { name = "platformdirs", marker = "extra == 'cli'", specifier = ">=4.3.6,<5" },
+    { name = "pydantic", marker = "extra == 'cli'", specifier = ">=2.10,<3" },
     { name = "python-dateutil", specifier = ">=2.9.0.post0" },
+    { name = "requests", marker = "extra == 'cli'", specifier = ">=2.32,<3" },
+    { name = "requests-oauth2client", marker = "extra == 'cli'", specifier = ">=1.6.0,<2" },
     { name = "rich", marker = "extra == 'cli'", specifier = ">=13.7" },
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.16.1" },
 ]
@@ -1105,6 +1129,19 @@ wheels = [
 ]
 
 [[package]]
+name = "furl"
+version = "2.1.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "orderedmultidict" },
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/53/e4/203a76fa2ef46cdb0a618295cc115220cbb874229d4d8721068335eb87f0/furl-2.1.4.tar.gz", hash = "sha256:877657501266c929269739fb5f5980534a41abd6bbabcb367c136d1d3b2a6015", size = 57526, upload-time = "2025-03-09T05:36:21.175Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/61/8c/dce3b1b7593858eba995b2dfdb833f872c7f863e3da92aab7128a6b11af4/furl-2.1.4-py2.py3-none-any.whl", hash = "sha256:da34d0b34e53ffe2d2e6851a7085a05d96922b5b578620a37377ff1dbeeb11c8", size = 27550, upload-time = "2025-03-09T05:36:19.928Z" },
+]
+
+[[package]]
 name = "ghp-import"
 version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1459,6 +1496,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/02/49/9d1284d0dc65e2c757b74c6687b6d319b02f822ad039e5c512df9194d9dd/jupyter_core-5.9.1.tar.gz", hash = "sha256:4d09aaff303b9566c3ce657f580bd089ff5c91f5f89cf7d8846c3cdf465b5508", size = 89814, upload-time = "2025-10-16T19:19:18.444Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e7/e7/80988e32bf6f73919a113473a604f5a8f09094de312b9d52b79c2df7612b/jupyter_core-5.9.1-py3-none-any.whl", hash = "sha256:ebf87fdc6073d142e114c72c9e29a9d7ca03fad818c5d300ce2adc1fb0743407", size = 29032, upload-time = "2025-10-16T19:19:16.783Z" },
+]
+
+[[package]]
+name = "jwskate"
+version = "0.12.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "binapy" },
+    { name = "cryptography" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f5/45/85a545c824439ba37aa61bed6c10ddf89dc51915d28b937931de8cca2eef/jwskate-0.12.2.tar.gz", hash = "sha256:7c38b036b633d689b31c89b358823dbc8c439e4c74596cb1fceb0dfe4cf9efce", size = 128629, upload-time = "2025-04-02T10:06:46.539Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/80/21/4252ccb378deb49f9e38635731b30d43aee03c2238d2fe0100011242af62/jwskate-0.12.2-py3-none-any.whl", hash = "sha256:fd10271bd651db8da7df256f7b5bcface84bf165a203b991ae05fb728f3d3aef", size = 88775, upload-time = "2025-04-02T10:06:45.021Z" },
 ]
 
 [[package]]
@@ -2248,6 +2299,18 @@ wheels = [
 ]
 
 [[package]]
+name = "orderedmultidict"
+version = "1.0.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5c/62/61ad51f6c19d495970230a7747147ce7ed3c3a63c2af4ebfdb1f6d738703/orderedmultidict-1.0.2.tar.gz", hash = "sha256:16a7ae8432e02cc987d2d6d5af2df5938258f87c870675c73ee77a0920e6f4a6", size = 13973, upload-time = "2025-11-18T08:00:42.649Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b2/6c/d8a02ffb24876b5f51fbd781f479fc6525a518553a4196bd0433dae9ff8e/orderedmultidict-1.0.2-py2.py3-none-any.whl", hash = "sha256:ab5044c1dca4226ae4c28524cfc5cc4c939f0b49e978efa46a6ad6468049f79b", size = 11897, upload-time = "2025-11-18T08:00:41.44Z" },
+]
+
+[[package]]
 name = "orjson"
 version = "3.11.6"
 source = { registry = "https://pypi.org/simple" }
@@ -2379,7 +2442,7 @@ version = "0.6.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bigraph-schema" },
-    { name = "compose-api-client" },
+    { name = "compose-api-client", extra = ["cli"] },
     { name = "httpx" },
     { name = "jinja2" },
     { name = "pbsim-common" },
@@ -3353,6 +3416,22 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/34/64/8860370b167a9721e8956ae116825caff829224fbca0ca6e7bf8ddef8430/requests-2.33.0.tar.gz", hash = "sha256:c7ebc5e8b0f21837386ad0e1c8fe8b829fa5f544d8df3b2253bff14ef29d7652", size = 134232, upload-time = "2026-03-25T15:10:41.586Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/56/5d/c814546c2333ceea4ba42262d8c4d55763003e767fa169adc693bd524478/requests-2.33.0-py3-none-any.whl", hash = "sha256:3324635456fa185245e24865e810cecec7b4caf933d7eb133dcde67d48cee69b", size = 65017, upload-time = "2026-03-25T15:10:40.382Z" },
+]
+
+[[package]]
+name = "requests-oauth2client"
+version = "1.8.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "binapy" },
+    { name = "furl" },
+    { name = "jwskate" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/13/7f/b3084153443ed7b568854b6a6b0d66971b8f25354ec73f2694a85823d8a2/requests_oauth2client-1.8.0.tar.gz", hash = "sha256:a550f18c41bae5082548257b8a4cd453da6315552f451fc81352c2aaa79b89b3", size = 131048, upload-time = "2025-12-22T20:22:03.335Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/69/6d/18a6d7354924d5b9b71cbb6c247784c9eccf0f9f76c83c4e44bc891157bc/requests_oauth2client-1.8.0-py3-none-any.whl", hash = "sha256:afff45c7dcabe3d7762bcc3e25c002b3645cee6f3ce99776dff54c1f6048b83d", size = 85061, upload-time = "2025-12-22T20:22:01.828Z" },
 ]
 
 [[package]]

@@ -17,16 +17,14 @@ import inspect
 import json
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any, TypeVar
 
 import click
 import httpx
 import typer
-from click.core import ParameterSource
 
-from compose_api_client.cli.config import AuthOverrides
 from compose_api_client.cli.render import Output, emit, err, event_line, lines, resolve, span_tree
 from compose_api_client.ext import (
     DEFAULT_URL,
@@ -65,13 +63,40 @@ class Settings:
     token: str | None = None
     verbose: bool = False
     quiet: bool = False
-    # Command-line auth flags only. Resolution (env, profile file, defaults) waits until sign-in.
-    auth_overrides: AuthOverrides = field(default_factory=AuthOverrides)
+
+
+LOGIN_HINT = "Run compose-api auth login to sign in again, or compose-api auth logout to continue anonymously."
+
+
+def _login_failed(exc: Exception) -> typer.Exit:
+    """A stored login that cannot be used: exit 3 with a way back, never a silent anonymous request."""
+    message = str(exc)
+    typer.echo(message, err=True)
+    if "auth login" not in message:
+        typer.echo(LOGIN_HINT, err=True)
+    return typer.Exit(EXIT_API)
 
 
 def make_session(settings: Settings) -> ComposeSession:
-    """The session every command uses. Tests replace this to inject a transport."""
-    return ComposeSession(settings.url, token=settings.token, timeout=settings.timeout)
+    """The session every command uses. Tests replace this to inject a transport.
+
+    Credentials: ``--token`` / ``COMPOSE_API_TOKEN``, else the stored login for ``--url`` (renewed before each
+    request, so long-running commands keep working), else anonymous when there is no stored login at all.
+    """
+    from compose_api_client.cli.auth import LoginError, StoredAuth, access_token
+
+    try:
+        token = settings.token if settings.token is not None else access_token(settings.url)
+        session = ComposeSession(settings.url, token=token, timeout=settings.timeout)
+        if settings.token is None and token is not None:
+            try:
+                session.client.get_httpx_client().auth = StoredAuth(settings.url)
+            except BaseException:
+                session.close()
+                raise
+    except LoginError as exc:
+        raise _login_failed(exc) from None
+    return session
 
 
 app = typer.Typer(
@@ -92,7 +117,9 @@ datasets_app = typer.Typer(help="The files runs produced.", no_args_is_help=True
 app.add_typer(datasets_app, name="datasets")
 simulations_app = typer.Typer(help="Find simulations and their ids.", no_args_is_help=True)
 app.add_typer(simulations_app, name="simulations")
-auth_app = typer.Typer(help="Who the service sees behind this machine's credentials.", no_args_is_help=True)
+auth_app = typer.Typer(
+    help="Sign in through BioSimulations, sign out, and see who the service sees.", no_args_is_help=True
+)
 app.add_typer(auth_app, name="auth")
 
 
@@ -106,91 +133,20 @@ def root(
         typer.Option("--output", "-o", envvar="COMPOSE_API_OUTPUT", help="auto: table on a terminal, else json."),
     ] = Output.AUTO,
     token: Annotated[
-        str | None, typer.Option(envvar="COMPOSE_API_TOKEN", help="Bearer token for this invocation. Not stored.")
-    ] = None,
-    profile: Annotated[
-        str | None,
-        typer.Option(
-            envvar="COMPOSE_API_PROFILE",
-            help="Auth profile: production, local, or a name in the config file.",
-        ),
-    ] = None,
-    auth0_issuer: Annotated[
-        str | None,
-        typer.Option(
-            envvar="COMPOSE_API_AUTH0_ISSUER",
-            help="Auth0 issuer URL (https). Selects JWKS; not taken from a token.",
-        ),
-    ] = None,
-    auth0_client_id: Annotated[
-        str | None,
-        typer.Option(envvar="COMPOSE_API_AUTH0_CLIENT_ID", help="Public native client ID. Not a secret."),
-    ] = None,
-    auth0_audience: Annotated[
-        str | None,
-        typer.Option(envvar="COMPOSE_API_AUTH0_AUDIENCE", help="API audience identifier, not the service URL."),
-    ] = None,
-    auth0_scopes: Annotated[
-        str | None,
-        typer.Option(envvar="COMPOSE_API_AUTH0_SCOPES", help="Space-separated OIDC scopes for sign-in."),
-    ] = None,
-    callback_ports: Annotated[
-        str | None,
-        typer.Option(
-            envvar="COMPOSE_API_AUTH0_CALLBACK_PORTS",
-            help="Comma-separated loopback callback ports registered with Auth0.",
-        ),
-    ] = None,
-    login_deadline: Annotated[
-        str | None,
-        typer.Option(envvar="COMPOSE_API_AUTH0_LOGIN_DEADLINE", help="Seconds to wait for a browser login."),
-    ] = None,
-    auth_timeout: Annotated[
-        str | None,
-        typer.Option(envvar="COMPOSE_API_AUTH0_NETWORK_TIMEOUT", help="Seconds for Auth0 and JWKS requests."),
+        str | None, typer.Option(envvar="COMPOSE_API_TOKEN", help="Bearer token (when auth is on).")
     ] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Log HTTP requests; tracebacks on errors.")] = False,
     quiet: Annotated[bool, typer.Option("--quiet", "-q", help="No progress lines.")] = False,
 ) -> None:
-    ctx.obj = Settings(
-        url=url,
-        timeout=timeout,
-        output=output,
-        token=token,
-        verbose=verbose,
-        quiet=quiet,
-        auth_overrides=_command_line_auth(ctx),
-    )
+    if token is not None and not token.strip():
+        # An empty token would otherwise mean anonymous here and "use the stored login" elsewhere.
+        raise typer.BadParameter("must not be empty; omit it to use a stored login", param_hint="--token")
+    ctx.obj = Settings(url=url, timeout=timeout, output=output, token=token, verbose=verbose, quiet=quiet)
     if verbose:
         import logging
 
         logging.basicConfig(level=logging.INFO, format="%(message)s")
         logging.getLogger("httpx").setLevel(logging.INFO)
-
-
-def _command_line_auth(ctx: click.Context) -> AuthOverrides:
-    """Flags only. Typer has already merged environment variables; those stay out of this object."""
-
-    def taken(name: str) -> str | None:
-        if ctx.get_parameter_source(name) is not ParameterSource.COMMANDLINE:
-            return None
-        value = ctx.params.get(name)
-        if not isinstance(value, str):
-            return None
-        text = value.strip()
-        return text or None
-
-    return AuthOverrides(
-        profile=taken("profile"),
-        api_base_url=taken("url"),
-        issuer=taken("auth0_issuer"),
-        client_id=taken("auth0_client_id"),
-        audience=taken("auth0_audience"),
-        scopes=taken("auth0_scopes"),
-        callback_ports=taken("callback_ports"),
-        login_deadline=taken("login_deadline"),
-        network_timeout=taken("auth_timeout"),
-    )
 
 
 def _settings(ctx: click.Context) -> Settings:
@@ -253,6 +209,10 @@ def handled(fn: F) -> F:
         except typer.Exit:
             raise
         except (Exception, KeyboardInterrupt) as e:
+            from compose_api_client.cli.auth import LoginError
+
+            if isinstance(e, LoginError):
+                raise _login_failed(e) from None
             code = _report(e, settings)
             if code is None or settings.verbose:
                 raise
@@ -734,11 +694,137 @@ def build_status(
 # -- identity -------------------------------------------------------------------------------------------------------
 
 
+@auth_app.command("login")
+@handled
+def auth_login(ctx: typer.Context) -> None:
+    """Sign in through BioSimulations, then authorize the CLI separately with Auth0 PKCE."""
+    from compose_api_client.cli import auth
+
+    settings = _settings(ctx)
+    env = auth.environment_for(settings.url)
+    if env is None:
+        typer.echo("No Auth0 application for this URL; use --token.", err=True)
+        raise typer.Exit(EXIT_USAGE)
+
+    def notify(message: str) -> None:
+        typer.echo(message, err=True)
+
+    try:
+        _portal_login(settings, notify)
+    except typer.Exit:
+        raise
+    except (KeyboardInterrupt, click.Abort):
+        notify("Login cancelled. No new credentials were saved.")
+        raise typer.Exit(EXIT_INTERRUPT) from None
+    except TimeoutError:
+        notify("CLI authorization timed out. No new credentials were saved; run compose-api auth login again.")
+        raise typer.Exit(EXIT_TIMEOUT) from None
+    except auth.LoginError as exc:
+        notify(str(exc))
+        raise typer.Exit(EXIT_API) from None
+    except Exception:
+        # Do not expose provider/API responses or token-bearing exception objects, even with --verbose.
+        notify("Login could not be confirmed or saved. Check API /auth/me availability and credential storage.")
+        raise typer.Exit(EXIT_API) from None
+
+
+def _portal_login(settings: Settings, notify: Callable[[str], None]) -> None:
+    from compose_api_client.cli import auth
+
+    env = auth.environment_for(settings.url)
+    if env is None:
+        raise typer.Exit(EXIT_USAGE)
+    auth.open_browser(auth.PORTAL_URL, notify)
+    if settings.token:
+        _confirm_supplied_token(settings)
+        notify("The API confirmed your supplied token. No browser credentials were saved.")
+        return
+    if _stored_login_confirmed(settings, notify):
+        notify("Already authenticated; the API confirmed the stored access token.")
+        return
+    notify("Sign in at BioSimulations (or choose Sign Up and finish any required verification).")
+    notify("Website login alone does not authenticate this CLI. Next, authorize the Compose API native client.")
+    if not typer.confirm("Ready to continue to CLI authorization?", default=False, err=True):
+        raise typer.Exit(EXIT_INTERRUPT)
+    tokens = auth.login_interactive_tokens(env, notify)
+    with ComposeSession(settings.url, token=tokens.access_token, timeout=min(settings.timeout, 10)) as session:
+        identity = session.whoami()
+    if identity.issuer != f"{auth.ISSUER_URL}/" or env.audience not in identity.audience:
+        raise auth.LoginError("The API reported an incompatible issuer or audience. No credentials were saved.")
+    tokens.subject = identity.subject
+    auth.save(settings.url, tokens)
+    notify("Authenticated: Compose API accepted the access token; credentials saved securely.")
+
+
+def _confirm_supplied_token(settings: Settings) -> None:
+    from compose_api_client.cli import auth
+
+    with make_session(settings) as session:
+        try:
+            session.whoami()
+        except ComposeApiError as exc:
+            raise auth.LoginError(
+                f"The API did not accept the supplied token (HTTP {exc.status_code}). Nothing was saved."
+            ) from None
+
+
+def _stored_login_confirmed(settings: Settings, notify: Callable[[str], None]) -> bool:
+    """Whether the API accepts the current stored login; False when there is none, or it is unusable or rejected."""
+    from compose_api_client.cli import auth
+
+    try:
+        existing = auth.access_token(settings.url)
+    except auth.LoginError as exc:
+        notify(f"Stored login could not be used: {exc}")
+        return False  # an expired local login can be replaced by a new verified login
+    if not existing:
+        return False
+    try:
+        with ComposeSession(settings.url, token=existing, timeout=min(settings.timeout, 10)) as session:
+            session.whoami()
+    except ComposeApiError as exc:
+        if exc.status_code != 401:
+            raise
+        return False
+    return True
+
+
+@auth_app.command("signup")
+@handled
+def auth_signup() -> None:
+    """Open BioSimulations registration; this does not establish a CLI session."""
+    from compose_api_client.cli import auth
+
+    auth.open_browser(auth.PORTAL_URL, lambda message: typer.echo(message, err=True))
+    typer.echo(
+        "Choose Sign Up at BioSimulations and complete any required verification. "
+        "Then run compose-api auth login. No CLI credentials were obtained or saved.",
+        err=True,
+    )
+
+
+@auth_app.command("logout")
+@handled
+def auth_logout(ctx: typer.Context) -> None:
+    """Remove local credentials and attempt refresh-token revocation; browser sessions remain signed in."""
+    from compose_api_client.cli import auth
+
+    try:
+        revoked = auth.logout(_settings(ctx).url)
+    except Exception:
+        typer.echo("Could not clear the credential file; check its permissions and format.", err=True)
+        raise typer.Exit(EXIT_API) from None
+    message = "Local credentials removed; refresh-token revocation completed or was not needed."
+    if not revoked:
+        message = "Local credentials removed; refresh-token revocation could not be confirmed."
+    typer.echo(message + " Browser sessions and issued access tokens may remain valid.", err=True)
+
+
 @auth_app.command("whoami")
 @claims("auth whoami", "get-auth-me")
 @handled
 def auth_whoami(ctx: typer.Context) -> None:
-    """Who the service sees: the identity behind --token (or COMPOSE_API_TOKEN)."""
+    """Who the service sees: the identity behind --token, COMPOSE_API_TOKEN, or auth login."""
     with make_session(_settings(ctx)) as s:
         emit(_settings(ctx).output, s.whoami())
 
