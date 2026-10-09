@@ -24,6 +24,7 @@ exclude_docs: |
 nav:
   - Home: index.md
   - Authentication: authentication.md
+  - Web UI: webapp.md
   - Modules: modules.md
 plugins:
   - search

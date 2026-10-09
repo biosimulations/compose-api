@@ -11,6 +11,7 @@ import uvicorn
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
+from compose_api.api.webapp import mount_webapp
 from compose_api.authentication import BEARER_SCHEME_NAME
 from compose_api.common.gateway.models import ServerMode
 from compose_api.config import get_settings
@@ -119,6 +120,7 @@ def _openapi_with_optional_bearer() -> dict[str, Any]:
 
 
 app.openapi = _openapi_with_optional_bearer  # type: ignore[method-assign]
+mount_webapp(app, Path(get_settings().webapp_dist_dir))
 
 
 # -- app-level endpoints -- #

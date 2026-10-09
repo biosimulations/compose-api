@@ -27,6 +27,8 @@ clients: ## Regenerate the OpenAPI spec and the Python client from the app (LIB_
 	@uv run python compose_api/api/openapi_spec.py
 	@echo "🚀 Creating HTTPX Clients"
 	@scripts/generate-api-client.sh
+	@if [ -d webapp/node_modules ]; then echo "🚀 Regenerating the web UI's API types"; cd webapp && npm run --silent types; \
+	else echo "⚠️  webapp/node_modules missing: run 'make webapp-install' to regenerate webapp/app/api/schema.d.ts"; fi
 
 .PHONY: cli-docs
 cli-docs: ## Regenerate the command reference at the end of docs/cli.md
@@ -42,6 +44,22 @@ check-clients: ## Fail if the committed spec or client differs from a fresh gene
 	diff -r -x __pycache__ -x utils -x ext -x cli clients/python/compose_api_client "$$tmp/client" && \
 	cp docs/cli.md "$$tmp/cli.md" && scripts/cli-docs.sh "$$tmp/cli.md" && diff -u docs/cli.md "$$tmp/cli.md" || \
 	{ echo "❌ The spec, the client or the CLI reference is stale: run 'make clients cli-docs' and commit."; exit 1; }
+
+.PHONY: webapp-install
+webapp-install: ## Install the web UI's npm dependencies (webapp/, Node 24)
+	@cd webapp && npm ci
+
+.PHONY: webapp-dev
+webapp-dev: ## Serve the web UI on http://localhost:4200/ui/ against `make run` (COMPOSE_API_URL=... for another API)
+	@cd webapp && NUXT_PUBLIC_API_BASE=$${COMPOSE_API_URL:-http://localhost:8000} npm run dev
+
+.PHONY: webapp-build
+webapp-build: ## Build the static web UI into webapp/.output/public, which `make run` then serves at /ui
+	@cd webapp && npm run generate
+
+.PHONY: webapp-check
+webapp-check: ## Lint and typecheck the web UI, and fail if its API types are stale
+	@cd webapp && npm run --silent types && git diff --exit-code app/api/schema.d.ts && npm run lint && npm run typecheck
 
 .PHONY: test
 test: ## Test the code with pytest

@@ -1,4 +1,7 @@
 .venv
+webapp/node_modules
+webapp/.nuxt
+webapp/.output
 __pycache__/
 *.pyc
 *.pyo
