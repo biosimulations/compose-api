@@ -11,3 +11,7 @@ The Python client for [compose-api](https://github.com/biosimulations/compose-ap
 Until 0.2.0 this package lived in [biosimulations/compose-api-client](https://github.com/biosimulations/compose-api-client);
 it was brought here with its history. The plan for this package, its application layer and the `compose-api` command
 line is [`docs/plan-cli.md`](../../docs/plan-cli.md).
+
+CLI login/signup reuse the [BioSimulations portal](https://biosim.biosimulations.org/login); login then requires
+a separate native PKCE authorization and Compose API confirmation. See the [CLI guide](../../docs/cli.md) for
+current storage, expiry, configuration, and production deployment limitations.

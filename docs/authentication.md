@@ -47,6 +47,44 @@ This API does not register or sign in users. Sign in through BioSim's login. The
 
 When that client holds a refresh token, use the client's refresh flow to obtain a new access token before the current one expires. Send the new access token to this API. Do not send the refresh token here. This API does not issue, refresh, or revoke tokens.
 
+
+## BioSimulations CLI login and signup
+
+`compose-api auth login` and `compose-api auth signup` both open
+<https://biosim.biosimulations.org/login>. Sign in with your existing BioSimulations account, or choose Sign Up
+there and complete any required verification. The CLI never asks for your password or registers a separate account.
+If no browser opens, use the printed URL manually.
+
+Signup provides portal instructions only; it does not authenticate the CLI. Afterwards run `compose-api auth login`.
+Login first opens the portal, then asks you to return to the terminal before opening a separate Auth0 authorization
+for the Compose native client (Authorization Code with S256 PKCE). The website cannot return credentials to the CLI.
+The shared tenant may reuse your browser session, but consent or another sign-in may be required.
+
+Only after `GET /auth/me` accepts the Compose-audience access token does login report success and save it in
+`~/.compose-api/tokens.json` (POSIX directory 0700, file 0600). ID tokens and website tokens are never used for API
+requests. Refresh tokens, when issued for `offline_access`, are stored in the same private file.
+Current storage is POSIX-only; use `--token` on other systems. `--token` / `COMPOSE_API_TOKEN` takes
+precedence over stored credentials. Stored tokens are bound to their configured API URL.
+`compose-api auth whoami` verifies identity with the API. Stored sessions refresh before each API request as needed,
+including during long-running commands. Concurrent commands serialize refresh through a private POSIX lock file.
+If a refresh is interrupted or its result cannot be safely confirmed/saved, the CLI requires login again instead
+of retrying the old refresh token. Access-only sessions require login after expiry. Explicit tokens are not refreshed.
+
+`compose-api auth logout` removes local credentials first, then attempts refresh-token revocation and reports whether
+it could be confirmed. It does not sign out the browser or guarantee invalidation of an issued access token.
+Running commands stop using a removed session or a different account's replacement session. Cancellation, failed
+authorization, or failed API verification saves no new login. The token file and lock must be private regular files;
+symlinks, hard links, insecure ownership/modes, and corrupt state are rejected rather than treated as anonymous.
+
+The existing native apps require public token-endpoint authentication (no secret), S256 PKCE, callback
+`http://127.0.0.1:8400/callback`, and a user grant to the correct Compose audience. Port 8400 must be available.
+Production uses audience `https://api.compose.cam.uchc.edu`; the configured local cluster uses
+`https://api.compose.local`. Both use issuer `https://dev-bu7yo7484tyxu6a1.us.auth0.com/`.
+The companion `auth0-pulumi/compose-api/CLI_SETUP.md` records earlier tenant deployment evidence; current tenant
+settings and interactive portal-to-CLI login still need release verification. The production `/auth/me` probe on
+2026-10-09 returned **404**: deploy the existing route before expecting production login to succeed. A successful
+website login cannot work around that blocker. No automatic portal-to-loopback handoff is currently supported.
+
 ## Service callers
 
 A service uses the OAuth 2.0 client-credentials grant. The Auth0 application must be allowed to request the Compose API audience for that environment. Ask the tenant for a new access token when the current one expires. Client credentials do not return a refresh token.
