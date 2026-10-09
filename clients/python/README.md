@@ -13,5 +13,6 @@ it was brought here with its history. The plan for this package, its application
 line is [`docs/plan-cli.md`](../../docs/plan-cli.md).
 
 CLI login/signup reuse the [BioSimulations portal](https://biosim.biosimulations.org/login); login then requires
-a separate native PKCE authorization and Compose API confirmation. See the [CLI guide](../../docs/cli.md) for
-current storage, expiry, configuration, and production deployment limitations.
+a separate native PKCE authorization and Compose API confirmation. `compose-api auth login` stores the confirmed
+tokens in `~/.compose-api/tokens.json` (directory 0700, file 0600, keyed by API URL; POSIX only, use `--token`
+elsewhere). See the [CLI guide](../../docs/cli.md) for expiry, renewal, logout, and production deployment limitations.

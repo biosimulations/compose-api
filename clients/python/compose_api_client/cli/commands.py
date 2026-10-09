@@ -745,7 +745,7 @@ def _portal_login(settings: Settings, notify: Callable[[str], None]) -> None:
     notify("Sign in at BioSimulations (or choose Sign Up and finish any required verification).")
     notify("Website login alone does not authenticate this CLI. Next, authorize the Compose API native client.")
     if not typer.confirm("Ready to continue to CLI authorization?", default=False, err=True):
-        raise typer.Exit(EXIT_INTERRUPT)
+        raise click.Abort  # declining is a cancellation: the same message and exit 130 as Ctrl-C
     tokens = auth.login_interactive_tokens(env, notify)
     with ComposeSession(settings.url, token=tokens.access_token, timeout=min(settings.timeout, 10)) as session:
         identity = session.whoami()

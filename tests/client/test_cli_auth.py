@@ -137,6 +137,7 @@ def test_portal_entry_and_cancellation(monkeypatch: pytest.MonkeyPatch, command:
     monkeypatch.setattr(webbrowser, "open", launch)
     result = CliRunner().invoke(app, ["auth", command], input="n\n")
     assert result.exit_code == (130 if command == "login" else 0)
+    assert ("Login cancelled. No new credentials were saved." in result.output) is (command == "login")
     assert opened == [auth.PORTAL_URL]
     assert auth.PORTAL_URL in result.output
     assert "private provider error" not in result.output
