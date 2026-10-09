@@ -107,6 +107,12 @@ class Settings(BaseSettings):
     # empty no token can be verified: anonymous requests still work and any supplied bearer token gets a 401.
     auth0_domain: str = ""  # e.g. dev-bu7yo7484tyxu6a1.us.auth0.com -- no scheme, no trailing slash
     auth0_audience: str = ""  # the Auth0 API Identifier, exactly as shown in the dashboard
+    # The web UI's Auth0 Single Page Application (compose_api/api/webapp.py). Not a secret: an SPA has none. The UI
+    # offers login only when this and both values above are set; it must be allowed to request auth0_audience.
+    auth0_spa_client_id: str = ""
+
+    # The static web UI build served at /ui (webapp/, `npm run generate`). Absent: the API runs without a UI.
+    webapp_dist_dir: str = f"{REPO_ROOT}/webapp/.output/public"
 
 
 @lru_cache

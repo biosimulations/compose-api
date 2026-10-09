@@ -1,3 +1,11 @@
+# The web UI (webapp/): a static Nuxt SPA that the API serves at /ui (compose_api/api/webapp.py).
+FROM node:24-alpine AS webapp
+WORKDIR /webapp
+COPY webapp/package.json webapp/package-lock.json ./
+RUN npm ci
+COPY webapp/ ./
+RUN npm run generate
+
 # Use the official Python image from the Docker Hub
 FROM python:3.14.7-slim-bookworm AS base
 
@@ -37,6 +45,9 @@ COPY --chown=appuser:appgroup . /app
 
 # Sync the project
 RUN uv sync --frozen
+
+# The built web UI, where settings.webapp_dist_dir looks by default
+COPY --from=webapp --chown=appuser:appgroup /webapp/.output/public /app/webapp/.output/public
 
 # Declare the volume for local cache storage
 VOLUME ["/app/scratch"]

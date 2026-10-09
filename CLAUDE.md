@@ -39,6 +39,11 @@ make check-clients    # fails if either is stale; part of `make check`, so CI en
 LIB_DIR=<compose-api-client checkout>/compose_api_client make clients   # also writes the external 0.2.x repo
 ```
 
+Web UI (`webapp/`, Nuxt 4 + Nuxt UI static SPA served by the API at `/ui`; [`docs/webapp.md`](docs/webapp.md)):
+`make webapp-install`, `make webapp-dev` (:4200/ui/ against `make run`; `COMPOSE_API_URL=` for another API), `make webapp-check`, `make webapp-build`.
+`webapp/app/api/schema.d.ts` is generated from the spec (`make clients` regenerates it; CI fails when stale) — never
+hand-edit. Use standard libraries there (VueUse, openapi-fetch, PapaParse, Nuxt UI components) over ad hoc code.
+
 Command line: `uv run compose-api --help` (the `compose-api-client[cli]` extra; guide and reference in
 [`docs/cli.md`](docs/cli.md), `make cli-docs` regenerates the reference). Every API operation must be claimed by a
 command (`@claims` in `compose_api_client/cli/commands.py`); `tests/client/test_cli.py` fails otherwise, so a new

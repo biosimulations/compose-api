@@ -37,6 +37,30 @@ jobs:
         run: |
           docker build -f Dockerfile-api -t compose-api:ci .
           docker run --rm compose-api:ci bash -c "source .venv/bin/activate && python -c 'import compose_api.api.main'"
+          docker run --rm compose-api:ci test -f /app/webapp/.output/public/200.html
+
+  # The web UI (webapp/). Its API types are generated from the committed spec, so a spec change without
+  # `make clients` fails here the way a stale Python client fails `make check`.
+  webapp:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: webapp/.nvmrc
+          cache: npm
+          cache-dependency-path: webapp/package-lock.json
+
+      - name: Install
+        run: make webapp-install
+
+      - name: Lint, typecheck, and check the API types are current
+        run: make webapp-check
+
+      - name: Build
+        run: make webapp-build
 
   # Split from the SLURM tests below so the common failure modes report in about a
   # minute instead of waiting behind a six-minute container build. Together the two jobs
