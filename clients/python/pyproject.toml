@@ -1,7 +1,7 @@
 [project]
 name = "compose-api-client"
 # Released in lock-step with the service (docs/strategy.md, packaging): tag.sh bumps both.
-version = "0.7.6"
+version = "0.7.7"
 description = "Python client for compose-api: generated from its OpenAPI spec, plus a hand-written application layer"
 readme = "README.md"
 requires-python = ">=3.11"
