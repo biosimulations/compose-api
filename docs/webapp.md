@@ -20,7 +20,9 @@ serves it at **`/ui`** on the same host, and `/` redirects there.
 declares which datasets it fits (by kind, media type and attributes) and is an async component, so a viewer and its
 libraries download only when first opened. `/ui/datasets/<id>` opens a dataset full width; the table's preview shows
 the same viewers. Built in: image, table (plotted when numeric), text, and for results bundles (`*.fenics`) a
-statistics view read chunk by chunk with zarrita from `/datasets/{id}/files/`.
+statistics view and a **3D view** (vtk.js) read chunk by chunk with zarrita from `/datasets/{id}/files/`. The 3D view
+draws the bundle's web extension (a precomputed surface per domain, viva-pde-particle `docs/web-bundle.md`) coloured by
+one variable, fetches one row per frame, shows particles, and follows a running simulation.
 
 `get-simulations-status-batch` is not used: it is a GET with a JSON body, which browsers cannot send. The list page
 re-fetches while any row is still running.

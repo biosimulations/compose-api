@@ -27,7 +27,7 @@ describe('Bundle', () => {
     expect(Object.keys(b.manifest.domains)).toEqual(['cell'])
     expect(b.variablesOf('cell').map(v => v.name)).toEqual(['u'])
     expect(b.particleSpecies).toEqual(['A'])
-    expect(b.web).toBeUndefined()
+    expect(b.web?.schema).toBe(1)
   })
 
   it('reads one row with one chunk request', async () => {
@@ -52,6 +52,15 @@ describe('Bundle', () => {
     const [lo, hi] = await b.range(u)
     expect(lo).toBeCloseTo(s.min[0]!, 12)
     expect(hi).toBeCloseTo(s.max[2]!, 12)
+  })
+
+  it('reads the web surface: mesh-order points and boundary triangles', async () => {
+    const b = await Bundle.open(diskStore())
+    const s = (await b.surface('cell'))!
+    expect(s.points.length).toBe(125 * 3) // every mesh point, so a row colours it directly
+    expect(s.triangles.length).toBe(6 * 16 * 2 * 3) // 6 faces of 4x4 squares, 2 triangles each
+    expect(Math.max(...s.triangles)).toBeLessThan(125)
+    expect(await b.surface('nope')).toBeUndefined()
   })
 
   it('reads particles up to their count', async () => {

@@ -8,8 +8,8 @@
 | 0 | This document | compose-api | in review (with F1) |
 | F1 | Directory datasets (`*.fenics`, `*.zarr`) and `GET /datasets/{id}/files/{subpath}` | compose-api | in review |
 | F2 | Viewer registry; built-in viewers; shared bundle reader; `StatsViewer` | compose-api `webapp/` | in review |
-| B1 | Ad hoc `SpatialExport` step and the bundle's `web` extension; the compose runner writes and announces the bundle | viva-pde-particle | |
-| B2 | `BundleSurfaceViewer` (vtk.js) | compose-api `webapp/` | |
+| B1 | Ad hoc `SpatialExport` step and the bundle's `web` extension; the compose runner writes and announces the bundle | viva-pde-particle | in review (viva-pde-particle#57) |
+| B2 | `BundleSurfaceViewer` (vtk.js) | compose-api `webapp/` | in review |
 | A1–A3 | Optional: VCell's vtk.wasm field viewer behind a `DataSource`, fed from the same bundles | vcell, compose-api | later |
 
 ## Context
