@@ -64,6 +64,9 @@ manifest() {  # one artifact.written per file the run left: what it wrote under 
     # A zarr store (a *.fenics results bundle or a *.zarr) is ONE dataset, read file by file through
     # /datasets/{id}/files/ (docs/plan-viewers.md F1): announced with its total size and no checksum.
     local f size sum
+    # The API serves these files as another user: a producer's restrictive mode (e.g. a 0600 mkstemp file renamed into
+    # place) must not hide one, or the file route fails mid-response (simulation 4570).
+    chmod -R a+rX "$EXPERIMENT/output" 2>/dev/null || true
     while IFS= read -r f; do
         if [ -d "$EXPERIMENT/$f" ]; then
             emit artifact.written info "{\"uri\":\"$(json_escape "$f")\",\"bytes\":$(dir_bytes "$EXPERIMENT/$f")}"

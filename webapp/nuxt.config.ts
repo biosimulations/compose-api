@@ -37,7 +37,8 @@ export default defineNuxtConfig({
   // api.iconify.design at runtime.
   icon: {
     provider: 'none',
-    clientBundle: { scan: true }
+    // The scan covers templates; icons named only in TypeScript (the viewer registry) are listed here.
+    clientBundle: { scan: true, icons: ['lucide:image', 'lucide:table', 'lucide:file-text', 'lucide:box', 'lucide:chart-line'] }
   },
 
   // Nuxt UI's @nuxt/fonts fetches web fonts at build time; the on-premise build uses system fonts instead.
