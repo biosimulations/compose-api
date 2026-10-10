@@ -126,6 +126,10 @@ def normalize_path(uri: str) -> str | None:
     return normal
 
 
+#: Every kind :func:`infer_kind` can give; the web UI's kind filter lists these (``GET /webapp/config``).
+DATASET_KINDS = sorted({*_KINDS.values(), "file"})
+
+
 def infer_kind(path: str) -> str:
     return _KINDS.get(posixpath.splitext(path)[1].lower(), "file")
 

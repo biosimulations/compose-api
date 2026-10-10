@@ -10,6 +10,7 @@ from httpx import ASGITransport
 from compose_api.api.main import app as main_app
 from compose_api.api.webapp import SPA_FALLBACK, mount_webapp
 from compose_api.config import get_settings, override_settings
+from compose_api.observability.datasets import DATASET_KINDS
 
 SHELL = "<html>spa shell</html>"
 
@@ -67,7 +68,10 @@ async def test_webapp_config_publishes_login_settings_and_simulator_names(
         "auth0_audience": get_settings().auth0_audience,
         "auth0_client_id": "spa-client",
         "prebuilt_simulators": ["a-sim", "b-sim"],
+        "dataset_kinds": DATASET_KINDS,
     }
+    assert "results-bundle" in DATASET_KINDS
+    assert "file" in DATASET_KINDS
 
 
 def test_webapp_routes_are_not_api_operations() -> None:
