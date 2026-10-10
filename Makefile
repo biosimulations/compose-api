@@ -58,8 +58,8 @@ webapp-build: ## Build the static web UI into webapp/.output/public, which `make
 	@cd webapp && npm run generate
 
 .PHONY: webapp-check
-webapp-check: ## Lint and typecheck the web UI, and fail if its API types are stale
-	@cd webapp && npm run --silent types && git diff --exit-code app/api/schema.d.ts && npm run lint && npm run typecheck
+webapp-check: ## Lint, typecheck and unit-test the web UI, and fail if its API types are stale
+	@cd webapp && npm run --silent types && git diff --exit-code app/api/schema.d.ts && npm run lint && npm run typecheck && npm test
 
 .PHONY: test
 test: ## Test the code with pytest

@@ -46,6 +46,7 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-01-15',
 
   vite: {
-    optimizeDeps: { exclude: ['plotly.js-dist-min'] }
+    // Pre-bundle Plotly's UMD build so the dev server exposes it as a module (served raw, it sets a global instead).
+    optimizeDeps: { include: ['plotly.js-dist-min'] }
   }
 })

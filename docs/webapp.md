@@ -16,6 +16,12 @@ serves it at **`/ui`** on the same host, and `/` redirects there.
 | `/ui/datasets`: every run's files | `list-datasets`, `get-dataset-content` |
 | `/ui/catalog`: processes, steps, simulator versions | `get-processes-list`, `get-steps-list`, `get-simulator-list` |
 
+**Viewers are registered per dataset type** (`webapp/app/viewers/registry.ts`, [plan](plan-viewers.md)). Each one
+declares which datasets it fits (by kind, media type and attributes) and is an async component, so a viewer and its
+libraries download only when first opened. `/ui/datasets/<id>` opens a dataset full width; the table's preview shows
+the same viewers. Built in: image, table (plotted when numeric), text, and for results bundles (`*.fenics`) a
+statistics view read chunk by chunk with zarrita from `/datasets/{id}/files/`.
+
 `get-simulations-status-batch` is not used: it is a GET with a JSON body, which browsers cannot send. The list page
 re-fetches while any row is still running.
 

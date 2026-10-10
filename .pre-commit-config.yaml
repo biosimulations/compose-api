@@ -17,9 +17,9 @@ repos:
       # the newline this hook likes changes the hash and the file stops being a copy of
       # what production recorded. Learned by having it happen.
       - id: end-of-file-fixer
-        exclude: ^tests/fixtures/resources/
+        exclude: ^(tests/fixtures/resources|webapp/test/fixtures/.*\.fenics)/
       - id: trailing-whitespace
-        exclude: ^tests/fixtures/resources/
+        exclude: ^(tests/fixtures/resources|webapp/test/fixtures/.*\.fenics)/
 
   # Must match the `ruff` pin in pyproject.toml. When they drift, the two disagree on
   # import order and `make check` oscillates on the same file forever, each run

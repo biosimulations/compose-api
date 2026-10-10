@@ -1,0 +1,75 @@
+{
+ "particles": {
+  "schema": 1,
+  "species": {
+   "A": {
+    "count": "particles/A/count",
+    "xyz": "particles/A/xyz"
+   }
+  }
+ },
+ "vcell_fenics": {
+  "domains": {
+   "cell": {
+    "cell_type": 10,
+    "dim": 3,
+    "gdim": 3,
+    "kind": "volume",
+    "mesh": "mesh/cell.vtu",
+    "n_cells": 384,
+    "n_points": 125
+   }
+  },
+  "message": null,
+  "planned_times": [],
+  "profile": "fixed",
+  "progress": 1.0,
+  "schema": 1,
+  "segments": [
+   {
+    "count": 3,
+    "index": 0,
+    "motion": "none",
+    "prefix": "",
+    "t0": 0.0
+   }
+  ],
+  "solver": {
+   "dolfinx": "",
+   "mpi_ranks": 1,
+   "options": {},
+   "overrides": {},
+   "version": "viva-pde-particle 0.0.0"
+  },
+  "source": {
+   "file": "compose-api webapp fixture",
+   "job_index": null,
+   "kind": "viva-pde-particle",
+   "sim_key": null,
+   "task_id": null
+  },
+  "stats_columns": [
+   "mean",
+   "total",
+   "min",
+   "max"
+  ],
+  "status": "completed",
+  "times": [
+   0.0,
+   0.5,
+   1.0
+  ],
+  "updated": "2026-10-10T14:54:31+00:00",
+  "variables": [
+   {
+    "assoc": "point",
+    "domain": "cell",
+    "element": "P1",
+    "name": "u",
+    "path": "cell/u",
+    "stats": "stats/cell/u"
+   }
+  ]
+ }
+}
