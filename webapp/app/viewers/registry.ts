@@ -44,6 +44,14 @@ export const VIEWERS: ViewerDef[] = [
     component: lazy(() => import('./TextViewer.vue'))
   },
   {
+    // Bundles carrying the web extension are drawn in 3D; others still get it offered, and say why it is empty.
+    id: 'bundle-surface',
+    label: '3D',
+    icon: 'i-lucide-box',
+    match: d => (isBundle(d) ? (d.attributes?.web ? 10 : 3) : 0),
+    component: lazy(() => import('./BundleSurfaceViewer.vue'))
+  },
+  {
     id: 'bundle-stats',
     label: 'Statistics',
     icon: 'i-lucide-chart-line',

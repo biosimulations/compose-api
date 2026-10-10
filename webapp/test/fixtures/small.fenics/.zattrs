@@ -60,7 +60,7 @@
    0.5,
    1.0
   ],
-  "updated": "2026-10-10T14:54:31+00:00",
+  "updated": "2026-10-10T15:04:56+00:00",
   "variables": [
    {
     "assoc": "point",
@@ -71,5 +71,14 @@
     "stats": "stats/cell/u"
    }
   ]
+ },
+ "web": {
+  "schema": 1,
+  "surfaces": {
+   "cell": {
+    "points": "web/cell/points",
+    "triangles": "web/cell/triangles"
+   }
+  }
  }
 }
