@@ -73,7 +73,7 @@ this repo's `main`. It applies `kustomize/overlays/compose-api-rke` within a min
 - **Manual fallback:** `make deploy` (`KUBECONFIG=~/.kube/kubeconfig_vxrails.yaml`). Flux reverts anything that
   diverges from `main` at its next reconcile.
 - **Any API pod restart drops submissions still in flight:** a run still pulling or building its container stays
-  `submitting` (#238). Avoid deploying while a first run of a new simulator image is in progress. Publishing a GitHub *release* (separate from the tag push) additionally archives it to Zenodo under concept DOI 10.5281/zenodo.21127421 via the reusable `virtualcell/zenodo-maint` workflow; keep `CITATION.cff` and `.zenodo.json` in step with the authors and version, as a weekly drift check flags mismatches.
+  `submitting` (#238). Avoid deploying while a first run of a new simulator image is in progress. Zenodo archiving is a **monthly rollup** (`zenodo-archive.yml`, 1st of the month): the reusable `virtualcell/zenodo-maint` workflow archives the latest GitHub *release*, if it isn't archived yet, under concept DOI 10.5281/zenodo.21127421. Run it by hand to archive now. Tags alone are never archived, and a published release also publishes the client to PyPI (above); keep `CITATION.cff` and `.zenodo.json` in step with the authors and version, as a weekly drift check flags mismatches.
 
 ## Test environment
 
