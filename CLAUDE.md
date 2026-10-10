@@ -193,7 +193,10 @@ parsing, span folding and Chrome Trace renderer are ported from viva-core.
 `output/` (kept now) and for `results.zip`, with size and sha256, and one for the SLURM log `job.out` (kind
 `log`, which simulation jobs now write in their experiment directory instead of `htclogs/`). A simulator's own event (any component but
 `compose_api.job`) wins over that manifest. Paths are relative to the experiment directory, and
-`resolve_content_path` keeps content reads inside it. Listings filter with `authorization.readable_clause`.
+`resolve_content_path` keeps content reads inside it. A zarr store (`*.fenics` results bundle, `*.zarr`) is ONE
+directory dataset: the manifest announces the directory, `/content` answers 409, and its files are read one at a time
+through `/datasets/{id}/files/{subpath}` (Range, ETag, `no-cache`), so the web UI's viewers fetch chunks with no
+server-side reduction ([`docs/plan-viewers.md`](docs/plan-viewers.md)). Listings filter with `authorization.readable_clause`.
 
 **Persistence.** `DatabaseServiceSQL` (async SQLAlchemy + asyncpg) is a facade over three ORM executors:
 `get_simulator_db()`, `get_hpc_db()`, `get_package_db()` (`compose_api/db/services/`, tables in `db/tables/`). Startup

@@ -16,7 +16,7 @@ from compose_api.common.gateway.models import Namespace, RouterConfig
 from compose_api.config import get_settings
 from compose_api.db.services.datasets_db import DatasetQuery
 from compose_api.dependencies import get_required_database_service
-from compose_api.observability.datasets import Dataset, DatasetPage
+from compose_api.observability.datasets import Dataset, DatasetPage, infer_media_type
 from compose_api.simulation.hpc_utils import get_internal_experiment_dir
 
 logger = logging.getLogger(__name__)
@@ -39,6 +39,17 @@ def resolve_content_path(experiment_dir: Path, relative: str) -> Path | None:
     root = experiment_dir.resolve()
     target = (root / relative).resolve()
     return target if target.is_relative_to(root) else None
+
+
+async def _dataset_path(dataset: Dataset) -> Path | None:
+    """Where ``dataset`` lives on the mounted store, or None if its path resolves outside its experiment directory."""
+    db = get_required_database_service()
+    experiment_id = await db.get_simulator_db().get_simulations_experiment_id(simulation_id=dataset.simulation_id)
+    experiment_dir = get_internal_experiment_dir(experiment_id, Namespace(get_settings().namespace))
+    path = resolve_content_path(experiment_dir, dataset.path)
+    if path is None:
+        logger.warning(f"Dataset {dataset.id} path {dataset.path!r} resolves outside its experiment directory")
+    return path
 
 
 @config.router.get(
@@ -88,6 +99,7 @@ async def get_dataset(dataset_id: uuid.UUID, caller: OptionalCaller) -> Dataset:
     responses={
         200: {"content": {"application/octet-stream": {"schema": {"format": "binary"}}}, "description": "The file"},
         404: {"description": "The dataset does not exist, the caller may not read it, or its file is gone"},
+        409: {"description": "The dataset is a directory (a zarr store): read its files with get-dataset-file"},
     },
     tags=["Datasets"],
     summary="Read a dataset's file (supports HTTP Range requests)",
@@ -95,14 +107,44 @@ async def get_dataset(dataset_id: uuid.UUID, caller: OptionalCaller) -> Dataset:
 async def get_dataset_content(dataset_id: uuid.UUID, caller: OptionalCaller) -> FileResponse:
     dataset = await _readable_dataset(dataset_id, caller)
     db = get_required_database_service()
-    experiment_id = await db.get_simulator_db().get_simulations_experiment_id(simulation_id=dataset.simulation_id)
-    experiment_dir = get_internal_experiment_dir(experiment_id, Namespace(get_settings().namespace))
-    path = resolve_content_path(experiment_dir, dataset.path)
+    path = await _dataset_path(dataset)
     if path is None:
-        logger.warning(f"Dataset {dataset_id} path {dataset.path!r} resolves outside its experiment directory")
         raise HTTPException(status_code=404, detail=f"Dataset {dataset_id} not found.")
+    if path.is_dir():
+        raise HTTPException(
+            status_code=409,
+            detail=f"Dataset {dataset_id} is a directory; read its files at /datasets/{dataset_id}/files/<path>.",
+        )
     if not path.is_file():
         if dataset.available:
             await db.get_datasets_db().set_available(dataset_id, False)
         raise HTTPException(status_code=404, detail=f"The file of dataset {dataset_id} is no longer available.")
     return FileResponse(path=path, media_type=dataset.media_type, filename=Path(dataset.path).name)
+
+
+@config.router.get(
+    path="/{dataset_id}/files/{subpath:path}",
+    response_class=FileResponse,
+    operation_id="get-dataset-file",
+    responses={
+        200: {"content": {"application/octet-stream": {"schema": {"format": "binary"}}}, "description": "The file"},
+        404: {
+            "description": "The dataset does not exist, the caller may not read it, it is not a directory, "
+            "or it has no such file"
+        },
+    },
+    tags=["Datasets"],
+    summary="Read one file inside a directory dataset, e.g. a zarr store's metadata or chunk (supports HTTP Range)",
+)
+async def get_dataset_file(dataset_id: uuid.UUID, subpath: str, caller: OptionalCaller) -> FileResponse:
+    """A directory dataset (a ``*.fenics`` results bundle, a ``*.zarr`` store) is read file by file, so a browser
+    can fetch one chunk at a time with no server-side reduction (docs/plan-viewers.md F1). ``no-cache``: a live
+    run rewrites the bundle's manifest after every row, so clients revalidate (the ETag makes that cheap)."""
+    dataset = await _readable_dataset(dataset_id, caller)
+    root = await _dataset_path(dataset)
+    if root is None or not root.is_dir():
+        raise HTTPException(status_code=404, detail=f"Dataset {dataset_id} has no files.")
+    target = resolve_content_path(root, subpath)
+    if target is None or not target.is_file():
+        raise HTTPException(status_code=404, detail=f"Dataset {dataset_id} has no file {subpath!r}.")
+    return FileResponse(path=target, media_type=infer_media_type(subpath), headers={"Cache-Control": "no-cache"})

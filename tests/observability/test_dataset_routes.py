@@ -21,6 +21,8 @@ from tests.api.test_authorization import ALICE, BOB
 
 CORRELATION = "simulation-datasets1"
 CSV = b"time,a\n0,1\n1,2\n"
+MANIFEST = '{"vcell_fenics": {"status": "completed"}}'
+CHUNK = bytes(range(64))
 
 
 def _artifact(trace: str, seq: int, component: str, **payload: object) -> str:
@@ -51,12 +53,18 @@ async def ingested(
     experiment = tmp_path / "exp-datasets"
     (experiment / "output").mkdir(parents=True)
     (experiment / "output" / "a.csv").write_bytes(CSV)
+    bundle = experiment / "output" / "run.fenics"  # a results bundle: a zarr store, one dataset read file by file
+    (bundle / "u").mkdir(parents=True)
+    (bundle / ".zattrs").write_text(MANIFEST)
+    (bundle / "u" / "0.0").write_bytes(CHUNK)
+    (bundle / "escape").symlink_to(tmp_path)  # leaves the bundle: must never be served
     (experiment / "events").mkdir()
     trace = run.trace_id or ""
     digest = hashlib.sha256(CSV).hexdigest()
     (experiment / "events" / "job.jsonl").write_text(
         _artifact(trace, 1, "compose_api.job", uri="output/a.csv", bytes=len(CSV), sha256=digest)
         + _artifact(trace, 2, "compose_api.job", uri="output/gone.csv", bytes=3)
+        + _artifact(trace, 3, "compose_api.job", uri="output/run.fenics", bytes=len(MANIFEST) + len(CHUNK))
     )
     (experiment / "events" / "engine.jsonl").write_text(
         _artifact(trace, 1, "process_bigraph", uri="/experiment/output/a.csv", kind="species", name="Species")
@@ -84,7 +92,7 @@ async def test_datasets_are_registered_listed_and_served(ingested: tuple[int, Pa
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
         page = (await http.get("/datasets", params={"simulation_id": simulation_id})).json()
         by_path = {d["path"]: d for d in page["datasets"]}
-        assert set(by_path) == {"output/a.csv", "output/gone.csv"} and page["total"] == 2
+        assert set(by_path) == {"output/a.csv", "output/gone.csv", "output/run.fenics"} and page["total"] == 3
         a = by_path["output/a.csv"]
         assert (a["kind"], a["display_name"], a["origin"]) == ("species", "Species", "event")  # the engine's wins
         assert a["size_bytes"] == len(CSV) and a["sha256"] == hashlib.sha256(CSV).hexdigest()  # the manifest's
@@ -130,3 +138,53 @@ def test_content_paths_cannot_leave_the_experiment(tmp_path: Path) -> None:
     assert resolve(experiment, "output/a.csv") == (experiment / "output" / "a.csv").resolve()
     assert resolve(experiment, "../secret") is None
     assert resolve(experiment, "output/link") is None
+
+
+@pytest.mark.asyncio
+async def test_a_bundle_is_one_dataset_read_file_by_file(ingested: tuple[int, Path]) -> None:
+    simulation_id, _ = ingested
+    _as(ALICE)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
+        page = (await http.get("/datasets", params={"simulation_id": simulation_id, "kind": "results-bundle"})).json()
+        (bundle,) = page["datasets"]
+        assert (bundle["path"], bundle["media_type"]) == (
+            "output/run.fenics",
+            "application/vnd.vcell.results-bundle+zarr",
+        )
+        files = f"/datasets/{bundle['id']}/files"
+
+        manifest = await http.get(f"{files}/.zattrs")
+        assert manifest.status_code == 200 and manifest.text == MANIFEST
+        assert manifest.headers["cache-control"] == "no-cache" and manifest.headers["etag"]
+
+        ranged = await http.get(f"{files}/u/0.0", headers={"Range": "bytes=8-15"})
+        assert ranged.status_code == 206 and ranged.content == CHUNK[8:16]
+
+        for missing in ("u/9.9", "u", "escape/exp-datasets/output/a.csv", "../a.csv"):
+            assert (await http.get(f"{files}/{missing}")).status_code == 404, missing
+
+        content = await http.get(f"/datasets/{bundle['id']}/content")
+        assert content.status_code == 409
+        # A directory is not a missing file: it stays available.
+        assert (await http.get(f"/datasets/{bundle['id']}")).json()["available"] is True
+
+
+@pytest.mark.asyncio
+async def test_a_plain_files_dataset_has_no_files(ingested: tuple[int, Path]) -> None:
+    simulation_id, _ = ingested
+    _as(ALICE)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
+        page = (await http.get("/datasets", params={"simulation_id": simulation_id, "kind": "species"})).json()
+        (csv,) = page["datasets"]
+        assert (await http.get(f"/datasets/{csv['id']}/files/a.csv")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_a_bundles_files_are_not_found_by_others(ingested: tuple[int, Path]) -> None:
+    simulation_id, _ = ingested
+    _as(ALICE)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
+        page = (await http.get("/datasets", params={"simulation_id": simulation_id, "kind": "results-bundle"})).json()
+        bundle_id = page["datasets"][0]["id"]
+        _as(BOB)
+        assert (await http.get(f"/datasets/{bundle_id}/files/.zattrs")).status_code == 404

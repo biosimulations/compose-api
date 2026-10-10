@@ -565,6 +565,7 @@ $ compose-api datasets [OPTIONS] COMMAND [ARGS]...
 * `list`: The files runs produced: one simulation's,...
 * `show`: Everything recorded about one dataset.
 * `get`: Download a dataset's file.
+* `file`: Download one file from inside a directory...
 
 ### `compose-api datasets list`
 
@@ -618,6 +619,27 @@ $ compose-api datasets get [OPTIONS] DATASET_ID
 **Arguments**:
 
 * `DATASET_ID`: The dataset id.  [required]
+
+**Options**:
+
+* `-O, --out PATH`: Write it here (a file, or a directory). Default: here.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api datasets file`
+
+Download one file from inside a directory dataset.
+
+**Usage**:
+
+```console
+$ compose-api datasets file [OPTIONS] DATASET_ID SUBPATH
+```
+
+**Arguments**:
+
+* `DATASET_ID`: The dataset id (a directory dataset: a results bundle or zarr).  [required]
+* `SUBPATH`: The file inside it, e.g. .zattrs or u/0.0.  [required]
 
 **Options**:
 

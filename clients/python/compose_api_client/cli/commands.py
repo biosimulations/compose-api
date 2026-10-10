@@ -625,6 +625,24 @@ def datasets_get(
     emit(settings.output, {"dataset_id": dataset_id, "files": [str(path)]})
 
 
+@datasets_app.command("file")
+@claims("datasets file", "get-dataset-file")
+@handled
+def datasets_file(
+    ctx: typer.Context,
+    dataset_id: Annotated[str, typer.Argument(help="The dataset id (a directory dataset: a results bundle or zarr).")],
+    subpath: Annotated[str, typer.Argument(help="The file inside it, e.g. .zattrs or u/0.0.")],
+    out: Annotated[
+        Path | None, typer.Option("--out", "-O", help="Write it here (a file, or a directory). Default: here.")
+    ] = None,
+) -> None:
+    """Download one file from inside a directory dataset."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        path = s.download_dataset_file(dataset_id, subpath, out if out is not None else Path.cwd())
+    emit(settings.output, {"dataset_id": dataset_id, "files": [str(path)]})
+
+
 @app.command("build-status")
 @claims("build-status", "get-simulator-build-status")
 @handled

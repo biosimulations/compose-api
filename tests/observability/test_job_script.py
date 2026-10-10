@@ -32,11 +32,14 @@ TRACE=$(echo "$PBG_TRACEPARENT" | cut -d- -f2); PARENT=$(echo "$PBG_TRACEPARENT"
 SINK="${PBG_EVENT_SINKS#file:}"; SINK="$HOST${SINK#/experiment}"
 printf '{"v":1,"ts":"2026-10-07T12:00:01.000Z","seq":1,"source":"node-42","component":"process_bigraph","event":"run.start","level":"info","trace_id":"%s","span_id":null,"parent_span_id":"%s","baggage":{"simulation_id":"%s"},"payload":{}}\n' "$TRACE" "$PARENT" "$PBG_TRACE_BAGGAGE" >> "$SINK"
 echo result > "$HOST/output/out.txt"
+if [ -n "${FAKE_BUNDLE:-}" ]; then  # a zarr store: a directory of chunk files, announced as one dataset
+  mkdir -p "$HOST/output/run.fenics/u"; echo '{}' > "$HOST/output/run.fenics/.zattrs"; printf 'abcd' > "$HOST/output/run.fenics/u/0.0"
+fi
 exit "${FAKE_EXIT:-0}"
 """
 
 
-def _run(tmp_path: Path, exit_code: int) -> tuple[subprocess.CompletedProcess[str], Path]:
+def _run(tmp_path: Path, exit_code: int, bundle: bool = False) -> tuple[subprocess.CompletedProcess[str], Path]:
     if shutil.which("zip") is None:
         pytest.skip("zip is not installed")
     experiment = tmp_path / "experiment-x"
@@ -64,6 +67,8 @@ def _run(tmp_path: Path, exit_code: int) -> tuple[subprocess.CompletedProcess[st
         )
     )
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "SLURM_JOB_ID": "4242", "FAKE_EXIT": str(exit_code)}
+    if bundle:
+        env["FAKE_BUNDLE"] = "1"
     result = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True, check=False)  # noqa: S603, S607
     return result, experiment
 
@@ -106,6 +111,17 @@ def test_a_successful_job_records_its_span_and_passes_the_trace_on(tmp_path: Pat
     assert engine[0].parent_span_id == job_span_id(CORRELATION)
     assert engine[0].baggage == {"simulation_id": "simulation_id=7,experiment_id=x"}  # the fake echoes it raw
     assert (experiment / "results.zip").exists()
+
+
+def test_a_zarr_store_is_announced_as_one_dataset(tmp_path: Path) -> None:
+    result, experiment = _run(tmp_path, 0, bundle=True)
+    assert result.returncode == 0, result.stderr
+    job = _read(experiment / "events" / "job.jsonl")
+    artifacts = {e.payload["uri"]: e.payload for e in job if e.event == "artifact.written"}
+    assert set(artifacts) == {"output/out.txt", "output/run.fenics", "results.zip", "job.out"}
+    bundle = artifacts["output/run.fenics"]
+    assert "sha256" not in bundle
+    assert bundle["bytes"] >= len("{}\n") + len("abcd")  # du counts blocks where -b is missing
 
 
 def test_a_failed_job_records_its_exit_code(tmp_path: Path) -> None:

@@ -55,13 +55,27 @@ json_escape() { local s=${1//\\/\\\\}; printf '%s' "${s//\"/\\\"}"; }
 sha256_of() {
     if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
 }
+dir_bytes() {  # GNU du -sb on the cluster; du -sk elsewhere (macOS), to the nearest KiB
+    local b; b=$(du -sb "$1" 2>/dev/null | cut -f1)
+    [ -n "$b" ] || b=$(( $(du -sk "$1" | cut -f1) * 1024 ))
+    echo "$b"
+}
 manifest() {  # one artifact.written per file the run left: what it wrote under output/, and the results archive
+    # A zarr store (a *.fenics results bundle or a *.zarr) is ONE dataset, read file by file through
+    # /datasets/{id}/files/ (docs/plan-viewers.md F1): announced with its total size and no checksum.
     local f size sum
     while IFS= read -r f; do
+        if [ -d "$EXPERIMENT/$f" ]; then
+            emit artifact.written info "{\"uri\":\"$(json_escape "$f")\",\"bytes\":$(dir_bytes "$EXPERIMENT/$f")}"
+            continue
+        fi
         size=$(wc -c < "$EXPERIMENT/$f" | tr -d ' ')
         sum=$(sha256_of "$EXPERIMENT/$f")
         emit artifact.written info "{\"uri\":\"$(json_escape "$f")\",\"bytes\":$size,\"sha256\":\"$sum\"}"
-    done < <(cd "$EXPERIMENT" && { find output -type f 2>/dev/null; [ -f results.zip ] && echo results.zip; } | LC_ALL=C sort)
+    done < <(cd "$EXPERIMENT" && {
+        find output \( -type d \( -name '*.fenics' -o -name '*.zarr' \) -prune -print \) -o -type f -print 2>/dev/null
+        [ -f results.zip ] && echo results.zip
+    } | LC_ALL=C sort)
     # SLURM keeps appending to the log after this trap, so it is announced without a size or checksum.
     emit artifact.written info '{"uri":"job.out","kind":"log","name":"SLURM log"}'
 }

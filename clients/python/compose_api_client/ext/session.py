@@ -31,7 +31,7 @@ from compose_api_client import AuthenticatedClient, Client
 from compose_api_client.api.biosim_api import check_health_health_get, get_version_version_get
 from compose_api_client.api.compute import get_processes_list, get_simulator_list, get_steps_list
 from compose_api_client.api.curated import run_copasi, run_tellurium
-from compose_api_client.api.datasets import get_dataset, get_dataset_content, list_datasets
+from compose_api_client.api.datasets import get_dataset, get_dataset_content, get_dataset_file, list_datasets
 from compose_api_client.api.results import (
     get_simulation_events,
     get_simulation_results_file,
@@ -361,6 +361,17 @@ class ComposeSession:
         r = get_dataset_content.sync_detailed(uuid.UUID(str(dataset_id)), client=self.client)
         raise_for(r)
         return r.content
+
+    def dataset_file(self, dataset_id: str | uuid.UUID, subpath: str) -> bytes:
+        """One file inside a directory dataset (a ``*.fenics`` results bundle or a ``*.zarr`` store), e.g.
+        ``.zattrs`` or a chunk such as ``u/0.0``."""
+        r = get_dataset_file.sync_detailed(uuid.UUID(str(dataset_id)), subpath, client=self.client)
+        raise_for(r)
+        return r.content
+
+    def download_dataset_file(self, dataset_id: str | uuid.UUID, subpath: str, dest: str | Path) -> Path:
+        """Save one file of a directory dataset to ``dest``: a file, or a directory for the file's own name."""
+        return _save_named(self.dataset_file(dataset_id, subpath), subpath, dest)
 
     def download_dataset(self, dataset_id: str | uuid.UUID, dest: str | Path) -> Path:
         """Save a dataset's file to ``dest``: a file, or a directory (existing, or written with a trailing slash) for
