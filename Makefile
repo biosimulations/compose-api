@@ -112,7 +112,7 @@ db-stamp: ## Mark existing database as current without running migrations
 	@uv run alembic stamp head
 
 .PHONY: deploy
-deploy: ## Deploy to site
+deploy: ## Apply the RKE overlay by hand (normally Flux deploys main; see CLAUDE.md)
 	@echo "🚀 Deploying ComposeAPI to Site"
 	@kubectl kustomize kustomize/overlays/compose-api-rke | kubectl apply -f -
 

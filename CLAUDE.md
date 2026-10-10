@@ -59,7 +59,21 @@ Client release: publishing a GitHub release also publishes `compose-api-client` 
 PyPI via `.github/workflows/publish-client.yml`, a trusted publisher (OIDC, environment `pypi`; setup in
 [`docs/plan-cli.md`](docs/plan-cli.md) §D).
 
-Release & deploy: `make tag` (`tag.sh` bumps `pyproject.toml` + `compose_api/version.py`, commits, tags, pushes — the tag push triggers the image build workflow); `kustomize/scripts/build_and_push.sh` builds/pushes `ghcr.io/biosimulations/compose-api`; `make deploy` applies `kustomize/overlays/compose-api-rke`. Publishing a GitHub *release* (separate from the tag push) additionally archives it to Zenodo under concept DOI 10.5281/zenodo.21127421 via the reusable `virtualcell/zenodo-maint` workflow; keep `CITATION.cff` and `.zenodo.json` in step with the authors and version, as a weekly drift check flags mismatches.
+Release & deploy: `make tag` (`tag.sh` bumps `pyproject.toml` + `compose_api/version.py`, commits, tags, pushes — the tag push triggers the image build workflow); `kustomize/scripts/build_and_push.sh` builds/pushes `ghcr.io/biosimulations/compose-api`.
+
+**Deploys are GitOps.** Flux on the vxrails RKE2 cluster (configured in
+[`virtualcell/vcell-fluxcd`](https://github.com/virtualcell/vcell-fluxcd), `clusters/vxrails/compose-api-*.yaml`) watches
+this repo's `main`. It applies `kustomize/overlays/compose-api-rke` within a minute of a merge, with prune on. So
+**merging to main deploys**: a pin bump in `kustomize/config/compose-api-rke/api.env`, or a release PR's `newTag`.
+- **Image before tag:** push the release tag on the release PR's head commit and let the image build finish *before*
+  merging. Otherwise Flux rolls out a tag that does not exist yet. The rolling update keeps the old pod serving, but
+  the Kustomization reports unhealthy until the image appears.
+- **Status / force a sync** (needs VPN): `flux get kustomization compose-api`;
+  `flux reconcile kustomization compose-api --with-source`.
+- **Manual fallback:** `make deploy` (`KUBECONFIG=~/.kube/kubeconfig_vxrails.yaml`). Flux reverts anything that
+  diverges from `main` at its next reconcile.
+- **Any API pod restart drops submissions still in flight:** a run still pulling or building its container stays
+  `submitting` (#238). Avoid deploying while a first run of a new simulator image is in progress. Publishing a GitHub *release* (separate from the tag push) additionally archives it to Zenodo under concept DOI 10.5281/zenodo.21127421 via the reusable `virtualcell/zenodo-maint` workflow; keep `CITATION.cff` and `.zenodo.json` in step with the authors and version, as a weekly drift check flags mismatches.
 
 ## Test environment
 
