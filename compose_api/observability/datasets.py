@@ -39,6 +39,9 @@ _KINDS = {
     ".hdf5": "hdf5",
     ".nc": "netcdf",
     ".zarr": "zarr",
+    # The vcell-fenics results bundle (ADR 010): a zarr v2 group of meshes, per-row fields, stats and particles. The
+    # web UI registers viewers against this kind (docs/plan-viewers.md).
+    ".fenics": "results-bundle",
     ".npy": "array",
     ".npz": "array",
     ".vtu": "mesh",
@@ -59,6 +62,9 @@ _MEDIA_TYPES = {
     ".pber": "application/x-ndjson",
     ".parquet": "application/vnd.apache.parquet",
     ".npy": "application/x-npy",
+    ".fenics": "application/vnd.vcell.results-bundle+zarr",
+    ".zarr": "application/x-zarr",
+    ".vtu": "application/vnd.vtk.vtu+xml",
 }
 
 
@@ -143,6 +149,10 @@ def artifact_record(event: RunEvent) -> ArtifactRecord | None:
     attributes = payload.get("attributes")
     kind, name, sha = payload.get("kind"), payload.get("name"), payload.get("sha256")
     media_type = payload.get("media_type")
+    attrs = {k: v for k, v in attributes.items() if k != "origin"} if isinstance(attributes, dict) else {}
+    view = payload.get("view")
+    if isinstance(view, (str, dict)) and view:  # a producer's viewer hint (docs/plan-viewers.md)
+        attrs["view"] = view
     return ArtifactRecord(
         path=path,
         origin=ORIGIN_MANIFEST if event.component == MANIFEST_COMPONENT else ORIGIN_EVENT,
@@ -151,7 +161,7 @@ def artifact_record(event: RunEvent) -> ArtifactRecord | None:
         size_bytes=_int(payload.get("bytes")),
         sha256=sha.lower() if isinstance(sha, str) and len(sha) == 64 else None,
         media_type=media_type if isinstance(media_type, str) and media_type else None,
-        attributes={k: v for k, v in attributes.items() if k != "origin"} if isinstance(attributes, dict) else {},
+        attributes=attrs,
         span_id=event.span_id,
         available=not payload.get("error"),
     )

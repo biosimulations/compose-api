@@ -1085,6 +1085,65 @@
           "404": {
             "description": "The dataset does not exist, the caller may not read it, or its file is gone"
           },
+          "409": {
+            "description": "The dataset is a directory (a zarr store): read its files with get-dataset-file"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/datasets/{dataset_id}/files/{subpath}": {
+      "get": {
+        "tags": [
+          "Datasets"
+        ],
+        "summary": "Read one file inside a directory dataset, e.g. a zarr store's metadata or chunk (supports HTTP Range)",
+        "description": "A directory dataset (a ``*.fenics`` results bundle, a ``*.zarr`` store) is read file by file, so a browser\ncan fetch one chunk at a time with no server-side reduction (docs/plan-viewers.md F1). ``no-cache``: a live\nrun rewrites the bundle's manifest after every row, so clients revalidate (the ETag makes that cheap).",
+        "operationId": "get-dataset-file",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "subpath",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Subpath"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The dataset does not exist, the caller may not read it, it is not a directory, or it has no such file"
+          },
           "422": {
             "description": "Validation Error",
             "content": {

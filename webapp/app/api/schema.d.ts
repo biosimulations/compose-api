@@ -314,6 +314,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/datasets/{dataset_id}/files/{subpath}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one file inside a directory dataset, e.g. a zarr store's metadata or chunk (supports HTTP Range)
+         * @description A directory dataset (a ``*.fenics`` results bundle, a ``*.zarr`` store) is read file by file, so a browser
+         *     can fetch one chunk at a time with no server-side reduction (docs/plan-viewers.md F1). ``no-cache``: a live
+         *     run rewrites the bundle's manifest after every row, so clients revalidate (the ETag makes that cheap).
+         */
+        get: operations["get-dataset-file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1410,6 +1432,52 @@ export interface operations {
                 };
             };
             /** @description The dataset does not exist, the caller may not read it, or its file is gone */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The dataset is a directory (a zarr store): read its files with get-dataset-file */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "get-dataset-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+                subpath: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": unknown;
+                };
+            };
+            /** @description The dataset does not exist, the caller may not read it, it is not a directory, or it has no such file */
             404: {
                 headers: {
                     [name: string]: unknown;

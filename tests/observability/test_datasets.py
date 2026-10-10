@@ -55,6 +55,27 @@ def test_artifact_events_become_records() -> None:
     assert records[2].available is False
 
 
+def test_a_producers_view_hint_is_kept() -> None:
+    (record,) = artifact_records([
+        _event(
+            "viva_pde_particle",
+            uri="output/run.fenics",
+            kind="results-bundle",
+            view={"variable": "u"},
+            attributes={"web": 1},
+        ),
+    ])
+    assert record.attributes == {"web": 1, "view": {"variable": "u"}}
+
+
+def test_bundles_and_stores_have_their_own_kind_and_media_type() -> None:
+    assert (infer_kind("output/run.fenics"), infer_media_type("output/run.fenics")) == (
+        "results-bundle",
+        "application/vnd.vcell.results-bundle+zarr",
+    )
+    assert infer_media_type("output/t.zarr") == "application/x-zarr"
+
+
 def test_a_simulators_event_wins_and_the_manifest_fills_in() -> None:
     manifest = ArtifactRecord(path="output/a.csv", origin=ORIGIN_MANIFEST, size_bytes=10, sha256=SHA)
     event = ArtifactRecord(path="output/a.csv", origin=ORIGIN_EVENT, kind="species", display_name="Species")
