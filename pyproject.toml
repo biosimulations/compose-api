@@ -121,7 +121,7 @@ markers = [
 ]
 
 [tool.deptry]
-exclude = [".venv/*", "alembic/*"]
+exclude = [".venv/*", "alembic/*", "webapp/*"]  # webapp/test/fixtures/make_fixture.py runs in viva-pde-particle's env
 ignore = ["DEP002", "DEP003", "DEP004"]
 
 [tool.ruff]

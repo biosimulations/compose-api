@@ -87,6 +87,20 @@ export async function downloadFile(path: string, query: Record<string, string | 
   setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000)
 }
 
+/** A `fetch` that adds the caller's token: for loaders (zarrita, viewers) that fetch API URLs themselves. */
+export const authFetch: typeof fetch = async (input, init) => {
+  const token = await accessToken()
+  if (!token) return fetch(input, init)
+  const headers = new Headers(init?.headers)
+  headers.set('Authorization', `Bearer ${token}`)
+  return fetch(input, { ...init, headers })
+}
+
+/** Where the files of a directory dataset (a zarr store) are served: append `/<path inside it>`. */
+export function datasetFilesUrl(id: string): string {
+  return apiUrl(`/datasets/${id}/files`)
+}
+
 /** Fetch a file's body with the caller's token, for inline previews. */
 export async function fetchContent(path: string): Promise<Response> {
   const token = await accessToken()

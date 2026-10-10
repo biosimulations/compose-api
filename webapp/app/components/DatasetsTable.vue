@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
 import type { Dataset } from '~/composables/useApi'
+import { isDirectoryDataset, viewersFor } from '~/viewers/registry'
 
 // A page of datasets, with preview and download. After ../platform/frontend/app/components/FilesOutputsTable.vue.
 const props = defineProps<{ datasets: Dataset[], showSimulation?: boolean, loading?: boolean }>()
@@ -43,8 +44,9 @@ const columns = computed<TableColumn<Dataset>[]>(() => [
   {
     id: 'actions',
     cell: ({ row }) => h('div', { class: 'flex justify-end gap-1' }, [
-      h(UButton, { icon: 'i-lucide-eye', variant: 'ghost', color: 'neutral', title: 'Preview', disabled: !row.original.available, onClick: () => { selected.value = row.original } }),
-      h(UButton, { icon: 'i-lucide-download', variant: 'ghost', color: 'neutral', title: 'Download', disabled: !row.original.available, onClick: () => save(row.original) })
+      h(UButton, { icon: 'i-lucide-eye', variant: 'ghost', color: 'neutral', title: 'Preview', disabled: !row.original.available || !viewersFor(row.original).length, onClick: () => { selected.value = row.original } }),
+      h(UButton, { icon: 'i-lucide-maximize-2', variant: 'ghost', color: 'neutral', title: 'Open', disabled: !row.original.available, to: `/datasets/${row.original.id}` }),
+      h(UButton, { icon: 'i-lucide-download', variant: 'ghost', color: 'neutral', title: isDirectoryDataset(row.original) ? 'A directory: open it instead' : 'Download', disabled: !row.original.available || isDirectoryDataset(row.original), onClick: () => save(row.original) })
     ])
   }
 ])
@@ -56,7 +58,7 @@ const columns = computed<TableColumn<Dataset>[]>(() => [
     <UTable :data="datasets" :columns="columns" :loading="loading" empty="No datasets recorded." />
     <UModal v-model:open="open" :title="selected?.display_name" :description="selected?.path" fullscreen>
       <template #body>
-        <DatasetPreview v-if="selected" :key="selected.id" :dataset="selected" />
+        <DatasetViewer v-if="selected" :key="selected.id" :dataset="selected" />
       </template>
     </UModal>
   </div>
