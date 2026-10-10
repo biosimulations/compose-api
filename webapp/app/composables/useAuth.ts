@@ -9,6 +9,7 @@ export interface WebappConfig {
   auth0_audience: string
   auth0_client_id: string
   prebuilt_simulators: string[]
+  dataset_kinds?: string[]
 }
 
 const webappConfig = ref<WebappConfig | null>(null)

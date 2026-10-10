@@ -15,6 +15,7 @@ from starlette.staticfiles import StaticFiles
 from starlette.types import Scope
 
 from compose_api.config import get_settings
+from compose_api.observability.datasets import DATASET_KINDS
 
 WEBAPP_PATH = "/ui"
 # nuxt generate writes this shell for client-side routes it did not prerender.
@@ -28,6 +29,8 @@ class WebappConfig(BaseModel):
     auth0_audience: str
     auth0_client_id: str
     prebuilt_simulators: list[str]
+    # The kinds the API infers from file names, for the datasets filter; a simulator may announce others.
+    dataset_kinds: list[str]
 
 
 class SpaStaticFiles(StaticFiles):
@@ -50,6 +53,7 @@ async def get_webapp_config() -> WebappConfig:
         auth0_audience=settings.auth0_audience,
         auth0_client_id=settings.auth0_spa_client_id,
         prebuilt_simulators=sorted(settings.prebuilt_simulators),
+        dataset_kinds=DATASET_KINDS,
     )
 
 

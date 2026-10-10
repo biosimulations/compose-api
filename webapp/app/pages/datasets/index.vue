@@ -13,7 +13,9 @@ const total = ref(0)
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-const kinds = ['results', 'table', 'figure', 'archive', 'log', 'file']
+// The API publishes the kinds it infers; the fallback is for an API without them.
+const webappConfig = useWebappConfig()
+const kinds = computed(() => webappConfig.value?.dataset_kinds ?? ['results', 'results-bundle', 'table', 'figure', 'archive', 'log', 'file'])
 
 async function load() {
   loading.value = true
