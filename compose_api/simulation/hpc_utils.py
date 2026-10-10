@@ -38,8 +38,10 @@ def get_slurm_singularity_container_file(singularity_hash: str) -> Path:
     return _namespace_path() / "images" / f"{singularity_hash}.sif"
 
 
-def get_slurm_sim_input_file_path(experiment_id: str) -> Path:
-    return get_slurm_sim_experiment_dir(experiment_id) / f"{experiment_id}.omex"
+def get_slurm_sim_input_file_path(experiment_id: str, suffix: str = "omex") -> Path:
+    """The submitted file on the cluster, named with its own suffix: the job script runs
+    ``/experiment/<id>.<suffix>`` (job_script.py), so a ``.pbg`` stored as ``.omex`` is never found."""
+    return get_slurm_sim_experiment_dir(experiment_id) / f"{experiment_id}.{suffix}"
 
 
 def get_slurm_sim_output_directory_path(experiment_id: str) -> Path:

@@ -121,7 +121,10 @@ class SimulationServiceHpc(SimulationService):
                 local_sbatch_file=local_submit_file,
                 remote_sbatch_file=get_slurm_submit_file(slurm_job_name=slurm_job_name),
                 local_input_file=simulation.sim_request.request_file_path,
-                remote_input_file=get_slurm_sim_input_file_path(experiment_id=slurm_job_name),
+                remote_input_file=get_slurm_sim_input_file_path(
+                    experiment_id=slurm_job_name,
+                    suffix=simulation.sim_request.simulation_file_type.get_files_suffix(),
+                ),
             )
             return slurm_jobid
 

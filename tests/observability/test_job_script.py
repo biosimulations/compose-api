@@ -34,6 +34,7 @@ printf '{"v":1,"ts":"2026-10-07T12:00:01.000Z","seq":1,"source":"node-42","compo
 echo result > "$HOST/output/out.txt"
 if [ -n "${FAKE_BUNDLE:-}" ]; then  # a zarr store: a directory of chunk files, announced as one dataset
   mkdir -p "$HOST/output/run.fenics/u"; echo '{}' > "$HOST/output/run.fenics/.zattrs"; printf 'abcd' > "$HOST/output/run.fenics/u/0.0"
+  chmod 600 "$HOST/output/run.fenics/.zattrs"  # as a mkstemp file renamed into place
 fi
 exit "${FAKE_EXIT:-0}"
 """
@@ -122,6 +123,7 @@ def test_a_zarr_store_is_announced_as_one_dataset(tmp_path: Path) -> None:
     bundle = artifacts["output/run.fenics"]
     assert "sha256" not in bundle
     assert bundle["bytes"] >= len("{}\n") + len("abcd")  # du counts blocks where -b is missing
+    assert (experiment / "output" / "run.fenics" / ".zattrs").stat().st_mode & 0o044 == 0o044  # readable by the API
 
 
 def test_a_failed_job_records_its_exit_code(tmp_path: Path) -> None:

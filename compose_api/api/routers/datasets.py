@@ -4,6 +4,7 @@ A dataset is readable by whoever may read its simulation (O7, O8); one the calle
 """
 
 import logging
+import os
 import uuid
 from pathlib import Path
 
@@ -39,6 +40,15 @@ def resolve_content_path(experiment_dir: Path, relative: str) -> Path | None:
     root = experiment_dir.resolve()
     target = (root / relative).resolve()
     return target if target.is_relative_to(root) else None
+
+
+def _unreadable(dataset_id: uuid.UUID, path: str) -> HTTPException:
+    """A file the API's user may not read. Checked before responding: FileResponse opens the file only after sending
+    the headers, so a PermissionError there broke the response mid-stream instead of failing it (simulation 4570)."""
+    logger.error(f"Dataset {dataset_id}: {path!r} exists but is not readable by the API")
+    return HTTPException(
+        status_code=500, detail=f"Dataset {dataset_id}: the file exists but the server cannot read it."
+    )
 
 
 async def _dataset_path(dataset: Dataset) -> Path | None:
@@ -115,6 +125,8 @@ async def get_dataset_content(dataset_id: uuid.UUID, caller: OptionalCaller) -> 
             status_code=409,
             detail=f"Dataset {dataset_id} is a directory; read its files at /datasets/{dataset_id}/files/<path>.",
         )
+    if path.is_file() and not os.access(path, os.R_OK):
+        raise _unreadable(dataset_id, dataset.path)
     if not path.is_file():
         if dataset.available:
             await db.get_datasets_db().set_available(dataset_id, False)
@@ -147,4 +159,6 @@ async def get_dataset_file(dataset_id: uuid.UUID, subpath: str, caller: Optional
     target = resolve_content_path(root, subpath)
     if target is None or not target.is_file():
         raise HTTPException(status_code=404, detail=f"Dataset {dataset_id} has no file {subpath!r}.")
+    if not os.access(target, os.R_OK):
+        raise _unreadable(dataset_id, f"{dataset.path}/{subpath}")
     return FileResponse(path=target, media_type=infer_media_type(subpath), headers={"Cache-Control": "no-cache"})

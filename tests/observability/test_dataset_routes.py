@@ -188,3 +188,20 @@ async def test_a_bundles_files_are_not_found_by_others(ingested: tuple[int, Path
         bundle_id = page["datasets"][0]["id"]
         _as(BOB)
         assert (await http.get(f"/datasets/{bundle_id}/files/.zattrs")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_file_fails_cleanly(ingested: tuple[int, Path]) -> None:
+    simulation_id, experiment = ingested
+    _as(ALICE)
+    secret = experiment / "output" / "run.fenics" / "u" / "0.0"
+    secret.chmod(0)
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
+            page = (
+                await http.get("/datasets", params={"simulation_id": simulation_id, "kind": "results-bundle"})
+            ).json()
+            response = await http.get(f"/datasets/{page['datasets'][0]['id']}/files/u/0.0")
+            assert response.status_code == 500 and "cannot read" in response.json()["detail"]
+    finally:
+        secret.chmod(0o644)
