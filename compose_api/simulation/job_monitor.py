@@ -119,6 +119,10 @@ class JobMonitor:
                 await self.database_service.get_hpc_db().update_hpcrun_status(
                     hpcrun_id=hpc_run.database_id, new_slurm_job=slurm_job
                 )
+            except Exception:
+                # One run's failed update (a database error) must not stop the others from being polled this pass.
+                logger.exception(f"Error updating HpcRun {hpc_run.database_id}; polling the remaining runs.")
+                continue
 
             if slurm_job.job_id in self.internal_listeners:
                 self.internal_listeners[slurm_job.job_id].put_nowait(hpc_run)
