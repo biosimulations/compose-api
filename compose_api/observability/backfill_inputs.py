@@ -43,17 +43,22 @@ def _sha256(path: Path) -> str:
 
 
 def input_record(experiment_dir: Path, experiment_id: str) -> ArtifactRecord | None:
-    """The input file the job ran (``<experiment_id>.<suffix>``), or None if the directory has none."""
+    """The input file the job ran (``<experiment_id>.<suffix>``), or None if the directory has none we can read."""
     for suffix in sorted({t.get_files_suffix() for t in SimulationFileType}):
         path = experiment_dir / f"{experiment_id}.{suffix}"
         if path.is_file():
+            try:
+                sha256 = _sha256(path)
+            except PermissionError:  # uploaded 0600 before announce_input made it readable; registered when it is
+                logger.warning(f"Cannot read {path}")
+                return None
             return ArtifactRecord(
                 path=path.name,
                 origin=ORIGIN_MANIFEST,
                 kind=INPUT_KIND,
                 display_name="Simulation input",
                 size_bytes=path.stat().st_size,
-                sha256=_sha256(path),
+                sha256=sha256,
                 attributes={"file_type": suffix},
             )
     return None
@@ -87,7 +92,9 @@ async def _main() -> None:
     )
     try:
         registered, not_found = await backfill_inputs(engine, DatabaseServiceSQL(async_engine=engine))
-        logger.warning(f"Registered {registered} inputs; {not_found} simulations have no input file on the store.")
+        logger.warning(
+            f"Registered {registered} inputs; {not_found} simulations have no readable input file on the store."
+        )
     finally:
         await engine.dispose()
 

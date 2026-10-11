@@ -52,6 +52,7 @@ def _run(
     experiment.mkdir()
     if staged_input:
         (experiment / "x.omex").write_bytes(INPUT)  # where submit_simulation_job copies the request's file
+        (experiment / "x.omex").chmod(0o600)  # as uploaded: scp keeps the mode of the API's NamedTemporaryFile
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     fake = bin_dir / "singularity"
@@ -114,6 +115,7 @@ def test_a_successful_job_records_its_span_and_passes_the_trace_on(tmp_path: Pat
         "sha256": hashlib.sha256(INPUT).hexdigest(),
         "attributes": {"file_type": "omex", "end_time": 1.0, "batch": False},
     }
+    assert (experiment / "x.omex").stat().st_mode & 0o044 == 0o044  # readable by the API
     out = experiment / "output" / "out.txt"
     assert out.exists()  # output/ is kept: its files are datasets
     assert artifacts["output/out.txt"]["bytes"] == out.stat().st_size
