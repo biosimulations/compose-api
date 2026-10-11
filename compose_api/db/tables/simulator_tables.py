@@ -82,6 +82,10 @@ class ORMSimulation(DeclarativeTableBase):
     owner_sub: Mapped[str | None] = mapped_column(nullable=True, index=True)
     visibility: Mapped[str] = mapped_column(nullable=False, server_default=Visibility.PUBLIC.value)
 
+    # Written periodically by the task submitting the simulation, until it reaches SLURM. A simulation with no run
+    # whose heartbeat (or, before the first one, creation) is stale lost its task, e.g. to an API restart (#238).
+    dispatch_heartbeat_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
+
     def to_simulation_access(self) -> SimulationAccess:
         return SimulationAccess(
             simulation_id=self.id,

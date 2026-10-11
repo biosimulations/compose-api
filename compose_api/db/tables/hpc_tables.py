@@ -65,7 +65,7 @@ class ORMHpcRun(DeclarativeTableBase):
 
     job_type: Mapped[JobTypeDB] = mapped_column(nullable=False)
     correlation_id: Mapped[str] = mapped_column(nullable=False, index=True, unique=True)
-    slurmjobid: Mapped[int] = mapped_column(nullable=True)
+    slurmjobid: Mapped[int | None] = mapped_column(nullable=True)  # None: the submission failed before sbatch
     start_time: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
     end_time: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
     status: Mapped[JobStatusDB] = mapped_column(nullable=False)

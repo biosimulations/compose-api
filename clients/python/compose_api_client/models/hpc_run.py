@@ -18,7 +18,7 @@ class HpcRun:
     """
     Attributes:
         database_id (int):
-        slurmjobid (int):
+        slurmjobid (int | None):
         correlation_id (str):
         job_type (JobType):
         sim_id (int | None):
@@ -31,7 +31,7 @@ class HpcRun:
     """
 
     database_id: int
-    slurmjobid: int
+    slurmjobid: int | None
     correlation_id: str
     job_type: JobType
     sim_id: int | None
@@ -46,6 +46,7 @@ class HpcRun:
     def to_dict(self) -> dict[str, Any]:
         database_id = self.database_id
 
+        slurmjobid: int | None
         slurmjobid = self.slurmjobid
 
         correlation_id = self.correlation_id
@@ -118,7 +119,12 @@ class HpcRun:
         d = dict(src_dict)
         database_id = d.pop("database_id")
 
-        slurmjobid = d.pop("slurmjobid")
+        def _parse_slurmjobid(data: object) -> int | None:
+            if data is None:
+                return data
+            return cast(int | None, data)
+
+        slurmjobid = _parse_slurmjobid(d.pop("slurmjobid"))
 
         correlation_id = d.pop("correlation_id")
 

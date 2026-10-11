@@ -95,6 +95,13 @@ class Settings(BaseSettings):
     # and the arbitrary-import `local:!` form -- are rejected under either policy.
     address_policy: Literal["enforce", "warn"] = "enforce"
 
+    # Submission supervision (#238). The task submitting a simulation (fetching or building its container, then
+    # sbatch) heartbeats on the simulation; the job monitor fails one whose heartbeat is older than
+    # submission_stale_seconds, since its task is gone (an API restart). A task running longer than
+    # submission_timeout_seconds is cancelled and fails the simulation; a first container build can take an hour.
+    submission_stale_seconds: int = 300
+    submission_timeout_seconds: int = 4 * 3600
+
     # Simulators published by their owners as OCI images, by name: a request's `simulator`
     # query parameter selects one and the job runs in that image instead of the shared one
     # (compose_api/simulation/prebuilt.py). Only these names are accepted, so a request can

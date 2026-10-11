@@ -500,7 +500,7 @@ export interface components {
             /** Database Id */
             database_id: number;
             /** Slurmjobid */
-            slurmjobid: number;
+            slurmjobid: number | null;
             /** Correlation Id */
             correlation_id: string;
             job_type: components["schemas"]["JobType"];

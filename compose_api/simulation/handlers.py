@@ -5,7 +5,9 @@ import shutil
 import string
 import tempfile
 import zipfile
+from collections.abc import Coroutine
 from pathlib import Path
+from typing import Any
 
 from fastapi import BackgroundTasks, HTTPException
 from pbest.containerization.container_constructor import generate_container_def_file
@@ -13,6 +15,7 @@ from pbest.utils.input_types import (
     ContainerizationEngine,
 )
 
+from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService
 from compose_api.db.services.hpc_db import HPCDatabaseService
 from compose_api.dependencies import (
@@ -93,12 +96,16 @@ async def run_simulation(
     )
 
     async def perform_job() -> None:
-        await _dispatch_job(
-            database_service=database_service,
-            job_monitor=job_monitor,
-            simulation=simulation,
-            simulation_service_slurm=simulation_service_slurm,
-            experiment_id=experiment_id,
+        await supervise_dispatch(
+            database_service.get_hpc_db(),
+            simulation.database_id,
+            _dispatch_job(
+                database_service=database_service,
+                job_monitor=job_monitor,
+                simulation=simulation,
+                simulation_service_slurm=simulation_service_slurm,
+                experiment_id=experiment_id,
+            ),
         )
 
     def remove_temp_dir() -> None:
@@ -154,6 +161,46 @@ async def run_curated_pbif(
         except Exception as e:
             logger.exception(msg=f"Failed to start {simulator_name} run", exc_info=e)
             raise HTTPException(500)
+
+
+#: How often a submitting task heartbeats; well inside settings.submission_stale_seconds.
+DISPATCH_HEARTBEAT_SECONDS = 30
+
+
+async def supervise_dispatch(
+    hpc_db: HPCDatabaseService, simulation_id: int, dispatch: Coroutine[Any, Any, None]
+) -> None:
+    """Run a simulation's submission, heartbeating on the simulation while it works (#238).
+
+    A submission that raises or outlives settings.submission_timeout_seconds fails the simulation with the reason,
+    instead of leaving it with no run, "submitting" forever. One whose task is lost outright (the API restarted) stops
+    heartbeating, and the job monitor fails it (JobMonitor.fail_stale_submissions).
+    """
+
+    async def heartbeat() -> None:
+        while True:
+            try:
+                await hpc_db.touch_submission(simulation_id)
+            except Exception:
+                logger.exception(f"Could not record the dispatch heartbeat of simulation {simulation_id}")
+            await asyncio.sleep(DISPATCH_HEARTBEAT_SECONDS)
+
+    timeout = get_settings().submission_timeout_seconds
+    beating = asyncio.create_task(heartbeat())
+    reason: str | None = None
+    try:
+        async with asyncio.timeout(timeout):
+            await dispatch
+    except TimeoutError:
+        reason = f"Submission did not reach SLURM within {timeout} s; resubmit the simulation."
+        logger.exception(f"Simulation {simulation_id}: {reason}")
+    except Exception as e:
+        reason = f"Submission failed before reaching SLURM: {type(e).__name__}: {e}"
+        logger.exception(f"Simulation {simulation_id}: submission failed")
+    finally:
+        beating.cancel()
+    if reason is not None:
+        await hpc_db.fail_submission(simulation_id, reason)
 
 
 async def _dispatch_job(
@@ -260,17 +307,20 @@ async def _build_container_and_wait(
         simulator_version=simulator_version, random_str=random_prefix
     )
 
+    slurmjobid = hpc_run.slurmjobid
+    if slurmjobid is None:
+        raise RuntimeError(f"Container build for {simulator_version.container_def_hash} has no SLURM job")
     wait_time = 0
     current_status = hpc_run.status
     job_queue: asyncio.Queue[HpcRun] = asyncio.Queue()
-    job_monitor.internal_subscribe(job_queue, hpc_run.slurmjobid)
+    job_monitor.internal_subscribe(job_queue, slurmjobid)
     while current_status != JobStatus.COMPLETED:
         wait_time += 1
         try:
             current_status = (await asyncio.wait_for(job_queue.get(), timeout=60)).status
         except TimeoutError:
             # If no status update from monitor, get most recent from DB of absolute truth
-            latest_hpc = await hpc_db.get_hpcrun_by_slurmjobid(hpc_run.slurmjobid)
+            latest_hpc = await hpc_db.get_hpcrun_by_slurmjobid(slurmjobid)
             if latest_hpc is None:
                 raise Exception(
                     f"Can't get HPC Run with jobID {hpc_run} for container build {simulator_version.container_def_hash}"
@@ -283,4 +333,4 @@ async def _build_container_and_wait(
             raise Exception(
                 f"Building container for simulator {simulator_version} took to long, job at status of {current_status}."
             )
-    job_monitor.internal_unsubscribe(hpc_run.slurmjobid)
+    job_monitor.internal_unsubscribe(slurmjobid)
