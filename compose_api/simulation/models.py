@@ -73,7 +73,7 @@ class JobStatus(StrEnum):
 
 class HpcRun(BaseModel):
     database_id: int
-    slurmjobid: int  # Slurm job ID if applicable
+    slurmjobid: int | None  # Slurm job ID; None for a submission that failed before reaching SLURM
     correlation_id: str  # to correlate with the WorkerEvent, if applicable ("N/A" if not applicable)
     job_type: JobType
     sim_id: int | None

@@ -4,6 +4,7 @@ from asyncio import Queue
 from typing import TYPE_CHECKING
 
 from compose_api.common.hpc.slurm_service import SlurmService
+from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService
 from compose_api.observability.api_events import record_api_event
 from compose_api.simulation.models import HpcRun, JobStatus
@@ -60,12 +61,33 @@ class JobMonitor:
                 await self.update_running_jobs()
             except Exception:
                 logger.exception("Error during job polling")
+            try:
+                await self.fail_stale_submissions()
+            except Exception:
+                logger.exception("Error checking for stale submissions")
             if self.event_ingester is not None:
                 try:
                     await self.event_ingester.ingest_once()
                 except Exception:
                     logger.exception("Error during event ingest")
             await asyncio.sleep(interval_seconds)
+
+    async def fail_stale_submissions(self) -> list[int]:
+        """Fail every simulation whose submitting task is gone: no run, and no dispatch heartbeat for
+        settings.submission_stale_seconds. Its task lived only in an API process that has since stopped (#238), so
+        nothing would ever submit it. Returns the simulations failed."""
+        stale_seconds = get_settings().submission_stale_seconds
+        hpc_db = self.database_service.get_hpc_db()
+        failed = []
+        for simulation_id in await hpc_db.list_stale_submissions(stale_seconds):
+            reason = (
+                f"Submission abandoned: its task stopped reporting progress for over {stale_seconds} s before reaching"
+                " SLURM (the API likely restarted); resubmit the simulation."
+            )
+            if await hpc_db.fail_submission(simulation_id, reason) is not None:
+                logger.warning(f"Simulation {simulation_id}: {reason}")
+                failed.append(simulation_id)
+        return failed
 
     async def update_running_jobs(self) -> None:
         # Every run that has not reached a terminal status, not only the RUNNING ones: a
@@ -84,7 +106,7 @@ class JobMonitor:
         slurm_job_map = {job.job_id: job for job in slurm_jobs_from_squeue}
         slurm_job_map.update({job.job_id: job for job in slurm_jobs_from_sacct})
         for hpc_run in running_jobs:
-            slurm_job = slurm_job_map.get(hpc_run.slurmjobid)
+            slurm_job = slurm_job_map.get(hpc_run.slurmjobid) if hpc_run.slurmjobid is not None else None
             if not slurm_job or not slurm_job.job_state:
                 continue
             try:

@@ -3,7 +3,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import override
 
-from sqlalchemy import Result, and_, select
+from sqlalchemy import Result, and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import InstrumentedAttribute
 
@@ -15,6 +15,7 @@ from compose_api.db.tables.hpc_tables import (
     ORMHpcRun,
     ORMWorkerEvent,
 )
+from compose_api.db.tables.simulator_tables import ORMSimulation
 from compose_api.observability.identity import trace_id_from_correlation
 from compose_api.simulation.models import (
     HpcRun,
@@ -46,6 +47,22 @@ class HPCDatabaseService(ABC):
 
     @abstractmethod
     async def get_hpcrun_by_ref(self, ref_id: int, job_type: JobType) -> HpcRun | None:
+        pass
+
+    @abstractmethod
+    async def touch_submission(self, simulation_id: int) -> None:
+        """Record that the task submitting ``simulation_id`` is still alive (its dispatch heartbeat)."""
+        pass
+
+    @abstractmethod
+    async def list_stale_submissions(self, stale_seconds: int) -> list[int]:
+        """Simulations with no run whose dispatch heartbeat (or creation, before any) is over ``stale_seconds`` old."""
+        pass
+
+    @abstractmethod
+    async def fail_submission(self, simulation_id: int, reason: str) -> HpcRun | None:
+        """Record a submission that never reached SLURM as a FAILED run with ``reason``, unless it has a run already
+        (then None): the run was submitted after all, or another caller failed it first."""
         pass
 
     @abstractmethod
@@ -137,6 +154,58 @@ class HPCORMExecutor(HPCDatabaseService):
                 start_time=datetime.datetime.now(),
                 correlation_id=correlation_id,
                 trace_id=trace_id_from_correlation(correlation_id),
+            )
+            session.add(orm_hpc_run)
+            await session.flush()
+            return orm_hpc_run.to_hpc_run()
+
+    @override
+    async def touch_submission(self, simulation_id: int) -> None:
+        async with self.async_session_maker() as session, session.begin():
+            await session.execute(
+                update(ORMSimulation)
+                .where(ORMSimulation.id == simulation_id)
+                .values(dispatch_heartbeat_at=func.localtimestamp())
+            )
+
+    @override
+    async def list_stale_submissions(self, stale_seconds: int) -> list[int]:
+        has_run = (
+            select(ORMHpcRun.id)
+            .where(ORMHpcRun.simulation_id == ORMSimulation.id, ORMHpcRun.job_type == JobTypeDB.SIMULATION)
+            .exists()
+        )
+        # Both columns are TIMESTAMP WITHOUT TIME ZONE in the session's zone (created_at defaults to now()), so the
+        # cutoff is too.
+        last_seen = func.coalesce(ORMSimulation.dispatch_heartbeat_at, ORMSimulation.created_at)
+        cutoff = func.localtimestamp() - func.make_interval(0, 0, 0, 0, 0, 0, stale_seconds)
+        stmt = select(ORMSimulation.id).where(~has_run, last_seen < cutoff).order_by(ORMSimulation.id)
+        async with self.async_session_maker() as session:
+            return list((await session.execute(stmt)).scalars().all())
+
+    @override
+    async def fail_submission(self, simulation_id: int, reason: str) -> HpcRun | None:
+        async with self.async_session_maker() as session, session.begin():
+            # Lock the simulation so the submitting task and the monitor cannot both record a run for it.
+            await session.execute(select(ORMSimulation.id).where(ORMSimulation.id == simulation_id).with_for_update())
+            existing = await session.execute(
+                select(ORMHpcRun.id).where(
+                    ORMHpcRun.simulation_id == simulation_id, ORMHpcRun.job_type == JobTypeDB.SIMULATION
+                )
+            )
+            if existing.first() is not None:
+                return None
+            now = datetime.datetime.now()
+            orm_hpc_run = ORMHpcRun(
+                slurmjobid=None,
+                job_type=JobTypeDB.SIMULATION,
+                status=JobStatusDB.FAILED,
+                simulation_id=simulation_id,
+                start_time=now,
+                end_time=now,
+                error_message=reason,
+                # Unique per simulation (one failure at most, under the lock); no trace id, so no events to ingest.
+                correlation_id=f"submission-failed-{simulation_id}",
             )
             session.add(orm_hpc_run)
             await session.flush()

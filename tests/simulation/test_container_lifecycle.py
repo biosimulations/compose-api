@@ -152,6 +152,7 @@ async def test_build_container_runs_a_fakeroot_build_to_completion(
     random_str = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 - not security relevant
 
     hpc_run = await simulation_service_slurm.build_container(simulator, random_str=random_str)
+    assert hpc_run.slurmjobid is not None
     try:
         job = await _wait_for_job(simulation_service_slurm, hpc_run.slurmjobid, timeout_seconds=600)
         sif = get_slurm_singularity_container_file(singularity_hash=simulator.container_def_hash)

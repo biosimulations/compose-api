@@ -1519,7 +1519,14 @@
             "title": "Database Id"
           },
           "slurmjobid": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Slurmjobid"
           },
           "correlation_id": {

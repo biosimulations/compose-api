@@ -129,11 +129,13 @@ async def test_build_simulator(
     hpc_run = await simulation_service_slurm.build_container(simulator, random_str=random_string_7_hex)
 
     sif = get_slurm_singularity_container_file(singularity_hash=simulator.container_def_hash)
+    build_job_id = hpc_run.slurmjobid
+    assert build_job_id is not None
     try:
         deadline = time.monotonic() + 20 * 60
         slurm_build_job: SlurmJob | None = None
         while time.monotonic() < deadline:
-            slurm_build_job = await simulation_service_slurm.get_slurm_job(slurmjobid=hpc_run.slurmjobid)
+            slurm_build_job = await simulation_service_slurm.get_slurm_job(slurmjobid=build_job_id)
             if slurm_build_job is not None and slurm_build_job.is_done():
                 break
             await asyncio.sleep(5)
@@ -207,10 +209,12 @@ async def test_simulate(
     assert hpcrun.job_type == JobType.SIMULATION
     assert hpcrun.sim_id == sim_experiement.simulation_database_id
 
+    sim_job_id = hpcrun.slurmjobid
+    assert sim_job_id is not None
     start_time = time.time()
     sim_slurmjob: SlurmJob | None = None
     while start_time + 60 > time.time():
-        sim_slurmjob = await simulation_service_slurm.get_slurm_job(slurmjobid=hpcrun.slurmjobid)
+        sim_slurmjob = await simulation_service_slurm.get_slurm_job(slurmjobid=sim_job_id)
         if sim_slurmjob is not None and sim_slurmjob.is_done():
             break
         await asyncio.sleep(5)
