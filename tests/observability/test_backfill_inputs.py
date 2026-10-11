@@ -44,20 +44,26 @@ async def test_inputs_on_the_store_are_registered_once(
     with override_settings(internal_mount_dir=str(tmp_path)):
         with_input, experiment_id = await _ran(database_service, simulation_request, simulator, 1)
         without_input, _ = await _ran(database_service, simulation_request, simulator, 2)
+        unreadable, unreadable_id = await _ran(database_service, simulation_request, simulator, 3)
         directory = get_internal_experiment_dir(experiment_id, Namespace(get_settings().namespace))
         directory.mkdir(parents=True)
         (directory / f"{experiment_id}.pbg").write_bytes(b'{"state": {}}')
+        hidden = get_internal_experiment_dir(unreadable_id, Namespace(get_settings().namespace))
+        hidden.mkdir(parents=True)
+        (hidden / f"{unreadable_id}.omex").write_bytes(b"PK")
+        (hidden / f"{unreadable_id}.omex").chmod(0)  # another user's 0600 upload
 
         registered, not_found = await backfill_inputs(async_postgres_engine, database_service)
-        assert registered >= 1 and not_found >= 1
+        assert registered >= 1 and not_found >= 2
 
         datasets, _ = await database_service.get_datasets_db().page(DatasetQuery(simulation_id=with_input))
         (dataset,) = [d for d in datasets if d.kind == "input"]
         assert (dataset.path, dataset.media_type) == (f"{experiment_id}.pbg", "application/json")
         assert dataset.sha256 == hashlib.sha256(b'{"state": {}}').hexdigest()
         assert dataset.attributes == {"file_type": "pbg"}
-        missing, _ = await database_service.get_datasets_db().page(DatasetQuery(simulation_id=without_input))
-        assert missing == []
+        for simulation_id in (without_input, unreadable):
+            missing, _ = await database_service.get_datasets_db().page(DatasetQuery(simulation_id=simulation_id))
+            assert missing == []
 
         # Repeating it registers nothing new for a simulation that has its input.
         await backfill_inputs(async_postgres_engine, database_service)

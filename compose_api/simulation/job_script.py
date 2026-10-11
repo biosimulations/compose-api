@@ -86,6 +86,7 @@ manifest() {  # one artifact.written per file the run left: what it wrote under 
 announce_input() {  # the submitted file, before the simulator runs, with what the request asked of it
     local f="@@JOB_NAME@@.@@SUFFIX@@" size sum
     [ -f "$EXPERIMENT/$f" ] || return 0
+    chmod a+r "$EXPERIMENT/$f" 2>/dev/null || true  # uploaded from a 0600 temp file; the API reads it as another user
     size=$(wc -c < "$EXPERIMENT/$f" | tr -d ' ')
     sum=$(sha256_of "$EXPERIMENT/$f")
     emit artifact.written info "{\"uri\":\"$f\",\"kind\":\"input\",\"name\":\"Simulation input\",\"bytes\":$size,\"sha256\":\"$sum\",\"attributes\":{\"file_type\":\"@@SUFFIX@@\",\"end_time\":@@END_TIME_JSON@@,\"batch\":@@BATCH@@}}"
