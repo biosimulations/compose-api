@@ -202,7 +202,7 @@ server-side reduction ([`docs/plan-viewers.md`](docs/plan-viewers.md)). Listings
 `get_simulator_db()`, `get_hpc_db()`, `get_package_db()` (`compose_api/db/services/`, tables in `db/tables/`). Startup
 calls `create_db()`: `metadata.create_all` (new tables), a stamp for a database alembic doesn't track yet (head if it
 was empty, else the pre-tracking baseline), then `alembic upgrade head`. `create_all` never adds a column, so **a new
-column on an existing table needs an alembic revision**; write it idempotently (`ADD COLUMN IF NOT EXISTS`), because a
+column on an existing table, or a new member of a model enum, needs an alembic revision**; write it idempotently (`ADD COLUMN IF NOT EXISTS`, `ADD VALUE IF NOT EXISTS`), because a
 fresh database already has it (`tests/common/test_migrations.py`). MongoDB settings and fixtures exist but the live path
 is Postgres.
 
