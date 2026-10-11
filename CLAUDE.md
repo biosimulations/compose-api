@@ -191,7 +191,8 @@ parsing, span folding and Chrome Trace renderer are ported from viva-core.
 
 **Datasets (`observability/datasets.py`, `api/routers/datasets.py`).** Every `artifact.written` event becomes a
 `dataset` row (`DatasetsDatabaseService.register`, called by the ingester). The job script emits one per file under
-`output/` (kept now) and for `results.zip`, with size and sha256, and one for the SLURM log `job.out` (kind
+`output/` (kept now) and for `results.zip`, with size and sha256, one at job start for the submitted input `<experiment_id>.<suffix>` (kind `input`, with the request's file
+type, end time and batch flag; `python -m compose_api.observability.backfill_inputs` registers older runs'), and one for the SLURM log `job.out` (kind
 `log`, which simulation jobs now write in their experiment directory instead of `htclogs/`). A simulator's own event (any component but
 `compose_api.job`) wins over that manifest. Paths are relative to the experiment directory, and
 `resolve_content_path` keeps content reads inside it. A zarr store (`*.fenics` results bundle, `*.zarr`) is ONE

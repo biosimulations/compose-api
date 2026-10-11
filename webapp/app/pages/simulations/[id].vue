@@ -10,6 +10,17 @@ const sim = ref<SimulationDetail | null>(null)
 const run = ref<HpcRun | null>(null)
 const build = ref<HpcRun | null>(null)
 const datasets = ref<Dataset[]>([])
+// The file the simulation was submitted with, announced by the job script when the run starts (kind "input").
+const input = computed(() => datasets.value.find(d => d.kind === 'input') ?? null)
+const inputError = ref<string | null>(null)
+
+async function saveInput(d: Dataset) {
+  try {
+    await downloadFile(`/datasets/${d.id}/content`, {}, d.path.split('/').pop() || d.display_name)
+  } catch (e) {
+    inputError.value = (e as Error).message
+  }
+}
 const notFound = ref(false)
 const error = ref<string | null>(null)
 
@@ -150,6 +161,28 @@ const fields = computed(() => {
                     <dt class="text-muted">Ended</dt><dd>{{ formatTime(build.end_time) }}</dd>
                     <template v-if="build.error_message">
                       <dt class="text-muted">Error</dt><dd class="text-error text-xs">{{ build.error_message }}</dd>
+                    </template>
+                  </dl>
+                </UCard>
+                <UCard v-if="input">
+                  <template #header>
+                    <div class="flex items-center justify-between">
+                      <h3 class="font-semibold">Input</h3>
+                      <div class="flex gap-1">
+                        <UButton icon="i-lucide-maximize-2" variant="ghost" color="neutral" title="Open" :to="`/datasets/${input.id}`" :disabled="!input.available" />
+                        <UButton icon="i-lucide-download" variant="ghost" color="neutral" title="Download" :disabled="!input.available" @click="saveInput(input)" />
+                      </div>
+                    </div>
+                  </template>
+                  <UAlert v-if="inputError" color="error" variant="subtle" :description="inputError" class="mb-2" />
+                  <dl class="grid grid-cols-[9rem_1fr] gap-y-2 text-sm">
+                    <dt class="text-muted">File</dt><dd class="font-mono text-xs break-all self-center">{{ input.path }}</dd>
+                    <dt class="text-muted">Size</dt><dd>{{ formatBytes(input.size_bytes) }}</dd>
+                    <template v-if="input.attributes?.end_time != null">
+                      <dt class="text-muted">End time</dt><dd>{{ input.attributes.end_time }}</dd>
+                    </template>
+                    <template v-if="input.sha256">
+                      <dt class="text-muted">SHA-256</dt><dd class="font-mono text-xs break-all self-center">{{ input.sha256 }}</dd>
                     </template>
                   </dl>
                 </UCard>
