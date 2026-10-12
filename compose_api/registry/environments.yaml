@@ -13,8 +13,8 @@
 
 describe:
   source: https://github.com/biosimulations/process-bigraph-lang
-  # pinned; the script is `path` at this commit
-  ref: 8fa272c2859c174c6db0e7d401a5e8787a2cfa94
+  # pinned (the merge of process-bigraph-lang#56); the script is `path` at this commit
+  ref: bd130969fb02a3d52800abf969f700c16bda3c20
   path: process_bigraph_lang/v2/describe_env.py
 
 environments:
