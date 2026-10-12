@@ -32,6 +32,7 @@ from compose_api_client.api.biosim_api import check_health_health_get, get_versi
 from compose_api_client.api.compute import get_processes_list, get_simulator_list, get_steps_list
 from compose_api_client.api.curated import run_copasi, run_tellurium
 from compose_api_client.api.datasets import get_dataset, get_dataset_content, get_dataset_file, list_datasets
+from compose_api_client.api.registry import get_environment_manifest, list_environments
 from compose_api_client.api.results import (
     get_simulation_events,
     get_simulation_results_file,
@@ -52,7 +53,9 @@ from compose_api_client.models import (
     BodyRunTellurium,
     Dataset,
     DatasetPage,
+    EnvironmentSummary,
     HpcRun,
+    InterfaceManifest,
     ListSimulationsStatusType0,
     RegisteredSimulators,
     RunEvent,
@@ -192,6 +195,14 @@ class ComposeSession:
 
     def steps(self) -> list[BiGraphStep]:
         return list(_parsed(get_steps_list.sync_detailed(client=self.client)))
+
+    def environments(self) -> list[EnvironmentSummary]:
+        """The environments documents run in, with what their interface manifests hold."""
+        return list(_parsed(list_environments.sync_detailed(client=self.client)))
+
+    def environment_manifest(self, name: str) -> InterfaceManifest:
+        """An environment's interface manifest (pbg-interfaces/1)."""
+        return _parsed(get_environment_manifest.sync_detailed(name, client=self.client))  # type: ignore[no-any-return]
 
     # -- submit -----------------------------------------------------------------------------------------------------
 
@@ -462,6 +473,14 @@ class AsyncComposeSession:
 
     async def steps(self) -> list[BiGraphStep]:
         return list(_parsed(await get_steps_list.asyncio_detailed(client=self.client)))
+
+    async def environments(self) -> list[EnvironmentSummary]:
+        """The environments documents run in, with what their interface manifests hold."""
+        return list(_parsed(await list_environments.asyncio_detailed(client=self.client)))
+
+    async def environment_manifest(self, name: str) -> InterfaceManifest:
+        """An environment's interface manifest (pbg-interfaces/1)."""
+        return _parsed(await get_environment_manifest.asyncio_detailed(name, client=self.client))  # type: ignore[no-any-return]
 
     async def submit(
         self, document: FileSource, *, simulator: str | None = None, interval: float = 1.0, batch: bool = False

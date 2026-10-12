@@ -173,6 +173,7 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 * `curated`: Run an SBML model with a curated simulator.
 * `datasets`: The files runs produced.
 * `simulations`: Find simulations and their ids.
+* `environments`: The environments documents run in, and the...
 
 ## `compose-api health`
 
@@ -700,6 +701,61 @@ $ compose-api simulations show [OPTIONS] SIMULATION_ID
 **Arguments**:
 
 * `SIMULATION_ID`: The simulation id.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+## `compose-api environments`
+
+The environments documents run in, and the process interfaces each provides.
+
+**Usage**:
+
+```console
+$ compose-api environments [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `list`: Environments: the `--simulator` to run in...
+* `manifest`: An environment's interface manifest: its...
+
+### `compose-api environments list`
+
+Environments: the `--simulator` to run in each, its image, and whether its manifest is current.
+
+**Usage**:
+
+```console
+$ compose-api environments list [OPTIONS]
+```
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments manifest`
+
+An environment's interface manifest: its steps and processes, their config schemas and ports.
+
+`--output json` prints the manifest itself (pbg-interfaces/1), which other tools read as it is.
+
+**Usage**:
+
+```console
+$ compose-api environments manifest [OPTIONS] NAME
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
 
 **Options**:
 

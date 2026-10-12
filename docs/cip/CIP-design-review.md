@@ -655,6 +655,15 @@ let a workbench browse the ecosystem, and neither was asked to describe an inter
   that none is published. A shared registry is now a convergence question between the two backends (strategy
   decision 4), not only a protocol one.
 
+**Update 2026-10-12.** This repository now stores port types, and the unit is the environment, not the package.
+`compose_api/registry/manifests/<environment>.json` lists every step and process class an environment provides, with
+its config schema and ports as bigraph-schema types, read inside the image by CI and reviewed by pull request; each
+component is attributed to its registry entry, and `/registry/environments` serves them. The format is shared rather
+than this service's (`pbg-interfaces/1`, a published JSON Schema maintained in process-bigraph-lang), so option 4's
+ledger could carry the same files. That is the data option 3 needed, without the Postgres write path. It still
+records no units, contracts or adapter `from`/`to`, and no query by type pair exists yet, so the adapter question
+stays open. See [plan-authoring.md](../plan-authoring.md).
+
 **Your call.**
 
 ### D-G. How a model artifact travels with a document

@@ -174,6 +174,15 @@ runs means a manifest entry *and* the library in `simulation/simulator_registry.
 generated (`uv run python -m compose_api.registry.catalog`, read-only against GitHub) and lists every vivarium-collective
 catalog wrapper at `listed`; never hand-edit it — raising an entry means adding it to `manifest.yaml`, which wins.
 
+**Environments and interface manifests.** `registry/environments.yaml` lists the environments documents run in
+(`registry_env`, and each prebuilt image by its simulator name) and how to enter each one's Python.
+`registry/manifests/<name>.json` is generated, never hand-edited: `uv run python -m compose_api.registry.generate`
+(Docker; CI's `registry-manifests.yml` opens a PR) runs process-bigraph-lang's standalone describe script, pinned in
+`environments.yaml`, inside each image over the module roots of the entries whose `bundles` name it. The format is the
+shared `pbg-interfaces/1`. `GET /registry/environments[/{name}/manifest]` serves them to the web app. A test fails when
+a committed manifest was read from another image than the one deployed (regenerate it) or lists an unregistered
+component. Plan: `docs/plan-authoring.md`.
+
 **Job tracking.** An `HpcRun` row links a SLURM job id, a `correlation_id`, and a `JobType`
 (`SIMULATION` / `BUILD_CONTAINER`). `JobMonitor` updates status two ways: a 5-second polling loop reconciling
 `squeue`/`sacct` against running `HpcRun` rows, and the event ingester (below) on the same loop. The NATS path and its
