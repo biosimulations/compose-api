@@ -88,6 +88,10 @@ datasets_app = typer.Typer(help="The files runs produced.", no_args_is_help=True
 app.add_typer(datasets_app, name="datasets")
 simulations_app = typer.Typer(help="Find simulations and their ids.", no_args_is_help=True)
 app.add_typer(simulations_app, name="simulations")
+environments_app = typer.Typer(
+    help="The environments documents run in, and the process interfaces each provides.", no_args_is_help=True
+)
+app.add_typer(environments_app, name="environments")
 
 
 @app.callback()
@@ -299,6 +303,59 @@ def steps_list(ctx: typer.Context) -> None:
     """Registered steps."""
     with make_session(_settings(ctx)) as s:
         emit(_settings(ctx).output, s.steps(), ["database_id", "name", "module", "compute_type"])
+
+
+@environments_app.command("list")
+@claims("environments list", "list-environments")
+@handled
+def environments_list(ctx: typer.Context) -> None:
+    """Environments: the `--simulator` to run in each, its image, and whether its manifest is current."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        envs = s.environments()
+    rows = [
+        {
+            "name": e.name,
+            "simulator": e.simulator,
+            "components": e.components,
+            "errors": e.errors,
+            "stale": e.stale,
+            "image": e.image,
+        }
+        for e in envs
+    ]
+    emit(
+        settings.output,
+        rows if settings.output is not Output.JSON else [e.to_dict() for e in envs],
+        ["name", "simulator", "components", "errors", "stale", "image"],
+    )
+
+
+@environments_app.command("manifest")
+@claims("environments manifest", "get-environment-manifest")
+@handled
+def environments_manifest(
+    ctx: typer.Context, name: Annotated[str, typer.Argument(help="The environment, e.g. registry_env.")]
+) -> None:
+    """An environment's interface manifest: its steps and processes, their config schemas and ports.
+
+    `--output json` prints the manifest itself (pbg-interfaces/1), which other tools read as it is."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        manifest = s.environment_manifest(name)
+    if settings.output is Output.JSON:
+        emit(Output.JSON, manifest.to_dict())
+        return
+    rows = [
+        {
+            "address": c.address,
+            "kind": c.kind,
+            "dynamic_ports": c.dynamic_ports,
+            "entry": c.registry_entry.id if c.registry_entry else None,
+        }
+        for c in manifest.components
+    ]
+    emit(settings.output, rows, ["address", "kind", "dynamic_ports", "entry"])
 
 
 # -- running ------------------------------------------------------------------------------------------------------

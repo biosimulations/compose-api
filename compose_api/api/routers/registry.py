@@ -9,7 +9,7 @@ import hashlib
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from compose_api.authentication import get_optional_principal
+from compose_api.authentication import OptionalPrincipal, get_optional_principal
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.registry.environments import (
     EnvironmentSummary,
@@ -30,7 +30,8 @@ config = RouterConfig(router=APIRouter(), prefix="/registry", dependencies=[Depe
     tags=["Registry"],
     summary="The environments documents run in, with what their interface manifests hold",
 )
-async def list_environments() -> list[EnvironmentSummary]:
+async def list_environments(principal: OptionalPrincipal) -> list[EnvironmentSummary]:
+    # public: the same for every caller
     return [s for s in (summarize(spec) for spec in load_environments().environments) if s is not None]
 
 
@@ -42,7 +43,10 @@ async def list_environments() -> list[EnvironmentSummary]:
     summary="An environment's interface manifest (pbg-interfaces/1), each component with its registry entry",
     responses={404: {"description": "No such environment here, or no manifest has been generated for it"}},
 )
-async def get_environment_manifest(name: str, request: Request, response: Response) -> InterfaceManifest | Response:
+async def get_environment_manifest(
+    name: str, request: Request, response: Response, principal: OptionalPrincipal
+) -> InterfaceManifest | Response:
+    # public: the same for every caller
     spec = next((e for e in load_environments().environments if e.name == name), None)
     if spec is None or summarize(spec) is None:
         raise HTTPException(status_code=404, detail=f"no environment {name!r}")
