@@ -24,7 +24,9 @@ statistics view and a **3D view** (vtk.js) read chunk by chunk with zarrita from
 draws the bundle's web extension (a precomputed surface per domain, viva-pde-particle `docs/web-bundle.md`) coloured by
 one variable, fetches one row per frame, shows particles, and follows a running simulation.
 
-**The submitted composite** (the `input` dataset, a `.pbg` document) opens in the composite viewer
+**The submitted composite** (the `input` dataset: a `.pbg` document, or an OMEX archive holding one or more, found
+as the service finds them at submission: `.pbg` and `.json` members, nested `.omex` archives at most three deep; with
+several, a picker chooses one) opens in the composite viewer
 (`webapp/app/viewers/CompositeViewer.vue`): the document is decompiled in the browser into `.pblang` text by
 [process-bigraph-lang](https://github.com/biosimulations/process-bigraph-lang) (the npm package of its `dsl/`), checked, and shown read-only in Monaco with
 the checker's findings as markers and as a list; a second tab draws the wiring (`viewers/composite/layout.ts`, stores

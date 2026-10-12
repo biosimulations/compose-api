@@ -6,17 +6,26 @@ import type { Dataset } from '~/composables/useApi'
 import ViewerState from './ViewerState.vue'
 import CompositeGraph from './composite/CompositeGraph.vue'
 import { LANGUAGE, registerLanguage, toMarkers } from './composite/monaco'
+import { type ArchiveDocument, compositeDocuments, documentName, isZip } from './composite/archive'
 
 /**
- * A submitted composite (`.pbg`, a process-bigraph `{schema, state}` document) as `.pblang` text and as a wiring
- * graph. The document is decompiled in the browser with process-bigraph-lang, checked against the interface manifest
+ * A submitted composite (`.pbg`, a process-bigraph `{schema, state}` document, on its own or inside an OMEX archive)
+ * as `.pblang` text and as a wiring graph. An archive's documents are found the way the service finds them at
+ * submission (./composite/archive.ts); when it holds several, one is picked. The document is decompiled in the browser with process-bigraph-lang, checked against the interface manifest
  * of the environment its run used (so its processes resolve to their ports and config), and shown read-only in Monaco
  * with the checker's findings as markers. Large values the printer moved to sidecar assets are listed below the text.
  */
 const props = defineProps<{ dataset: Dataset }>()
-const { text: json, error: loadError, loading, tooBig } = useDatasetFile(() => props.dataset, 'text')
+const { bytes, error: loadError, loading, tooBig } = useDatasetFile(() => props.dataset, 'bytes')
 
-const name = computed(() => (props.dataset.path.split('/').pop() ?? 'composite').replace(/\.(pbg|json|ya?ml)$/i, ''))
+const fileName = computed(() => props.dataset.path.split('/').pop() ?? 'composite')
+const documents = shallowRef<ArchiveDocument[]>([])
+const fromArchive = ref(false)
+const chosen = ref<string | undefined>(undefined)
+const name = computed(() => documentName(chosen.value ?? fileName.value))
+const copyLink = computed(() =>
+  `/composites/new?from=${props.dataset.id}${fromArchive.value && chosen.value ? `&member=${encodeURIComponent(chosen.value)}` : ''}`
+)
 const text = ref<string | null>(null)
 const assets = ref<Record<string, string>>({})
 const diagnostics = ref<Diagnostic[]>([])
@@ -67,25 +76,66 @@ async function addRunManifest(pblang: Pblang): Promise<void> {
   }
 }
 
-watch(json, async (value) => {
+watch(bytes, (value) => {
   if (value == null) return
   try {
+    fromArchive.value = isZip(value)
+    documents.value = compositeDocuments(value, fileName.value)
+    if (!documents.value.length) error.value = 'This archive holds no composite document (no .pbg or .json member).'
+    chosen.value = documents.value[0]?.path
+  } catch (e) {
+    error.value = `Not an archive this viewer can read: ${(e as Error).message}`
+  }
+})
+
+// one session for the dataset, holding the manifest of the environment its run used
+let session: Promise<Pblang> | null = null
+function runSession(): Promise<Pblang> {
+  session ??= (async () => {
     const pblang = new Pblang()
     await addRunManifest(pblang)
-    const printed = pblang.decompile(value, { name: name.value })
-    text.value = printed.text
-    assets.value = printed.assets
+    return pblang
+  })()
+  return session
+}
+
+watch(chosen, async (path) => {
+  const document = documents.value.find(d => d.path === path)
+  if (!document) return
+  error.value = null
+  try {
+    const pblang = await runSession()
+    const printed = pblang.decompile(document.text, { name: name.value })
     diagnostics.value = (await pblang.check(printed.text)).diagnostics
-    graph.value = await pblang.graph({ document: value })
+    graph.value = await pblang.graph({ document: document.text })
+    assets.value = printed.assets
+    shownAsset.value = null
+    text.value = printed.text
   } catch (e) {
-    error.value = `Not a composite this viewer can read: ${(e as Error).message}`
+    text.value = null
+    graph.value = null
+    diagnostics.value = []
+    error.value = `${fromArchive.value ? `${path}: n` : 'N'}ot a composite this viewer can read: ${(e as Error).message}`
   }
 })
 
 // Monaco mounts once the text exists and its tab is visible; it keeps the model when tabs switch (unmount-on-hide off).
 watch([text, editorHost], ([value, host]) => {
-  if (value == null || !host || editor) return
+  if (value == null || !host) return
   const m = registerLanguage()
+  if (editor && editor.getContainerDomNode() === host) {
+    // another document of the same archive: same editor, new text
+    const current = editor.getModel()!
+    current.setValue(value)
+    m.editor.setModelMarkers(current, 'pblang', toMarkers(diagnostics.value))
+    return
+  }
+  if (editor) {
+    // the host was re-rendered (after a document that could not be read)
+    editor.getModel()?.dispose()
+    editor.dispose()
+    editor = null
+  }
   const model = m.editor.createModel(value, LANGUAGE, m.Uri.parse(`inmemory://composite/${props.dataset.id}.pblang`))
   m.editor.setModelMarkers(model, 'pblang', toMarkers(diagnostics.value))
   editor = m.editor.create(host, {
@@ -129,6 +179,12 @@ const severityColor = (s: Diagnostic['severity']) => (s === 'error' ? 'error' : 
 
 <template>
   <div class="flex flex-col gap-3">
+    <div v-if="fromArchive && documents.length" class="flex flex-wrap items-center gap-2 text-sm">
+      <UIcon name="i-lucide-file-archive" class="text-muted" />
+      <span class="text-muted">{{ documents.length === 1 ? 'The composite document in this archive:' : `${documents.length} composite documents in this archive:` }}</span>
+      <USelect v-if="documents.length > 1" v-model="chosen" :items="documents.map(d => d.path)" size="sm" class="min-w-64" />
+      <code v-else>{{ chosen }}</code>
+    </div>
     <ViewerState :loading="loading" :error="loadError ?? error" :too-big="tooBig" :size="dataset.size_bytes" />
     <template v-if="text != null">
       <div class="flex flex-wrap items-center gap-2 text-sm">
@@ -144,7 +200,7 @@ const severityColor = (s: Diagnostic['severity']) => (s === 'error' ? 'error' : 
           </UBadge>
         </UTooltip>
         <span class="grow" />
-        <UButton icon="i-lucide-square-pen" label="Edit a copy" size="sm" variant="subtle" color="neutral" :to="`/composites/new?from=${dataset.id}`" />
+        <UButton icon="i-lucide-square-pen" label="Edit a copy" size="sm" variant="subtle" color="neutral" :to="copyLink" />
         <UButton icon="i-lucide-download" :label="`${name}.pblang`" size="sm" variant="subtle" color="neutral" @click="download" />
       </div>
       <UTabs v-model="tab" :items="tabs" variant="link" class="w-full" :unmount-on-hide="false">
