@@ -20,8 +20,18 @@ const media = (d: Dataset) => d.media_type ?? ''
 const isTable = (d: Dataset) => /csv|tab-separated|tsv/.test(media(d)) || /\.(csv|tsv)$/i.test(d.path)
 const isText = (d: Dataset) => media(d).startsWith('text/') || /json|yaml|xml/.test(media(d))
 const isBundle = (d: Dataset) => d.kind === 'results-bundle'
+// the submitted composite: a process-bigraph document (.pbg or .json); an OMEX archive is not one
+const isComposite = (d: Dataset) => d.kind === 'input' && (/json/.test(media(d)) || /\.(pbg|json)$/i.test(d.path))
 
 export const VIEWERS: ViewerDef[] = [
+  {
+    // The submitted composite as .pblang text (decompiled in the browser by process-bigraph-lang) and as a wiring graph.
+    id: 'composite',
+    label: 'Composite',
+    icon: 'i-lucide-workflow',
+    match: d => (isComposite(d) ? 10 : 0),
+    component: lazy(() => import('./CompositeViewer.vue'))
+  },
   {
     id: 'image',
     label: 'Image',

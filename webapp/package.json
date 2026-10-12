@@ -22,12 +22,14 @@
     "@nuxt/ui": "^4.11.3",
     "@vueuse/core": "^15.0.0",
     "@vueuse/nuxt": "^15.0.0",
+    "monaco-editor": "^0.57.0",
     "nuxt": "^4.6.0",
     "openapi-fetch": "^0.17.0",
     "papaparse": "^5.7.0",
     "plotly.js-dist-min": "^3.7.0",
     "pretty-bytes": "^7.2.0",
     "pretty-ms": "^9.3.1",
+    "process-bigraph-lang": "file:vendor/process-bigraph-lang-0.0.1.tgz",
     "zarrita": "^0.7.5"
   },
   "devDependencies": {

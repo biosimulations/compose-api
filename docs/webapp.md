@@ -19,10 +19,19 @@ serves it at **`/ui`** on the same host, and `/` redirects there.
 **Viewers are registered per dataset type** (`webapp/app/viewers/registry.ts`, [plan](plan-viewers.md)). Each one
 declares which datasets it fits (by kind, media type and attributes) and is an async component, so a viewer and its
 libraries download only when first opened. `/ui/datasets/<id>` opens a dataset full width; the table's preview shows
-the same viewers. Built in: image, table (plotted when numeric), text, and for results bundles (`*.fenics`) a
+the same viewers. Built in: composite (below), image, table (plotted when numeric), text, and for results bundles (`*.fenics`) a
 statistics view and a **3D view** (vtk.js) read chunk by chunk with zarrita from `/datasets/{id}/files/`. The 3D view
 draws the bundle's web extension (a precomputed surface per domain, viva-pde-particle `docs/web-bundle.md`) coloured by
 one variable, fetches one row per frame, shows particles, and follows a running simulation.
+
+**The submitted composite** (the `input` dataset, a `.pbg` document) opens in the composite viewer
+(`webapp/app/viewers/CompositeViewer.vue`): the document is decompiled in the browser into `.pblang` text by
+[process-bigraph-lang](https://github.com/biosimulations/process-bigraph-lang) (its `dsl/` npm package, vendored as
+`webapp/vendor/process-bigraph-lang-<version>.tgz` until it is published), checked, and shown read-only in Monaco with
+the checker's findings as markers and as a list; a second tab draws the wiring (`viewers/composite/layout.ts`, stores
+left, processes and steps right, a link per wired port, nested composites below). Without the registry's header
+manifests the checker cannot resolve addresses, so unknown-component findings are expected for now; authoring (the
+language server for hover and completion, manifests, compile and submit) is the next stage.
 
 `get-simulations-status-batch` is not used: it is a GET with a JSON body, which browsers cannot send. The list page
 re-fetches while any row is still running.
