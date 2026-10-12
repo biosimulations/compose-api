@@ -336,6 +336,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/registry/environments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The environments documents run in, with what their interface manifests hold */
+        get: operations["list-environments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/environments/{name}/manifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An environment's interface manifest (pbg-interfaces/1), each component with its registry entry */
+        get: operations["get-environment-manifest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -443,6 +477,12 @@ export interface components {
             containerization_engine: components["schemas"]["ContainerizationEngine"];
         };
         /**
+         * CurationLevel
+         * @description The curation ladder, lowest first. Order matters: comparisons use the declaration order.
+         * @enum {string}
+         */
+        CurationLevel: "listed" | "installable" | "tested" | "validated" | "curated";
+        /**
          * Dataset
          * @description A file a run produced, readable by anyone who may read its simulation (O7).
          */
@@ -490,6 +530,53 @@ export interface components {
             /** Next Offset */
             next_offset?: number | null;
         };
+        /**
+         * EntryRef
+         * @description The registry entry a component belongs to (by module root), and its curation level.
+         */
+        EntryRef: {
+            /** Id */
+            id: string;
+            level: components["schemas"]["CurationLevel"];
+        };
+        /** EnvironmentSummary */
+        EnvironmentSummary: {
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "shared" | "prebuilt";
+            /**
+             * Simulator
+             * @description The value of /simulation/run's `simulator` for this environment
+             */
+            simulator: string | null;
+            /**
+             * Image
+             * @description The image this deployment runs it in
+             */
+            image: string | null;
+            /**
+             * Manifest Image
+             * @description The image the manifest was read from
+             */
+            manifest_image: string | null;
+            /**
+             * Stale
+             * @description The manifest was read from another image than the one deployed
+             */
+            stale: boolean;
+            /** Process Bigraph */
+            process_bigraph?: string | null;
+            /** Components */
+            components: number;
+            /** Errors */
+            errors: number;
+            /** Entries */
+            entries: components["schemas"]["EntryRef"][];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -517,6 +604,64 @@ export interface components {
             error_message?: string | null;
             /** Trace Id */
             trace_id?: string | null;
+        };
+        /**
+         * InterfaceComponent
+         * @description One step or process class, as `pbg-interfaces/1` describes it; unknown keys pass through.
+         */
+        InterfaceComponent: {
+            /** Name */
+            name: string;
+            /** Kind */
+            kind: string;
+            /** Address */
+            address: string;
+            /** Module */
+            module?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Config Schema */
+            config_schema?: {
+                [key: string]: unknown;
+            };
+            /** Inputs */
+            inputs?: {
+                [key: string]: unknown;
+            } | null;
+            /** Outputs */
+            outputs?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Dynamic Ports
+             * @default false
+             */
+            dynamic_ports: boolean;
+            registry_entry?: components["schemas"]["EntryRef"] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * InterfaceManifest
+         * @description An environment's interface manifest (`pbg-interfaces/1`), with each component's registry entry added.
+         */
+        InterfaceManifest: {
+            /** $Schema */
+            $schema?: string | null;
+            /** Schema Version */
+            schema_version: string;
+            /** Environment */
+            environment?: {
+                [key: string]: unknown;
+            } | null;
+            /** Components */
+            components: components["schemas"]["InterfaceComponent"][];
+            /** Errors */
+            errors?: {
+                [key: string]: string;
+            }[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * JobStatus
@@ -1478,6 +1623,64 @@ export interface operations {
                 };
             };
             /** @description The dataset does not exist, the caller may not read it, it is not a directory, or it has no such file */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "list-environments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentSummary"][];
+                };
+            };
+        };
+    };
+    "get-environment-manifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterfaceManifest"];
+                };
+            };
+            /** @description No such environment here, or no manifest has been generated for it */
             404: {
                 headers: {
                     [name: string]: unknown;

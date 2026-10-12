@@ -56,6 +56,7 @@ APP_ROUTERS = [
     "results",
     "compute",
     "datasets",
+    "registry",
 ]  # for now, just referencing core
 assets_dir = Path(get_settings().assets_dir)
 ACTIVE_URL = ServerMode.detect(assets_dir / "dev" / "config" / ".dev_env")

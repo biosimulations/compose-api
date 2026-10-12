@@ -745,6 +745,53 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /registry/environments:
+    get:
+      tags:
+      - Registry
+      summary: The environments documents run in, with what their interface manifests
+        hold
+      operationId: list-environments
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/EnvironmentSummary'
+                type: array
+                title: Response List-Environments
+  /registry/environments/{name}/manifest:
+    get:
+      tags:
+      - Registry
+      summary: An environment's interface manifest (pbg-interfaces/1), each component
+        with its registry entry
+      operationId: get-environment-manifest
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterfaceManifest'
+        '404':
+          description: No such environment here, or no manifest has been generated
+            for it
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /health:
     get:
       tags:
@@ -889,6 +936,17 @@ components:
       - representation
       - containerization_engine
       title: ContainerizationFileRepr
+    CurationLevel:
+      type: string
+      enum:
+      - listed
+      - installable
+      - tested
+      - validated
+      - curated
+      title: CurationLevel
+      description: 'The curation ladder, lowest first. Order matters: comparisons
+        use the declaration order.'
     Dataset:
       properties:
         id:
@@ -977,6 +1035,81 @@ components:
       - datasets
       - total
       title: DatasetPage
+    EntryRef:
+      properties:
+        id:
+          type: string
+          title: Id
+        level:
+          $ref: '#/components/schemas/CurationLevel'
+      type: object
+      required:
+      - id
+      - level
+      title: EntryRef
+      description: The registry entry a component belongs to (by module root), and
+        its curation level.
+    EnvironmentSummary:
+      properties:
+        name:
+          type: string
+          title: Name
+        kind:
+          type: string
+          enum:
+          - shared
+          - prebuilt
+          title: Kind
+        simulator:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Simulator
+          description: The value of /simulation/run's `simulator` for this environment
+        image:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Image
+          description: The image this deployment runs it in
+        manifest_image:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Manifest Image
+          description: The image the manifest was read from
+        stale:
+          type: boolean
+          title: Stale
+          description: The manifest was read from another image than the one deployed
+        process_bigraph:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Process Bigraph
+        components:
+          type: integer
+          title: Components
+        errors:
+          type: integer
+          title: Errors
+        entries:
+          items:
+            $ref: '#/components/schemas/EntryRef'
+          type: array
+          title: Entries
+      type: object
+      required:
+      - name
+      - kind
+      - simulator
+      - image
+      - manifest_image
+      - stale
+      - components
+      - errors
+      - entries
+      title: EnvironmentSummary
     HTTPValidationError:
       properties:
         detail:
@@ -1044,6 +1177,96 @@ components:
       - sim_id
       - simulator_id
       title: HpcRun
+    InterfaceComponent:
+      properties:
+        name:
+          type: string
+          title: Name
+        kind:
+          type: string
+          title: Kind
+        address:
+          type: string
+          title: Address
+        module:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Module
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        config_schema:
+          additionalProperties: true
+          type: object
+          title: Config Schema
+        inputs:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Inputs
+        outputs:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Outputs
+        dynamic_ports:
+          type: boolean
+          title: Dynamic Ports
+          default: false
+        registry_entry:
+          anyOf:
+          - $ref: '#/components/schemas/EntryRef'
+          - type: 'null'
+      additionalProperties: true
+      type: object
+      required:
+      - name
+      - kind
+      - address
+      title: InterfaceComponent
+      description: One step or process class, as `pbg-interfaces/1` describes it;
+        unknown keys pass through.
+    InterfaceManifest:
+      properties:
+        $schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: $Schema
+        schema_version:
+          type: string
+          title: Schema Version
+        environment:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Environment
+        components:
+          items:
+            $ref: '#/components/schemas/InterfaceComponent'
+          type: array
+          title: Components
+        errors:
+          items:
+            additionalProperties:
+              type: string
+            type: object
+          type: array
+          title: Errors
+      additionalProperties: true
+      type: object
+      required:
+      - schema_version
+      - components
+      title: InterfaceManifest
+      description: An environment's interface manifest (`pbg-interfaces/1`), with
+        each component's registry entry added.
     JobStatus:
       type: string
       enum:

@@ -1,0 +1,29 @@
+# The environments this service runs documents in, and how CI reads the process interfaces each one provides.
+# Strategy decision 5, phase B; docs/plan-authoring.md.
+#
+# A manifest describes an environment, not a package: the classes are imported inside the image that runs the
+# document, by process-bigraph-lang's standalone describe script (standard library only, so it runs in any image).
+# `.github/workflows/registry-manifests.yml` runs `scripts/registry_manifests.py`, which writes
+# `manifests/<name>.json` in the shared interface-manifest format (`pbg-interfaces/1`) and opens a pull request when
+# one changes. The API serves them at /registry/environments.
+#
+# Which modules are described comes from manifest.yaml (and catalog.yaml): the module roots of every entry whose
+# `bundles` include the environment's name. The image comes from the deployment: the shared image is identified by
+# the hash of its generated definition, a prebuilt one by its pin in PREBUILT_SIMULATORS.
+
+describe:
+  source: https://github.com/biosimulations/process-bigraph-lang
+  # pinned; the script is `path` at this commit
+  ref: 8fa272c2859c174c6db0e7d401a5e8787a2cfa94
+  path: process_bigraph_lang/v2/describe_env.py
+
+environments:
+  - name: registry_env
+    kind: shared
+    # the image's ENTRYPOINT runs pbest; its Python is the micromamba env
+    python: [micromamba, run, -p, /micromamba_env/runtime_env, python3]
+
+  - name: viva-pde-particle
+    kind: prebuilt
+    # the pixi env must be activated (conda activation scripts: dolfinx, PETSc), as docker/compose-entrypoint.sh does
+    python: [/bin/bash, -c, 'source /app/docker/shell-hook.sh && exec python "$@"', python]
