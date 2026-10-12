@@ -32,8 +32,14 @@ left, processes and steps right, a link per wired port, nested composites below)
 against interface manifests: one per environment documents run in, generated in CI inside each image and served by
 the API at `GET /registry/environments` and `GET /registry/environments/{name}/manifest` (same origin; in
 development, from whatever `NUXT_PUBLIC_API_BASE` points at). Until the viewer adds the run's manifest
-([plan-authoring.md](plan-authoring.md), step B), unknown-component findings are expected; authoring (the language
-server for hover and completion, compile and submit) is step C.
+([plan-authoring.md](plan-authoring.md), step B), unknown-component findings are expected.
+
+**Writing a composite** (`/ui/composites/new`, or "Edit a copy" from the viewer) opens `.pblang` text in an editable
+Monaco with process-bigraph-lang's language server running in a web worker (`viewers/composite/languageClient.ts`):
+findings appear as you type, hover shows a process's interface, and completion offers processes, ports, config keys
+and stores, all from the manifest of the environment picked above the editor. **Run** compiles the text in the
+browser (addresses in the `local:module.Class` form the service accepts; sidecar files compiled back in) and submits
+the document as a `.pbg` to `/simulation/run` in that environment.
 
 `get-simulations-status-batch` is not used: it is a GET with a JSON body, which browsers cannot send. The list page
 re-fetches while any row is still running.

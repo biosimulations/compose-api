@@ -96,7 +96,8 @@ watch([text, editorHost], ([value, host]) => {
     scrollBeyondLastLine: false,
     fontSize: 12,
     lineNumbersMinChars: 3,
-    renderLineHighlight: 'none'
+    renderLineHighlight: 'none',
+    fixedOverflowWidgets: true // hover boxes may extend past the editor's frame
   })
 })
 onBeforeUnmount(() => {
@@ -143,6 +144,7 @@ const severityColor = (s: Diagnostic['severity']) => (s === 'error' ? 'error' : 
           </UBadge>
         </UTooltip>
         <span class="grow" />
+        <UButton icon="i-lucide-square-pen" label="Edit a copy" size="sm" variant="subtle" color="neutral" :to="`/composites/new?from=${dataset.id}`" />
         <UButton icon="i-lucide-download" :label="`${name}.pblang`" size="sm" variant="subtle" color="neutral" @click="download" />
       </div>
       <UTabs v-model="tab" :items="tabs" variant="link" class="w-full" :unmount-on-hide="false">

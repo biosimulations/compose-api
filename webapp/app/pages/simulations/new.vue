@@ -59,17 +59,21 @@ async function submit() {
   submitting.value = true
   error.value = null
   violations.value = []
+  if (mode.value === 'archive') {
+    const outcome = await submitRun(file.value, { intervalTime: intervalTime.value, batch: batch.value, simulator: simulator.value })
+    submitting.value = false
+    if (!outcome.ok) {
+      error.value = outcome.error
+      violations.value = outcome.violations
+      return
+    }
+    await navigateTo(`/simulations/${outcome.simulationId}`)
+    return
+  }
   const form = new FormData()
   const asIs = { bodySerializer: (b: unknown) => b as FormData }
   let result
-  if (mode.value === 'archive') {
-    form.append('uploaded_file', file.value)
-    result = await api.POST('/simulation/run', {
-      params: { query: { interval_time: intervalTime.value, batch_submission: batch.value, simulator: simulator.value || undefined } },
-      body: form as never,
-      ...asIs
-    })
-  } else if (mode.value === 'copasi') {
+  if (mode.value === 'copasi') {
     form.append('sbml', asSbml(file.value))
     result = await api.POST('/curated/copasi', {
       params: { query: { start_time: startTime.value, duration: duration.value, num_data_points: points.value } },
