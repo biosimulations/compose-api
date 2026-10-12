@@ -26,8 +26,7 @@ one variable, fetches one row per frame, shows particles, and follows a running 
 
 **The submitted composite** (the `input` dataset, a `.pbg` document) opens in the composite viewer
 (`webapp/app/viewers/CompositeViewer.vue`): the document is decompiled in the browser into `.pblang` text by
-[process-bigraph-lang](https://github.com/biosimulations/process-bigraph-lang) (its `dsl/` npm package, vendored as
-`webapp/vendor/process-bigraph-lang-<version>.tgz` until it is published), checked, and shown read-only in Monaco with
+[process-bigraph-lang](https://github.com/biosimulations/process-bigraph-lang) (the npm package of its `dsl/`), checked, and shown read-only in Monaco with
 the checker's findings as markers and as a list; a second tab draws the wiring (`viewers/composite/layout.ts`, stores
 left, processes and steps right, a link per wired port, nested composites below). Without the registry's header
 manifests the checker cannot resolve addresses, so unknown-component findings are expected for now; authoring (the
