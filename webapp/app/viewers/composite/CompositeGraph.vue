@@ -10,7 +10,8 @@ const layout = computed(() => layoutGraph(props.graph))
 const nested = computed(() => props.graph.nodes.filter(n => n.children != null))
 const selected = ref<string | null>(null)
 
-const color = (direction: 'input' | 'output') => (direction === 'input' ? 'var(--ui-primary)' : 'var(--ui-color-amber-500)')
+// Nuxt UI's semantic color tokens: inputs in the primary color, outputs in the warning (amber) one
+const color = (direction: 'input' | 'output') => (direction === 'input' ? 'var(--ui-primary)' : 'var(--ui-warning)')
 const kindLabel = (kind: string) => kind.replace('shared_process_ref', 'shared').replace('shared_process', 'shared process')
 const truncate = (s: string, n = 28) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
 </script>

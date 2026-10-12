@@ -102,7 +102,8 @@ const severityColor = (s: Diagnostic['severity']) => (s === 'error' ? 'error' : 
       <div class="flex flex-wrap items-center gap-2 text-sm">
         <UBadge v-if="counts.error" color="error" variant="subtle">{{ counts.error }} error{{ counts.error === 1 ? '' : 's' }}</UBadge>
         <UBadge v-if="counts.warning" color="warning" variant="subtle">{{ counts.warning }} warning{{ counts.warning === 1 ? '' : 's' }}</UBadge>
-        <UBadge v-if="!counts.error && !counts.warning" color="success" variant="subtle">no findings</UBadge>
+        <UBadge v-if="!counts.error && !counts.warning" color="success" variant="subtle">no errors or warnings</UBadge>
+        <UBadge v-if="counts.info" color="neutral" variant="subtle">{{ counts.info }} note{{ counts.info === 1 ? '' : 's' }}</UBadge>
         <span v-if="graph" class="text-muted">{{ graph.nodes.length }} node{{ graph.nodes.length === 1 ? '' : 's' }}, {{ graph.stores.length }} store{{ graph.stores.length === 1 ? '' : 's' }}</span>
         <span class="grow" />
         <UButton icon="i-lucide-download" :label="`${name}.pblang`" size="sm" variant="subtle" color="neutral" @click="download" />
