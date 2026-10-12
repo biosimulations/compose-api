@@ -9,7 +9,8 @@ import { LANGUAGE, registerLanguage, toMarkers } from './composite/monaco'
 
 /**
  * A submitted composite (`.pbg`, a process-bigraph `{schema, state}` document) as `.pblang` text and as a wiring
- * graph. The document is decompiled in the browser with process-bigraph-lang, checked, and shown read-only in Monaco
+ * graph. The document is decompiled in the browser with process-bigraph-lang, checked against the interface manifest
+ * of the environment its run used (so its processes resolve to their ports and config), and shown read-only in Monaco
  * with the checker's findings as markers. Large values the printer moved to sidecar assets are listed below the text.
  */
 const props = defineProps<{ dataset: Dataset }>()
@@ -21,6 +22,8 @@ const assets = ref<Record<string, string>>({})
 const diagnostics = ref<Diagnostic[]>([])
 const graph = ref<Graph | null>(null)
 const error = ref<string | null>(null)
+// what the text was checked against: the run's environment and its manifest, or why there was none
+const checkedAgainst = ref<{ environment: string | null, components: number, note: string | null } | null>(null)
 const tab = ref('text')
 const shownAsset = ref<string | null>(null)
 const editorHost = ref<HTMLElement | null>(null)
@@ -37,10 +40,38 @@ const tabs = computed(() => [
   { label: `Findings (${diagnostics.value.length})`, icon: 'i-lucide-list-checks', value: 'findings', slot: 'findings' as const }
 ])
 
+/** The manifest of the environment this dataset's run used; never fails the viewer, it only checks less. */
+async function addRunManifest(pblang: Pblang): Promise<void> {
+  try {
+    const { data: simulation } = await useApi().GET('/simulations/{simulation_id}', {
+      params: { path: { simulation_id: props.dataset.simulation_id } }
+    })
+    const environment = await environmentFor(simulation?.simulator)
+    if (!environment) {
+      checkedAgainst.value = { environment: null, components: 0, note: 'its run used an environment this service no longer offers' }
+      return
+    }
+    const manifest = await fetchManifest(environment.name)
+    if (!manifest) {
+      checkedAgainst.value = { environment: environment.name, components: 0, note: 'no interface manifest has been generated for it' }
+      return
+    }
+    pblang.addManifest(manifest)
+    checkedAgainst.value = {
+      environment: environment.name,
+      components: manifest.components.length,
+      note: environment.stale ? 'its manifest was read from an earlier image' : null
+    }
+  } catch (e) {
+    checkedAgainst.value = { environment: null, components: 0, note: (e as Error).message }
+  }
+}
+
 watch(json, async (value) => {
   if (value == null) return
   try {
     const pblang = new Pblang()
+    await addRunManifest(pblang)
     const printed = pblang.decompile(value, { name: name.value })
     text.value = printed.text
     assets.value = printed.assets
@@ -105,6 +136,12 @@ const severityColor = (s: Diagnostic['severity']) => (s === 'error' ? 'error' : 
         <UBadge v-if="!counts.error && !counts.warning" color="success" variant="subtle">no errors or warnings</UBadge>
         <UBadge v-if="counts.info" color="neutral" variant="subtle">{{ counts.info }} note{{ counts.info === 1 ? '' : 's' }}</UBadge>
         <span v-if="graph" class="text-muted">{{ graph.nodes.length }} node{{ graph.nodes.length === 1 ? '' : 's' }}, {{ graph.stores.length }} store{{ graph.stores.length === 1 ? '' : 's' }}</span>
+        <UTooltip v-if="checkedAgainst" :text="checkedAgainst.note ?? 'Addresses resolve to the ports and config this environment\'s classes declare'">
+          <UBadge :color="checkedAgainst.components && !checkedAgainst.note ? 'neutral' : 'warning'" variant="outline" icon="i-lucide-package-check">
+            <template v-if="checkedAgainst.components">checked against {{ checkedAgainst.environment }} ({{ checkedAgainst.components }} components)</template>
+            <template v-else>not checked against an environment{{ checkedAgainst.environment ? ` (${checkedAgainst.environment})` : '' }}</template>
+          </UBadge>
+        </UTooltip>
         <span class="grow" />
         <UButton icon="i-lucide-download" :label="`${name}.pblang`" size="sm" variant="subtle" color="neutral" @click="download" />
       </div>
