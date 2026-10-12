@@ -28,9 +28,12 @@ one variable, fetches one row per frame, shows particles, and follows a running 
 (`webapp/app/viewers/CompositeViewer.vue`): the document is decompiled in the browser into `.pblang` text by
 [process-bigraph-lang](https://github.com/biosimulations/process-bigraph-lang) (the npm package of its `dsl/`), checked, and shown read-only in Monaco with
 the checker's findings as markers and as a list; a second tab draws the wiring (`viewers/composite/layout.ts`, stores
-left, processes and steps right, a link per wired port, nested composites below). Without the registry's header
-manifests the checker cannot resolve addresses, so unknown-component findings are expected for now; authoring (the
-language server for hover and completion, manifests, compile and submit) is the next stage.
+left, processes and steps right, a link per wired port, nested composites below). The checker resolves addresses
+against interface manifests: one per environment documents run in, generated in CI inside each image and served by
+the API at `GET /registry/environments` and `GET /registry/environments/{name}/manifest` (same origin; in
+development, from whatever `NUXT_PUBLIC_API_BASE` points at). Until the viewer adds the run's manifest
+([plan-authoring.md](plan-authoring.md), step B), unknown-component findings are expected; authoring (the language
+server for hover and completion, compile and submit) is step C.
 
 `get-simulations-status-batch` is not used: it is a GET with a JSON body, which browsers cannot send. The list page
 re-fetches while any row is still running.

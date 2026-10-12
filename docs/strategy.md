@@ -271,6 +271,15 @@ source, pinned commit, environment spec, level, the evidence for that level, por
 reviewer. The catalog is read daily, read-only, to discover new wrappers and new commits; nothing is written back to
 `vivarium-collective`. The manifest's exact schema is its own design document.
 
+*Update 2026-10-12: port types, per environment.* Port types and config schemas are recorded, but not in the entries:
+they are a fact about an environment, read inside the image that runs the document, because the same package can
+declare different ports under another process-bigraph. `compose_api/registry/environments.yaml` names the
+environments (`registry_env` and each prebuilt image); CI runs process-bigraph-lang's describe script inside each one
+and commits `compose_api/registry/manifests/<name>.json` by pull request, in a format shared with other tools
+(`pbg-interfaces/1`, published JSON Schema). Each component is attributed to the entry whose module roots contain it,
+and the API serves them at `/registry/environments` for the web app's editor and checker. Units and contracts are not
+in them yet, so *curated* still has nothing to read them from. See [plan-authoring.md](plan-authoring.md).
+
 ### Environments for a composite of N components
 
 One environment for every simulator does not scale, as the dependency survey shows and as `viva-api` concluded
@@ -316,6 +325,9 @@ candidate: a spatial **and** particle-based simulator with validation studies ag
 et al. 2016). Two gaps remain:
 
 - `viva-pde-particle` carries no `viva-marketplace` topic, so it is absent from the catalog and from `catalog.yaml`.
+  *Update 2026-10-12:* it is now an entry in `manifest.yaml` at *tested*, in its own bundle `viva-pde-particle` (its
+  image's own CI runs this service's job contract before every push), so its components are registered and its
+  interfaces are read like the shared image's.
 - Documents submitted to a prebuilt image skip the address check entirely, *including* the unsafe forms (`local:!`,
   non-`local` protocols). The deployment vouches for the image, not for every document sent to it, so the unsafe-form
   check should still apply.
@@ -325,7 +337,7 @@ et al. 2016). Two gaps remain:
 | Phase | What | Gate |
 |---|---|---|
 | A | Manifest schema; ingest the catalog; every wrapper appears at *listed*. Enforce the allow-list the service already receives. | Service rejects unlisted addresses (G6); registry lists every catalog wrapper. **Landed 2026-09-23 in `compose_api/registry/`: the manifest, enforcement at submission, and the catalog ingest, which lists all 50 catalog wrappers at *listed*.** |
-| B | CI that builds each entry's environment and runs its tests; levels 2 and 3 computed, not asserted. | A nightly report of every entry's level, and why. |
+| B | CI that builds each entry's environment and runs its tests; levels 2 and 3 computed, not asserted. | A nightly report of every entry's level, and why. **First output 2026-10-12: CI builds or pulls each environment and reads its interfaces (`registry-manifests.yml`, [plan-authoring.md](plan-authoring.md)); levels are still asserted.** |
 | C | The per-composite resolver, after digest identity (decision 2). | Two wrappers from different entries run in one composite on HPC. |
 | D | Container splitting for conflicting components. | One composite with processes in two containers (`A3.4.docker`). |
 | E | Validation and curation: the spatial and particle simulators for G4, the two adapters for G5, first. | Named entries at *validated* and *curated*, each with its evidence linked. |

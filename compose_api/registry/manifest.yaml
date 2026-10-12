@@ -4,6 +4,10 @@
 # Changes land by pull request. Raising an entry's level needs the evidence for the new level in `evidence`.
 # An address is accepted on HPC only if its module sits under one of an entry's `module_roots`, that entry is at
 # level `tested` or higher, and the entry is part of the bundle the service runs (`registry_env`).
+#
+# `bundles` names the environments an entry is installed in (environments.yaml): `registry_env`, or a prebuilt
+# image's simulator name. CI reads the interfaces each environment provides, over the module roots of its entries,
+# into manifests/<environment>.json (docs/plan-authoring.md); every component there must belong to an entry here.
 
 entries:
   - id: pbsim-common
