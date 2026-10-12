@@ -29,7 +29,7 @@
     "plotly.js-dist-min": "^3.7.0",
     "pretty-bytes": "^7.2.0",
     "pretty-ms": "^9.3.1",
-    "process-bigraph-lang": "^0.1.1",
+    "process-bigraph-lang": "^0.2.0",
     "zarrita": "^0.7.5"
   },
   "devDependencies": {
