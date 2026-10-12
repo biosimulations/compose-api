@@ -1,12 +1,26 @@
 import * as monaco from 'monaco-editor/editor/editor.api'
+// editor.api is the bare editor: each feature registers itself. These are the ones the viewer and the editor use
+// (hover and suggest show the language server's answers; gotoError steps through the checker's markers with F8).
+import 'monaco-editor/features/hover/register.js'
+// the completion widget: Monaco's `features/suggest` registers only inline completions, so import its controller
+import 'monaco-editor/editor/contrib/suggest/browser/suggestController.js'
+import 'monaco-editor/features/snippet/register.js'
+import 'monaco-editor/features/find/register.js'
+import 'monaco-editor/features/folding/register.js'
+import 'monaco-editor/features/bracketMatching/register.js'
+import 'monaco-editor/features/comment/register.js'
+import 'monaco-editor/features/contextmenu/register.js'
+import 'monaco-editor/features/clipboard/register.js'
+import 'monaco-editor/features/gotoError/register.js'
+import 'monaco-editor/features/wordHighlighter/register.js'
 import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker'
 import monarch from 'process-bigraph-lang/monarch'
 import type { Diagnostic } from 'process-bigraph-lang'
 
 /**
  * Monaco for `.pblang` text: the language registered once with process-bigraph-lang's Monarch tokenizer, and the
- * checker's findings as markers. The language server (`process-bigraph-lang/worker`, hover and completion) is not
- * connected yet: the viewer is read-only and checks on the main thread.
+ * checker's findings as markers. The read-only viewer checks on the main thread; the editor connects the language
+ * server (`process-bigraph-lang/worker`) through ./languageClient.ts for diagnostics, hover and completion.
  */
 
 export const LANGUAGE = 'pblang'

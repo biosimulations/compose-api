@@ -9,8 +9,8 @@ GitOps"). The language side is planned in process-bigraph-lang's
 |---|---|---|---|
 | 1 | A standalone describe script; a shared manifest format (`pbg-interfaces/1`) with a JSON Schema; a replaceable registry and a `pblang/setManifests` channel in the language worker | process-bigraph-lang | in review (#56) |
 | A | Environments, their manifests generated in CI inside each image, `/registry/environments`; viva-pde-particle as a registry entry; these docs | compose-api | in review (#270) |
-| B | The composite viewer checks against the run's environment, so processes resolve | compose-api `webapp/` | planned |
-| C | An editor: language worker, environment picker, compile, submit | compose-api `webapp/` | planned |
+| B | The composite viewer checks against the run's environment, so processes resolve | compose-api `webapp/` | in review (#271) |
+| C | An editor: language worker, environment picker, compile, submit | compose-api `webapp/` | in review |
 | R | process-bigraph-lang 0.2.0; compose-api bumps it and releases A, B and C together | both | planned |
 
 ## Why
@@ -71,10 +71,17 @@ language worker (hover, completion, diagnostics while typing).
   (`setManifests`) and the worker (`pblang/setManifests`). Monaco is editable, with the language worker connected by a
   thin JSON-RPC client (diagnostics as markers, hover, completion). Compile, then submit the document as a `.pbg` to
   `/simulation/run` with the environment's `simulator`, through a submit composable shared with the existing form.
-- **The address form, to settle in C.** Manifests address classes as `local:!module.Class` (process-bigraph's import
+- **The address form (settled in C).** Manifests address classes as `local:!module.Class` (process-bigraph's import
   form). This service always refuses that form at submission and accepts `local:module.Class` under a registered
-  entry (CLAUDE.md, "Registry and submission checks"), and viva-pde-particle's runner registers the same qualified
-  names. The checker resolves either form, but compile must write `local:module.Class` for documents sent here.
+  entry (CLAUDE.md, "Registry and submission checks"); process-bigraph's discovery registers every class under that
+  name, and viva-pde-particle's runner does too. The editor compiles with process-bigraph-lang's
+  `addresses: "registered"`, which writes `local:module.Class` everywhere a class is addressed.
+- **What C delivered.** `/ui/composites/new` (and "Edit a copy" in the viewer, which opens a run's composite in the
+  environment it ran in, sidecar files included). The language worker runs in a web worker behind a thin client
+  (`webapp/app/viewers/composite/languageClient.ts`: text sync, markers, hover, completion; Monaco's hover and suggest
+  contributions are registered in `monaco.ts`, since `editor.api` is the bare editor). Run compiles in the browser
+  and submits through `useSubmitRun`, which the run form shares. Open sites and params have no form yet: the checker
+  reports an unfilled one, and the text is edited to fill it.
 
 ## Out of scope
 
