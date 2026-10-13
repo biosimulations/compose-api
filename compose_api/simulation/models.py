@@ -173,6 +173,29 @@ class DownloadedContainerImage(RemoteContainerImage):
     downloaded_at: datetime.datetime | None = None
 
 
+class ImageKind(StrEnum):
+    SIF = "sif"  # a SIF file on the shared filesystem, which the cluster's jobs run from
+    OCI = "oci"  # an image in a registry (docs/plan-environment-builds.md, phase 5)
+
+
+class EnvironmentImage(BaseModel):
+    """A built or pulled image of a simulator's definition (docs/plan-environment-builds.md, E3).
+
+    Images are write-once (E4): one that turns out missing is marked unavailable, never replaced in place.
+    """
+
+    database_id: int
+    simulator_id: int
+    kind: ImageKind
+    location: str  # a path on the shared filesystem (sif), or a registry reference (oci)
+    digest: str | None = None  # "sha256:<hex>" of the file, or the registry's manifest digest
+    size_bytes: int | None = None
+    hpcrun_id: int | None = None  # the build that produced it; None when adopted or pulled
+    available: bool = True
+    created_at: datetime.datetime | None = None
+    verified_at: datetime.datetime | None = None
+
+
 class SimulatorVersion(Simulator):
     database_id: int  # Unique identifier for the simulator version
     created_at: datetime.datetime | None = None

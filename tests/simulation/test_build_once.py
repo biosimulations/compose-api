@@ -4,6 +4,7 @@ new registry_env definition; one built and failed, the other skipped the build a
 
 import asyncio
 import uuid
+from typing import Any, cast
 
 import pytest
 from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
@@ -11,7 +12,7 @@ from pbest.utils.input_types import ContainerizationEngine, ContainerizationFile
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation import handlers
-from compose_api.simulation.models import JobStatus, JobType, SimulatorVersion
+from compose_api.simulation.models import HpcRun, ImageKind, JobStatus, JobType, SimulatorVersion
 
 
 class NoDownload:
@@ -32,7 +33,7 @@ async def test_concurrent_runs_build_once_and_a_failed_build_is_retried(
     builds: list[str] = []
     outcome = {"state": "FAILED"}
 
-    async def build(simulator_version: SimulatorVersion, hpc_db: object, random_prefix: str, **_: object) -> None:
+    async def build(simulator_version: SimulatorVersion, hpc_db: object, random_prefix: str, **_: object) -> HpcRun:
         builds.append(random_prefix)
         await asyncio.sleep(0.2)  # the other run arrives while this one builds
         run = await database_service.get_hpc_db().insert_hpcrun(
@@ -45,12 +46,20 @@ async def test_concurrent_runs_build_once_and_a_failed_build_is_retried(
         )  # fmt: skip
         if outcome["state"] == "FAILED":
             raise RuntimeError("the build failed")
+        return run
 
     monkeypatch.setattr(handlers, "_build_container_and_wait", build)
 
     async def dispatch(name: str) -> BaseException | None:
         try:
-            await handlers._download_or_build_container(NoDownload(), simulator, hpc_db, None, name)  # type: ignore[arg-type]
+            await handlers._download_or_build_container(
+                cast(Any, NoDownload()),
+                simulator,
+                hpc_db,
+                cast(Any, None),
+                name,
+                simulator_db=database_service.get_simulator_db(),
+            )
         except RuntimeError as e:
             return e
         return None
@@ -66,3 +75,6 @@ async def test_concurrent_runs_build_once_and_a_failed_build_is_retried(
     assert builds == ["a", "b", "c"]
     latest = await hpc_db.get_hpcrun_by_ref(ref_id=simulator.database_id, job_type=JobType.BUILD_CONTAINER)
     assert latest is not None and latest.status == JobStatus.COMPLETED
+    # the completed build's image is recorded, with the run that produced it
+    image = await database_service.get_simulator_db().get_available_image(simulator.database_id, ImageKind.SIF)
+    assert image is not None and image.hpcrun_id == latest.database_id

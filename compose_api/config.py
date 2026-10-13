@@ -107,6 +107,9 @@ class Settings(BaseSettings):
     # submission_timeout_seconds is cancelled and fails the simulation; a first container build can take an hour.
     submission_stale_seconds: int = 300
     submission_timeout_seconds: int = 4 * 3600
+    # How often the API checks every simulator's SIF against the store and adopts unrecorded ones
+    # (compose_api/simulation/images.py); the first pass runs at startup.
+    image_verify_interval_seconds: int = 3600
 
     # Simulators published by their owners as OCI images, by name: a request's `simulator`
     # query parameter selects one and the job runs in that image instead of the shared one

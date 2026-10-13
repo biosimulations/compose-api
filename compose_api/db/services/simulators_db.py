@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from compose_api.db.tables.hpc_tables import JobStatusDB, JobTypeDB, ORMHpcRun
 from compose_api.db.tables.simulator_tables import (
     ORMDownloadedContainers,
+    ORMEnvironmentImage,
     ORMSimulation,
     ORMSimulator,
     ORMSimulatorToPackage,
@@ -22,7 +23,9 @@ from compose_api.simulation.hpc_utils import get_singularity_hash, get_slurm_sim
 from compose_api.simulation.models import (
     ContainerEngine,
     DownloadedContainerImage,
+    EnvironmentImage,
     HpcRun,
+    ImageKind,
     RegisteredPackage,
     RemoteContainerImage,
     Simulation,
@@ -55,6 +58,34 @@ class SimulatorDatabaseService(ABC):
     @abstractmethod
     async def get_downloaded_simulator(self, simulator_id: int) -> DownloadedContainerImage | None:
         pass
+
+    @abstractmethod
+    async def record_image(
+        self,
+        simulator_id: int,
+        kind: ImageKind,
+        location: str,
+        digest: str | None = None,
+        size_bytes: int | None = None,
+        hpcrun_id: int | None = None,
+    ) -> EnvironmentImage:
+        """Record an available image of a simulator (docs/plan-environment-builds.md, E3, E4).
+
+        An available record of the same location is kept and marked verified (its missing digest or size filled in);
+        one whose digest differs is marked unavailable and a new record added, never rewritten.
+        """
+
+    @abstractmethod
+    async def get_available_image(self, simulator_id: int, kind: ImageKind) -> EnvironmentImage | None:
+        """The newest available image of that kind, or None: "built" means one exists."""
+
+    @abstractmethod
+    async def list_images(self, simulator_id: int | None = None) -> list[EnvironmentImage]:
+        """Every image record, of one simulator or of all, newest first, available or not."""
+
+    @abstractmethod
+    async def set_image_verified(self, image_id: int, available: bool) -> None:
+        """Mark an image verified now, available or (its file gone) unavailable."""
 
     @abstractmethod
     def container_lock(self, container_def_hash: str, poll_s: float = 2.0) -> AbstractAsyncContextManager[None]:
@@ -269,6 +300,87 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
             return orm_simulator.to_simulator_version()
 
     @override
+    async def record_image(
+        self,
+        simulator_id: int,
+        kind: ImageKind,
+        location: str,
+        digest: str | None = None,
+        size_bytes: int | None = None,
+        hpcrun_id: int | None = None,
+    ) -> EnvironmentImage:
+        now = datetime.datetime.now()
+        async with self.async_session_maker() as session, session.begin():
+            stmt = (
+                select(ORMEnvironmentImage)
+                .where(
+                    ORMEnvironmentImage.simulator_id == simulator_id,
+                    ORMEnvironmentImage.kind == kind.value,
+                    ORMEnvironmentImage.location == location,
+                    ORMEnvironmentImage.available.is_(True),
+                )
+                .order_by(ORMEnvironmentImage.id.desc())
+                .with_for_update()
+            )
+            for existing in (await session.execute(stmt)).scalars().all():
+                if digest is None or existing.digest is None or existing.digest == digest:
+                    existing.digest = existing.digest or digest
+                    existing.size_bytes = existing.size_bytes if existing.size_bytes is not None else size_bytes
+                    existing.hpcrun_id = existing.hpcrun_id or hpcrun_id
+                    existing.verified_at = now
+                    await session.flush()
+                    return existing.to_environment_image()
+                logger.warning(f"Image {location} changed under record {existing.id}; recording it anew")
+                existing.available = False
+            image = ORMEnvironmentImage(
+                simulator_id=simulator_id,
+                kind=kind.value,
+                location=location,
+                digest=digest,
+                size_bytes=size_bytes,
+                hpcrun_id=hpcrun_id,
+                available=True,
+                verified_at=now,
+            )
+            session.add(image)
+            await session.flush()
+            await session.refresh(image)
+            return image.to_environment_image()
+
+    @override
+    async def get_available_image(self, simulator_id: int, kind: ImageKind) -> EnvironmentImage | None:
+        async with self.async_session_maker() as session:
+            stmt = (
+                select(ORMEnvironmentImage)
+                .where(
+                    ORMEnvironmentImage.simulator_id == simulator_id,
+                    ORMEnvironmentImage.kind == kind.value,
+                    ORMEnvironmentImage.available.is_(True),
+                )
+                .order_by(ORMEnvironmentImage.id.desc())
+                .limit(1)
+            )
+            image = (await session.execute(stmt)).scalars().one_or_none()
+            return image.to_environment_image() if image is not None else None
+
+    @override
+    async def list_images(self, simulator_id: int | None = None) -> list[EnvironmentImage]:
+        async with self.async_session_maker() as session:
+            stmt = select(ORMEnvironmentImage).order_by(ORMEnvironmentImage.id.desc())
+            if simulator_id is not None:
+                stmt = stmt.where(ORMEnvironmentImage.simulator_id == simulator_id)
+            return [image.to_environment_image() for image in (await session.execute(stmt)).scalars().all()]
+
+    @override
+    async def set_image_verified(self, image_id: int, available: bool) -> None:
+        now = datetime.datetime.now()
+        async with self.async_session_maker() as session, session.begin():
+            image = await session.get(ORMEnvironmentImage, image_id)
+            if image is not None:
+                image.available = available
+                image.verified_at = now
+
+    @override
     @asynccontextmanager
     async def container_lock(self, container_def_hash: str, poll_s: float = 2.0) -> AsyncIterator[None]:
         """A Postgres transaction-level advisory lock on the hash, held by an open transaction until exit.
@@ -324,6 +436,9 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
             rst = (await session.execute(stmt)).scalars().all()
             for k in rst:
                 await session.delete(k)
+            images = select(ORMEnvironmentImage).where(ORMEnvironmentImage.simulator_id == simulator_id)
+            for image in (await session.execute(images)).scalars().all():
+                await session.delete(image)
             await session.flush()
             await session.delete(orm_simulator)
 
