@@ -3,12 +3,14 @@ import type * as monaco from 'monaco-editor/editor/editor.api'
 import { CompileError, Pblang, type Diagnostic } from 'process-bigraph-lang'
 import { PblangLanguageClient } from '~/viewers/composite/languageClient'
 import { LANGUAGE, registerLanguage, toMarkers } from '~/viewers/composite/monaco'
+import { compositeDocuments, documentName } from '~/viewers/composite/archive'
 import type { EnvironmentSummary, InterfaceManifest } from '~/composables/useRegistry'
 
 // Write a composite in .pblang and run it (docs/plan-authoring.md, step C). The language server checks the text as it
 // changes, against the interface manifest of the environment picked here, and offers hover and completion from it.
 // Submitting compiles the text in the browser into a process-bigraph document and sends it to /simulation/run in that
-// environment. `?from=<dataset id>` starts from a submitted composite (the viewer's "Edit a copy").
+// environment. `?from=<dataset id>` starts from a submitted composite (the viewer's "Edit a copy"); `&member=<path>`
+// picks a document inside an OMEX archive (else its first).
 const route = useRoute()
 
 const STARTER = `// A composite to run in the environment picked above. Hover a name to see its interface; completion
@@ -55,6 +57,11 @@ async function startingText(): Promise<{ text: string, environment: string | nul
   if (!dataset) throw new Error(`Dataset ${from} was not found`)
   const response = await fetchContent(`/datasets/${from}/content`)
   if (!response.ok) throw new Error(`Could not read dataset ${from} (HTTP ${response.status})`)
+  const fileName = dataset.path.split('/').pop() ?? 'composite'
+  const documents = compositeDocuments(new Uint8Array(await response.arrayBuffer()), fileName)
+  const member = typeof route.query.member === 'string' ? route.query.member : null
+  const document = documents.find(d => d.path === member) ?? documents[0]
+  if (!document) throw new Error(`Dataset ${from} holds no composite document`)
   const { data: simulation } = await api.GET('/simulations/{simulation_id}', {
     params: { path: { simulation_id: dataset.simulation_id } }
   })
@@ -62,8 +69,8 @@ async function startingText(): Promise<{ text: string, environment: string | nul
   const session = new Pblang()
   const runManifest = env ? await fetchManifest(env.name).catch(() => null) : null
   if (runManifest) session.addManifest(runManifest)
-  const name = (dataset.path.split('/').pop() ?? 'composite').replace(/\.(pbg|json|ya?ml)$/i, '').replace(/\W/g, '_')
-  const printed = session.decompile(await response.text(), { name })
+  const name = documentName(document.path).replace(/\W/g, '_')
+  const printed = session.decompile(document.text, { name })
   return { text: printed.text, environment: env?.name ?? null, assets: printed.assets }
 }
 
