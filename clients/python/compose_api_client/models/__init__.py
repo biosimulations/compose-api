@@ -32,6 +32,7 @@ from .dataset_page import DatasetPage
 from .drift import Drift
 from .entry_environment import EntryEnvironment
 from .entry_ref import EntryRef
+from .environment_image import EnvironmentImage
 from .environment_summary import EnvironmentSummary
 from .environment_summary_kind import EnvironmentSummaryKind
 from .expected_failure import ExpectedFailure
@@ -46,6 +47,9 @@ from .get_simulation_trace_chrome_response_get_simulation_trace_chrome import (
 )
 from .hpc_run import HpcRun
 from .http_validation_error import HTTPValidationError
+from .image_kind import ImageKind
+from .image_state import ImageState
+from .image_status import ImageStatus
 from .interface_component import InterfaceComponent
 from .interface_component_config_schema import InterfaceComponentConfigSchema
 from .interface_component_inputs_type_0 import InterfaceComponentInputsType0
@@ -127,6 +131,7 @@ __all__ = (
     "Drift",
     "EntryEnvironment",
     "EntryRef",
+    "EnvironmentImage",
     "EnvironmentSummary",
     "EnvironmentSummaryKind",
     "ExpectedFailure",
@@ -135,6 +140,9 @@ __all__ = (
     "GetSimulationTraceChromeResponseGetSimulationTraceChrome",
     "HpcRun",
     "HTTPValidationError",
+    "ImageKind",
+    "ImageState",
+    "ImageStatus",
     "InterfaceComponent",
     "InterfaceComponentConfigSchema",
     "InterfaceComponentInputsType0",

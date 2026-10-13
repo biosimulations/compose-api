@@ -915,6 +915,134 @@ paths:
                   $ref: '#/components/schemas/Solver'
                 type: array
                 title: Response List-Solvers
+  /registry/environments/{name}/images:
+    get:
+      tags:
+      - Registry
+      summary: Whether an environment's current image is built, with its image records
+        and newest build run
+      operationId: get-environment-images
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageStatus'
+        '404':
+          description: No such environment here
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /registry/environments/{name}/build:
+    post:
+      tags:
+      - Registry
+      summary: 'Make an environment''s current image available: 200 if it is, 202
+        once its pull or build has started'
+      operationId: build-environment
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageStatus'
+        '202':
+          description: Its pull or build has started (or was already under way)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageStatus'
+        '404':
+          description: No such environment here
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /registry/simulators/{simulator_id}/images:
+    get:
+      tags:
+      - Registry
+      summary: Whether a simulator's image is built, with its image records and newest
+        build run
+      operationId: get-simulator-images
+      parameters:
+      - name: simulator_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Simulator Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageStatus'
+        '404':
+          description: No such simulator
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /registry/simulators/{simulator_id}/build:
+    post:
+      tags:
+      - Registry
+      summary: 'Make a simulator''s image available: 200 if it is, 202 once its pull
+        or build has started'
+      operationId: build-simulator
+      parameters:
+      - name: simulator_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Simulator Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageStatus'
+        '202':
+          description: Its pull or build has started (or was already under way)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageStatus'
+        '404':
+          description: No such simulator
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /sedml/preview:
     post:
       tags:
@@ -2243,6 +2371,63 @@ components:
       title: EntryRef
       description: The registry entry a component belongs to (by module root), and
         its curation level.
+    EnvironmentImage:
+      properties:
+        database_id:
+          type: integer
+          title: Database Id
+        simulator_id:
+          type: integer
+          title: Simulator Id
+        kind:
+          $ref: '#/components/schemas/ImageKind'
+        location:
+          type: string
+          title: Location
+        digest:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Digest
+        size_bytes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Size Bytes
+        hpcrun_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Hpcrun Id
+        available:
+          type: boolean
+          title: Available
+          default: true
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+        verified_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Verified At
+      type: object
+      required:
+      - database_id
+      - simulator_id
+      - kind
+      - location
+      title: EnvironmentImage
+      description: 'A built or pulled image of a simulator''s definition (docs/plan-environment-builds.md,
+        E3).
+
+
+        Images are write-once (E4): one that turns out missing is marked unavailable,
+        never replaced in place.'
     EnvironmentSummary:
       properties:
         name:
@@ -2398,6 +2583,60 @@ components:
       - sim_id
       - simulator_id
       title: HpcRun
+    ImageKind:
+      type: string
+      enum:
+      - sif
+      - oci
+      title: ImageKind
+    ImageState:
+      type: string
+      enum:
+      - available
+      - building
+      - failed
+      - missing
+      title: ImageState
+    ImageStatus:
+      properties:
+        simulator_id:
+          type: integer
+          title: Simulator Id
+        container_def_hash:
+          type: string
+          title: Container Def Hash
+        environment:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Environment
+          description: The environment whose current definition this is
+        state:
+          $ref: '#/components/schemas/ImageState'
+        image:
+          anyOf:
+          - $ref: '#/components/schemas/EnvironmentImage'
+          - type: 'null'
+          description: The available image runs use
+        build:
+          anyOf:
+          - $ref: '#/components/schemas/HpcRun'
+          - type: 'null'
+          description: The newest build run of the definition
+        images:
+          items:
+            $ref: '#/components/schemas/EnvironmentImage'
+          type: array
+          title: Images
+          description: Every image recorded, newest first
+      type: object
+      required:
+      - simulator_id
+      - container_def_hash
+      - state
+      title: ImageStatus
+      description: Whether a simulator's image is there to run from, and the records
+        behind that answer.
     InterfaceComponent:
       properties:
         name:

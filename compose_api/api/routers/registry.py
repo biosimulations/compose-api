@@ -7,11 +7,19 @@ this service (compose_api/registry/manifests/); see compose_api/registry/environ
 """
 
 import hashlib
+import logging
+import random
+import string
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 
 from compose_api.authentication import OptionalPrincipal, get_optional_principal
 from compose_api.common.gateway.models import RouterConfig
+from compose_api.dependencies import (
+    get_required_database_service,
+    get_required_job_monitor,
+    get_required_simulation_service,
+)
 from compose_api.registry.environments import (
     CatalogEntry,
     EnvironmentSummary,
@@ -23,6 +31,11 @@ from compose_api.registry.environments import (
     summarize,
 )
 from compose_api.registry.solvers import Solver, load_solvers
+from compose_api.simulation import builds, handlers
+from compose_api.simulation.builds import ImageState, ImageStatus
+from compose_api.simulation.models import SimulatorVersion
+
+logger = logging.getLogger(__name__)
 
 config = RouterConfig(router=APIRouter(), prefix="/registry", dependencies=[Depends(get_optional_principal)])
 
@@ -91,3 +104,108 @@ async def list_registry_entries(principal: OptionalPrincipal) -> list[CatalogEnt
 async def list_solvers(principal: OptionalPrincipal) -> list[Solver]:
     # public: the same for every caller
     return list(load_solvers().solvers)
+
+
+# --- environments' images: status, and builds on their own (docs/plan-environment-builds.md, phase 4) -------------
+
+
+async def _environment_simulator(name: str) -> SimulatorVersion:
+    spec = builds.find_environment(name)
+    if spec is None:
+        raise HTTPException(status_code=404, detail=f"no environment {name!r}")
+    simulator_db = get_required_database_service().get_simulator_db()
+    return await builds.simulator_for(simulator_db, builds.environment_definition(spec))
+
+
+async def _simulator(simulator_id: int) -> SimulatorVersion:
+    simulator = await get_required_database_service().get_simulator_db().get_simulator(simulator_id)
+    if simulator is None:
+        raise HTTPException(status_code=404, detail=f"no simulator {simulator_id}")
+    return simulator
+
+
+async def _build_in_background(simulator: SimulatorVersion) -> None:
+    try:
+        await handlers.ensure_image(
+            simulator,
+            database_service=get_required_database_service(),
+            simulation_service_slurm=get_required_simulation_service(),
+            job_monitor=get_required_job_monitor(),
+            random_string="".join(random.choices(string.hexdigits, k=7)),  # noqa: S311 a name, not a secret
+        )
+    except Exception:
+        logger.exception(f"The build of simulator {simulator.database_id}'s image failed")
+
+
+async def _start_build(
+    simulator: SimulatorVersion, environment: str | None, background_tasks: BackgroundTasks, response: Response
+) -> ImageStatus:
+    status = await builds.image_status(get_required_database_service(), simulator, environment)
+    if status.state == ImageState.AVAILABLE:
+        return status
+    # pulled or built through the run path's own function: it joins a build that has not finished
+    background_tasks.add_task(_build_in_background, simulator)
+    response.status_code = 202
+    return status.model_copy(update={"state": ImageState.BUILDING})
+
+
+@config.router.get(
+    path="/environments/{name}/images",
+    response_model=ImageStatus,
+    operation_id="get-environment-images",
+    tags=["Registry"],
+    summary="Whether an environment's current image is built, with its image records and newest build run",
+    responses={404: {"description": "No such environment here"}},
+)
+async def get_environment_images(name: str, principal: OptionalPrincipal) -> ImageStatus:
+    # public: the same for every caller
+    simulator = await _environment_simulator(name)
+    return await builds.image_status(get_required_database_service(), simulator, name)
+
+
+@config.router.post(
+    path="/environments/{name}/build",
+    response_model=ImageStatus,
+    operation_id="build-environment",
+    tags=["Registry"],
+    summary="Make an environment's current image available: 200 if it is, 202 once its pull or build has started",
+    responses={
+        202: {"model": ImageStatus, "description": "Its pull or build has started (or was already under way)"},
+        404: {"description": "No such environment here"},
+    },
+)
+async def build_environment(
+    name: str, background_tasks: BackgroundTasks, response: Response, principal: OptionalPrincipal
+) -> ImageStatus:
+    # anyone who may submit a run may cause this build: a run of the environment would start it
+    return await _start_build(await _environment_simulator(name), name, background_tasks, response)
+
+
+@config.router.get(
+    path="/simulators/{simulator_id}/images",
+    response_model=ImageStatus,
+    operation_id="get-simulator-images",
+    tags=["Registry"],
+    summary="Whether a simulator's image is built, with its image records and newest build run",
+    responses={404: {"description": "No such simulator"}},
+)
+async def get_simulator_images(simulator_id: int, principal: OptionalPrincipal) -> ImageStatus:
+    # public: the same for every caller
+    return await builds.image_status(get_required_database_service(), await _simulator(simulator_id))
+
+
+@config.router.post(
+    path="/simulators/{simulator_id}/build",
+    response_model=ImageStatus,
+    operation_id="build-simulator",
+    tags=["Registry"],
+    summary="Make a simulator's image available: 200 if it is, 202 once its pull or build has started",
+    responses={
+        202: {"model": ImageStatus, "description": "Its pull or build has started (or was already under way)"},
+        404: {"description": "No such simulator"},
+    },
+)
+async def build_simulator(
+    simulator_id: int, background_tasks: BackgroundTasks, response: Response, principal: OptionalPrincipal
+) -> ImageStatus:
+    return await _start_build(await _simulator(simulator_id), None, background_tasks, response)

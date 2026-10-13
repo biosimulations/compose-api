@@ -1,14 +1,14 @@
 # Environment builds: jobs and artifacts of their own
 
-**Status (2026-10-13): plan agreed; phases 1–3 in review.** One PR per phase, merged with a merge commit; each PR updates the
+**Status (2026-10-13): phases 1–3 merged (release 0.7.20); phase 4 in review.** One PR per phase, merged with a merge commit; each PR updates the
 table below. A merge deploys nothing by itself: the next release's image ships it (CLAUDE.md, "Deploys are GitOps").
 
 | Phase | What | State |
 |---|---|---|
-| 1 | Runs carry their backend and external job id (`hpcrun.backend`, `hpcrun.external_id`); the monitor asks each backend about its own runs | in review |
-| 2 | `environment_image`: an artifact record per built or pulled image (kind, location, digest, size, the run that produced it, available); "built" means an available artifact | in review |
-| 3 | The `k8s` build backend: a Kubernetes Job builds the image (privileged, scratch only) and copies it onto the shared filesystem as the service user | in review |
-| 4 | Builds invoked on their own: `POST /environments/{name}/build`, `GET /environments/{name}/images`; a run waits for an in-flight build of its definition instead of starting another | planned |
+| 1 | Runs carry their backend and external job id (`hpcrun.backend`, `hpcrun.external_id`); the monitor asks each backend about its own runs | merged |
+| 2 | `environment_image`: an artifact record per built or pulled image (kind, location, digest, size, the run that produced it, available); "built" means an available artifact | merged |
+| 3 | The `k8s` build backend: a Kubernetes Job builds the image (privileged, scratch only) and copies it onto the shared filesystem as the service user | merged |
+| 4 | Builds invoked on their own: `POST /environments/{name}/build`, `GET /environments/{name}/images`; a run waits for an in-flight build of its definition instead of starting another | in review |
 | 5 | Publish: an image pushed to a registry, recorded as another artifact; a cluster pulls it instead of building | planned |
 
 ## Why
@@ -95,6 +95,15 @@ registry environment (environments.yaml: registry_env) ──► its current sim
    build run, or the available image when there is one), `GET /environments/{name}/images`, and the same for a
    simulator id. The run path calls the same function and waits on the build run's status in the database (any API
    process, not only the one that started it). The web app's environment page shows whether its image is built.
+   *As built:* the routes are under `/registry` (`GET /registry/environments/{name}/images`,
+   `POST /registry/environments/{name}/build`, and `/registry/simulators/{id}/images|build`), answering an
+   `ImageStatus` (`available`, `building`, `failed`, `missing`, with the image records and the newest build run); a
+   build answers 200 for an available image, else 202 and runs `handlers.ensure_image` in the background, the run
+   path's own function. Under the definition's lock, a build run that has not finished is joined through
+   `builds.wait_for_run` (its status in the database) instead of a second one started, so a build started by another
+   API process, or before a restart, is waited on. The build routes are as open as a run's submission, which would
+   start the same build. CLI: `environments images|build`, `simulators images|build`. The web app's environment page
+   shows the image's state and offers Build.
 5. **Publish.** `POST /environments/{name}/publish`: a Kubernetes Job (or CI, for the shared image) pushes the image
    to `settings.simulator_image_repository` under its hash and records an `oci` artifact with the registry's digest;
    the run path pulls an available `oci` artifact before building. The repository must be readable by the cluster

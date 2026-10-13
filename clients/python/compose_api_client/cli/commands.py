@@ -35,6 +35,7 @@ from compose_api_client.ext import (
     JobState,
     NotFound,
 )
+from compose_api_client.types import Unset
 
 EXIT_JOB, EXIT_USAGE, EXIT_API, EXIT_NOT_FOUND, EXIT_TIMEOUT, EXIT_INTERRUPT = 1, 2, 3, 4, 5, 130
 
@@ -425,6 +426,82 @@ def environments_manifest(
         for c in manifest.components
     ]
     emit(settings.output, rows, ["address", "kind", "dynamic_ports", "entry"])
+
+
+def _emit_image_status(settings: Settings, status: Any) -> None:
+    """An image status: one row per image record (the available one first), or the status itself as JSON."""
+    if settings.output is Output.JSON:
+        emit(Output.JSON, status.to_dict())
+        return
+    build = status.build if not isinstance(status.build, Unset) and status.build is not None else None
+    print(
+        f"simulator {status.simulator_id} ({status.container_def_hash[:12]}): {status.state}"
+        + (f"; newest build run {build.database_id} {build.status} ({build.backend})" if build else "")
+    )
+    rows = [
+        {
+            "id": i.database_id,
+            "kind": i.kind,
+            "available": i.available,
+            "size": i.size_bytes,
+            "digest": (i.digest or "")[:19],
+            "run": i.hpcrun_id,
+            "location": i.location,
+        }
+        for i in (status.images if isinstance(status.images, list) else [])
+    ]
+    if rows:
+        emit(settings.output, rows, ["id", "kind", "available", "size", "digest", "run", "location"])
+
+
+@environments_app.command("images")
+@claims("environments images", "get-environment-images")
+@handled
+def environments_images(
+    ctx: typer.Context, name: Annotated[str, typer.Argument(help="The environment, e.g. registry_env.")]
+) -> None:
+    """Whether an environment's current image is built: its image records and its newest build run."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        _emit_image_status(settings, s.environment_images(name))
+
+
+@environments_app.command("build")
+@claims("environments build", "build-environment")
+@handled
+def environments_build(
+    ctx: typer.Context, name: Annotated[str, typer.Argument(help="The environment, e.g. registry_env.")]
+) -> None:
+    """Make an environment's current image available: pulled or built unless it is, joining a build under way.
+
+    Returns at once; `environments images` follows the build."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        _emit_image_status(settings, s.build_environment(name))
+
+
+@simulators_app.command("images")
+@claims("simulators images", "get-simulator-images")
+@handled
+def simulators_images(
+    ctx: typer.Context, simulator_id: Annotated[int, typer.Argument(help="The simulator's id.")]
+) -> None:
+    """Whether a simulator's image is built: its image records and its newest build run."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        _emit_image_status(settings, s.simulator_images(simulator_id))
+
+
+@simulators_app.command("build")
+@claims("simulators build", "build-simulator")
+@handled
+def simulators_build(
+    ctx: typer.Context, simulator_id: Annotated[int, typer.Argument(help="The simulator's id.")]
+) -> None:
+    """Make a simulator's image available: pulled or built unless it is, joining a build under way."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        _emit_image_status(settings, s.build_simulator(simulator_id))
 
 
 # -- running ------------------------------------------------------------------------------------------------------
