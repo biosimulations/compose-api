@@ -230,6 +230,8 @@ assets/dev/config/compose_known_hosts
 !/docs/grant/trd3/
 !/docs/grant/trd3/tracking/
 !/docs/grant/trd3/tracking/**
+!/docs/grant/trd3/progress/
+!/docs/grant/trd3/progress/**
 
 # Agentic Framework
 .kilo/
