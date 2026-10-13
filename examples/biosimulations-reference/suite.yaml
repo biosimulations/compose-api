@@ -6,8 +6,21 @@ name: biosimulations-reference
 description: biosimulations.org projects run on COPASI and Tellurium, compared with each other and with their original results.
 solvers: [copasi, tellurium]
 tolerances: {rel_tol: 1.0e-4, abs_tol_min: 1.0e-3, abs_tol_scale: 1.0e-5}
-baseline: null
-expected: []
+baseline: 1  # 2026-10-13, compose-api 0.7.21: the first run on the cluster
+# known disagreements, shown as expected rather than failed (findings of run 1, 2026-10-13)
+expected:
+  - source: biosimulations:Nicotinic-excitation-Edelstein-Biol-Cybern-1996
+    solver: tellurium
+    reason: "Tellurium disagrees with COPASI on this event model; COPASI matches both original results. Suspected: the Tellurium step's write-back of state each update undoes the events (pbsim-common 0.1.2)"
+  - source: biosimulations:BIOMD0000000062_amici_Dynamic_regulation_of_the_tryp
+    solver: tellurium
+    reason: "the Tellurium step writes every species back into RoadRunner each update, which refuses one defined by an assignment rule (Tt; pbsim-common 0.1.2, tellurium_process.set_road_runner_incoming_values)"
+  - source: biosimulations:BIOMD0000000202_copasi_Dynamic_simulation_of_the_effe
+    solver: tellurium
+    reason: "the Tellurium step writes every species back into RoadRunner each update, which refuses one defined by an assignment rule (Orai1; pbsim-common 0.1.2, tellurium_process.set_road_runner_incoming_values)"
+  - source: biosimulations:BIOMD0000000009_tellurium_Ultrasensitivity_in_the_mitoge
+    solver: tellurium
+    reason: "the Tellurium step writes every species back into RoadRunner each update, which refuses one defined by an assignment rule (KKK_P_norm; pbsim-common 0.1.2, tellurium_process.set_road_runner_incoming_values)"
 sources:
   - biosimulations:Morphogenesis-checkpoint-continuous-Ciliberto-J-Cell-Biol-2003  # tellurium 2.2.1
   - biosimulations:Nicotinic-excitation-Edelstein-Biol-Cybern-1996  # pysces
