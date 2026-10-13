@@ -174,6 +174,7 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 * `trace`: A simulation's spans as a tree, each with...
 * `build-status`: State of a simulator's container build.
 * `openapi`: The OpenAPI document: this client's...
+* `build-log`: The SLURM log of a simulator's newest...
 * `simulators`: Registered simulator versions.
 * `processes`: Registered process-bigraph processes.
 * `steps`: Registered process-bigraph steps.
@@ -418,6 +419,25 @@ $ compose-api openapi [OPTIONS]
 
 * `--server / --no-server`: Fetch the live service's /openapi.json instead.  [default: no-server]
 * `--diff / --no-diff`: Compare this client's operations with the live service's; exit 1 on skew.  [default: no-diff]
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+## `compose-api build-log`
+
+The SLURM log of a simulator's newest container build.
+
+**Usage**:
+
+```console
+$ compose-api build-log [OPTIONS] SIMULATOR_ID
+```
+
+**Arguments**:
+
+* `SIMULATOR_ID`: The simulator id (a run's simulator_id).  [required]
+
+**Options**:
+
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
