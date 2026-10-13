@@ -26,10 +26,29 @@ export function listEnvironments(): Promise<EnvironmentSummary[]> {
   return environments
 }
 
-/** The environment a run used: the prebuilt simulator it named, else the shared one (`simulator` is null there). */
+/** An image reference without its digest or tag: `ghcr.io/org/name@sha256:…` and `ghcr.io/org/name:1.0` → `ghcr.io/org/name`. */
+export function imageRepository(ref: string): string {
+  const at = ref.indexOf('@')
+  const bare = at < 0 ? ref : ref.slice(0, at)
+  const colon = bare.lastIndexOf(':')
+  return colon > bare.lastIndexOf('/') ? bare.slice(0, colon) : bare
+}
+
+/**
+ * The environment a run used. A run's `simulator` is null for the shared image; for a prebuilt one it is the image it
+ * ran in (an earlier digest of it, too, once the pin moves), so it is matched by repository; a bare name also matches.
+ */
 export async function environmentFor(simulator: string | null | undefined): Promise<EnvironmentSummary | null> {
-  const all = await listEnvironments()
-  return all.find(e => (e.simulator ?? null) === (simulator ?? null)) ?? null
+  return matchEnvironment(await listEnvironments(), simulator)
+}
+
+export function matchEnvironment<E extends Pick<EnvironmentSummary, 'simulator' | 'image'>>(
+  all: E[],
+  simulator: string | null | undefined
+): E | null {
+  if (!simulator) return all.find(e => !e.simulator) ?? null
+  const repository = imageRepository(simulator)
+  return all.find(e => e.simulator && (e.simulator === simulator || (e.image != null && imageRepository(e.image) === repository))) ?? null
 }
 
 /** An environment's manifest, or null when none has been generated for it. */
