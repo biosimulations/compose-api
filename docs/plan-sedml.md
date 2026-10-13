@@ -1,6 +1,6 @@
 # SED-ML models as process-bigraph runs across solvers, compared
 
-**Status (2026-10-13): every phase merged; phases 0 to 5 released in 0.7.18, phase 6 in 0.7.19. Verified on the cluster: not yet (see "Verification"; the first live comparison waited on environment builds, `docs/plan-environment-builds.md`).** One PR per phase and repository, merged with a merge commit on
+**Status (2026-10-13): every phase merged; phases 0 to 5 released in 0.7.18, phase 6 in 0.7.19; verified on the cluster with 0.7.21 (see "Verification"), the suites' baselines set to their first runs.** One PR per phase and repository, merged with a merge commit on
 the maintainer's word; each PR updates the table below. A merge deploys nothing by itself: the next release's image
 ships it (CLAUDE.md, "Deploys are GitOps"). The language side is planned in process-bigraph-lang's
 [`docs/v2/sedml-plan.md`](https://github.com/biosimulations/process-bigraph-lang/blob/main/docs/v2/sedml-plan.md).
@@ -268,6 +268,29 @@ and tag filters on `/ui/simulations`, and `/ui/catalog` on `/registry/entries`.
 - On the cluster: BIOMD0000000012 on COPASI and Tellurium gives two labelled runs with both archives, report CSVs and
   figures, and one comparison scored per variable; the Ciliberto project is compared against its original results,
   its plots overlaid; a two-model suite run twice shows no drift, and a tightened tolerance shows a failure.
+
+### On the cluster, 2026-10-13 (compose-api 0.7.21)
+
+The first attempts (0.7.19, 0.7.20) never ran: the shared image could not be built on the cluster, which
+`docs/plan-environment-builds.md` fixed (the image is now built as a Kubernetes Job).
+
+- **Ciliberto project** (comparison 3): COPASI and Tellurium agree, and both match the original Tellurium 2.2.1
+  results; worst data set SBF, score 0.019.
+- **BIOMD0000000012** (comparison 4): the solvers agree, worst Y, 0.059. The same archive with `rel_tol=1e-12`
+  (comparison 5) differs, as it should.
+- **Suites, run 1** (now each suite's baseline):
+  - `smoke`: 2 of 2 agree.
+  - `biomodels-ode-sample`: 14 of 20 agree.
+  - `biosimulations-reference`: 6 of 10 agree; every completed solver matches the original results except Tellurium
+    on the Edelstein model.
+- **Findings, recorded as the suites' expected failures, all in the solver steps (pbsim-common 0.1.2):**
+  - The Tellurium step writes every species back into RoadRunner each update, and RoadRunner refuses a species
+    defined by an assignment rule. Six runs fail this way: BIOMD 7, 9 and 16, and three biosimulations.org projects.
+  - Tellurium disagrees on the Edelstein event model (BIOMD0000000001 and the Edelstein project), where COPASI
+    matches both original results.
+  - The COPASI step fails on a model without species (BIOMD0000000020, Hodgkin–Huxley: rate rules only).
+  - BIOMD0000000043: the solvers differ on Rho (score 6.5); there is no reference, and it is not investigated yet.
+- **Drift:** `smoke` run 2 against its baseline is to come.
 
 ## Out of scope
 
