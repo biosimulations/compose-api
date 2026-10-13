@@ -3,6 +3,8 @@
 from .bi_graph_compute_type import BiGraphComputeType
 from .bi_graph_process import BiGraphProcess
 from .bi_graph_step import BiGraphStep
+from .biomodel_hit import BiomodelHit
+from .biomodel_info import BiomodelInfo
 from .body_preview_sedml import BodyPreviewSedml
 from .body_run_copasi import BodyRunCopasi
 from .body_run_sedml import BodyRunSedml
@@ -26,6 +28,12 @@ from .entry_environment import EntryEnvironment
 from .entry_ref import EntryRef
 from .environment_summary import EnvironmentSummary
 from .environment_summary_kind import EnvironmentSummaryKind
+from .get_biosimulations_reference_response_get_biosimulations_reference import (
+    GetBiosimulationsReferenceResponseGetBiosimulationsReference,
+)
+from .get_biosimulations_reference_response_get_biosimulations_reference_additional_property import (
+    GetBiosimulationsReferenceResponseGetBiosimulationsReferenceAdditionalProperty,
+)
 from .get_simulation_trace_chrome_response_get_simulation_trace_chrome import (
     GetSimulationTraceChromeResponseGetSimulationTraceChrome,
 )
@@ -42,6 +50,7 @@ from .job_status import JobStatus
 from .job_type import JobType
 from .list_simulations_status_type_0 import ListSimulationsStatusType0
 from .package_type import PackageType
+from .project_info import ProjectInfo
 from .registered_package import RegisteredPackage
 from .registered_simulators import RegisteredSimulators
 from .run_event import RunEvent
@@ -75,6 +84,8 @@ __all__ = (
     "BiGraphComputeType",
     "BiGraphProcess",
     "BiGraphStep",
+    "BiomodelHit",
+    "BiomodelInfo",
     "BodyPreviewSedml",
     "BodyRunCopasi",
     "BodyRunSedml",
@@ -98,6 +109,8 @@ __all__ = (
     "EntryRef",
     "EnvironmentSummary",
     "EnvironmentSummaryKind",
+    "GetBiosimulationsReferenceResponseGetBiosimulationsReference",
+    "GetBiosimulationsReferenceResponseGetBiosimulationsReferenceAdditionalProperty",
     "GetSimulationTraceChromeResponseGetSimulationTraceChrome",
     "HpcRun",
     "HTTPValidationError",
@@ -112,6 +125,7 @@ __all__ = (
     "JobType",
     "ListSimulationsStatusType0",
     "PackageType",
+    "ProjectInfo",
     "RegisteredPackage",
     "RegisteredSimulators",
     "RunEvent",

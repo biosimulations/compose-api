@@ -37,3 +37,18 @@ class ORMComparisonMember(DeclarativeTableBase):
         ForeignKey("simulation.id", ondelete="CASCADE"), nullable=False, index=True
     )
     solver: Mapped[str] = mapped_column(nullable=False)
+
+
+class ORMComparisonReference(DeclarativeTableBase):
+    """Results a comparison's runs are measured against, not among (docs/plan-sedml.md, D7): the original run's reports
+    from biosimulations.org, or a `reports.h5` shipped in the archive. `reports`: `{report id: {label: series}}`."""
+
+    __tablename__ = "comparison_reference"
+    __table_args__ = (UniqueConstraint("comparison_id", "origin", name="uq_comparison_reference_origin"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    comparison_id: Mapped[int] = mapped_column(
+        ForeignKey("comparison.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    origin: Mapped[str] = mapped_column(nullable=False)  # biosimulations:<run>, archive
+    reports: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)

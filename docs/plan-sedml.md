@@ -1,6 +1,6 @@
 # SED-ML models as process-bigraph runs across solvers, compared
 
-**Status (2026-10-13): phases 0 and 1 merged (process-bigraph-lang 0.3.x); phases 2 and 3 in review.** One PR per phase and repository, merged with a merge commit on
+**Status (2026-10-13): phases 0 to 2 merged; phases 3 and 4 in review.** One PR per phase and repository, merged with a merge commit on
 the maintainer's word; each PR updates the table below. A merge deploys nothing by itself: the next release's image
 ships it (CLAUDE.md, "Deploys are GitOps"). The language side is planned in process-bigraph-lang's
 [`docs/v2/sedml-plan.md`](https://github.com/biosimulations/process-bigraph-lang/blob/main/docs/v2/sedml-plan.md).
@@ -9,9 +9,9 @@ ships it (CLAUDE.md, "Deploys are GitOps"). The language side is planned in proc
 |---|---|---|---|
 | 0 | Labels, tags and a description on simulations, and filters on them; the concepts below documented; `GET /registry/entries` and `/ui/catalog` rebuilt on it | compose-api | merged (#283) |
 | 1 | SED-ML read into a `.pblang` template per task with the solver as an open site, one checked instance per solver; plots built at run time; release 0.3.0 | process-bigraph-lang | merged (#58, #59, #60); released 0.3.0, 0.3.1 |
-| 2 | SED-ML adapter steps around generic COPASI and Tellurium steps; `solvers.yaml` and `GET /registry/solvers` | biosim-toolkit 0.1.0 (released), compose-api | in review |
+| 2 | SED-ML adapter steps around generic COPASI and Tellurium steps; `solvers.yaml` and `GET /registry/solvers` | biosim-toolkit 0.1.0 (released), compose-api | merged (#284) |
 | 3 | `POST /sedml/run` and `/sedml/preview`; the `sedml-omex` and `input` datasets; comparisons computed on the server | compose-api | in review |
-| 4 | BioModels and biosimulations.org source routes, cached; run shortcuts; references (original results as CSV) and interpolation between time grids; the curated routes on the same path | compose-api | planned |
+| 4 | BioModels and biosimulations.org source routes, cached; run shortcuts; references (original results); the curated routes on the same path | compose-api | in review (the curated routes and interpolation deferred) |
 | 5 | Web app: ad-hoc SED-ML page, sources, a Plotly viewer, the comparison page | compose-api `webapp/` | planned |
 | 6 | Regression and reproducibility suites, rerun on a schedule, with their pages | compose-api | planned |
 
@@ -147,6 +147,27 @@ goes into the shared image) and `manifest.yaml` (what is admitted) from one list
   phase 4.
 - Tables `comparison` and `comparison_member` (created at startup). CLI: `sedml preview|run`,
   `comparisons list|show`.
+
+## Phase 4: what exists after it
+
+- **`compose_api/sedml/sources.py`**: EBI BioModels (search, limited to manually curated models unless
+  `curated=false`; metadata with the latest revision; the COMBINE archive) and biosimulations.org (project search by
+  id, a project with the simulator that ran it, its archive, its original results). Archives are cached on disk by
+  id and upstream revision (`settings.sources_cache_dir`); lists and metadata for an hour in memory.
+- **Routes** (`routers/sources.py`): `GET /sources/biomodels/search?q=`, `/sources/biomodels/{id}`,
+  `/sources/biomodels/{id}/omex`; `GET /sources/biosimulations/projects?q=`, `/sources/biosimulations/{project}`,
+  `/{project}/omex`, `/{project}/reference`; and `POST /sources/biomodels/{id}/run`,
+  `POST /sources/biosimulations/{project}/run`, which run the archive as `/sedml/run` does, labelled
+  `source=biomodels, model=…` or `source=biosimulations, project=…`.
+- **References** (D7): a `comparison_reference` per origin, matched to the comparison's SED-ML file and reports. A
+  biosimulations.org project's original results (its run's `outputs/reports.h5`, origin
+  `biosimulations:<simulator>`), and any `reports.h5` shipped in an uploaded archive (origin `archive`), are scored
+  against each solver as `solver|origin`; `close` stays the solvers' agreement, `close_to_references` says whether
+  every solver matches every reference.
+- **Deferred**: interpolation between different time grids (same-length columns only, as the platform; the generic
+  solvers and the references share the SED-ML grid), and reimplementing `/curated/copasi|tellurium` on this path
+  (their cluster tests compare today's outputs; the SED-ML path makes them redundant rather than wrong).
+- CLI: `biomodels search|show|get|run`, `biosimulations search|show|get|reference|run`.
 
 ## Data model (phase 0, phase 3)
 

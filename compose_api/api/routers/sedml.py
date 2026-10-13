@@ -107,17 +107,35 @@ async def run_sedml(
     abs_tol_scale: Annotated[float, Query(ge=0)] = Tolerances().abs_tol_scale,
 ) -> SedmlRunResult:
     logger.info("SED-ML submission from %s", describe_caller(principal))
+    source = await _saved(archive)
+    tolerances = Tolerances(rel_tol=rel_tol, abs_tol_min=abs_tol_min, abs_tol_scale=abs_tol_scale)
+    return await run_archive(
+        source, None, solvers, task, tags, description, tolerances, background_tasks
+    )  # fmt: skip
+
+
+async def run_archive(
+    source: Path,
+    source_label: str | None,
+    solver_ids: list[str] | None,
+    tasks: list[str] | None,
+    tags: list[str] | None,
+    description: str | None,
+    tolerances: Tolerances,
+    background_tasks: BackgroundTasks,
+    references: dict[str, dict[str, dict[str, list[float]]]] | None = None,
+) -> SedmlRunResult:
+    """Translate, submit one run per accepted task and solver, and answer with the comparisons (`/sedml/run`, and the
+    source shortcuts in sources.py). `source_label` defaults to `upload:<file name>`."""
     try:
         run_tags, run_description = clean_tags(tags), clean_description(description)
     except LabelError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    source = await _saved(archive)
-    translation, chosen = await _translate(source, solvers)
-    tolerances = Tolerances(rel_tol=rel_tol, abs_tol_min=abs_tol_min, abs_tol_scale=abs_tol_scale)
+    translation, chosen = await _translate(source, solver_ids)
     try:
         ids = await service.submit(
-            translation, source, f"upload:{translation.source}", chosen, task, run_tags, run_description, tolerances,
-            background_tasks,
+            translation, source, source_label or f"upload:{translation.source}", chosen, tasks, run_tags,
+            run_description, tolerances, background_tasks, references=references,
         )  # fmt: skip
     except SubmissionRejectedError as e:
         raise HTTPException(

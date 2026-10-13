@@ -40,3 +40,20 @@ def test_two_agreeing_solvers_are_close_and_lengths_must_match() -> None:
     assert result["reports"]["r"]["labels"]["A"]["p|q"] == {"score": None, "close": False, "lengths": [2, 1]}
     assert result["close"] is False
     assert compare({"p": {"r": a}}, {"r": ["t"]}, T)["close"] is False  # one solver is no comparison
+
+
+def test_references_are_scored_against_each_solver_but_do_not_decide_agreement() -> None:
+    a = read_report("t,A\n0,1\n1,2\n")
+    far = read_report("t,A\n0,1\n1,3\n")
+    result = compare(
+        {"p": {"r": a}, "q": {"r": a}}, {"r": ["t", "A"]}, T, references={"biosimulations:run": {"r": far}}
+    )
+    pairs = result["reports"]["r"]["labels"]["A"]
+    assert pairs["p|q"]["close"] is True
+    assert pairs["p|biosimulations:run"] == {
+        "score": pairs["p|biosimulations:run"]["score"],
+        "close": False,
+        "reference": True,
+    }
+    assert result["close"] is True and result["close_to_references"] is False
+    assert compare({"p": {"r": a}, "q": {"r": a}}, {"r": ["t"]}, T)["close_to_references"] is None

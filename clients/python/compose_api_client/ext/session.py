@@ -50,10 +50,23 @@ from compose_api_client.api.results import (
 from compose_api_client.api.sed_ml import get_comparison, list_comparisons, preview_sedml, run_sedml
 from compose_api_client.api.simulation import run_simulation
 from compose_api_client.api.simulations import get_simulation, list_simulations
+from compose_api_client.api.sources import (
+    get_biomodel,
+    get_biomodel_omex,
+    get_biosimulations_omex,
+    get_biosimulations_project,
+    get_biosimulations_reference,
+    run_biomodel,
+    run_biosimulations_project,
+    search_biomodels,
+    search_biosimulations_projects,
+)
 from compose_api_client.ext.errors import ApiTimeout, raise_for
 from compose_api_client.models import (
     BiGraphProcess,
     BiGraphStep,
+    BiomodelHit,
+    BiomodelInfo,
     BodyPreviewSedml,
     BodyRunCopasi,
     BodyRunSedml,
@@ -68,6 +81,7 @@ from compose_api_client.models import (
     HpcRun,
     InterfaceManifest,
     ListSimulationsStatusType0,
+    ProjectInfo,
     RegisteredSimulators,
     RunEvent,
     RunEventPage,
@@ -353,6 +367,59 @@ class ComposeSession:
             task=list(tasks) if tasks else UNSET,
             tags=list(tags) if tags else UNSET,
             description=description if description is not None else UNSET,
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    # -- sources (BioModels, biosimulations.org) --------------------------------------------------------------------
+
+    def biomodels_search(self, query: str, *, limit: int = 20, curated: bool = True) -> list[BiomodelHit]:
+        r = search_biomodels.sync_detailed(client=self.client, q=query, limit=limit, curated=curated)
+        return list(_parsed(r))
+
+    def biomodel(self, model_id: str) -> BiomodelInfo:
+        return _parsed(get_biomodel.sync_detailed(model_id, client=self.client))  # type: ignore[no-any-return]
+
+    def biomodel_omex(self, model_id: str) -> bytes:
+        r = get_biomodel_omex.sync_detailed(model_id, client=self.client)
+        raise_for(r)
+        return r.content
+
+    def run_biomodel(self, model_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()) -> SedmlRunResult:
+        r = run_biomodel.sync_detailed(
+            model_id,
+            client=self.client,
+            solvers=list(solvers) if solvers else UNSET,
+            tags=list(tags) if tags else UNSET,
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    def biosimulations_search(self, query: str = "", *, limit: int = 20) -> list[ProjectInfo]:
+        r = search_biosimulations_projects.sync_detailed(client=self.client, q=query, limit=limit)
+        return list(_parsed(r))
+
+    def biosimulations_project(self, project_id: str) -> ProjectInfo:
+        return _parsed(get_biosimulations_project.sync_detailed(project_id, client=self.client))  # type: ignore[no-any-return]
+
+    def biosimulations_omex(self, project_id: str) -> bytes:
+        r = get_biosimulations_omex.sync_detailed(project_id, client=self.client)
+        raise_for(r)
+        return r.content
+
+    def biosimulations_reference(self, project_id: str) -> dict[str, dict[str, list[float]]]:
+        """The project's original results: `{"<sedml>/<report>": {label: values}}`."""
+        r = get_biosimulations_reference.sync_detailed(project_id, client=self.client)
+        raise_for(r)
+        data: dict[str, dict[str, list[float]]] = r.parsed.to_dict()  # type: ignore[union-attr]
+        return data
+
+    def run_biosimulations_project(
+        self, project_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()
+    ) -> SedmlRunResult:
+        r = run_biosimulations_project.sync_detailed(
+            project_id,
+            client=self.client,
+            solvers=list(solvers) if solvers else UNSET,
+            tags=list(tags) if tags else UNSET,
         )
         return _parsed(r)  # type: ignore[no-any-return]
 
@@ -684,6 +751,61 @@ class AsyncComposeSession:
             task=list(tasks) if tasks else UNSET,
             tags=list(tags) if tags else UNSET,
             description=description if description is not None else UNSET,
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    # -- sources (BioModels, biosimulations.org) --------------------------------------------------------------------
+
+    async def biomodels_search(self, query: str, *, limit: int = 20, curated: bool = True) -> list[BiomodelHit]:
+        r = await search_biomodels.asyncio_detailed(client=self.client, q=query, limit=limit, curated=curated)
+        return list(_parsed(r))
+
+    async def biomodel(self, model_id: str) -> BiomodelInfo:
+        return _parsed(await get_biomodel.asyncio_detailed(model_id, client=self.client))  # type: ignore[no-any-return]
+
+    async def biomodel_omex(self, model_id: str) -> bytes:
+        r = await get_biomodel_omex.asyncio_detailed(model_id, client=self.client)
+        raise_for(r)
+        return r.content
+
+    async def run_biomodel(
+        self, model_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()
+    ) -> SedmlRunResult:
+        r = await run_biomodel.asyncio_detailed(
+            model_id,
+            client=self.client,
+            solvers=list(solvers) if solvers else UNSET,
+            tags=list(tags) if tags else UNSET,
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    async def biosimulations_search(self, query: str = "", *, limit: int = 20) -> list[ProjectInfo]:
+        r = await search_biosimulations_projects.asyncio_detailed(client=self.client, q=query, limit=limit)
+        return list(_parsed(r))
+
+    async def biosimulations_project(self, project_id: str) -> ProjectInfo:
+        return _parsed(await get_biosimulations_project.asyncio_detailed(project_id, client=self.client))  # type: ignore[no-any-return]
+
+    async def biosimulations_omex(self, project_id: str) -> bytes:
+        r = await get_biosimulations_omex.asyncio_detailed(project_id, client=self.client)
+        raise_for(r)
+        return r.content
+
+    async def biosimulations_reference(self, project_id: str) -> dict[str, dict[str, list[float]]]:
+        """The project's original results: `{"<sedml>/<report>": {label: values}}`."""
+        r = await get_biosimulations_reference.asyncio_detailed(project_id, client=self.client)
+        raise_for(r)
+        data: dict[str, dict[str, list[float]]] = r.parsed.to_dict()  # type: ignore[union-attr]
+        return data
+
+    async def run_biosimulations_project(
+        self, project_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()
+    ) -> SedmlRunResult:
+        r = await run_biosimulations_project.asyncio_detailed(
+            project_id,
+            client=self.client,
+            solvers=list(solvers) if solvers else UNSET,
+            tags=list(tags) if tags else UNSET,
         )
         return _parsed(r)  # type: ignore[no-any-return]
 
