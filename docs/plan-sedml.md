@@ -290,7 +290,8 @@ The first attempts (0.7.19, 0.7.20) never ran: the shared image could not be bui
     matches both original results.
   - The COPASI step fails on a model without species (BIOMD0000000020, Hodgkin–Huxley: rate rules only).
   - BIOMD0000000043: the solvers differ on Rho (score 6.5); there is no reference, and it is not investigated yet.
-- **Drift:** `smoke` run 2 against its baseline is to come.
+- **Drift** (0.7.22): `smoke` run 2 against its baseline (run 1): both solvers reproduce their own results exactly
+  (score 0.0) on both models; no drift.
 
 ## Out of scope
 
