@@ -8,7 +8,8 @@ import pytest
 import pytest_asyncio
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from compose_api.authentication import Auth0Verifier, JwksCache
+from compose_api.api.main import app
+from compose_api.authentication import Auth0Verifier, JwksCache, get_auth0_verifier
 
 AUTH0_TEST_DOMAIN = "compose-test.example.auth0.com"
 AUTH0_TEST_ISSUER = f"https://{AUTH0_TEST_DOMAIN}/"
@@ -66,3 +67,19 @@ async def auth0_verifier(fake_auth0: FakeAuth0) -> AsyncGenerator[Auth0Verifier]
     verifier = Auth0Verifier(domain=AUTH0_TEST_DOMAIN, audience=AUTH0_TEST_AUDIENCE, jwks=jwks)
     yield verifier
     await verifier.aclose()  # the cache built its own client around the mock transport
+
+
+@pytest_asyncio.fixture
+async def authenticated_identity_client(auth0_verifier: Auth0Verifier) -> AsyncGenerator[httpx.AsyncClient]:
+    """Real router/verification, without starting the HPC lifespan or replacing authentication itself."""
+    previous = app.dependency_overrides.get(get_auth0_verifier)
+    app.dependency_overrides[get_auth0_verifier] = lambda: auth0_verifier
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+            yield client
+    finally:
+        if previous is None:
+            app.dependency_overrides.pop(get_auth0_verifier, None)
+        else:
+            app.dependency_overrides[get_auth0_verifier] = previous
+        # auth0_verifier closes the verifier on its own teardown, which runs after this one.
