@@ -452,7 +452,8 @@ def test_simulations_list_and_show(service: Callable[..., FakeService]) -> None:
     assert [r["simulation_id"] for r in listed] == [4334, 4333]
     params = fake.requests[-1].url.params
     assert (params["status"], params["limit"]) == ("completed", "2") and params["since"].startswith("20")
-    table = runner.invoke(app, ["--output", "table", "simulations", "list"], env={"COLUMNS": "200"})
+    # Rich treats TERM=dumb as 80 columns and ignores COLUMNS, which hides the simulator_id header.
+    table = runner.invoke(app, ["--output", "table", "simulations", "list"], env={"COLUMNS": "200", "TERM": "xterm"})
     assert table.exit_code == 0 and "4334" in table.stdout and "of 7" in table.stdout
     assert "simulator_id" in table.stdout and "138" in table.stdout
     shown = json.loads(invoke("simulations", "show", "4334").stdout)
