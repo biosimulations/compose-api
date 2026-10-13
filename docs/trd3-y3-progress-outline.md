@@ -9,8 +9,8 @@ viva-pde-particle and the other `viva-*` wrappers, process-bigraph and Vivarium,
 project.
 
 **Status.** This is an outline for the Year 3 progress report and the advisory-board talk
-([Y3-deck-storyboard.md](Y3-deck-storyboard.md)). Statuses come from [TRACKER.md](../tracking/TRACKER.md) (refreshed
-2026-10-13), and deviations come from [DEVIATIONS.md](../tracking/DEVIATIONS.md). Items marked **[to fill]** need a
+([Y3-deck-storyboard.md](trd3-y3-deck-storyboard.md)). Statuses come from [TRACKER.md](grant/trd3/tracking/TRACKER.md) (refreshed
+2026-10-13), and deviations come from [DEVIATIONS.md](grant/trd3/tracking/DEVIATIONS.md). Items marked **[to fill]** need a
 person: they cannot be settled from repositories.
 
 **Structure.** Sections 1–7 follow the progress report's sections B.2, B.4, B.5, B.6 and C. Within TR&D3 it uses the
@@ -54,7 +54,7 @@ Each subsection gives what was done, then its evidence. The aim and task numbers
   - Environment images are pinned by digest.
   - Every run records its image and the checksums of its outputs.
   - Environment images are built as artifacts of their own, in Kubernetes Jobs or on SLURM, joined rather than
-    duplicated. See [plan-environment-builds.md](../../../plan-environment-builds.md), #292–#299.
+    duplicated. See [plan-environment-builds.md](plan-environment-builds.md), #292–#299.
   - The first Kubernetes build ran on 2026-10-13 (`registry_env`, 936 MB).
 - **Safe by construction (G6, met 2026-10-06).**
   - A submission that names an unregistered process address is refused with a clear message (0.6.0, #184).
@@ -62,11 +62,11 @@ Each subsection gives what was done, then its evidence. The aim and task numbers
 - **Observable.**
   - Each run's events, its trace (opened directly in Perfetto, #304) and its datasets are recorded. Datasets include
     the input, logs, tables, figures, zarr and directory outputs, and 3D results viewed in the browser. See
-    [plan-observability.md](../../../plan-observability.md) and [plan-viewers.md](../../../plan-viewers.md),
+    [plan-observability.md](plan-observability.md) and [plan-viewers.md](plan-viewers.md),
     #204–#222 and #241–#244.
   - Runs carry labels, tags and descriptions for query (#283).
 - **Scriptable (Aim 3, Task 3.3b).** `compose-api-client` is on PyPI with a CLI covering every API operation (0.7.0,
-  [plan-cli.md](../../../plan-cli.md)).
+  [plan-cli.md](plan-cli.md)).
 - **Also from Valencia's pbest (Nov 2025 – May 2026):** a composite builder, HPC submission, containerization, and
   releases 0.3.1–0.6.3.
 
@@ -95,7 +95,7 @@ Each subsection gives what was done, then its evidence. The aim and task numbers
   2. it is checked for each solver against that solver's interface;
   3. it is run once per solver (COPASI and Tellurium), with the runs grouped in a comparison.
 
-  Reports and Plotly figures come out of the composite itself. See [plan-sedml.md](../../../plan-sedml.md),
+  Reports and Plotly figures come out of the composite itself. See [plan-sedml.md](plan-sedml.md),
   #282–#289, and process-bigraph-lang #57–#60.
 - **Comparison.**
   - It uses the BioSimulations verification score, per report and variable, solver against solver and against the
@@ -178,7 +178,7 @@ The Year 2 response to the board said TR&D3, apart from Agmon, does not contribu
 is in evidence:
 
 - **Public, documented services:** API docs at `/docs` and a full CLI reference
-  ([cli.md](../../../cli.md)).
+  ([cli.md](cli.md)).
 - **Packages:**
   - compose-api-client on PyPI;
   - process-bigraph-lang on PyPI and npm (an embeddable editor for other web apps);
@@ -228,7 +228,7 @@ Each item names the goal or tracker row it closes; dates are targets **[to confi
 ## 7. Products (C.2 and C.3)
 
 Count tools delivered and maintained, not repositories. The toolchain was consolidated on purpose; see
-[goals.md §4](../../../goals.md).
+[goals.md §4](goals.md).
 
 | Product | Kind | Version / URL |
 |---|---|---|

@@ -18,6 +18,7 @@ exclude_docs: |
   strategy.md
   plan-*.md
   ecosystem-repos.md
+  trd3-*.md
   cip/
   grant/
 

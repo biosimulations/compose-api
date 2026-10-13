@@ -4,7 +4,7 @@
 
 **Length.** 20 minutes, 15 slides: 18.5 minutes of talk plus 1.5 minutes of slack for the live demo on slides 5–7.
 
-**Source.** [Y3-progress-outline.md](Y3-progress-outline.md). Every claim on a slide comes from there with its
+**Source.** [Y3-progress-outline.md](trd3-y3-progress-outline.md). Every claim on a slide comes from there with its
 evidence, and the numbers are re-queried on the day (see its "Numbers" table).
 
 **Arc.** What we promised → what now runs → evidence that it is credible → status, stated plainly → what comes by

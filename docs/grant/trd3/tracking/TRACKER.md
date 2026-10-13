@@ -31,7 +31,7 @@ A4.1.particle-pde): its TR&D3 activities are quoted against these rows in
 (ReaDDy "initiated" by March 2026, delivered by August), the next-step column says which period each belongs to. No
 status was changed.
 
-**Refreshed 2026-10-13 for the Year 3 progress outline** ([../progress/Y3-progress-outline.md](../progress/Y3-progress-outline.md)):
+**Refreshed 2026-10-13 for the Year 3 progress outline** ([trd3-y3-progress-outline.md](../../../trd3-y3-progress-outline.md)):
 evidence from compose-api 0.7.11–0.7.25 and process-bigraph-lang 0.1.0–0.3.1 added to A1.1, A1.3.verify, A1.4, A2.2,
 A2.spec, A3.3a, A3.3e, A4.1.particle-pde and CP-BM. Two statuses changed, both marked `?` until a person confirms
 them: A3.3a and A4.1.particle-pde, `in-progress` → `delivered?`.
