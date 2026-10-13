@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport
 
 from compose_api.api.routers import registry as registry_router
-from compose_api.config import override_settings
+from compose_api.config import get_settings, override_settings
 from compose_api.registry import environments
 from compose_api.registry.environments import (
     INTERFACES_VERSION,
@@ -27,6 +27,10 @@ from compose_api.registry.environments import (
 )
 from compose_api.registry.generate import describe_command, prebuilt_pins
 from compose_api.registry.manifest import CurationLevel, load_manifest
+
+needs_pblang = pytest.mark.skipif(
+    not Path(get_settings().pblang_python).exists(), reason="process-bigraph-lang is not installed (make pblang)"
+)
 
 PDE_IMAGE = "ghcr.io/example/pde@sha256:1"
 
@@ -157,6 +161,27 @@ async def test_routes_list_environments_and_serve_manifests(client: httpx.AsyncC
 
     assert (await client.get("/registry/environments/registry_env/manifest")).status_code == 404  # not generated
     assert (await client.get("/registry/environments/nope/manifest")).status_code == 404
+
+
+@needs_pblang
+@pytest.mark.asyncio
+async def test_headers_render_each_module_and_each_class(client: httpx.AsyncClient) -> None:
+    response = await client.get("/registry/environments/viva-pde-particle/headers")
+    assert response.status_code == 200
+    body = response.json()
+    manifest = (await client.get("/registry/environments/viva-pde-particle/manifest")).json()
+    first = manifest["components"][0]
+    assert [m["module"] for m in body["modules"]] == sorted({c["module"] for c in manifest["components"]})
+    texts = {m["module"]: m["text"] for m in body["modules"]}
+    assert f"module {first['module']};" in texts[first["module"]]
+    declaration = body["components"][first["address"]]
+    assert declaration.startswith("/// A test process.\n")  # the description, as doc comments
+    assert f'{first["kind"]} {first["name"]} at "{first["address"]}" {{' in declaration
+    assert "module " not in declaration
+    assert set(body["components"]) == {c["address"] for c in manifest["components"]}
+
+    assert (await client.get("/registry/environments/registry_env/headers")).status_code == 404  # not generated
+    assert (await client.get("/registry/environments/nope/headers")).status_code == 404
 
 
 @pytest.mark.parametrize("path", sorted(environments.MANIFESTS_DIR.glob("*.json")), ids=lambda p: p.stem)

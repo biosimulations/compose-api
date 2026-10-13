@@ -35,6 +35,7 @@ from compose_api_client.api.datasets import get_dataset, get_dataset_content, ge
 from compose_api_client.api.registry import (
     build_environment,
     build_simulator,
+    get_environment_headers,
     get_environment_images,
     get_environment_manifest,
     get_simulator_images,
@@ -90,6 +91,7 @@ from compose_api_client.models import (
     ComparisonSeries,
     Dataset,
     DatasetPage,
+    EnvironmentHeaders,
     EnvironmentSummary,
     HpcRun,
     ImageStatus,
@@ -256,6 +258,10 @@ class ComposeSession:
     def environment_manifest(self, name: str) -> InterfaceManifest:
         """An environment's interface manifest (pbg-interfaces/1)."""
         return _parsed(get_environment_manifest.sync_detailed(name, client=self.client))  # type: ignore[no-any-return]
+
+    def environment_headers(self, name: str) -> EnvironmentHeaders:
+        """An environment's interfaces as .pblang header files, and each class's declaration."""
+        return _parsed(get_environment_headers.sync_detailed(name, client=self.client))  # type: ignore[no-any-return]
 
     def environment_images(self, name: str) -> ImageStatus:
         """Whether an environment's current image is built, with its image records and newest build run."""
@@ -691,6 +697,10 @@ class AsyncComposeSession:
     async def environment_manifest(self, name: str) -> InterfaceManifest:
         """An environment's interface manifest (pbg-interfaces/1)."""
         return _parsed(await get_environment_manifest.asyncio_detailed(name, client=self.client))  # type: ignore[no-any-return]
+
+    async def environment_headers(self, name: str) -> EnvironmentHeaders:
+        """An environment's interfaces as .pblang header files, and each class's declaration."""
+        return _parsed(await get_environment_headers.asyncio_detailed(name, client=self.client))  # type: ignore[no-any-return]
 
     async def environment_images(self, name: str) -> ImageStatus:
         """Whether an environment's current image is built, with its image records and newest build run."""

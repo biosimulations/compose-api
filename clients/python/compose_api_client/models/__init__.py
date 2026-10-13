@@ -32,6 +32,8 @@ from .dataset_page import DatasetPage
 from .drift import Drift
 from .entry_environment import EntryEnvironment
 from .entry_ref import EntryRef
+from .environment_headers import EnvironmentHeaders
+from .environment_headers_components import EnvironmentHeadersComponents
 from .environment_image import EnvironmentImage
 from .environment_summary import EnvironmentSummary
 from .environment_summary_kind import EnvironmentSummaryKind
@@ -45,6 +47,7 @@ from .get_biosimulations_reference_response_get_biosimulations_reference_additio
 from .get_simulation_trace_chrome_response_get_simulation_trace_chrome import (
     GetSimulationTraceChromeResponseGetSimulationTraceChrome,
 )
+from .header_module import HeaderModule
 from .hpc_run import HpcRun
 from .http_validation_error import HTTPValidationError
 from .image_kind import ImageKind
@@ -131,6 +134,8 @@ __all__ = (
     "Drift",
     "EntryEnvironment",
     "EntryRef",
+    "EnvironmentHeaders",
+    "EnvironmentHeadersComponents",
     "EnvironmentImage",
     "EnvironmentSummary",
     "EnvironmentSummaryKind",
@@ -138,6 +143,7 @@ __all__ = (
     "GetBiosimulationsReferenceResponseGetBiosimulationsReference",
     "GetBiosimulationsReferenceResponseGetBiosimulationsReferenceAdditionalProperty",
     "GetSimulationTraceChromeResponseGetSimulationTraceChrome",
+    "HeaderModule",
     "HpcRun",
     "HTTPValidationError",
     "ImageKind",

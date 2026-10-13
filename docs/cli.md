@@ -833,6 +833,7 @@ $ compose-api environments [OPTIONS] COMMAND [ARGS]...
 
 * `list`: Environments: the `--simulator` to run in...
 * `manifest`: An environment's interface manifest: its...
+* `headers`: An environment's interfaces as .pblang...
 * `images`: Whether an environment's current image is...
 * `build`: Make an environment's current image...
 
@@ -869,6 +870,29 @@ $ compose-api environments manifest [OPTIONS] NAME
 
 **Options**:
 
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments headers`
+
+An environment's interfaces as .pblang header files: what a composite imports (`import module.{Name};`).
+
+Prints every module's file, or writes them into `--out`; `--output json` prints them with each class's
+declaration.
+
+**Usage**:
+
+```console
+$ compose-api environments headers [OPTIONS] NAME
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+
+**Options**:
+
+* `-o, --out PATH`: Write one &lt;module&gt;.pbl per module into this directory.
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 

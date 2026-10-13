@@ -3,7 +3,23 @@ import { type Component, faceRows } from '~/viewers/composite/interfaces'
 
 // One class of an environment's interface manifest: its address, config, ports, and registry entry, as declared in
 // the image (types in bigraph-schema's own form).
-const props = defineProps<{ component: Component, highlighted?: boolean }>()
+// `header` is its `.pblang` declaration; it and the manifest entry open below the faces.
+const props = defineProps<{ component: Component, highlighted?: boolean, header?: string }>()
+const shown = ref<'header' | 'json' | null>(props.highlighted && props.header ? 'header' : null)
+watch(() => [props.highlighted, props.header] as const, ([on, header]) => {
+  if (on && header && !shown.value) shown.value = 'header'
+})
+const json = computed(() => {
+  const { registry_entry: _entry, ...entry } = props.component
+  return JSON.stringify(entry, null, 2)
+})
+// what a composite writes to use the class, above its declaration
+const headerText = computed(() =>
+  props.header && props.component.module ? `import ${props.component.module}.{${props.component.name}};\n\n${props.header}` : props.header
+)
+function toggle(view: 'header' | 'json') {
+  shown.value = shown.value === view ? null : view
+}
 const faces = computed(() => [
   { title: 'Config', rows: faceRows(props.component.config_schema) },
   { title: 'Inputs', rows: faceRows(props.component.inputs) },
@@ -21,6 +37,16 @@ const faces = computed(() => [
         <UBadge v-if="component.registry_entry" color="neutral" variant="outline" size="sm">
           {{ component.registry_entry.id }} · {{ component.registry_entry.level }}
         </UBadge>
+        <span class="ms-auto flex gap-1">
+          <UButton
+            v-if="header" size="xs" icon="i-lucide-file-code" label="Header" color="neutral"
+            :variant="shown === 'header' ? 'soft' : 'ghost'" @click="toggle('header')"
+          />
+          <UButton
+            size="xs" icon="i-lucide-braces" label="JSON" color="neutral"
+            :variant="shown === 'json' ? 'soft' : 'ghost'" @click="toggle('json')"
+          />
+        </span>
       </div>
       <code class="text-xs text-muted break-all">{{ component.address }}</code>
       <p v-if="component.description" class="text-sm">{{ component.description }}</p>
@@ -38,6 +64,11 @@ const faces = computed(() => [
           </table>
         </div>
       </div>
+      <pre
+        v-if="shown"
+        class="text-xs font-mono bg-elevated rounded p-3 overflow-x-auto"
+        :aria-label="shown === 'header' ? `${component.name} as a .pblang header` : `${component.name} in the manifest`"
+      >{{ shown === 'header' ? headerText : json }}</pre>
     </div>
   </UCard>
 </template>

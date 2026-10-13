@@ -30,7 +30,9 @@ from compose_api.registry.environments import (
     read_manifest,
     summarize,
 )
+from compose_api.registry.headers import EnvironmentHeaders, environment_headers
 from compose_api.registry.solvers import Solver, load_solvers
+from compose_api.sedml.translator import TranslatorUnavailableError
 from compose_api.simulation import builds, handlers
 from compose_api.simulation.builds import ImageState, ImageStatus
 from compose_api.simulation.models import SimulatorVersion
@@ -79,6 +81,31 @@ async def get_environment_manifest(
     response.headers["ETag"] = etag
     response.headers["Cache-Control"] = "no-cache"
     return manifest
+
+
+@config.router.get(
+    path="/environments/{name}/headers",
+    response_model=EnvironmentHeaders,
+    operation_id="get-environment-headers",
+    tags=["Registry"],
+    summary="An environment's interfaces as .pblang header files (one per module), and each class's declaration",
+    responses={
+        404: {"description": "No such environment here, or no manifest has been generated for it"},
+        503: {"description": "process-bigraph-lang is not installed in this deployment"},
+    },
+)
+async def get_environment_headers(name: str, principal: OptionalPrincipal) -> EnvironmentHeaders:
+    # public: the same for every caller
+    spec = next((e for e in load_environments().environments if e.name == name), None)
+    if spec is None or summarize(spec) is None:
+        raise HTTPException(status_code=404, detail=f"no environment {name!r}")
+    try:
+        headers = await environment_headers(name)
+    except TranslatorUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    if headers is None:
+        raise HTTPException(status_code=404, detail=f"no interface manifest has been generated for {name!r}")
+    return headers
 
 
 @config.router.get(

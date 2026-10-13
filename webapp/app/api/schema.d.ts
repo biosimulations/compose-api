@@ -399,6 +399,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/registry/environments/{name}/headers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An environment's interfaces as .pblang header files (one per module), and each class's declaration */
+        get: operations["get-environment-headers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/registry/entries": {
         parameters: {
             query?: never;
@@ -1149,6 +1166,20 @@ export interface components {
             id: string;
             level: components["schemas"]["CurationLevel"];
         };
+        /** EnvironmentHeaders */
+        EnvironmentHeaders: {
+            /** Environment */
+            environment: string;
+            /** Modules */
+            modules: components["schemas"]["HeaderModule"][];
+            /**
+             * Components
+             * @description Each class's declaration, by address
+             */
+            components: {
+                [key: string]: string;
+            };
+        };
         /**
          * EnvironmentImage
          * @description A built or pulled image of a simulator's definition (docs/plan-environment-builds.md, E3).
@@ -1230,6 +1261,16 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HeaderModule */
+        HeaderModule: {
+            /** Module */
+            module: string;
+            /**
+             * Text
+             * @description The module's header file (`module …;` and one declaration per class)
+             */
+            text: string;
         };
         /** HpcRun */
         HpcRun: {
@@ -2649,6 +2690,51 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    "get-environment-headers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentHeaders"];
+                };
+            };
+            /** @description No such environment here, or no manifest has been generated for it */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description process-bigraph-lang is not installed in this deployment */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
