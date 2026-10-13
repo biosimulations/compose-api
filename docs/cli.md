@@ -889,6 +889,7 @@ $ compose-api comparisons [OPTIONS] COMMAND [ARGS]...
 
 * `list`: Comparisons, newest first.
 * `show`: One comparison: its runs, and per report...
+* `series`: One report's columns from each run and...
 
 ### `compose-api comparisons list`
 
@@ -924,6 +925,26 @@ $ compose-api comparisons show [OPTIONS] COMPARISON_ID
 
 **Options**:
 
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api comparisons series`
+
+One report's columns from each run and each reference (JSON; a table lists what is there).
+
+**Usage**:
+
+```console
+$ compose-api comparisons series [OPTIONS] COMPARISON_ID
+```
+
+**Arguments**:
+
+* `COMPARISON_ID`: The comparison id.  [required]
+
+**Options**:
+
+* `--report TEXT`: The SED-ML report id.  [required]
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 

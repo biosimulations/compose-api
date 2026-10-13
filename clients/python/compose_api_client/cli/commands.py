@@ -1135,3 +1135,27 @@ def biosimulations_run(
         result = s.run_biosimulations_project(project_id, solvers=solver or (), tags=tag or ())
     emit(settings.output, _run_rows(result) if settings.output is not Output.JSON else result.to_dict(),
          ["comparison", "task", "solver", "simulation"])  # fmt: skip
+
+
+@comparisons_app.command("series")
+@claims("comparisons series", "get-comparison-series")
+@handled
+def comparisons_series(
+    ctx: typer.Context,
+    comparison_id: Annotated[int, typer.Argument(help="The comparison id.")],
+    report: Annotated[str, typer.Option(help="The SED-ML report id.")],
+) -> None:
+    """One report's columns from each run and each reference (JSON; a table lists what is there)."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        series = s.comparison_series(comparison_id, report)
+    if settings.output is Output.JSON:
+        emit(Output.JSON, series.to_dict())
+        return
+    data = series.to_dict()
+    rows = [
+        {"from": name, "kind": kind, "labels": len(columns)}
+        for kind in ("solvers", "references")
+        for name, columns in data[kind].items()
+    ]
+    emit(settings.output, rows, ["from", "kind", "labels"])

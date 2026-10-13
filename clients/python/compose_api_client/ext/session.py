@@ -47,7 +47,13 @@ from compose_api_client.api.results import (
     get_simulations_status_batch,
     get_simulator_build_status,
 )
-from compose_api_client.api.sed_ml import get_comparison, list_comparisons, preview_sedml, run_sedml
+from compose_api_client.api.sed_ml import (
+    get_comparison,
+    get_comparison_series,
+    list_comparisons,
+    preview_sedml,
+    run_sedml,
+)
 from compose_api_client.api.simulation import run_simulation
 from compose_api_client.api.simulations import get_simulation, list_simulations
 from compose_api_client.api.sources import (
@@ -75,6 +81,7 @@ from compose_api_client.models import (
     CatalogEntry,
     Comparison,
     ComparisonPage,
+    ComparisonSeries,
     Dataset,
     DatasetPage,
     EnvironmentSummary,
@@ -427,6 +434,11 @@ class ComposeSession:
         r = list_comparisons.sync_detailed(
             client=self.client, source=source if source is not None else UNSET, limit=limit, offset=offset
         )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    def comparison_series(self, comparison_id: int, report: str) -> ComparisonSeries:
+        """One report's columns from each run and each reference."""
+        r = get_comparison_series.sync_detailed(comparison_id, client=self.client, report=report)
         return _parsed(r)  # type: ignore[no-any-return]
 
     def comparison(self, comparison_id: int) -> Comparison:
@@ -813,6 +825,11 @@ class AsyncComposeSession:
         r = await list_comparisons.asyncio_detailed(
             client=self.client, source=source if source is not None else UNSET, limit=limit, offset=offset
         )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    async def comparison_series(self, comparison_id: int, report: str) -> ComparisonSeries:
+        """One report's columns from each run and each reference."""
+        r = await get_comparison_series.asyncio_detailed(comparison_id, client=self.client, report=report)
         return _parsed(r)  # type: ignore[no-any-return]
 
     async def comparison(self, comparison_id: int) -> Comparison:

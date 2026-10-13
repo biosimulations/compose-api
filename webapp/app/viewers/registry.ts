@@ -20,6 +20,8 @@ const media = (d: Dataset) => d.media_type ?? ''
 const isTable = (d: Dataset) => /csv|tab-separated|tsv/.test(media(d)) || /\.(csv|tsv)$/i.test(d.path)
 const isText = (d: Dataset) => media(d).startsWith('text/') || /json|yaml|xml/.test(media(d))
 const isBundle = (d: Dataset) => d.kind === 'results-bundle'
+// a Plotly figure a run wrote (biosim-toolkit's SED-ML Plots step: plots/<sedml>/<plot>.plotly.json)
+const isPlotlyFigure = (d: Dataset) => /\.plotly\.json$/i.test(d.path) || /plotly/.test(media(d))
 // the submitted composite: a process-bigraph document (.pbg or .json), or an OMEX archive holding one or more
 const isComposite = (d: Dataset) =>
   d.kind === 'input' && (/json|zip/.test(media(d)) || /\.(pbg|json|omex)$/i.test(d.path))
@@ -32,6 +34,13 @@ export const VIEWERS: ViewerDef[] = [
     icon: 'i-lucide-workflow',
     match: d => (isComposite(d) ? 10 : 0),
     component: lazy(() => import('./CompositeViewer.vue'))
+  },
+  {
+    id: 'plotly',
+    label: 'Figure',
+    icon: 'i-lucide-chart-spline',
+    match: d => (isPlotlyFigure(d) ? 12 : 0),
+    component: lazy(() => import('./PlotlyFigureViewer.vue'))
   },
   {
     id: 'image',

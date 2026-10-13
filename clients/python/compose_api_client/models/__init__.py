@@ -16,6 +16,11 @@ from .comparison import Comparison
 from .comparison_member import ComparisonMember
 from .comparison_page import ComparisonPage
 from .comparison_result_type_0 import ComparisonResultType0
+from .comparison_series import ComparisonSeries
+from .comparison_series_references import ComparisonSeriesReferences
+from .comparison_series_references_additional_property import ComparisonSeriesReferencesAdditionalProperty
+from .comparison_series_solvers import ComparisonSeriesSolvers
+from .comparison_series_solvers_additional_property import ComparisonSeriesSolversAdditionalProperty
 from .comparison_settings import ComparisonSettings
 from .comparison_status import ComparisonStatus
 from .containerization_engine import ContainerizationEngine
@@ -97,6 +102,11 @@ __all__ = (
     "ComparisonMember",
     "ComparisonPage",
     "ComparisonResultType0",
+    "ComparisonSeries",
+    "ComparisonSeriesReferences",
+    "ComparisonSeriesReferencesAdditionalProperty",
+    "ComparisonSeriesSolvers",
+    "ComparisonSeriesSolversAdditionalProperty",
     "ComparisonSettings",
     "ComparisonStatus",
     "ContainerizationEngine",

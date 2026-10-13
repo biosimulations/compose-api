@@ -1099,6 +1099,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /comparisons/{comparison_id}/series:
+    get:
+      tags:
+      - SED-ML
+      summary: One report's columns from each run and each reference, for overlays
+      operationId: get-comparison-series
+      parameters:
+      - name: comparison_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Comparison Id
+      - name: report
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Report
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonSeries'
+        '404':
+          description: No such comparison or report
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /sources/biomodels/search:
     get:
       tags:
@@ -1857,6 +1891,47 @@ components:
       - comparisons
       - total
       title: ComparisonPage
+    ComparisonSeries:
+      properties:
+        report:
+          type: string
+          title: Report
+        labels:
+          items:
+            type: string
+          type: array
+          title: Labels
+        solvers:
+          additionalProperties:
+            additionalProperties:
+              items:
+                anyOf:
+                - type: number
+                - type: 'null'
+              type: array
+            type: object
+          type: object
+          title: Solvers
+        references:
+          additionalProperties:
+            additionalProperties:
+              items:
+                anyOf:
+                - type: number
+                - type: 'null'
+              type: array
+            type: object
+          type: object
+          title: References
+      type: object
+      required:
+      - report
+      - labels
+      - solvers
+      - references
+      title: ComparisonSeries
+      description: One report's columns from each member (by solver) and each reference
+        (by origin), for overlays.
     ContainerizationEngine:
       type: integer
       enum:
