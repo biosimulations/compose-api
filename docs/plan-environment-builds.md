@@ -1,13 +1,13 @@
 # Environment builds: jobs and artifacts of their own
 
-**Status (2026-10-13): plan agreed; phases 1 and 2 in review.** One PR per phase, merged with a merge commit; each PR updates the
+**Status (2026-10-13): plan agreed; phases 1–3 in review.** One PR per phase, merged with a merge commit; each PR updates the
 table below. A merge deploys nothing by itself: the next release's image ships it (CLAUDE.md, "Deploys are GitOps").
 
 | Phase | What | State |
 |---|---|---|
 | 1 | Runs carry their backend and external job id (`hpcrun.backend`, `hpcrun.external_id`); the monitor asks each backend about its own runs | in review |
 | 2 | `environment_image`: an artifact record per built or pulled image (kind, location, digest, size, the run that produced it, available); "built" means an available artifact | in review |
-| 3 | The `k8s` build backend: a Kubernetes Job builds the image (privileged, scratch only) and copies it onto the shared filesystem as the service user | planned |
+| 3 | The `k8s` build backend: a Kubernetes Job builds the image (privileged, scratch only) and copies it onto the shared filesystem as the service user | in review |
 | 4 | Builds invoked on their own: `POST /environments/{name}/build`, `GET /environments/{name}/images`; a run waits for an in-flight build of its definition instead of starting another | planned |
 | 5 | Publish: an image pushed to a registry, recorded as another artifact; a cluster pulls it instead of building | planned |
 
@@ -85,6 +85,12 @@ registry environment (environments.yaml: registry_env) ──► its current sim
 3. **The `k8s` backend.** `compose_api/simulation/build_k8s.py` (the Job of E7, `ghcr.io/apptainer/apptainer:1.3.6`),
    a `compose-api-builds` service account and Role (Jobs, pods, logs, events), settings `build_backend` and
    `build_k8s_*`; the rke deployment sets `build_backend=k8s`. The build log route reads the Job's pods' logs.
+   *As built:* `submit_build` writes the definition through the API's mount, creates the Job and records a run
+   (backend `k8s`, external id the Job's name); `K8sPoller`, registered with the job monitor when
+   `build_backend=k8s`, reports each Job's state (a vanished Job, or a pod refused with `FailedCreate`, is failed);
+   the waiter reads the run's status from the database and, on failure, raises with the pods' logs. The handler then
+   records the image as produced by that run (phase 2). Whether the namespace admits a privileged init container is
+   known only live: a refusal fails the build at once with the event's message.
 4. **Builds on their own.** `POST /environments/{name}/build` (the environment's current definition; answers the
    build run, or the available image when there is one), `GET /environments/{name}/images`, and the same for a
    simulator id. The run path calls the same function and waits on the build run's status in the database (any API

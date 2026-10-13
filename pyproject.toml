@@ -37,6 +37,7 @@ dependencies = [
     "python-libsbml>=5.20.5",
     "pbest==0.6.3",
     "pyjwt[crypto]>=2.15.0,<3",
+    "kubernetes>=31",
 ]
 
 [project.urls]

@@ -63,6 +63,19 @@ class Settings(BaseSettings):
     slurm_partition: str = ""
     slurm_node_list: str = ""  # comma-separated list of nodes, e.g., "node1,node2"
     slurm_build_node: str = ""
+    # Where containers are built (compose_api/simulation/build_k8s.py): "slurm" (a fakeroot build on
+    # slurm_build_node) or "k8s" (a Kubernetes Job in build_k8s_namespace, the image placed on the shared filesystem
+    # through build_k8s_pvc_claim, mounted at build_k8s_pvc_mount_path: the path the SLURM nodes read it at).
+    build_backend: str = "slurm"
+    build_k8s_namespace: str = ""
+    build_k8s_image: str = "ghcr.io/apptainer/apptainer:1.3.6"
+    build_k8s_pvc_claim: str = ""
+    build_k8s_pvc_mount_path: str = ""
+    build_k8s_pvc_sub_path: str = ""
+    build_k8s_run_as_uid: int = 0
+    build_k8s_run_as_gid: int = 0
+    build_k8s_supplemental_groups: str = ""
+    build_k8s_timeout_seconds: int = 7200
     slurm_qos: str = ""
     batch_slurm_qos: str = ""
     batch_slurm_partition: str = ""
