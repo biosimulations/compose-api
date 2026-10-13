@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { strToU8, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 import { Pblang } from 'process-bigraph-lang'
-import { compositeDocuments, documentName, isZip } from '../app/viewers/composite/archive'
+import { companionFiles, compositeDocuments, documentName, isZip } from '../app/viewers/composite/archive'
 
 // The documents a submitted input holds, found as the service finds them at submission: .pbg and .json members,
 // nested .omex archives (at most three deep), nothing else; a non-zip input is one document.
@@ -47,5 +47,30 @@ describe('compositeDocuments', () => {
     expect(documentName('sub/updated.pbg')).toBe('updated')
     expect(documentName('nested.omex/inner.json')).toBe('inner')
     expect(documentName('c7e984d3_4F3aBE3.omex')).toBe('c7e984d3_4F3aBE3')
+  })
+})
+
+// What a document runs with when it is resubmitted: the files beside it in its own archive, never another document.
+describe('companionFiles', () => {
+  it('a SED-ML run\'s archive keeps its model, not its .pblang source or manifest', () => {
+    const bytes = zip({
+      'manifest.xml': strToU8('<omexManifest/>'),
+      'task_1.pbg': strToU8(DOC),
+      'task_1.pblang': strToU8('composite task_1 {}'),
+      'BIOMD0000000297_url.changed.xml': strToU8('<sbml/>')
+    })
+    expect(Object.keys(companionFiles(bytes, 'task_1.pbg'))).toEqual(['BIOMD0000000297_url.changed.xml'])
+  })
+
+  it('takes the document\'s own directory and nested archive, and no other document', () => {
+    const inner = zip({ 'sub/inner.pbg': strToU8(DOC), 'sub/model.sbml': strToU8('<sbml/>'), 'sub/other.json': strToU8(DOC), 'top.csv': strToU8('a') })
+    const bytes = zip({ 'nested.omex': inner, 'outer.sbml': strToU8('<sbml/>') })
+    const files = companionFiles(bytes, 'nested.omex/sub/inner.pbg')
+    expect(Object.keys(files)).toEqual(['model.sbml'])
+    expect(new TextDecoder().decode(files['model.sbml'])).toBe('<sbml/>')
+  })
+
+  it('a bare document has none', () => {
+    expect(companionFiles(strToU8(DOC), 'bare.pbg')).toEqual({})
   })
 })

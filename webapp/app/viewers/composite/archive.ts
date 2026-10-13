@@ -42,3 +42,37 @@ function fromArchive(bytes: Uint8Array, prefix: string, depth: number): ArchiveD
 export function documentName(path: string): string {
   return (path.split('/').pop() ?? 'composite').replace(/\.(pbg|json|omex|ya?ml)$/i, '') || 'composite'
 }
+
+/**
+ * The files a document in an archive runs with: the other members of its own archive (the innermost, for a document
+ * in a nested one), keyed by their path there, other than documents, nested archives and the archive's manifest.
+ * These are what a document names by file (an SBML model, data); resubmitting the document without them fails. The
+ * runner reads the first document it finds in an archive, so no other document may travel with it. A document that is
+ * not in an archive has none.
+ */
+export function companionFiles(bytes: Uint8Array, documentPath: string): Record<string, Uint8Array> {
+  if (!isZip(bytes)) return {}
+  let archive = bytes
+  let inner = documentPath
+  for (let depth = 0; depth <= MAX_NESTING; depth++) {
+    const at = inner.search(/\.omex\//i)
+    if (at < 0) break
+    const nested = inner.slice(0, at + '.omex'.length)
+    const member = unzipSync(archive, { filter: f => f.name === nested })[nested]
+    if (!member) return {}
+    archive = member
+    inner = inner.slice(nested.length + 1)
+  }
+  const directory = inner.includes('/') ? inner.slice(0, inner.lastIndexOf('/') + 1) : ''
+  const members = unzipSync(archive, {
+    filter: f =>
+      !f.name.endsWith('/')
+      && f.name.startsWith(directory)
+      && !f.name.slice(directory.length).includes('/')
+      && !DOCUMENT.test(f.name)
+      && !NESTED.test(f.name)
+      && !/\.pbl(ang)?$/i.test(f.name)
+      && !/(^|\/)manifest\.xml$/i.test(f.name)
+  })
+  return Object.fromEntries(Object.entries(members).map(([name, content]) => [name.slice(directory.length), content]))
+}
