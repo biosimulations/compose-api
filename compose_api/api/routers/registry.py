@@ -22,6 +22,7 @@ from compose_api.registry.environments import (
     read_manifest,
     summarize,
 )
+from compose_api.registry.solvers import Solver, load_solvers
 
 config = RouterConfig(router=APIRouter(), prefix="/registry", dependencies=[Depends(get_optional_principal)])
 
@@ -78,3 +79,15 @@ async def get_environment_manifest(
 async def list_registry_entries(principal: OptionalPrincipal) -> list[CatalogEntry]:
     # public: the same for every caller
     return catalog_entries()
+
+
+@config.router.get(
+    path="/solvers",
+    response_model=list[Solver],
+    operation_id="list-solvers",
+    tags=["Registry"],
+    summary="The solvers SED-ML runs can use: each one's class, environment, KiSAO algorithms and what it returns",
+)
+async def list_solvers(principal: OptionalPrincipal) -> list[Solver]:
+    # public: the same for every caller
+    return list(load_solvers().solvers)

@@ -399,6 +399,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/registry/solvers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The solvers SED-ML runs can use: each one's class, environment, KiSAO algorithms and what it returns */
+        get: operations["list-solvers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -988,6 +1005,29 @@ export interface components {
             database_id: number;
             /** Created At */
             created_at?: string | null;
+        };
+        /** Solver */
+        Solver: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Role
+             * @constant
+             */
+            role: "TimeCourseSolver";
+            /** Environment */
+            environment: string;
+            /** Address */
+            address: string;
+            /**
+             * Algorithms
+             * @description KiSAO terms it implements, its default first
+             */
+            algorithms: string[];
+            /** Provides */
+            provides?: string[];
         };
         /**
          * SpanTree
@@ -1805,6 +1845,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CatalogEntry"][];
+                };
+            };
+        };
+    };
+    "list-solvers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Solver"][];
                 };
             };
         };

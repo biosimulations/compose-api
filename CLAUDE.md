@@ -189,6 +189,11 @@ under reserved keys only (`source`, `environment`, `solver`, `model`, ...); subm
 `description` at submission (runs are anonymous; nothing edits them). `GET /simulations?label=k:v&tag=t` filters by
 JSONB/array containment (GIN indexes). Add a key to `LABEL_KEYS` before writing it.
 
+**Solvers** (`registry/solvers.yaml`, `registry/solvers.py`): the classes a SED-ML run can fill the TimeCourseSolver role
+with, per environment, with their KiSAO algorithms; served at `GET /registry/solvers`. A solver's class must be in its
+environment's committed manifest at `tested` or above (`tests/registry/test_solvers.py`). The SED-ML adapter steps are
+biosim-toolkit's (`local:biosim_toolkit.sedml.*`, installed in registry_env).
+
 **Job tracking.** An `HpcRun` row links a SLURM job id, a `correlation_id`, and a `JobType`
 (`SIMULATION` / `BUILD_CONTAINER`). `JobMonitor` updates status two ways: a 5-second polling loop reconciling
 `squeue`/`sacct` against running `HpcRun` rows, and the event ingester (below) on the same loop. The NATS path and its

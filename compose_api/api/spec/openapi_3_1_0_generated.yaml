@@ -869,6 +869,23 @@ paths:
                   $ref: '#/components/schemas/CatalogEntry'
                 type: array
                 title: Response List-Registry-Entries
+  /registry/solvers:
+    get:
+      tags:
+      - Registry
+      summary: 'The solvers SED-ML runs can use: each one''s class, environment, KiSAO
+        algorithms and what it returns'
+      operationId: list-solvers
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Solver'
+                type: array
+                title: Response List-Solvers
   /health:
     get:
       tags:
@@ -1917,6 +1934,47 @@ components:
       - packages
       - database_id
       title: SimulatorVersion
+    Solver:
+      properties:
+        id:
+          type: string
+          pattern: ^[a-z][a-z0-9_-]*$
+          title: Id
+        name:
+          type: string
+          title: Name
+        role:
+          type: string
+          const: TimeCourseSolver
+          title: Role
+        environment:
+          type: string
+          title: Environment
+        address:
+          type: string
+          pattern: ^local:[A-Za-z_][\w.]*\.[A-Za-z_]\w*$
+          title: Address
+        algorithms:
+          items:
+            type: string
+          type: array
+          minItems: 1
+          title: Algorithms
+          description: KiSAO terms it implements, its default first
+        provides:
+          items:
+            type: string
+          type: array
+          title: Provides
+      type: object
+      required:
+      - id
+      - name
+      - role
+      - environment
+      - address
+      - algorithms
+      title: Solver
     SpanTree:
       properties:
         span:

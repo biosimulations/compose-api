@@ -9,7 +9,12 @@ from compose_api.simulation.simulator_registry import registry_dependencies
 
 def test_pinned_registry_parses_into_pypi_and_conda() -> None:
     deps = registry_dependencies()
-    assert [d.dependency_name for d in deps.pypi_dependencies] == ["python-copasi", "tellurium", "pb_multiscale_actin"]
+    assert [d.dependency_name for d in deps.pypi_dependencies] == [
+        "python-copasi",
+        "tellurium",
+        "pb_multiscale_actin",
+        "biosim-toolkit",  # the SED-ML adapter steps (docs/plan-sedml.md, phase 2)
+    ]
     assert [d.dependency_name for d in deps.conda_dependencies] == ["readdy"]
     assert all(d.version for d in deps.pypi_dependencies + deps.conda_dependencies)
 

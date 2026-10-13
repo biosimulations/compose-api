@@ -1,15 +1,15 @@
 # SED-ML models as process-bigraph runs across solvers, compared
 
-**Status (2026-10-12): plan agreed; phase 0 in review.** One PR per phase and repository, merged with a merge commit on
+**Status (2026-10-13): phase 0 merged; phase 1 in review (process-bigraph-lang); phase 2 in review.** One PR per phase and repository, merged with a merge commit on
 the maintainer's word; each PR updates the table below. A merge deploys nothing by itself: the next release's image
 ships it (CLAUDE.md, "Deploys are GitOps"). The language side is planned in process-bigraph-lang's
 [`docs/v2/sedml-plan.md`](https://github.com/biosimulations/process-bigraph-lang/blob/main/docs/v2/sedml-plan.md).
 
 | Phase | What | Repo | State |
 |---|---|---|---|
-| 0 | Labels, tags and a description on simulations, and filters on them; the concepts below documented; `GET /registry/entries` and `/ui/catalog` rebuilt on it | compose-api | in review |
+| 0 | Labels, tags and a description on simulations, and filters on them; the concepts below documented; `GET /registry/entries` and `/ui/catalog` rebuilt on it | compose-api | merged (#283) |
 | 1 | SED-ML read into a `.pblang` template per task with the solver as an open site, one checked instance per solver; plots built at run time; release 0.3.0 | process-bigraph-lang | in review (#58, #59) |
-| 2 | SED-ML adapter steps around generic COPASI and Tellurium steps; `solvers.yaml` and `GET /registry/solvers` | adapters package, compose-api | planned |
+| 2 | SED-ML adapter steps around generic COPASI and Tellurium steps; `solvers.yaml` and `GET /registry/solvers` | biosim-toolkit 0.1.0 (released), compose-api | in review |
 | 3 | `POST /sedml/run` and `/sedml/preview`; the `sedml-omex` and `input` datasets; comparisons computed on the server; references | compose-api | planned |
 | 4 | BioModels and biosimulations.org source routes, cached; run shortcuts; the curated routes on the same path | compose-api | planned |
 | 5 | Web app: ad-hoc SED-ML page, sources, a Plotly viewer, the comparison page | compose-api `webapp/` | planned |
@@ -106,6 +106,23 @@ goes into the shared image) and `manifest.yaml` (what is admitted) from one list
   page); the Postgres `/core/*` lists are marked deprecated in the API.
 - The web app: label and tag chips on the simulations list and a run's page (a chip filters the list), label and tag
   filters in the list's query string, and tags and a description in the run form.
+
+## Phase 2: what exists after it
+
+- **biosim-toolkit** ([biosimulations/biosim-toolkit](https://github.com/biosimulations/biosim-toolkit), 0.1.0 on
+  PyPI): a rollup of trusted utilities (D11; SED-ML, model and format adapters, reports, data, visualization).
+  Its SED-ML steps are `local:biosim_toolkit.sedml.{DataGenerators, Report, Plots}`; its CI runs translated archives
+  end to end on registry_env's versions with real COPASI and Tellurium. Installed in registry_env
+  (`simulation/simulator_registry.json`), so the shared image's hash and its manifest change; registered at `tested`
+  in `manifest.yaml`, gated by `tests/simulators/test_sedml.py` (cluster only: the Ciliberto project on both
+  solvers inside the built image, which must agree).
+- **`registry/solvers.yaml`**: `copasi` (`CopasiUTCStep`, LSODA/LSODAR and LSODA) and `tellurium`
+  (`TelluriumUTCStep`, CVODE), both returning species. `tests/registry/test_solvers.py` checks each against its
+  environment's committed manifest (the class exists, at `tested` or above, with the role's face).
+  `GET /registry/solvers`; CLI `solvers`.
+- What the generic solvers do, found while building (process-bigraph-lang `docs/v2/sedml-plan.md`): they share one
+  face, start at time 0, take points not steps and return species only; process-bigraph 1.0.5 runs steps when the
+  composite is built; bigraph-schema 1.0 drops new keys on a `map` update, so the data store overwrites.
 
 ## Data model (phase 0, phase 3)
 

@@ -32,7 +32,12 @@ from compose_api_client.api.biosim_api import check_health_health_get, get_versi
 from compose_api_client.api.compute import get_processes_list, get_simulator_list, get_steps_list
 from compose_api_client.api.curated import run_copasi, run_tellurium
 from compose_api_client.api.datasets import get_dataset, get_dataset_content, get_dataset_file, list_datasets
-from compose_api_client.api.registry import get_environment_manifest, list_environments, list_registry_entries
+from compose_api_client.api.registry import (
+    get_environment_manifest,
+    list_environments,
+    list_registry_entries,
+    list_solvers,
+)
 from compose_api_client.api.results import (
     get_simulation_events,
     get_simulation_results_file,
@@ -65,6 +70,7 @@ from compose_api_client.models import (
     SimulationDetail,
     SimulationExperiment,
     SimulationPage,
+    Solver,
 )
 from compose_api_client.types import UNSET, File, Response
 
@@ -204,6 +210,10 @@ class ComposeSession:
     def catalog(self) -> list[CatalogEntry]:
         """Every registry entry with its curation level and the environments that provide its classes."""
         return list(_parsed(list_registry_entries.sync_detailed(client=self.client)))
+
+    def solvers(self) -> list[Solver]:
+        """The solvers SED-ML runs can use: class, environment, KiSAO algorithms, what each returns."""
+        return list(_parsed(list_solvers.sync_detailed(client=self.client)))
 
     def environment_manifest(self, name: str) -> InterfaceManifest:
         """An environment's interface manifest (pbg-interfaces/1)."""
@@ -498,6 +508,10 @@ class AsyncComposeSession:
     async def catalog(self) -> list[CatalogEntry]:
         """Every registry entry with its curation level and the environments that provide its classes."""
         return list(_parsed(await list_registry_entries.asyncio_detailed(client=self.client)))
+
+    async def solvers(self) -> list[Solver]:
+        """The solvers SED-ML runs can use: class, environment, KiSAO algorithms, what each returns."""
+        return list(_parsed(await list_solvers.asyncio_detailed(client=self.client)))
 
     async def environment_manifest(self, name: str) -> InterfaceManifest:
         """An environment's interface manifest (pbg-interfaces/1)."""
