@@ -10,8 +10,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from compose_api.config import get_settings
 from compose_api.registry.environments import manifest_path
 from compose_api.registry.solvers import Solver
@@ -72,8 +70,8 @@ async def describe(source: Path) -> dict[str, Any]:
 async def translate(source: Path, solvers: list[Solver], workdir: Path) -> Translation:
     """Every task of the archive, compiled per solver against its environment's manifest, into `workdir`."""
     description = await describe(source)
-    solvers_file = workdir / "solvers.yaml"
-    solvers_file.write_text(yaml.safe_dump({"solvers": [s.as_translation_data() for s in solvers]}))
+    solvers_file = workdir / "solvers.json"  # JSON: the CLI reads YAML only when PyYAML is installed
+    solvers_file.write_text(json.dumps({"solvers": [s.as_translation_data() for s in solvers]}))
     out = workdir / "translated"
     manifests = sorted({str(manifest_path(s.environment)) for s in solvers})
     args = ["sedml", "translate", str(source), "--solvers", str(solvers_file), "-o", str(out)]

@@ -48,7 +48,7 @@ check-clients: ## Fail if the committed spec or client differs from a fresh gene
 .PHONY: webapp-install
 .PHONY: pblang
 pblang: ## Install process-bigraph-lang (SED-ML translation) in its own environment, .pblang/ (settings.pblang_python)
-	@uv venv -q --allow-existing .pblang && uv pip install -q --python .pblang/bin/python -r compose_api/sedml/pblang-requirements.txt
+	@uv venv -q --allow-existing .pblang && uv pip install -q --refresh-package process-bigraph-lang --python .pblang/bin/python -r compose_api/sedml/pblang-requirements.txt
 
 webapp-install: ## Install the web UI's npm dependencies (webapp/, Node 24)
 	@cd webapp && npm ci
