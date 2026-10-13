@@ -23,7 +23,7 @@ from compose_api.simulation.hpc_utils import (
     get_slurm_singularity_def_file,
     get_slurm_submit_file,
 )
-from compose_api.simulation.job_script import SimulationJob, simulation_job_script
+from compose_api.simulation.job_script import SOURCE_FILE_NAME, SimulationJob, simulation_job_script
 from compose_api.simulation.models import HpcRun, JobType, RemoteContainerImage, Simulation, SimulatorVersion
 
 logger = logging.getLogger(__name__)
@@ -116,6 +116,12 @@ class SimulationServiceHpc(SimulationService):
                 f.write(script_content)
 
             await ssh_service.run_command(f"mkdir {experiment_path}")
+            if simulation.sim_request.source_file_path is not None:
+                # a SED-ML run's original archive, announced by the job script as the `sedml-omex` dataset
+                await ssh_service.scp_upload(
+                    local_file=simulation.sim_request.source_file_path,
+                    remote_path=experiment_path / SOURCE_FILE_NAME,
+                )
             # submit the build script to slurm
             slurm_jobid = await slurm_service.submit_job(
                 local_sbatch_file=local_submit_file,

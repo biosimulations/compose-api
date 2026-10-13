@@ -194,6 +194,13 @@ with, per environment, with their KiSAO algorithms; served at `GET /registry/sol
 environment's committed manifest at `tested` or above (`tests/registry/test_solvers.py`). The SED-ML adapter steps are
 biosim-toolkit's (`local:biosim_toolkit.sedml.*`, installed in registry_env).
 
+**SED-ML runs** (`compose_api/sedml/`, routers `sedml.py`, `comparisons.py`; `docs/plan-sedml.md`). process-bigraph-lang
+needs bigraph-schema 1.6, so it is NOT a dependency of this environment: `translator.py` runs its CLI with
+`settings.pblang_python` (`.pblang/`; `make pblang`, CI and the API image install `sedml/pblang-requirements.txt`).
+`/sedml/run` submits one run per task and solver (the original archive rides along as `source.omex`, the
+`sedml-omex` dataset) grouped by a `comparison`, computed from the members' report CSVs when all have finished.
+Tests needing the translator skip without `.pblang/`.
+
 **Job tracking.** An `HpcRun` row links a SLURM job id, a `correlation_id`, and a `JobType`
 (`SIMULATION` / `BUILD_CONTAINER`). `JobMonitor` updates status two ways: a 5-second polling loop reconciling
 `squeue`/`sacct` against running `HpcRun` rows, and the event ingester (below) on the same loop. The NATS path and its

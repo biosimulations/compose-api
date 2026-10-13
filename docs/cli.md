@@ -181,6 +181,8 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 * `datasets`: The files runs produced.
 * `simulations`: Find simulations and their ids.
 * `environments`: The environments documents run in, and the...
+* `sedml`: Run SED-ML archives on several solvers and...
+* `comparisons`: A SED-ML task's runs on several solvers,...
 
 ## `compose-api health`
 
@@ -799,6 +801,124 @@ $ compose-api environments manifest [OPTIONS] NAME
 **Arguments**:
 
 * `NAME`: The environment, e.g. registry_env.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+## `compose-api sedml`
+
+Run SED-ML archives on several solvers and compare them.
+
+**Usage**:
+
+```console
+$ compose-api sedml [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `preview`: Translate an archive without running it:...
+* `run`: Run each task once per solver; prints each...
+
+### `compose-api sedml preview`
+
+Translate an archive without running it: its tasks, the solvers that accept each, and the findings.
+
+**Usage**:
+
+```console
+$ compose-api sedml preview [OPTIONS] ARCHIVE
+```
+
+**Arguments**:
+
+* `ARCHIVE`: A COMBINE/OMEX archive with SED-ML and its models.  [required]
+
+**Options**:
+
+* `-s, --solver TEXT`: A solver id (repeatable); all when omitted.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api sedml run`
+
+Run each task once per solver; prints each task's comparison and its runs.
+
+**Usage**:
+
+```console
+$ compose-api sedml run [OPTIONS] ARCHIVE
+```
+
+**Arguments**:
+
+* `ARCHIVE`: A COMBINE/OMEX archive with SED-ML and its models.  [required]
+
+**Options**:
+
+* `-s, --solver TEXT`: A solver id (repeatable); all when omitted.
+* `--task TEXT`: A SED-ML task id (repeatable); all when omitted.
+* `-t, --tag TEXT`: A tag for every run (repeatable).
+* `--description TEXT`: What the runs are for.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+## `compose-api comparisons`
+
+A SED-ML task's runs on several solvers, and how they compare.
+
+**Usage**:
+
+```console
+$ compose-api comparisons [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `list`: Comparisons, newest first.
+* `show`: One comparison: its runs, and per report...
+
+### `compose-api comparisons list`
+
+Comparisons, newest first.
+
+**Usage**:
+
+```console
+$ compose-api comparisons list [OPTIONS]
+```
+
+**Options**:
+
+* `--source TEXT`: Only this source, e.g. upload:x.omex.
+* `--limit INTEGER`: At most this many.  [default: 25]
+* `--offset INTEGER`: Skip this many.  [default: 0]
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api comparisons show`
+
+One comparison: its runs, and per report the worst data set once every run has finished.
+
+**Usage**:
+
+```console
+$ compose-api comparisons show [OPTIONS] COMPARISON_ID
+```
+
+**Arguments**:
+
+* `COMPARISON_ID`: The comparison id.  [required]
 
 **Options**:
 

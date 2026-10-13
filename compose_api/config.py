@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     internal_mount_dir: str = "/mnt/projects/CRBM/compose_api"
     namespace: str = "test"
     containers_output_dir: str = "/experiment/output"
+    # The Python of the separate environment process-bigraph-lang is installed in (sedml/pblang-requirements.txt):
+    # it needs bigraph-schema 1.6, this service's environment has pbest's 1.0, so SED-ML translation runs its CLI there
+    # (docs/plan-sedml.md, phase 3). `make pblang` makes .pblang/ in a checkout; the API image builds the same at /app.
+    pblang_python: str = f"{REPO_ROOT}/.pblang/bin/python"
     container_service: str = "APPTAINER"
 
     # Repository holding the prebuilt simulator images, without a tag; the tag is the

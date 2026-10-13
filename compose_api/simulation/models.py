@@ -222,6 +222,9 @@ class SimulationRequest(BaseModel):
     labels: dict[str, str] = Field(default_factory=dict)
     tags: list[str] = Field(default_factory=list)
     description: str | None = None
+    # A SED-ML run's original archive (docs/plan-sedml.md, D6): uploaded beside the input as `source.omex` and
+    # announced as a `sedml-omex` dataset; the input is the process-bigraph archive translated from it.
+    source_file_path: Path | None = None
 
 
 class SimulationResults(BaseModel):

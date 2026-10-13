@@ -3,11 +3,19 @@
 from .bi_graph_compute_type import BiGraphComputeType
 from .bi_graph_process import BiGraphProcess
 from .bi_graph_step import BiGraphStep
+from .body_preview_sedml import BodyPreviewSedml
 from .body_run_copasi import BodyRunCopasi
+from .body_run_sedml import BodyRunSedml
 from .body_run_simulation import BodyRunSimulation
 from .body_run_tellurium import BodyRunTellurium
 from .catalog_entry import CatalogEntry
 from .check_health_health_get_response_check_health_health_get import CheckHealthHealthGetResponseCheckHealthHealthGet
+from .comparison import Comparison
+from .comparison_member import ComparisonMember
+from .comparison_page import ComparisonPage
+from .comparison_result_type_0 import ComparisonResultType0
+from .comparison_settings import ComparisonSettings
+from .comparison_status import ComparisonStatus
 from .containerization_engine import ContainerizationEngine
 from .containerization_file_repr import ContainerizationFileRepr
 from .curation_level import CurationLevel
@@ -44,6 +52,11 @@ from .run_event_tags_type_0 import RunEventTagsType0
 from .run_span import RunSpan
 from .run_span_attrs_type_0 import RunSpanAttrsType0
 from .run_trace_tree import RunTraceTree
+from .sedml_finding import SedmlFinding
+from .sedml_finding_severity import SedmlFindingSeverity
+from .sedml_preview import SedmlPreview
+from .sedml_run_result import SedmlRunResult
+from .sedml_task import SedmlTask
 from .simulation_detail import SimulationDetail
 from .simulation_detail_labels import SimulationDetailLabels
 from .simulation_experiment import SimulationExperiment
@@ -62,11 +75,19 @@ __all__ = (
     "BiGraphComputeType",
     "BiGraphProcess",
     "BiGraphStep",
+    "BodyPreviewSedml",
     "BodyRunCopasi",
+    "BodyRunSedml",
     "BodyRunSimulation",
     "BodyRunTellurium",
     "CatalogEntry",
     "CheckHealthHealthGetResponseCheckHealthHealthGet",
+    "Comparison",
+    "ComparisonMember",
+    "ComparisonPage",
+    "ComparisonResultType0",
+    "ComparisonSettings",
+    "ComparisonStatus",
     "ContainerizationEngine",
     "ContainerizationFileRepr",
     "CurationLevel",
@@ -101,6 +122,11 @@ __all__ = (
     "RunSpan",
     "RunSpanAttrsType0",
     "RunTraceTree",
+    "SedmlFinding",
+    "SedmlFindingSeverity",
+    "SedmlPreview",
+    "SedmlRunResult",
+    "SedmlTask",
     "SimulationDetail",
     "SimulationDetailLabels",
     "SimulationExperiment",

@@ -1,6 +1,6 @@
 # SED-ML models as process-bigraph runs across solvers, compared
 
-**Status (2026-10-13): phase 0 merged; phase 1 in review (process-bigraph-lang); phase 2 in review.** One PR per phase and repository, merged with a merge commit on
+**Status (2026-10-13): phases 0 and 1 merged (process-bigraph-lang 0.3.x); phases 2 and 3 in review.** One PR per phase and repository, merged with a merge commit on
 the maintainer's word; each PR updates the table below. A merge deploys nothing by itself: the next release's image
 ships it (CLAUDE.md, "Deploys are GitOps"). The language side is planned in process-bigraph-lang's
 [`docs/v2/sedml-plan.md`](https://github.com/biosimulations/process-bigraph-lang/blob/main/docs/v2/sedml-plan.md).
@@ -8,10 +8,10 @@ ships it (CLAUDE.md, "Deploys are GitOps"). The language side is planned in proc
 | Phase | What | Repo | State |
 |---|---|---|---|
 | 0 | Labels, tags and a description on simulations, and filters on them; the concepts below documented; `GET /registry/entries` and `/ui/catalog` rebuilt on it | compose-api | merged (#283) |
-| 1 | SED-ML read into a `.pblang` template per task with the solver as an open site, one checked instance per solver; plots built at run time; release 0.3.0 | process-bigraph-lang | in review (#58, #59) |
+| 1 | SED-ML read into a `.pblang` template per task with the solver as an open site, one checked instance per solver; plots built at run time; release 0.3.0 | process-bigraph-lang | merged (#58, #59, #60); released 0.3.0, 0.3.1 |
 | 2 | SED-ML adapter steps around generic COPASI and Tellurium steps; `solvers.yaml` and `GET /registry/solvers` | biosim-toolkit 0.1.0 (released), compose-api | in review |
-| 3 | `POST /sedml/run` and `/sedml/preview`; the `sedml-omex` and `input` datasets; comparisons computed on the server; references | compose-api | planned |
-| 4 | BioModels and biosimulations.org source routes, cached; run shortcuts; the curated routes on the same path | compose-api | planned |
+| 3 | `POST /sedml/run` and `/sedml/preview`; the `sedml-omex` and `input` datasets; comparisons computed on the server | compose-api | in review |
+| 4 | BioModels and biosimulations.org source routes, cached; run shortcuts; references (original results as CSV) and interpolation between time grids; the curated routes on the same path | compose-api | planned |
 | 5 | Web app: ad-hoc SED-ML page, sources, a Plotly viewer, the comparison page | compose-api `webapp/` | planned |
 | 6 | Regression and reproducibility suites, rerun on a schedule, with their pages | compose-api | planned |
 
@@ -123,6 +123,30 @@ goes into the shared image) and `manifest.yaml` (what is admitted) from one list
 - What the generic solvers do, found while building (process-bigraph-lang `docs/v2/sedml-plan.md`): they share one
   face, start at time 0, take points not steps and return species only; process-bigraph 1.0.5 runs steps when the
   composite is built; bigraph-schema 1.0 drops new keys on a `map` update, so the data store overwrites.
+
+## Phase 3: what exists after it
+
+- **The translator runs in its own environment.** process-bigraph-lang needs bigraph-schema 1.6; this service's
+  environment has pbest's 1.0. `compose_api/sedml/translator.py` runs its CLI (`sedml describe`, `sedml translate`)
+  with `settings.pblang_python` (`.pblang/`, made by `make pblang` and by the API image from
+  `compose_api/sedml/pblang-requirements.txt`) and reads what it writes: one archive per task and solver, the
+  template text, `findings.json`.
+- **`POST /sedml/preview`** (an archive, optional `solvers`): each task's template, the solvers that accept it and
+  those refused, its reports, and every finding. Nothing runs.
+- **`POST /sedml/run`** (an archive; `solvers`, `task`, `tags`, `description`, tolerances): per accepted task, a
+  comparison and one run per accepting solver, through the same submission check and `run_simulation` as any
+  upload. Each run is labelled `source`, `environment`, `solver`, `sedml_task`, `comparison`; its input is the
+  translated archive and it carries the original (`SimulationRequest.source_file_path`), uploaded beside the input
+  as `source.omex` and announced by the job script as a **`sedml-omex`** dataset. A task no solver accepts is a 400
+  with the findings.
+- **`GET /comparisons`, `GET /comparisons/{id}`**: a comparison's members and their states. When every member has
+  finished, the comparison reads each member's report CSVs from its experiment directory, scores every data set
+  label for every solver pair (`compose_api/sedml/compare.py`, the platform's score), stores the result and its
+  status (`complete`, or `incomplete` when a member did not complete), and says whether every pair is `close`.
+  Columns of different lengths are reported, not scored: interpolation onto a common grid comes with references in
+  phase 4.
+- Tables `comparison` and `comparison_member` (created at startup). CLI: `sedml preview|run`,
+  `comparisons list|show`.
 
 ## Data model (phase 0, phase 3)
 

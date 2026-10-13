@@ -416,6 +416,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sedml/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Translate a SED-ML archive without running it: its tasks, and what each solver would run or why not */
+        post: operations["preview-sedml"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sedml/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run each task of a SED-ML archive on several solvers, one run per solver, grouped by a comparison */
+        post: operations["run-sedml"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/comparisons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List comparisons, newest first */
+        get: operations["list-comparisons"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/comparisons/{comparison_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One comparison: its runs, and per report and data set each solver pair's score */
+        get: operations["get-comparison"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -487,6 +555,14 @@ export interface components {
             /** Database Id */
             database_id: number;
         };
+        /** Body_preview-sedml */
+        "Body_preview-sedml": {
+            /**
+             * Archive
+             * Format: binary
+             */
+            archive: string;
+        };
         /** Body_run-copasi */
         "Body_run-copasi": {
             /**
@@ -494,6 +570,14 @@ export interface components {
              * Format: binary
              */
             sbml: string;
+        };
+        /** Body_run-sedml */
+        "Body_run-sedml": {
+            /**
+             * Archive
+             * Format: binary
+             */
+            archive: string;
         };
         /** Body_run-simulation */
         "Body_run-simulation": {
@@ -538,6 +622,63 @@ export interface components {
             reviewer?: string | null;
             /** Environments */
             environments?: components["schemas"]["EntryEnvironment"][];
+        };
+        /**
+         * Comparison
+         * @description One SED-ML task run on several solvers. `result` is filled once every member has finished: per report and
+         *     data set label, each solver pair's score and whether it is close.
+         */
+        Comparison: {
+            /** Comparison Id */
+            comparison_id: number;
+            /** Created At */
+            created_at?: string | null;
+            /** Name */
+            name: string;
+            /** Source */
+            source: string;
+            /** Sedml */
+            sedml: string;
+            /** Task */
+            task: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "running" | "complete" | "incomplete";
+            /** Settings */
+            settings: {
+                [key: string]: unknown;
+            };
+            /** Members */
+            members: components["schemas"]["ComparisonMember"][];
+            /** Result */
+            result?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Close
+             * @description every compared data set close, every member completed
+             */
+            close?: boolean | null;
+        };
+        /** ComparisonMember */
+        ComparisonMember: {
+            /** Solver */
+            solver: string;
+            /** Simulation Id */
+            simulation_id: number;
+            /** Status */
+            status?: string | null;
+        };
+        /** ComparisonPage */
+        ComparisonPage: {
+            /** Comparisons */
+            comparisons: components["schemas"]["Comparison"][];
+            /** Total */
+            total: number;
+            /** Next Offset */
+            next_offset?: number | null;
         };
         /**
          * ContainerizationEngine
@@ -877,6 +1018,71 @@ export interface components {
             trace_id: string | null;
             /** Roots */
             roots: components["schemas"]["SpanTree"][];
+        };
+        /**
+         * SedmlFinding
+         * @description A finding of the translation (process-bigraph-lang's `X4xx`) or of the checker on a solver's instance.
+         */
+        SedmlFinding: {
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "error" | "warning" | "info";
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Solver */
+            solver?: string | null;
+            /** Task */
+            task?: string | null;
+            /** Path */
+            path?: string | null;
+        };
+        /** SedmlPreview */
+        SedmlPreview: {
+            /** Source */
+            source: string;
+            /** Tasks */
+            tasks: components["schemas"]["SedmlTask"][];
+            /** Findings */
+            findings: components["schemas"]["SedmlFinding"][];
+        };
+        /** SedmlRunResult */
+        SedmlRunResult: {
+            /** Comparisons */
+            comparisons: components["schemas"]["Comparison"][];
+            /** Findings */
+            findings: components["schemas"]["SedmlFinding"][];
+        };
+        /**
+         * SedmlTask
+         * @description One SED-ML task: its translation's template text, the solvers that accept it, and its reports and plots.
+         */
+        SedmlTask: {
+            /** Sedml */
+            sedml: string;
+            /** Task */
+            task: string;
+            /** Name */
+            name: string;
+            /** Template */
+            template: string;
+            /**
+             * Solvers
+             * @description the solvers whose instance compiled
+             */
+            solvers: string[];
+            /**
+             * Refused
+             * @description the solvers refused by an error finding
+             */
+            refused?: string[];
+            /** Reports */
+            reports?: string[];
+            /** Plots */
+            plots?: string[];
         };
         /**
          * SimulationDetail
@@ -1865,6 +2071,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Solver"][];
+                };
+            };
+        };
+    };
+    "preview-sedml": {
+        parameters: {
+            query?: {
+                /** @description Solvers to run (registry/solvers.yaml); all when omitted */
+                solvers?: string[] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview-sedml"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedmlPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "run-sedml": {
+        parameters: {
+            query?: {
+                /** @description Solvers to run (registry/solvers.yaml); all when omitted */
+                solvers?: string[] | null;
+                /** @description Only these SED-ML task ids; all when omitted */
+                task?: string[] | null;
+                /** @description Tags for every run */
+                tags?: string[] | null;
+                description?: string | null;
+                rel_tol?: number;
+                abs_tol_min?: number;
+                abs_tol_scale?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_run-sedml"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedmlRunResult"];
+                };
+            };
+            /** @description Not an archive, an unknown solver, a bad tag, or no task any solver accepted */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "list-comparisons": {
+        parameters: {
+            query?: {
+                /** @description Only this source, e.g. upload:x.omex or biomodels:BIOMD… */
+                source?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComparisonPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "get-comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comparison_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Comparison"];
+                };
+            };
+            /** @description No such comparison */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

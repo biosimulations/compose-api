@@ -93,6 +93,8 @@ jobs:
           tar -C /tmp -xzf /tmp/kustomize.tar.gz
           sudo install /tmp/kustomize /usr/local/bin/kustomize
 
+      - name: Install process-bigraph-lang in its own environment (SED-ML translation, docs/plan-sedml.md)
+        run: make pblang
       - name: Run the tests that need no scheduler
         run: uv run python -m pytest tests -m "not slurm" --cov --cov-config=pyproject.toml --cov-report=xml
 

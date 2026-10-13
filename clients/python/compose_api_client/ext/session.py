@@ -47,16 +47,21 @@ from compose_api_client.api.results import (
     get_simulations_status_batch,
     get_simulator_build_status,
 )
+from compose_api_client.api.sed_ml import get_comparison, list_comparisons, preview_sedml, run_sedml
 from compose_api_client.api.simulation import run_simulation
 from compose_api_client.api.simulations import get_simulation, list_simulations
 from compose_api_client.ext.errors import ApiTimeout, raise_for
 from compose_api_client.models import (
     BiGraphProcess,
     BiGraphStep,
+    BodyPreviewSedml,
     BodyRunCopasi,
+    BodyRunSedml,
     BodyRunSimulation,
     BodyRunTellurium,
     CatalogEntry,
+    Comparison,
+    ComparisonPage,
     Dataset,
     DatasetPage,
     EnvironmentSummary,
@@ -67,6 +72,8 @@ from compose_api_client.models import (
     RunEvent,
     RunEventPage,
     RunTraceTree,
+    SedmlPreview,
+    SedmlRunResult,
     SimulationDetail,
     SimulationExperiment,
     SimulationPage,
@@ -317,6 +324,47 @@ class ComposeSession:
             client=self.client, **_simulation_filters(status, simulator, since, labels, tags, limit, offset)
         )
         return _parsed(r)  # type: ignore[no-any-return]
+
+    # -- SED-ML -----------------------------------------------------------------------------------------------------
+
+    def sedml_preview(self, archive: FileSource, *, solvers: Sequence[str] = ()) -> SedmlPreview:
+        """Translate a SED-ML archive without running it: its tasks, and what each solver would run or why not."""
+        r = preview_sedml.sync_detailed(
+            client=self.client,
+            body=BodyPreviewSedml(archive=_file(archive)),
+            solvers=list(solvers) if solvers else UNSET,
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    def sedml_run(
+        self,
+        archive: FileSource,
+        *,
+        solvers: Sequence[str] = (),
+        tasks: Sequence[str] = (),
+        tags: Sequence[str] = (),
+        description: str | None = None,
+    ) -> SedmlRunResult:
+        """Run each task of a SED-ML archive once per solver; one comparison per task."""
+        r = run_sedml.sync_detailed(
+            client=self.client,
+            body=BodyRunSedml(archive=_file(archive)),
+            solvers=list(solvers) if solvers else UNSET,
+            task=list(tasks) if tasks else UNSET,
+            tags=list(tags) if tags else UNSET,
+            description=description if description is not None else UNSET,
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    def comparisons(self, *, source: str | None = None, limit: int = 25, offset: int = 0) -> ComparisonPage:
+        r = list_comparisons.sync_detailed(
+            client=self.client, source=source if source is not None else UNSET, limit=limit, offset=offset
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    def comparison(self, comparison_id: int) -> Comparison:
+        """One comparison: its runs, and per report and data set each solver pair's score once all have finished."""
+        return _parsed(get_comparison.sync_detailed(comparison_id, client=self.client))  # type: ignore[no-any-return]
 
     def simulation(self, simulation_id: int) -> SimulationDetail:
         """One simulation: its latest SLURM job and how many events and datasets its run recorded."""
@@ -607,6 +655,47 @@ class AsyncComposeSession:
             client=self.client, **_simulation_filters(status, simulator, since, labels, tags, limit, offset)
         )
         return _parsed(r)  # type: ignore[no-any-return]
+
+    # -- SED-ML -----------------------------------------------------------------------------------------------------
+
+    async def sedml_preview(self, archive: FileSource, *, solvers: Sequence[str] = ()) -> SedmlPreview:
+        """Translate a SED-ML archive without running it: its tasks, and what each solver would run or why not."""
+        r = await preview_sedml.asyncio_detailed(
+            client=self.client,
+            body=BodyPreviewSedml(archive=_file(archive)),
+            solvers=list(solvers) if solvers else UNSET,
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    async def sedml_run(
+        self,
+        archive: FileSource,
+        *,
+        solvers: Sequence[str] = (),
+        tasks: Sequence[str] = (),
+        tags: Sequence[str] = (),
+        description: str | None = None,
+    ) -> SedmlRunResult:
+        """Run each task of a SED-ML archive once per solver; one comparison per task."""
+        r = await run_sedml.asyncio_detailed(
+            client=self.client,
+            body=BodyRunSedml(archive=_file(archive)),
+            solvers=list(solvers) if solvers else UNSET,
+            task=list(tasks) if tasks else UNSET,
+            tags=list(tags) if tags else UNSET,
+            description=description if description is not None else UNSET,
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    async def comparisons(self, *, source: str | None = None, limit: int = 25, offset: int = 0) -> ComparisonPage:
+        r = await list_comparisons.asyncio_detailed(
+            client=self.client, source=source if source is not None else UNSET, limit=limit, offset=offset
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    async def comparison(self, comparison_id: int) -> Comparison:
+        """One comparison: its runs, and per report and data set each solver pair's score once all have finished."""
+        return _parsed(await get_comparison.asyncio_detailed(comparison_id, client=self.client))  # type: ignore[no-any-return]
 
     async def simulation(self, simulation_id: int) -> SimulationDetail:
         return _parsed(await get_simulation.asyncio_detailed(simulation_id, client=self.client))  # type: ignore[no-any-return]

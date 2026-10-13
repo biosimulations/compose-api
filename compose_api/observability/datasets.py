@@ -133,7 +133,9 @@ def normalize_path(uri: str) -> str | None:
 INPUT_KIND = "input"
 
 #: Every kind :func:`infer_kind` can give, and the input's; the web UI's kind filter lists them (``/webapp/config``).
-DATASET_KINDS = sorted({*_KINDS.values(), "file", INPUT_KIND})
+#: A SED-ML run's original archive, announced beside its input (``announce_source``; docs/plan-sedml.md, D6).
+SEDML_SOURCE_KIND = "sedml-omex"
+DATASET_KINDS = sorted({*_KINDS.values(), "file", INPUT_KIND, SEDML_SOURCE_KIND})
 
 
 def infer_kind(path: str) -> str:
