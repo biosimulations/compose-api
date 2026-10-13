@@ -671,6 +671,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/suites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The suites */
+        get: operations["list-suites"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/suites/{name}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A suite's runs, newest first */
+        get: operations["list-suite-runs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/suites/{name}/runs/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One suite run: per source, agreement, references, and drift from the baseline run */
+        get: operations["get-suite-run"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/suites/{name}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run every source of the suite on its solvers (submitted in the background) */
+        post: operations["run-suite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -983,6 +1051,18 @@ export interface components {
             next_offset?: number | null;
         };
         /**
+         * Drift
+         * @description One solver's result against its own result in the suite's baseline run.
+         */
+        Drift: {
+            /** Close */
+            close: boolean | null;
+            /** Worst Label */
+            worst_label?: string | null;
+            /** Worst Score */
+            worst_score?: number | string | null;
+        };
+        /**
          * EntryEnvironment
          * @description An environment that provides some of a registry entry's classes, and how many.
          */
@@ -1038,6 +1118,15 @@ export interface components {
             errors: number;
             /** Entries */
             entries: components["schemas"]["EntryRef"][];
+        };
+        /** ExpectedFailure */
+        ExpectedFailure: {
+            /** Source */
+            source: string;
+            /** Solver */
+            solver?: string | null;
+            /** Reason */
+            reason: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1499,6 +1588,102 @@ export interface components {
             events?: components["schemas"]["RunEvent"][];
             /** Children */
             children?: components["schemas"]["SpanTree"][];
+        };
+        /** Suite */
+        Suite: {
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Sources */
+            sources: string[];
+            /** Solvers */
+            solvers?: string[] | null;
+            tolerances?: components["schemas"]["Tolerances"];
+            /**
+             * Baseline
+             * @description the accepted suite run that later runs are compared with
+             */
+            baseline?: number | null;
+            /** Expected */
+            expected?: components["schemas"]["ExpectedFailure"][];
+        };
+        /** SuiteRunInfo */
+        SuiteRunInfo: {
+            /** Number */
+            number: number;
+            /** Created At */
+            created_at: string | null;
+            /** Status */
+            status: string;
+        };
+        /** SuiteRunRow */
+        SuiteRunRow: {
+            /** Source */
+            source: string;
+            /** Task */
+            task?: string | null;
+            /** Comparison Id */
+            comparison_id?: number | null;
+            /** Status */
+            status: string;
+            /** Close */
+            close?: boolean | null;
+            /** Close To References */
+            close_to_references?: boolean | null;
+            /** Worst Label */
+            worst_label?: string | null;
+            /** Worst Score */
+            worst_score?: number | string | null;
+            /** Drift */
+            drift?: {
+                [key: string]: components["schemas"]["Drift"];
+            } | null;
+            /** Expected */
+            expected?: string | null;
+            /** Failure */
+            failure?: string | null;
+        };
+        /** SuiteRunView */
+        SuiteRunView: {
+            /** Suite */
+            suite: string;
+            /** Number */
+            number: number;
+            /** Created At */
+            created_at: string | null;
+            /** Status */
+            status: string;
+            /** Baseline */
+            baseline: number | null;
+            /** Rows */
+            rows: components["schemas"]["SuiteRunRow"][];
+            /** Summary */
+            summary: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * Tolerances
+         * @description The platform's closeness score: close when `max |a-b| / (atol + rtol*|b|) < 1`, with
+         *     `atol = max(abs_tol_min, max|a|*abs_tol_scale, max|b|*abs_tol_scale)` (docs/plan-sedml.md, D4).
+         */
+        Tolerances: {
+            /**
+             * Rel Tol
+             * @default 0.0001
+             */
+            rel_tol: number;
+            /**
+             * Abs Tol Min
+             * @default 0.001
+             */
+            abs_tol_min: number;
+            /**
+             * Abs Tol Scale
+             * @default 0.00001
+             */
+            abs_tol_scale: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -2973,6 +3158,141 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    "list-suites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suite"][];
+                };
+            };
+        };
+    };
+    "list-suite-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuiteRunInfo"][];
+                };
+            };
+            /** @description No such suite */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "get-suite-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuiteRunView"];
+                };
+            };
+            /** @description No such suite or run */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "run-suite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuiteRunInfo"];
+                };
+            };
+            /** @description No such suite */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

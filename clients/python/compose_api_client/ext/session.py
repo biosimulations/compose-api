@@ -68,6 +68,7 @@ from compose_api_client.api.sources import (
     search_biomodels,
     search_biosimulations_projects,
 )
+from compose_api_client.api.suites import get_suite_run, list_suite_runs, list_suites, run_suite
 from compose_api_client.ext.errors import ApiTimeout, raise_for
 from compose_api_client.models import (
     BiGraphProcess,
@@ -100,6 +101,9 @@ from compose_api_client.models import (
     SimulationExperiment,
     SimulationPage,
     Solver,
+    Suite,
+    SuiteRunInfo,
+    SuiteRunView,
 )
 from compose_api_client.types import UNSET, File, Response
 
@@ -436,6 +440,22 @@ class ComposeSession:
             tags=list(tags) if tags else UNSET,
         )
         return _parsed(r)  # type: ignore[no-any-return]
+
+    # -- suites -----------------------------------------------------------------------------------------------------
+
+    def suites(self) -> list[Suite]:
+        return list(_parsed(list_suites.sync_detailed(client=self.client)))
+
+    def suite_runs(self, name: str) -> list[SuiteRunInfo]:
+        return list(_parsed(list_suite_runs.sync_detailed(name, client=self.client)))
+
+    def suite_run(self, name: str, number: int) -> SuiteRunView:
+        """One suite run: per source, agreement, references, and drift from the baseline run."""
+        return _parsed(get_suite_run.sync_detailed(name, number, client=self.client))  # type: ignore[no-any-return]
+
+    def run_suite(self, name: str) -> SuiteRunInfo:
+        """Run every source of the suite (submitted in the background); the new run's number."""
+        return _parsed(run_suite.sync_detailed(name, client=self.client))  # type: ignore[no-any-return]
 
     def comparisons(self, *, source: str | None = None, limit: int = 25, offset: int = 0) -> ComparisonPage:
         r = list_comparisons.sync_detailed(
@@ -833,6 +853,22 @@ class AsyncComposeSession:
             tags=list(tags) if tags else UNSET,
         )
         return _parsed(r)  # type: ignore[no-any-return]
+
+    # -- suites -----------------------------------------------------------------------------------------------------
+
+    async def suites(self) -> list[Suite]:
+        return list(_parsed(await list_suites.asyncio_detailed(client=self.client)))
+
+    async def suite_runs(self, name: str) -> list[SuiteRunInfo]:
+        return list(_parsed(await list_suite_runs.asyncio_detailed(name, client=self.client)))
+
+    async def suite_run(self, name: str, number: int) -> SuiteRunView:
+        """One suite run: per source, agreement, references, and drift from the baseline run."""
+        return _parsed(await get_suite_run.asyncio_detailed(name, number, client=self.client))  # type: ignore[no-any-return]
+
+    async def run_suite(self, name: str) -> SuiteRunInfo:
+        """Run every source of the suite (submitted in the background); the new run's number."""
+        return _parsed(await run_suite.asyncio_detailed(name, client=self.client))  # type: ignore[no-any-return]
 
     async def comparisons(self, *, source: str | None = None, limit: int = 25, offset: int = 0) -> ComparisonPage:
         r = await list_comparisons.asyncio_detailed(

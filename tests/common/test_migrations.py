@@ -10,11 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from compose_api.db.db_utils import DeclarativeTableBase, create_db
 
-HEAD = "3f9a6c1e7b24"
+HEAD = "7c2d4e9a1b38"
 
 NEW_COLUMNS = {
     "hpcrun": {"trace_id", "events_cursor", "last_event_at", "exit_code"},
     "simulation": {"owner_sub", "visibility", "dispatch_heartbeat_at", "labels", "tags", "description"},
+    "comparison": {"collection", "suite_run"},
 }
 
 

@@ -65,6 +65,8 @@ async def submit(
     tolerances: Tolerances,
     background_tasks: BackgroundTasks,
     references: dict[str, dict[str, dict[str, list[float]]]] | None = None,
+    collection: str | None = None,
+    suite_run: int | None = None,
 ) -> list[int]:
     """One comparison per accepted task (all, or those named), one run per solver that accepted it; the ids.
     `references[origin]["<sedml>/<report>"]` (the archive's own `reports.h5`, a biosimulations.org run's) are stored
@@ -96,6 +98,8 @@ async def submit(
                 "reports": task.reports,
                 "solvers": list(task.archives),
             },
+            collection=collection,
+            suite_run=suite_run,
         )
         for origin, by_output in references.items():
             matched = {
@@ -124,6 +128,8 @@ async def submit(
                     solver=solver_id,
                     sedml_task=task.task,
                     comparison=str(comparison_id),
+                    collection=collection,
+                    suite_run=str(suite_run) if suite_run is not None else None,
                     **extra,
                 ),
                 tags=tags,

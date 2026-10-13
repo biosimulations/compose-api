@@ -1552,6 +1552,116 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /suites:
+    get:
+      tags:
+      - Suites
+      summary: The suites
+      operationId: list-suites
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Suite'
+                type: array
+                title: Response List-Suites
+  /suites/{name}/runs:
+    get:
+      tags:
+      - Suites
+      summary: A suite's runs, newest first
+      operationId: list-suite-runs
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SuiteRunInfo'
+                title: Response List-Suite-Runs
+        '404':
+          description: No such suite
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /suites/{name}/runs/{number}:
+    get:
+      tags:
+      - Suites
+      summary: 'One suite run: per source, agreement, references, and drift from the
+        baseline run'
+      operationId: get-suite-run
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Number
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiteRunView'
+        '404':
+          description: No such suite or run
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /suites/{name}/run:
+    post:
+      tags:
+      - Suites
+      summary: Run every source of the suite on its solvers (submitted in the background)
+      operationId: run-suite
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiteRunInfo'
+        '404':
+          description: No such suite
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /health:
     get:
       tags:
@@ -2080,6 +2190,30 @@ components:
       - datasets
       - total
       title: DatasetPage
+    Drift:
+      properties:
+        close:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Close
+        worst_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Worst Label
+        worst_score:
+          anyOf:
+          - type: number
+          - type: string
+          - type: 'null'
+          title: Worst Score
+      type: object
+      required:
+      - close
+      title: Drift
+      description: One solver's result against its own result in the suite's baseline
+        run.
     EntryEnvironment:
       properties:
         name:
@@ -2170,6 +2304,24 @@ components:
       - errors
       - entries
       title: EnvironmentSummary
+    ExpectedFailure:
+      properties:
+        source:
+          type: string
+          title: Source
+        solver:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Solver
+        reason:
+          type: string
+          title: Reason
+      type: object
+      required:
+      - source
+      - reason
+      title: ExpectedFailure
     HTTPValidationError:
       properties:
         detail:
@@ -3044,6 +3196,192 @@ components:
       title: SpanTree
       description: A span with its own events (those whose ``span_id`` is the span's)
         and its children, by start time.
+    Suite:
+      properties:
+        name:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          title: Name
+        description:
+          type: string
+          title: Description
+        sources:
+          items:
+            type: string
+          type: array
+          minItems: 1
+          title: Sources
+        solvers:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Solvers
+        tolerances:
+          $ref: '#/components/schemas/Tolerances'
+        baseline:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Baseline
+          description: the accepted suite run that later runs are compared with
+        expected:
+          items:
+            $ref: '#/components/schemas/ExpectedFailure'
+          type: array
+          title: Expected
+      type: object
+      required:
+      - name
+      - description
+      - sources
+      title: Suite
+    SuiteRunInfo:
+      properties:
+        number:
+          type: integer
+          title: Number
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+        status:
+          type: string
+          title: Status
+      type: object
+      required:
+      - number
+      - created_at
+      - status
+      title: SuiteRunInfo
+    SuiteRunRow:
+      properties:
+        source:
+          type: string
+          title: Source
+        task:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task
+        comparison_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Comparison Id
+        status:
+          type: string
+          title: Status
+        close:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Close
+        close_to_references:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Close To References
+        worst_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Worst Label
+        worst_score:
+          anyOf:
+          - type: number
+          - type: string
+          - type: 'null'
+          title: Worst Score
+        drift:
+          anyOf:
+          - additionalProperties:
+              $ref: '#/components/schemas/Drift'
+            type: object
+          - type: 'null'
+          title: Drift
+        expected:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Expected
+        failure:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Failure
+      type: object
+      required:
+      - source
+      - status
+      title: SuiteRunRow
+    SuiteRunView:
+      properties:
+        suite:
+          type: string
+          title: Suite
+        number:
+          type: integer
+          title: Number
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+        status:
+          type: string
+          title: Status
+        baseline:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Baseline
+        rows:
+          items:
+            $ref: '#/components/schemas/SuiteRunRow'
+          type: array
+          title: Rows
+        summary:
+          additionalProperties:
+            type: integer
+          type: object
+          title: Summary
+      type: object
+      required:
+      - suite
+      - number
+      - created_at
+      - status
+      - baseline
+      - rows
+      - summary
+      title: SuiteRunView
+    Tolerances:
+      properties:
+        rel_tol:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Rel Tol
+          default: 0.0001
+        abs_tol_min:
+          type: number
+          minimum: 0.0
+          title: Abs Tol Min
+          default: 0.001
+        abs_tol_scale:
+          type: number
+          minimum: 0.0
+          title: Abs Tol Scale
+          default: 1.0e-05
+      type: object
+      title: Tolerances
+      description: 'The platform''s closeness score: close when `max |a-b| / (atol
+        + rtol*|b|) < 1`, with
+
+        `atol = max(abs_tol_min, max|a|*abs_tol_scale, max|b|*abs_tol_scale)` (docs/plan-sedml.md,
+        D4).'
     ValidationError:
       properties:
         loc:

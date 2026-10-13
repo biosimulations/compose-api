@@ -186,6 +186,7 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 * `comparisons`: A SED-ML task's runs on several solvers,...
 * `biomodels`: EBI BioModels: search, describe, download,...
 * `biosimulations`: biosimulations.org projects: search,...
+* `suites`: Regression and reproducibility suites of...
 
 ## `compose-api health`
 
@@ -1188,5 +1189,99 @@ $ compose-api biosimulations run [OPTIONS] PROJECT_ID
 
 * `-s, --solver TEXT`: A solver id (repeatable); all when omitted.
 * `-t, --tag TEXT`: A tag for every run (repeatable).
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+## `compose-api suites`
+
+Regression and reproducibility suites of SED-ML models.
+
+**Usage**:
+
+```console
+$ compose-api suites [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `list`: The suites: their sources, solvers and...
+* `runs`: A suite's runs, newest first.
+* `show`: One suite run: per source, whether the...
+* `run`: Run every source of the suite on its...
+
+### `compose-api suites list`
+
+The suites: their sources, solvers and accepted baseline run.
+
+**Usage**:
+
+```console
+$ compose-api suites list [OPTIONS]
+```
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api suites runs`
+
+A suite's runs, newest first.
+
+**Usage**:
+
+```console
+$ compose-api suites runs [OPTIONS] NAME
+```
+
+**Arguments**:
+
+* `NAME`: The suite, e.g. biomodels-ode-sample.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api suites show`
+
+One suite run: per source, whether the solvers agree, match references, and drifted from the baseline.
+
+**Usage**:
+
+```console
+$ compose-api suites show [OPTIONS] NAME NUMBER
+```
+
+**Arguments**:
+
+* `NAME`: The suite, e.g. biomodels-ode-sample.  [required]
+* `NUMBER`: The run's number.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api suites run`
+
+Run every source of the suite on its solvers; prints the new run's number.
+
+**Usage**:
+
+```console
+$ compose-api suites run [OPTIONS] NAME
+```
+
+**Arguments**:
+
+* `NAME`: The suite, e.g. biomodels-ode-sample.  [required]
+
+**Options**:
+
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.

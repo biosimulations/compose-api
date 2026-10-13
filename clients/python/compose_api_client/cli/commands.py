@@ -104,6 +104,8 @@ biosimulations_app = typer.Typer(
 )
 app.add_typer(biomodels_app, name="biomodels")
 app.add_typer(biosimulations_app, name="biosimulations")
+suites_app = typer.Typer(help="Regression and reproducibility suites of SED-ML models.", no_args_is_help=True)
+app.add_typer(suites_app, name="suites")
 
 
 @app.callback()
@@ -1159,6 +1161,82 @@ def comparisons_series(
         for name, columns in data[kind].items()
     ]
     emit(settings.output, rows, ["from", "kind", "labels"])
+
+
+# -- suites --------------------------------------------------------------------------------------------------------
+
+SuiteName = Annotated[str, typer.Argument(help="The suite, e.g. biomodels-ode-sample.")]
+
+
+@suites_app.command("list")
+@claims("suites list", "list-suites")
+@handled
+def suites_list(ctx: typer.Context) -> None:
+    """The suites: their sources, solvers and accepted baseline run."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        found = s.suites()
+    rows = [
+        {
+            "name": x.name,
+            "sources": len(x.sources),
+            "solvers": ", ".join(_listed(x.solvers)) or "all",
+            "baseline": x.baseline if isinstance(x.baseline, int) else None,
+        }
+        for x in found
+    ]
+    emit(settings.output, rows if settings.output is not Output.JSON else [x.to_dict() for x in found],
+         ["name", "sources", "solvers", "baseline"])  # fmt: skip
+
+
+@suites_app.command("runs")
+@claims("suites runs", "list-suite-runs")
+@handled
+def suites_runs(ctx: typer.Context, name: SuiteName) -> None:
+    """A suite's runs, newest first."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, [r.to_dict() for r in s.suite_runs(name)], ["number", "created_at", "status"])
+
+
+@suites_app.command("show")
+@claims("suites show", "get-suite-run")
+@handled
+def suites_show(
+    ctx: typer.Context, name: SuiteName, number: Annotated[int, typer.Argument(help="The run's number.")]
+) -> None:
+    """One suite run: per source, whether the solvers agree, match references, and drifted from the baseline."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        view = s.suite_run(name, number)
+    if settings.output is Output.JSON:
+        emit(Output.JSON, view.to_dict())
+        return
+    rows = [
+        {
+            "source": r.get("source"),
+            "task": r.get("task"),
+            "status": r.get("status"),
+            "agree": r.get("close"),
+            "references": r.get("close_to_references"),
+            "worst": r.get("worst_label"),
+            "drift": ", ".join(f"{k}:{'ok' if v.get('close') else 'DRIFT'}" for k, v in (r.get("drift") or {}).items())
+            or None,
+            "note": r.get("expected") or r.get("failure"),
+        }
+        for r in view.to_dict()["rows"]
+    ]
+    emit(settings.output, rows, ["source", "task", "status", "agree", "references", "worst", "drift", "note"])
+
+
+@suites_app.command("run")
+@claims("suites run", "run-suite")
+@handled
+def suites_run(ctx: typer.Context, name: SuiteName) -> None:
+    """Run every source of the suite on its solvers; prints the new run's number."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.run_suite(name).to_dict())
 
 
 @app.command("build-log")

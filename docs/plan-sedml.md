@@ -1,6 +1,6 @@
 # SED-ML models as process-bigraph runs across solvers, compared
 
-**Status (2026-10-13): phases 0 to 2 merged; phases 3 to 5 in review.** One PR per phase and repository, merged with a merge commit on
+**Status (2026-10-13): phases 0 to 5 merged and released in 0.7.18; phase 6 in review.** One PR per phase and repository, merged with a merge commit on
 the maintainer's word; each PR updates the table below. A merge deploys nothing by itself: the next release's image
 ships it (CLAUDE.md, "Deploys are GitOps"). The language side is planned in process-bigraph-lang's
 [`docs/v2/sedml-plan.md`](https://github.com/biosimulations/process-bigraph-lang/blob/main/docs/v2/sedml-plan.md).
@@ -10,10 +10,10 @@ ships it (CLAUDE.md, "Deploys are GitOps"). The language side is planned in proc
 | 0 | Labels, tags and a description on simulations, and filters on them; the concepts below documented; `GET /registry/entries` and `/ui/catalog` rebuilt on it | compose-api | merged (#283) |
 | 1 | SED-ML read into a `.pblang` template per task with the solver as an open site, one checked instance per solver; plots built at run time; release 0.3.0 | process-bigraph-lang | merged (#58, #59, #60); released 0.3.0, 0.3.1 |
 | 2 | SED-ML adapter steps around generic COPASI and Tellurium steps; `solvers.yaml` and `GET /registry/solvers` | biosim-toolkit 0.1.0 (released), compose-api | merged (#284) |
-| 3 | `POST /sedml/run` and `/sedml/preview`; the `sedml-omex` and `input` datasets; comparisons computed on the server | compose-api | in review |
-| 4 | BioModels and biosimulations.org source routes, cached; run shortcuts; references (original results); the curated routes on the same path | compose-api | in review (the curated routes and interpolation deferred) |
-| 5 | Web app: ad-hoc SED-ML page, sources, a Plotly viewer, the comparison page | compose-api `webapp/` | in review |
-| 6 | Regression and reproducibility suites, rerun on a schedule, with their pages | compose-api | planned |
+| 3 | `POST /sedml/run` and `/sedml/preview`; the `sedml-omex` and `input` datasets; comparisons computed on the server | compose-api | merged (#285) |
+| 4 | BioModels and biosimulations.org source routes, cached; run shortcuts; references (original results); the curated routes on the same path | compose-api | merged (#286; the curated routes and interpolation deferred) |
+| 5 | Web app: ad-hoc SED-ML page, sources, a Plotly viewer, the comparison page | compose-api `webapp/` | merged (#287) |
+| 6 | Regression and reproducibility suites, rerun on a schedule, with their pages | compose-api | in review |
 
 Phases 0, 1 and the inventory that opens phase 2 do not depend on each other. Phase 3 needs 1 and 2.
 
@@ -186,6 +186,31 @@ goes into the shared image) and `manifest.yaml` (what is admitted) from one list
   translation, COPASI and Tellurium outputs from biosim-toolkit's steps, and `compare()` against the project's
   original Tellurium 2.2.1 results. The solvers agree with each other and with the original results (worst score
   0.02, Cdh1).
+
+## Phase 6: what exists after it
+
+- **Suites** are `examples/<name>/suite.yaml` (`compose_api/sedml/suites.py`): sources (`biomodels:<id>`,
+  `biosimulations:<project>`), solvers, tolerances, expected failures (with reasons) and the accepted `baseline` run.
+  Two seeds, chosen by translating candidates on both solvers:
+  - `biomodels-ode-sample`: twenty curated ODE BioModels entries (of BIOMD0000000001-60, 56 translate on both
+    solvers; BIOMD0000000005 has no SED-ML, BIOMD0000000042 asks for a non-ODE algorithm, BIOMD0000000036 was
+    unavailable);
+  - `biosimulations-reference`: ten biosimulations.org projects whose original runs used different simulators
+    (Tellurium, COPASI, AMICI, PySCeS), each compared with its original results.
+- **A suite run** (`POST /suites/{name}/run`, `compose_api/sedml/suite_runs.py`) gets the next number, then fetches,
+  translates and submits every source in the background: one comparison per source and task, labelled
+  `collection=<suite>` and `suite_run=<n>` (columns `comparison.collection`, `comparison.suite_run`, migration
+  `7c2d4e9a1b38`; table `suite_run` with the sources that could not be submitted and why).
+- **Reading a run** (`GET /suites/{name}/runs/{n}`): per source and task, whether the solvers agree, whether they
+  match the references, the worst data set, and, once the suite has a baseline run, each solver's **drift**: its
+  report scored against its own report in the baseline run (same score and tolerances). Expected failures are shown
+  as such. `GET /suites`, `GET /suites/{name}/runs`.
+- **Scheduled**: `.github/workflows/sedml-suites.yml` runs every suite on the deployed service on the first of each
+  month and on demand; the job summary links each run's page. A new baseline is accepted by a pull request setting
+  `baseline` in the suite's file.
+- **Web app**: `/ui/suites`, `/ui/suites/{name}` (runs, and for one run a row per model: agreement, references,
+  worst data set, drift per solver, notes; "Run the suite"). CLI: `suites list|runs|show|run`.
+- An archive without SED-ML is now refused with that reason.
 
 ## Data model (phase 0, phase 3)
 

@@ -23,6 +23,9 @@ class ORMComparison(DeclarativeTableBase):
     settings: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="running")
     result: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    # a suite run's comparison (compose_api/sedml/suites.py): the suite and the run's number
+    collection: Mapped[str | None] = mapped_column(nullable=True, index=True)
+    suite_run: Mapped[int | None] = mapped_column(nullable=True)
 
 
 class ORMComparisonMember(DeclarativeTableBase):
@@ -52,3 +55,17 @@ class ORMComparisonReference(DeclarativeTableBase):
     )
     origin: Mapped[str] = mapped_column(nullable=False)  # biosimulations:<run>, archive
     reports: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+
+class ORMSuiteRun(DeclarativeTableBase):
+    """One run of a suite: its number within the suite, and the sources that could not be submitted, with why."""
+
+    __tablename__ = "suite_run"
+    __table_args__ = (UniqueConstraint("collection", "number", name="uq_suite_run_number"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
+    collection: Mapped[str] = mapped_column(nullable=False, index=True)
+    number: Mapped[int] = mapped_column(nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="submitting")
+    failures: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))

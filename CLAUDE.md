@@ -199,7 +199,8 @@ needs bigraph-schema 1.6, so it is NOT a dependency of this environment: `transl
 `settings.pblang_python` (`.pblang/`; `make pblang`, CI and the API image install `sedml/pblang-requirements.txt`).
 `/sedml/run` submits one run per task and solver (the original archive rides along as `source.omex`, the
 `sedml-omex` dataset) grouped by a `comparison`, computed from the members' report CSVs when all have finished.
-Tests needing the translator skip without `.pblang/`.
+Tests needing the translator skip without `.pblang/`. Suites: `examples/<name>/suite.yaml` (`sedml/suites.py`, `sedml/suite_runs.py`, `/suites`),
+rerun monthly by `.github/workflows/sedml-suites.yml`; a baseline is accepted by a PR setting `baseline`.
 
 **Job tracking.** An `HpcRun` row links a SLURM job id, a `correlation_id`, and a `JobType`
 (`SIMULATION` / `BUILD_CONTAINER`). `JobMonitor` updates status two ways: a 5-second polling loop reconciling
