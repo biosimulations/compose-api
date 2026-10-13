@@ -139,6 +139,9 @@ class Settings(BaseSettings):
     # The web UI's Auth0 Single Page Application (compose_api/api/webapp.py). Not a secret: an SPA has none. The UI
     # offers login only when this and both values above are set; it must be allowed to request auth0_audience.
     auth0_spa_client_id: str = ""
+    # Role name granting read access to every private simulation (compose_api/authorization.py). Empty disables
+    # the admin bypass so the tenant-wide `admin` role does not automatically read private compose-api simulations.
+    admin_role: str = ""
 
     # The static web UI build served at /ui (webapp/, `npm run generate`). Absent: the API runs without a UI.
     webapp_dist_dir: str = f"{REPO_ROOT}/webapp/.output/public"

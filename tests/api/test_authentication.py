@@ -785,7 +785,8 @@ def test_committed_spec_carries_the_optional_bearer() -> None:
     spec = yaml.safe_load(spec_path.read_text())
     assert spec["security"] == [{}, {"BearerAuth": []}]
     assert spec["components"]["securitySchemes"] == app.openapi()["components"]["securitySchemes"]
-    operations = [op for path in spec["paths"].values() for op in path.values()]
+    assert spec["paths"]["/auth/me"]["get"]["security"] == [{"BearerAuth": []}]
+    operations = [op for path, methods in spec["paths"].items() if path != "/auth/me" for op in methods.values()]
     assert all("security" not in op for op in operations), "per-operation security retypes the generated client"
 
 

@@ -18,11 +18,10 @@ from fastapi import Depends, HTTPException, Query
 from sqlalchemy import ColumnElement, or_
 
 from compose_api.authentication import OptionalPrincipal
+from compose_api.config import get_settings
 from compose_api.db.tables.simulator_tables import ORMSimulation
 from compose_api.dependencies import get_required_database_service
 from compose_api.simulation.models import SimulationAccess, Visibility
-
-ADMIN_ROLE = "admin"  # may read every simulation
 
 
 class Caller(Protocol):
@@ -44,18 +43,25 @@ async def get_caller(principal: OptionalPrincipal) -> Caller | None:
 OptionalCaller = Annotated[Caller | None, Depends(get_caller)]
 
 
+def _is_admin(caller: Caller | None) -> bool:
+    if caller is None:
+        return False
+    configured = get_settings().admin_role.strip()
+    return bool(configured) and configured in caller.roles
+
+
 def can_read(caller: Caller | None, simulation: SimulationAccess) -> bool:
-    """The read policy: public simulations to anyone, private ones to their owner and to admins."""
+    """The read policy: public simulations to anyone, private ones to their owner and to configured admins."""
     if simulation.visibility == Visibility.PUBLIC:
         return True
     if caller is None:
         return False
-    return ADMIN_ROLE in caller.roles or (simulation.owner_sub is not None and caller.subject == simulation.owner_sub)
+    return _is_admin(caller) or (simulation.owner_sub is not None and caller.subject == simulation.owner_sub)
 
 
 def readable_clause(caller: Caller | None) -> ColumnElement[bool] | None:
     """:func:`can_read` as a SQL condition on ``simulation``, for listings; None when every simulation is readable."""
-    if caller is not None and ADMIN_ROLE in caller.roles:
+    if _is_admin(caller):
         return None
     public = ORMSimulation.visibility == Visibility.PUBLIC.value
     return public if caller is None else or_(public, ORMSimulation.owner_sub == caller.subject)

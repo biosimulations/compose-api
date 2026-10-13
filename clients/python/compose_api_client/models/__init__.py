@@ -26,6 +26,7 @@ from .comparison_status import ComparisonStatus
 from .containerization_engine import ContainerizationEngine
 from .containerization_file_repr import ContainerizationFileRepr
 from .curation_level import CurationLevel
+from .current_principal_response import CurrentPrincipalResponse
 from .dataset import Dataset
 from .dataset_attributes import DatasetAttributes
 from .dataset_page import DatasetPage
@@ -128,6 +129,7 @@ __all__ = (
     "ContainerizationEngine",
     "ContainerizationFileRepr",
     "CurationLevel",
+    "CurrentPrincipalResponse",
     "Dataset",
     "DatasetAttributes",
     "DatasetPage",

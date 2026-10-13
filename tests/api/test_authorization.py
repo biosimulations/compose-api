@@ -8,15 +8,19 @@ directly.
 
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
+from typing import Any
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from compose_api.api.main import app
-from compose_api.authorization import ADMIN_ROLE, Caller, can_read, get_caller
+from compose_api.authentication import ROLES_CLAIM
+from compose_api.authorization import Caller, can_read, get_caller, readable_clause
+from compose_api.config import override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation.models import JobType, SimulationAccess, SimulationRequest, SimulatorVersion, Visibility
+from tests.fixtures.auth_fixtures import FakeAuth0
 
 
 @dataclass(frozen=True)
@@ -26,7 +30,8 @@ class FakeCaller:
 
 
 ALICE, BOB = FakeCaller("auth0|alice"), FakeCaller("auth0|bob")
-ADMIN = FakeCaller("auth0|root", frozenset({ADMIN_ROLE}))
+ADMIN = FakeCaller("auth0|root", frozenset({"user", "admin"}))
+COMPOSE_ADMIN = FakeCaller("auth0|ops", frozenset({"user", "compose-admin"}))
 
 
 def _access(visibility: Visibility, owner: str | None = "auth0|alice") -> SimulationAccess:
@@ -39,12 +44,34 @@ def test_public_is_readable_by_anyone() -> None:
         assert can_read(caller, _access(Visibility.PUBLIC, owner=None))
 
 
-def test_private_is_readable_by_its_owner_and_admins_only() -> None:
+def test_private_is_owner_only_when_admin_role_is_unset() -> None:
     private = _access(Visibility.PRIVATE)
-    assert can_read(ALICE, private) and can_read(ADMIN, private)
+    unowned = _access(Visibility.PRIVATE, owner=None)
+    assert can_read(ALICE, private)
     assert not can_read(BOB, private) and not can_read(None, private)
-    assert not can_read(ALICE, _access(Visibility.PRIVATE, owner=None))  # an unowned private simulation: admins only
-    assert can_read(ADMIN, _access(Visibility.PRIVATE, owner=None))
+    assert not can_read(ADMIN, private)
+    assert not can_read(ALICE, unowned) and not can_read(ADMIN, unowned)
+    assert readable_clause(None) is not None
+    assert readable_clause(ALICE) is not None
+    assert readable_clause(ADMIN) is not None
+
+
+def test_private_is_readable_by_configured_admin_role() -> None:
+    private = _access(Visibility.PRIVATE)
+    unowned = _access(Visibility.PRIVATE, owner=None)
+    with override_settings(admin_role="admin"):
+        assert can_read(ALICE, private) and can_read(ADMIN, private)
+        assert not can_read(BOB, private) and not can_read(None, private)
+        assert not can_read(ALICE, unowned)
+        assert can_read(ADMIN, unowned)
+        assert readable_clause(ADMIN) is None
+        assert readable_clause(ALICE) is not None
+
+    with override_settings(admin_role="compose-admin"):
+        assert not can_read(ADMIN, private) and not can_read(ADMIN, unowned)
+        assert readable_clause(ADMIN) is not None
+        assert can_read(COMPOSE_ADMIN, private) and can_read(COMPOSE_ADMIN, unowned)
+        assert readable_clause(COMPOSE_ADMIN) is None
 
 
 def test_fake_caller_is_a_caller() -> None:
@@ -92,7 +119,7 @@ async def test_a_private_simulation_is_not_found_except_by_its_owner(
     ]
     ids = [private.database_id, public.database_id]
     try:
-        for caller in (None, BOB):
+        for caller in (None, BOB, ADMIN):
             _as(caller)
             r = await http.get("/results/simulation/status", params={"simulation_id": private.database_id})
             assert r.status_code == 404
@@ -104,8 +131,14 @@ async def test_a_private_simulation_is_not_found_except_by_its_owner(
             r = await http.get("/results/simulation/status", params={"simulation_id": public.database_id})
             assert r.status_code == 200
 
-        for caller in (ALICE, ADMIN):
-            _as(caller)
+        _as(ALICE)
+        r = await http.get("/results/simulation/status", params={"simulation_id": private.database_id})
+        assert r.status_code == 200 and r.json()["trace_id"] == runs[0].trace_id
+        batch = await http.request("GET", "/results/simulations/status/batch", json=ids)
+        assert sorted(run["sim_id"] for run in batch.json()) == sorted(ids)
+
+        with override_settings(admin_role="admin"):
+            _as(ADMIN)
             r = await http.get("/results/simulation/status", params={"simulation_id": private.database_id})
             assert r.status_code == 200 and r.json()["trace_id"] == runs[0].trace_id
             batch = await http.request("GET", "/results/simulations/status/batch", json=ids)
@@ -167,7 +200,7 @@ async def test_a_comparison_of_a_private_simulation_is_not_found_except_by_its_o
     open_one = await cmp_db.insert("public", source, "<sedml/>", "task", settings)
     await cmp_db.add_member(open_one, public.database_id, "copasi")
     try:
-        for caller in (None, BOB):
+        for caller in (None, BOB, ADMIN):  # ADMIN too: admin_role is "" by default (Gate G1)
             _as(caller)
             assert (await http.get(f"/comparisons/{mixed}")).status_code == 404
             assert (await http.get(f"/comparisons/{mixed}/series", params={"report": "r"})).status_code == 404
@@ -176,11 +209,60 @@ async def test_a_comparison_of_a_private_simulation_is_not_found_except_by_its_o
             assert listed["total"] == 1
             assert (await http.get(f"/comparisons/{open_one}")).status_code == 200
 
-        for caller in (ALICE, ADMIN):
+        for caller, admin_role in ((ALICE, ""), (ADMIN, "admin")):  # the owner always; ADMIN once configured
             _as(caller)
-            assert (await http.get(f"/comparisons/{mixed}")).status_code == 200
-            listed = (await http.get("/comparisons", params={"source": source})).json()
-            assert sorted(c["comparison_id"] for c in listed["comparisons"]) == sorted([mixed, open_one])
+            with override_settings(admin_role=admin_role):
+                assert (await http.get(f"/comparisons/{mixed}")).status_code == 200
+                listed = (await http.get("/comparisons", params={"source": source})).json()
+                assert sorted(c["comparison_id"] for c in listed["comparisons"]) == sorted([mixed, open_one])
     finally:
         for sim in (private, public):  # members cascade; the comparisons stay, with no members
             await sim_db.delete_simulation(sim.database_id)
+
+
+@pytest.mark.asyncio
+async def test_tenant_admin_token_does_not_read_private_simulations_unless_configured(
+    authenticated_identity_client: AsyncClient,
+    fake_auth0: FakeAuth0,
+    database_service: DatabaseServiceSQL,
+    simulation_request: SimulationRequest,
+    simulator: SimulatorVersion,
+) -> None:
+    sim_db = database_service.get_simulator_db()
+    private = await sim_db.insert_simulation(
+        sim_request=simulation_request,
+        experiment_id="experiment-authz-g1-private",
+        simulator_version=simulator,
+        owner_sub=ALICE.subject,
+        visibility=Visibility.PRIVATE,
+    )
+    public = await sim_db.insert_simulation(
+        sim_request=simulation_request,
+        experiment_id="experiment-authz-g1-public",
+        simulator_version=simulator,
+    )
+    admin_claims: dict[str, Any] = {ROLES_CLAIM: ["admin"]}
+    token = fake_auth0.token(sub="auth0|tenant-admin", **admin_claims)
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        # /auth/me still reports the raw tenant roles (roles identify, they do not authorize by default).
+        me = await authenticated_identity_client.get("/auth/me", headers=headers)
+        assert me.status_code == 200
+        assert me.json()["roles"] == ["admin", "user"]
+
+        # Default admin_role == "": tenant admin cannot see Alice's private simulation in GET /simulations.
+        listing = await authenticated_identity_client.get("/simulations", headers=headers)
+        assert listing.status_code == 200
+        listed_ids = {row["simulation_id"] for row in listing.json()["simulations"]}
+        assert public.database_id in listed_ids
+        assert private.database_id not in listed_ids
+
+        # When admin_role is explicitly configured, the matching role reads all simulations.
+        with override_settings(admin_role="admin"):
+            listing_admin = await authenticated_identity_client.get("/simulations", headers=headers)
+            assert listing_admin.status_code == 200
+            admin_listed_ids = {row["simulation_id"] for row in listing_admin.json()["simulations"]}
+            assert {public.database_id, private.database_id} <= admin_listed_ids
+    finally:
+        await sim_db.delete_simulation(private.database_id)
+        await sim_db.delete_simulation(public.database_id)

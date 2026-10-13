@@ -1822,6 +1822,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /auth/me:
+    get:
+      tags:
+      - Authentication
+      summary: Get the authenticated caller's identity
+      operationId: get-current-principal
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentPrincipalResponse'
+        '401':
+          description: Missing or invalid bearer credentials
+      security:
+      - BearerAuth: []
   /health:
     get:
       tags:
@@ -2262,6 +2279,43 @@ components:
       title: CurationLevel
       description: 'The curation ladder, lowest first. Order matters: comparisons
         use the declaration order.'
+    CurrentPrincipalResponse:
+      properties:
+        issuer:
+          type: string
+          title: Issuer
+        subject:
+          type: string
+          title: Subject
+        audience:
+          items:
+            type: string
+          type: array
+          title: Audience
+        roles:
+          items:
+            type: string
+          type: array
+          title: Roles
+        scopes:
+          items:
+            type: string
+          type: array
+          title: Scopes
+        permissions:
+          items:
+            type: string
+          type: array
+          title: Permissions
+      type: object
+      required:
+      - issuer
+      - subject
+      - audience
+      - roles
+      - scopes
+      - permissions
+      title: CurrentPrincipalResponse
     Dataset:
       properties:
         id:

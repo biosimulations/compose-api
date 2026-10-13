@@ -5,9 +5,9 @@ from typing import Any, get_type_hints
 
 import httpx
 import pytest
-from compose_api.api.client import AuthenticatedClient
-from compose_api.api.client.api.authentication import get_current_principal
-from compose_api.api.client.models.current_principal_response import CurrentPrincipalResponse
+from compose_api_client import AuthenticatedClient
+from compose_api_client.api.authentication import get_current_principal
+from compose_api_client.models.current_principal_response import CurrentPrincipalResponse
 
 from compose_api.api.main import app
 from compose_api.authentication import ROLES_CLAIM
