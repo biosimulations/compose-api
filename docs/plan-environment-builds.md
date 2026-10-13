@@ -1,12 +1,12 @@
 # Environment builds: jobs and artifacts of their own
 
-**Status (2026-10-13): plan agreed; phase 1 in review.** One PR per phase, merged with a merge commit; each PR updates the
+**Status (2026-10-13): plan agreed; phases 1 and 2 in review.** One PR per phase, merged with a merge commit; each PR updates the
 table below. A merge deploys nothing by itself: the next release's image ships it (CLAUDE.md, "Deploys are GitOps").
 
 | Phase | What | State |
 |---|---|---|
 | 1 | Runs carry their backend and external job id (`hpcrun.backend`, `hpcrun.external_id`); the monitor asks each backend about its own runs | in review |
-| 2 | `environment_image`: an artifact record per built or pulled image (kind, location, digest, size, the run that produced it, available); "built" means an available artifact | planned |
+| 2 | `environment_image`: an artifact record per built or pulled image (kind, location, digest, size, the run that produced it, available); "built" means an available artifact | in review |
 | 3 | The `k8s` build backend: a Kubernetes Job builds the image (privileged, scratch only) and copies it onto the shared filesystem as the service user | planned |
 | 4 | Builds invoked on their own: `POST /environments/{name}/build`, `GET /environments/{name}/images`; a run waits for an in-flight build of its definition instead of starting another | planned |
 | 5 | Publish: an image pushed to a registry, recorded as another artifact; a cluster pulls it instead of building | planned |
@@ -77,6 +77,11 @@ registry environment (environments.yaml: registry_env) ──► its current sim
    stays as the pull's history), and when a build adopts an existing file. "Built" is
    `environment_image(kind=sif, available)`; a verification (`stat` on the mount) marks a missing file unavailable,
    at lookup and on a schedule. A backfill records the `.sif` files already on the store for existing simulators.
+   *As built:* `compose_api/simulation/images.py`. The run path asks `available_sif` (a `stat` through the mount; an
+   unrecorded file is adopted with its sha256, a missing one marked unavailable) instead of the newest build's status;
+   a pull or build that leaves no file fails the dispatch. Verification runs at startup (the backfill) and every
+   `image_verify_interval_seconds` (3600). Where the API does not mount the store, records are trusted as they are.
+   A Docker engine keeps the pull record (`downloaded_containers`) as its test.
 3. **The `k8s` backend.** `compose_api/simulation/build_k8s.py` (the Job of E7, `ghcr.io/apptainer/apptainer:1.3.6`),
    a `compose-api-builds` service account and Role (Jobs, pods, logs, events), settings `build_backend` and
    `build_k8s_*`; the rke deployment sets `build_backend=k8s`. The build log route reads the Job's pods' logs.

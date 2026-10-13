@@ -1,3 +1,4 @@
+import asyncio
 import importlib
 import logging
 import os
@@ -17,9 +18,11 @@ from compose_api.common.gateway.models import ServerMode
 from compose_api.config import get_settings
 from compose_api.dependencies import (
     get_job_monitor,
+    get_required_database_service,
     init_standalone,
     shutdown_standalone,
 )
+from compose_api.simulation import images
 from compose_api.version import __version__
 
 logger = logging.getLogger(__name__)
@@ -85,9 +88,17 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
         raise RuntimeError("JobMonitor is not initialized. Please check your configuration.")
     await job_monitor.start_polling(interval_seconds=5)  # configurable interval
 
+    # the backfill and verification of simulators' images (docs/plan-environment-builds.md, phase 2)
+    verifying = asyncio.create_task(
+        images.verify_images_periodically(
+            get_required_database_service().get_simulator_db(), get_settings().image_verify_interval_seconds
+        )
+    )
+
     try:
         yield
     finally:
+        verifying.cancel()
         await job_monitor.close()
     await shutdown_standalone()
 
