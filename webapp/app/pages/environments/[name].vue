@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { EnvironmentSummary, ImageStatus, InterfaceManifest } from '~/composables/useRegistry'
+import type { EnvironmentHeaders, EnvironmentSummary, ImageStatus, InterfaceManifest } from '~/composables/useRegistry'
 import type { Component } from '~/viewers/composite/interfaces'
 
 // One environment: its image, the versions its manifest was read with, and every class it provides with its config
@@ -8,6 +8,7 @@ const route = useRoute()
 const name = computed(() => String(route.params.name))
 const summary = ref<EnvironmentSummary | null>(null)
 const manifest = shallowRef<InterfaceManifest | null>(null)
+const headers = shallowRef<EnvironmentHeaders | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 const filter = ref('')
@@ -69,6 +70,16 @@ const components = computed<Component[]>(() => {
   const f = filter.value.toLowerCase()
   return f ? all.filter(c => `${c.name} ${c.address} ${c.kind}`.toLowerCase().includes(f)) : all
 })
+// every module's header file in one `.pblang` text, saved under the environment's name
+function downloadHeaders() {
+  if (!headers.value) return
+  const text = headers.value.modules.map(m => m.text).join('\n')
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }))
+  link.download = `${name.value}.pblang`
+  link.click()
+  URL.revokeObjectURL(link.href)
+}
 const manifestUrl = computed(() => apiUrl(`/registry/environments/${encodeURIComponent(name.value)}/manifest`))
 
 onMounted(async () => {
@@ -79,6 +90,8 @@ onMounted(async () => {
     else if (!m) error.value = `No interface manifest has been generated for ${name.value}.`
     manifest.value = m
     if (summary.value) void refreshImage()
+    // the headers are printed on the server; the page works without them
+    if (m) fetchHeaders(name.value).then(h => (headers.value = h)).catch(() => {})
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -100,6 +113,7 @@ watch(() => route.hash, hash => (highlighted.value = decodeURIComponent(hash.sli
     <PageHeader :title="name" description="The processes and steps this environment provides, as its image declares them.">
       <template #actions>
         <UButton to="/environments" icon="i-lucide-arrow-left" label="All environments" color="neutral" variant="ghost" />
+        <UButton v-if="headers" icon="i-lucide-file-code" label="Headers (.pblang)" color="neutral" variant="subtle" @click="downloadHeaders" />
         <UButton :to="manifestUrl" external target="_blank" icon="i-lucide-braces" label="Manifest JSON" color="neutral" variant="subtle" />
       </template>
     </PageHeader>
@@ -160,7 +174,10 @@ watch(() => route.hash, hash => (highlighted.value = decodeURIComponent(hash.sli
           <UInput v-model="filter" placeholder="Filter by name or address" icon="i-lucide-search" class="w-72" />
           <span class="text-sm text-muted">{{ components.length }} of {{ manifest.components.length }}</span>
         </div>
-        <InterfaceCard v-for="c in components" :key="c.address" :component="c" :highlighted="highlighted === c.name" />
+        <InterfaceCard
+          v-for="c in components" :key="c.address" :component="c" :highlighted="highlighted === c.name"
+          :header="headers?.components[c.address]"
+        />
       </template>
     </UContainer>
   </div>

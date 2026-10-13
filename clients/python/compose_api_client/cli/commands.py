@@ -15,6 +15,7 @@ import functools
 import importlib.resources
 import inspect
 import json
+import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -426,6 +427,34 @@ def environments_manifest(
         for c in manifest.components
     ]
     emit(settings.output, rows, ["address", "kind", "dynamic_ports", "entry"])
+
+
+@environments_app.command("headers")
+@claims("environments headers", "get-environment-headers")
+@handled
+def environments_headers(
+    ctx: typer.Context,
+    name: Annotated[str, typer.Argument(help="The environment, e.g. registry_env.")],
+    out: Annotated[
+        Path | None, typer.Option("--out", "-o", help="Write one <module>.pbl per module into this directory.")
+    ] = None,
+) -> None:
+    """An environment's interfaces as .pblang header files: what a composite imports (`import module.{Name};`).
+
+    Prints every module's file, or writes them into `--out`; `--output json` prints them with each class's
+    declaration."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        headers = s.environment_headers(name)
+    if settings.output is Output.JSON:
+        emit(Output.JSON, headers.to_dict())
+    elif out is not None:
+        out.mkdir(parents=True, exist_ok=True)
+        for m in headers.modules:
+            (out / f"{m.module}.pbl").write_text(m.text)
+        print(f"wrote {len(headers.modules)} header file(s) to {out}", file=sys.stderr)
+    else:
+        print("\n".join(m.text for m in headers.modules), end="")
 
 
 def _emit_image_status(settings: Settings, status: Any) -> None:

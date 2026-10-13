@@ -2,6 +2,7 @@ import type { Schemas } from './useApi'
 
 export type EnvironmentSummary = Schemas['EnvironmentSummary']
 export type InterfaceManifest = Schemas['InterfaceManifest']
+export type EnvironmentHeaders = Schemas['EnvironmentHeaders']
 
 /**
  * The environments documents run in, and their interface manifests (`pbg-interfaces/1`: every step and process class
@@ -69,6 +70,17 @@ export function fetchManifest(name: string): Promise<InterfaceManifest | null> {
     manifests.set(name, pending)
   }
   return pending
+}
+
+/**
+ * An environment's interfaces as `.pblang` header files, one per module, and each class's declaration by address
+ * (printed by process-bigraph-lang on the server); null when the deployment cannot print them.
+ */
+export async function fetchHeaders(name: string): Promise<EnvironmentHeaders | null> {
+  const { data, response } = await useApi().GET('/registry/environments/{name}/headers', { params: { path: { name } } })
+  if (data) return data
+  if (response.status === 404 || response.status === 503) return null
+  throw new Error(`Could not fetch the ${name} headers (HTTP ${response.status})`)
 }
 
 export type ImageStatus = Schemas['ImageStatus']

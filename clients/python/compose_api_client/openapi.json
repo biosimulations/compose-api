@@ -1356,6 +1356,54 @@
         }
       }
     },
+    "/registry/environments/{name}/headers": {
+      "get": {
+        "tags": [
+          "Registry"
+        ],
+        "summary": "An environment's interfaces as .pblang header files (one per module), and each class's declaration",
+        "operationId": "get-environment-headers",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentHeaders"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such environment here, or no manifest has been generated for it"
+          },
+          "503": {
+            "description": "process-bigraph-lang is not installed in this deployment"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/registry/entries": {
       "get": {
         "tags": [
@@ -3680,6 +3728,36 @@
         "title": "EntryRef",
         "description": "The registry entry a component belongs to (by module root), and its curation level."
       },
+      "EnvironmentHeaders": {
+        "properties": {
+          "environment": {
+            "type": "string",
+            "title": "Environment"
+          },
+          "modules": {
+            "items": {
+              "$ref": "#/components/schemas/HeaderModule"
+            },
+            "type": "array",
+            "title": "Modules"
+          },
+          "components": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Components",
+            "description": "Each class's declaration, by address"
+          }
+        },
+        "type": "object",
+        "required": [
+          "environment",
+          "modules",
+          "components"
+        ],
+        "title": "EnvironmentHeaders"
+      },
       "EnvironmentImage": {
         "properties": {
           "database_id": {
@@ -3907,6 +3985,25 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HeaderModule": {
+        "properties": {
+          "module": {
+            "type": "string",
+            "title": "Module"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "The module's header file (`module \u2026;` and one declaration per class)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "module",
+          "text"
+        ],
+        "title": "HeaderModule"
       },
       "HpcRun": {
         "properties": {

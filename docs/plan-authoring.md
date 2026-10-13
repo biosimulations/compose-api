@@ -58,7 +58,10 @@ language worker (hover, completion, diagnostics while typing).
 - `GET /registry/environments`: per environment, its `simulator` value for `/simulation/run` (null for the shared
   image), the deployed image, the image the manifest was read from, `stale` when they differ, counts, and its
   registry entries with their levels. `GET /registry/environments/{name}/manifest`: the manifest, each component with
-  its `registry_entry` (id and level), with an ETag.
+  its `registry_entry` (id and level), with an ETag. `GET /registry/environments/{name}/headers`: the same classes as
+  `.pblang` header files, one per module, and each class's declaration by address, printed by process-bigraph-lang
+  (`settings.pblang_python`) and cached per manifest; CLI `environments headers [-o dir]`. The environment page shows
+  each class's header (with its `import` line) and manifest entry, and downloads every module as one `.pblang` file.
 - Tests (`tests/registry/test_environments.py`) check the configuration, the docker command, the summaries, the
   routes, and that every committed manifest was read from the deployed image and lists only registered components.
 
