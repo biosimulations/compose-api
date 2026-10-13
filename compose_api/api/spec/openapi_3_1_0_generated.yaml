@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: compose-api
-  version: 0.7.16
+  version: 0.7.17
 paths:
   /curated/copasi:
     post:
