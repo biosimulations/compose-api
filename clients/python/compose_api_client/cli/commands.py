@@ -1159,3 +1159,19 @@ def comparisons_series(
         for name, columns in data[kind].items()
     ]
     emit(settings.output, rows, ["from", "kind", "labels"])
+
+
+@app.command("build-log")
+@claims("build-log", "get-simulator-build-log")
+@handled
+def build_log(
+    ctx: typer.Context, simulator_id: Annotated[int, typer.Argument(help="The simulator id (a run's simulator_id).")]
+) -> None:
+    """The SLURM log of a simulator's newest container build."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        text = s.build_log(simulator_id)
+    if settings.output is Output.JSON:
+        emit(Output.JSON, {"simulator_id": simulator_id, "log": text})
+    else:
+        print(text, end="")

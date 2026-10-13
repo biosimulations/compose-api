@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from starlette.responses import FileResponse
+from starlette.responses import FileResponse, PlainTextResponse
 
 from compose_api.authentication import OptionalPrincipal, get_optional_principal
 from compose_api.authorization import OptionalCaller, readable_simulation, readable_simulation_ids
@@ -171,6 +171,30 @@ async def get_simulator_build_status(principal: OptionalPrincipal, simulator_id:
     if db_service is None:
         raise HTTPException(status_code=500, detail="Database service is not initialized")
     return await get_hpc_run_status(db_service=db_service, ref_id=simulator_id, job_type=JobType.BUILD_CONTAINER)
+
+
+@config.router.get(
+    path="/simulator/build/log",
+    response_class=PlainTextResponse,
+    operation_id="get-simulator-build-log",
+    responses={404: NOT_FOUND_RESPONSE},
+    tags=["Results"],
+    summary="The SLURM log of a simulator's newest container build (its last 200 KB)",
+)
+async def get_simulator_build_log(principal: OptionalPrincipal, simulator_id: int = Query(...)) -> PlainTextResponse:
+    simulator = await get_required_database_service().get_simulator_db().get_simulator(simulator_id)
+    if simulator is None:
+        raise HTTPException(status_code=404, detail=f"Simulator {simulator_id} not found.")
+    settings = get_settings()
+    logs = Path(settings.internal_mount_dir) / settings.namespace / "htclogs"
+    found = sorted(
+        logs.glob(f"singularity_build_{simulator.container_def_hash[:5]}_*.out"), key=lambda p: p.stat().st_mtime
+    )
+    if not found:
+        raise HTTPException(status_code=404, detail=f"No build log for simulator {simulator_id}.")
+    with found[-1].open("rb") as f:
+        f.seek(max(0, found[-1].stat().st_size - 200_000))
+        return PlainTextResponse(f.read().decode(errors="replace"))
 
 
 # -- a run's events and trace (docs/plan-observability.md O3, O4) -- #

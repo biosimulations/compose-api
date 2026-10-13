@@ -180,13 +180,14 @@ class SimulationServiceHpc(SimulationService):
                     #SBATCH --output={get_slurm_log_file(slurm_job_name=slurm_job_name)}
 
                     set -e
-                    echo "Starting build for container {singularity_container_path}"
-                    pushd /tmp
-                    mv {singularity_def_file} /tmp/{def_file_name}
+                    echo "Starting build for container {singularity_container_path} on $(hostname)"
+                    # a working directory of this build's own: two builds of one definition must not share files
+                    work=$(mktemp -d /tmp/{slurm_job_name}.XXXXXX)
+                    trap 'rm -rf "$work"' EXIT
+                    cp {singularity_def_file} "$work/{def_file_name}"
+                    cd "$work"
                     singularity build --fakeroot {container_file_name} {def_file_name}
                     mv {container_file_name} {singularity_container_path}
-                    mv {def_file_name} {singularity_def_file} # Cleanup
-                    popd
                     echo "Finished building container."
                     """)
                 f.write(script_content)
