@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
 from ..models.visibility import Visibility
 from ..types import UNSET, Unset
+
+if TYPE_CHECKING:
+    from ..models.simulation_detail_labels import SimulationDetailLabels
+
 
 T = TypeVar("T", bound="SimulationDetail")
 
@@ -31,6 +35,9 @@ class SimulationDetail:
         exit_code (int | None | Unset):
         error_message (None | str | Unset):
         trace_id (None | str | Unset):
+        labels (SimulationDetailLabels | Unset):
+        tags (list[str] | Unset):
+        description (None | str | Unset):
         event_count (int | Unset):  Default: 0.
         dataset_count (int | Unset):  Default: 0.
     """
@@ -49,6 +56,9 @@ class SimulationDetail:
     exit_code: int | None | Unset = UNSET
     error_message: None | str | Unset = UNSET
     trace_id: None | str | Unset = UNSET
+    labels: SimulationDetailLabels | Unset = UNSET
+    tags: list[str] | Unset = UNSET
+    description: None | str | Unset = UNSET
     event_count: int | Unset = 0
     dataset_count: int | Unset = 0
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
@@ -116,6 +126,20 @@ class SimulationDetail:
         else:
             trace_id = self.trace_id
 
+        labels: dict[str, Any] | Unset = UNSET
+        if not isinstance(self.labels, Unset):
+            labels = self.labels.to_dict()
+
+        tags: list[str] | Unset = UNSET
+        if not isinstance(self.tags, Unset):
+            tags = self.tags
+
+        description: None | str | Unset
+        if isinstance(self.description, Unset):
+            description = UNSET
+        else:
+            description = self.description
+
         event_count = self.event_count
 
         dataset_count = self.dataset_count
@@ -147,6 +171,12 @@ class SimulationDetail:
             field_dict["error_message"] = error_message
         if trace_id is not UNSET:
             field_dict["trace_id"] = trace_id
+        if labels is not UNSET:
+            field_dict["labels"] = labels
+        if tags is not UNSET:
+            field_dict["tags"] = tags
+        if description is not UNSET:
+            field_dict["description"] = description
         if event_count is not UNSET:
             field_dict["event_count"] = event_count
         if dataset_count is not UNSET:
@@ -156,6 +186,8 @@ class SimulationDetail:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        from ..models.simulation_detail_labels import SimulationDetailLabels  # noqa: PLC0415
+
         d = dict(src_dict)
         simulation_id = d.pop("simulation_id")
 
@@ -246,6 +278,24 @@ class SimulationDetail:
 
         trace_id = _parse_trace_id(d.pop("trace_id", UNSET))
 
+        _labels = d.pop("labels", UNSET)
+        labels: SimulationDetailLabels | Unset
+        if isinstance(_labels, Unset):
+            labels = UNSET
+        else:
+            labels = SimulationDetailLabels.from_dict(_labels)
+
+        tags = cast(list[str], d.pop("tags", UNSET))
+
+        def _parse_description(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        description = _parse_description(d.pop("description", UNSET))
+
         event_count = d.pop("event_count", UNSET)
 
         dataset_count = d.pop("dataset_count", UNSET)
@@ -265,6 +315,9 @@ class SimulationDetail:
             exit_code=exit_code,
             error_message=error_message,
             trace_id=trace_id,
+            labels=labels,
+            tags=tags,
+            description=description,
             event_count=event_count,
             dataset_count=dataset_count,
         )

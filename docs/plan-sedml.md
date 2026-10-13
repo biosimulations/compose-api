@@ -1,14 +1,14 @@
 # SED-ML models as process-bigraph runs across solvers, compared
 
-**Status (2026-10-12): plan agreed; phase 0 next.** One PR per phase and repository, merged with a merge commit on
+**Status (2026-10-12): plan agreed; phase 0 in review.** One PR per phase and repository, merged with a merge commit on
 the maintainer's word; each PR updates the table below. A merge deploys nothing by itself: the next release's image
 ships it (CLAUDE.md, "Deploys are GitOps"). The language side is planned in process-bigraph-lang's
 [`docs/v2/sedml-plan.md`](https://github.com/biosimulations/process-bigraph-lang/blob/main/docs/v2/sedml-plan.md).
 
 | Phase | What | Repo | State |
 |---|---|---|---|
-| 0 | Labels, tags and a description on simulations, and filters on them; the concepts below documented; `GET /registry/entries` and `/ui/catalog` rebuilt on it | compose-api | planned |
-| 1 | SED-ML read into a `.pblang` template per task with the solver as an open site; plot templates; release 0.3.0 | process-bigraph-lang | planned |
+| 0 | Labels, tags and a description on simulations, and filters on them; the concepts below documented; `GET /registry/entries` and `/ui/catalog` rebuilt on it | compose-api | in review |
+| 1 | SED-ML read into a `.pblang` template per task with the solver as an open site, one checked instance per solver; plots built at run time; release 0.3.0 | process-bigraph-lang | in review (#58, #59) |
 | 2 | SED-ML adapter steps around generic COPASI and Tellurium steps; `solvers.yaml` and `GET /registry/solvers` | adapters package, compose-api | planned |
 | 3 | `POST /sedml/run` and `/sedml/preview`; the `sedml-omex` and `input` datasets; comparisons computed on the server; references | compose-api | planned |
 | 4 | BioModels and biosimulations.org source routes, cached; run shortcuts; the curated routes on the same path | compose-api | planned |
@@ -44,6 +44,13 @@ runs, and nothing compares results.
 | D7 | **biosimulations.org's original results are a reference**, not a candidate | | a reference column in the comparison |
 | D8 | **SED-ML scope, version 1**: uniform time course tasks, attribute model changes, simple data generators, reports, plots | steady state, repeated tasks, math in data generators | what most curated models use; anything else is reported, never dropped silently |
 | D9 | **Runs stay anonymous**: tags and description are given at submission and not edited | owner edits | submissions carry no owner today |
+| D10 | **SED-ML model changes are applied at translation** (2026-10-13): the instance's solver reads a changed copy of the SBML, and the `.pblang` text's `meta` lists each change | a changes step before the solver | changes are constants; the generic solvers read their model from config, which no step can change at run time |
+| D11 | **The SED-ML adapters are a new package this project owns** (2026-10-13), `pbsim_sedml` until named; registered in `manifest.yaml` and installed in `registry_env` | adding them to pbsim-common; shipping them in process-bigraph-lang | our release cadence and tests; process-bigraph-lang keeps process code out of its package |
+
+**How this feeds the curation ladder.** strategy.md decision 5 defines `validated` as "at least one study whose
+findings confirm against a published reference or an independent simulator". A passing comparison (phase 3) is that
+evidence for each solver's registry entry, and a suite (phase 6) keeps it current; recording it in `manifest.yaml`
+stays a reviewed change.
 
 ## Concepts: catalog, registry, environment, solver
 
@@ -82,6 +89,23 @@ goes into the shared image) and `manifest.yaml` (what is admitted) from one list
    and any references (the original results, converted to CSV), scores each variable pairwise across solvers and
    against each reference (interpolating onto the reference's time grid when grids differ, and saying so), and
    stores the result. A failed member is shown failed, not dropped.
+
+## Phase 0: what exists after it
+
+- `simulation.labels` (JSONB), `simulation.tags` (text[]) and `simulation.description`, with GIN indexes (migration
+  `3f9a6c1e7b24`). The reserved label keys and the rules for tags are `compose_api/simulation/labels.py`:
+  `source`, `environment`, `solver`, `model`, `project`, `sedml_task`, `comparison`, `collection`, `suite_run`.
+- `POST /simulation/run` takes `tags` (repeatable) and `description`, and labels the run `source=upload` and
+  `environment=<simulator or registry_env>`. The curated routes label theirs `source=curated`, `solver=copasi|tellurium`,
+  `environment=registry_env`. Runs submitted before this carry none.
+- `GET /simulations` and `GET /simulations/{id}` return them; `GET /simulations?label=key:value&tag=name` (each
+  repeatable, all must match) filters by containment. The CLI: `run --tag --description`, `simulations list --label
+  --tag`, `catalog`.
+- `GET /registry/entries`: every registry entry, most trusted first, with its pin, evidence and the environments whose
+  manifest lists its classes. `/ui/catalog` shows it (levels as strategy.md defines them, links to each environment's
+  page); the Postgres `/core/*` lists are marked deprecated in the API.
+- The web app: label and tag chips on the simulations list and a run's page (a chip filters the list), label and tag
+  filters in the list's query string, and tags and a description in the run form.
 
 ## Data model (phase 0, phase 3)
 

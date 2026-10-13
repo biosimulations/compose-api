@@ -331,6 +331,36 @@ def environments_list(ctx: typer.Context) -> None:
     )
 
 
+@app.command()
+@claims("catalog", "list-registry-entries")
+@handled
+def catalog(ctx: typer.Context) -> None:
+    """The catalog: every registry entry with its curation level, and the environments that provide its classes.
+
+    Discovery and trust, not runnability: most `listed` entries are in no environment (docs/plan-sedml.md)."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        entries = s.catalog()
+    rows = [
+        {
+            "id": e.id,
+            "level": str(e.level),
+            "package": e.package,
+            "pin": e.version or (e.commit[:12] if isinstance(e.commit, str) else None),
+            "environments": ", ".join(
+                f"{x.name} ({x.components})" for x in (e.environments if isinstance(e.environments, list) else [])
+            )
+            or None,
+        }
+        for e in entries
+    ]
+    emit(
+        settings.output,
+        rows if settings.output is not Output.JSON else [e.to_dict() for e in entries],
+        ["id", "level", "package", "pin", "environments"],
+    )
+
+
 @environments_app.command("manifest")
 @claims("environments manifest", "get-environment-manifest")
 @handled
@@ -378,6 +408,10 @@ def run(
     simulator: Annotated[str | None, typer.Option(help="A prebuilt simulator image by name.")] = None,
     interval: Annotated[float, typer.Option(help="Simulation interval passed to the runner.")] = 1.0,
     batch: Annotated[bool, typer.Option(help="Submit as a batch job (smaller partition, 1 CPU).")] = False,
+    tag: Annotated[
+        list[str] | None, typer.Option("--tag", "-t", help="A tag to find the run by later (repeatable).")
+    ] = None,
+    description: Annotated[str | None, typer.Option(help="What the run is for.")] = None,
     wait: Wait = False,
     download: Download = None,
     extract: Extract = False,
@@ -387,7 +421,9 @@ def run(
     """Submit a simulation. Prints its ids; with --wait, its final state (and the files, with --download)."""
     settings = _settings(ctx)
     with make_session(settings) as s:
-        sim = s.submit(document, simulator=simulator, interval=interval, batch=batch)
+        sim = s.submit(
+            document, simulator=simulator, interval=interval, batch=batch, tags=tag or (), description=description
+        )
         if not wait:
             emit(settings.output, sim)
             return
@@ -520,7 +556,9 @@ def results(
 
 # -- finding simulations ------------------------------------------------------------------------------------------
 
-SIMULATION_COLUMNS = ["simulation_id", "created_at", "simulator_id", "simulator", "status", "slurm_job_id", "end_time"]
+SIMULATION_COLUMNS = [
+    "simulation_id", "created_at", "simulator_id", "simulator", "status", "slurm_job_id", "end_time", "tags",
+]  # fmt: skip
 _UNITS = {"m": 60, "h": 3600, "d": 86400, "w": 604800}
 
 
@@ -534,6 +572,17 @@ def parse_since(value: str) -> datetime.datetime:
     except ValueError as e:
         raise typer.BadParameter(f"{value!r}: use 30m, 6h, 2d, 1w, or an ISO time") from e
     return moment if moment.tzinfo else moment.replace(tzinfo=datetime.UTC)
+
+
+def parse_labels(values: list[str] | None) -> dict[str, str]:
+    """``key:value`` options as a mapping; the server says which keys exist."""
+    parsed: dict[str, str] = {}
+    for value in values or []:
+        key, sep, rest = value.partition(":")
+        if not sep or not key or not rest:
+            raise typer.BadParameter(f"{value!r}: use key:value, e.g. source:biomodels")
+        parsed[key] = rest
+    return parsed
 
 
 @simulations_app.command("list")
@@ -550,6 +599,13 @@ def simulations_list(
     since: Annotated[
         str | None, typer.Option(help="Only those created since: 30m, 6h, 2d, 1w, or an ISO time.")
     ] = None,
+    label: Annotated[
+        list[str] | None,
+        typer.Option(help="Only those with this label, key:value, e.g. source:biomodels (repeatable, all must match)."),
+    ] = None,
+    tag: Annotated[
+        list[str] | None, typer.Option(help="Only those with this tag (repeatable, all must match).")
+    ] = None,
     limit: Annotated[int, typer.Option(help="At most this many.")] = 50,
     offset: Annotated[int, typer.Option(help="Skip this many (for the next page).")] = 0,
 ) -> None:
@@ -561,6 +617,8 @@ def simulations_list(
             status=status,
             simulator=simulator,
             since=parse_since(since) if since else None,
+            labels=parse_labels(label),
+            tags=tag or (),
             limit=limit,
             offset=offset,
         )

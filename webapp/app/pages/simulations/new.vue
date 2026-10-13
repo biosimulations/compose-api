@@ -14,6 +14,8 @@ const file = ref<File | null>(null)
 const intervalTime = ref(1)
 const batch = ref(false)
 const simulator = ref<string | undefined>(undefined)
+const tags = ref<string[]>([])
+const description = ref('')
 // /curated/*
 const startTime = ref(0)
 const duration = ref(10)
@@ -60,7 +62,13 @@ async function submit() {
   error.value = null
   violations.value = []
   if (mode.value === 'archive') {
-    const outcome = await submitRun(file.value, { intervalTime: intervalTime.value, batch: batch.value, simulator: simulator.value })
+    const outcome = await submitRun(file.value, {
+      intervalTime: intervalTime.value,
+      batch: batch.value,
+      simulator: simulator.value,
+      tags: tags.value,
+      description: description.value
+    })
     submitting.value = false
     if (!outcome.ok) {
       error.value = outcome.error
@@ -128,6 +136,12 @@ async function submit() {
             <UInputNumber v-model="intervalTime" :min="0" :max="1000" :step="0.1" class="w-48" />
           </UFormField>
           <USwitch v-model="batch" label="Batch submission" description="Use the batch partition (1 CPU, 1 GB)" />
+          <UFormField label="Tags" help="To find the run by later (Enter after each); letters, digits, spaces and _ . : / + -">
+            <UInputTags v-model="tags" placeholder="e.g. repressilator" class="w-full max-w-xl" :max="20" />
+          </UFormField>
+          <UFormField label="Description" help="What the run is for (optional)">
+            <UTextarea v-model="description" :rows="2" :maxlength="2000" class="w-full max-w-xl" />
+          </UFormField>
           <UAlert
             v-if="simulator"
             variant="subtle"
@@ -157,6 +171,12 @@ async function submit() {
               <dt class="text-muted">Simulator</dt><dd>{{ simulator || 'Shared container' }}</dd>
               <dt class="text-muted">Interval time</dt><dd>{{ intervalTime }}</dd>
               <dt class="text-muted">Batch</dt><dd>{{ batch ? 'yes' : 'no' }}</dd>
+              <template v-if="tags.length">
+                <dt class="text-muted">Tags</dt><dd><RunLabels :tags="tags" /></dd>
+              </template>
+              <template v-if="description.trim()">
+                <dt class="text-muted">Description</dt><dd>{{ description.trim() }}</dd>
+              </template>
             </template>
             <template v-else>
               <dt class="text-muted">Start</dt><dd>{{ startTime }}</dd>

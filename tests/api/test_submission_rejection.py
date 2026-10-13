@@ -79,3 +79,12 @@ async def test_an_unlisted_simulator_is_refused_before_the_registry(http_api_cli
         )
     assert response.status_code == 400
     assert "unknown simulator" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_a_malformed_tag_or_overlong_description_is_a_400(http_api_client: httpx.AsyncClient) -> None:
+    files = {"uploaded_file": ("doc.pbg", pbg(), "application/json")}
+    bad_tag = await http_api_client.post("/simulation/run", files=files, params={"tags": ["ok", "-starts-badly"]})
+    assert bad_tag.status_code == 400 and "-starts-badly" in bad_tag.json()["detail"]
+    long = await http_api_client.post("/simulation/run", files=files, params={"description": "x" * 2001})
+    assert long.status_code == 400 and "description" in long.json()["detail"]

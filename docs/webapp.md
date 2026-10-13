@@ -10,12 +10,12 @@ serves it at **`/ui`** on the same host, and `/` redirects there.
 | Page | API operations |
 |---|---|
 | `/ui/` dashboard: counts by status, recent runs | `list-simulations`, `/version` |
-| `/ui/simulations`: paged and filterable by status, simulator and date; download `results.zip` | `list-simulations`, `get-simulation-results-file` |
+| `/ui/simulations`: paged and filterable by status, simulator, date, labels (`key:value`) and tags; label and tag chips filter the list; download `results.zip` | `list-simulations`, `get-simulation-results-file` |
 | `/ui/simulations/new`: upload a `.pbg`, `.omex` or `.sbml`, or a curated COPASI/Tellurium time course from SBML. Registry rejections are listed address by address | `run-simulation`, `run-copasi`, `run-tellurium` |
 | `/ui/simulations/{id}`: status (polled until terminal), SLURM and container-build details, live event log, span tree and Chrome trace (for Perfetto), datasets with inline previews (images, CSV/TSV plotted with Plotly, JSON, text) | `get-simulation`, `get-simulation-status`, `get-simulator-build-status`, `get-simulation-events`, `get-simulation-trace`, `get-simulation-trace-chrome`, `list-datasets`, `get-dataset-content`, `get-simulation-results-file` |
 | `/ui/datasets`: every run's files | `list-datasets`, `get-dataset-content` |
 | `/ui/environments`: where composites run; `/ui/environments/{name}`: its image, versions, registry entries, and every class it provides with its config and ports (`#Name` opens on one) | `list-environments`, `get-environment-manifest` |
-| `/ui/catalog`: processes, steps, simulator versions | `get-processes-list`, `get-steps-list`, `get-simulator-list` |
+| `/ui/catalog`: every registry entry with its curation level, pin and evidence, and the environments that run its classes ([plan-sedml.md](plan-sedml.md), "Concepts") | `list-registry-entries` |
 
 **Viewers are registered per dataset type** (`webapp/app/viewers/registry.ts`, [plan](plan-viewers.md)). Each one
 declares which datasets it fits (by kind, media type and attributes) and is an async component, so a viewer and its

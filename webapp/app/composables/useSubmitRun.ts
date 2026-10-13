@@ -7,6 +7,10 @@ export interface RunOptions {
   batch?: boolean
   /** a prebuilt simulator by name; none runs in the shared image */
   simulator?: string | null
+  /** stored with the run, to find it by later */
+  tags?: string[]
+  /** what the run is for */
+  description?: string | null
 }
 
 export type RunOutcome =
@@ -22,7 +26,9 @@ export async function submitRun(file: File, options: RunOptions): Promise<RunOut
       query: {
         interval_time: options.intervalTime,
         batch_submission: options.batch ?? false,
-        simulator: options.simulator || undefined
+        simulator: options.simulator || undefined,
+        tags: options.tags?.length ? options.tags : undefined,
+        description: options.description?.trim() || undefined
       }
     },
     body: form as never,

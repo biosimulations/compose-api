@@ -100,7 +100,14 @@ paths:
         (settings.prebuilt_simulators);
 
         the job then runs in that image instead of the shared container. Omitted:
-        the shared container.'
+        the shared container.
+
+
+        The run is labelled `source=upload` and `environment=<simulator or registry_env>`;
+        `tags` and `description` are
+
+        stored with it as given (compose_api/simulation/labels.py) and filter `GET
+        /simulations`.'
       operationId: run-simulation
       parameters:
       - name: interval_time
@@ -125,6 +132,28 @@ paths:
           - type: string
           - type: 'null'
           title: Simulator
+      - name: tags
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Tags to find the run by later; at most 20, each up to 64 characters
+          title: Tags
+        description: Tags to find the run by later; at most 20, each up to 64 characters
+      - name: description
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: What the run is for; up to 2000 characters
+          title: Description
+        description: What the run is for; up to 2000 characters
       requestBody:
         required: true
         content:
@@ -203,6 +232,34 @@ paths:
           description: Only simulations created at or after this time
           title: Since
         description: Only simulations created at or after this time
+      - name: label
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: 'Only simulations with this label, as key:value; repeatable,
+            all must match. Keys: source, environment, solver, model, project, sedml_task,
+            comparison, collection, suite_run'
+          title: Label
+        description: 'Only simulations with this label, as key:value; repeatable,
+          all must match. Keys: source, environment, solver, model, project, sedml_task,
+          comparison, collection, suite_run'
+      - name: tag
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Only simulations with this tag; repeatable, all must match
+          title: Tag
+        description: Only simulations with this tag; repeatable, all must match
       - name: limit
         in: query
         required: false
@@ -526,6 +583,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RegisteredSimulators'
+      deprecated: true
   /core/processes/list:
     get:
       tags:
@@ -542,6 +600,7 @@ paths:
                   $ref: '#/components/schemas/BiGraphProcess'
                 type: array
                 title: Response Get-Processes-List
+      deprecated: true
   /core/steps/list:
     get:
       tags:
@@ -558,6 +617,7 @@ paths:
                   $ref: '#/components/schemas/BiGraphStep'
                 type: array
                 title: Response Get-Steps-List
+      deprecated: true
   /datasets:
     get:
       tags:
@@ -792,6 +852,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /registry/entries:
+    get:
+      tags:
+      - Registry
+      summary: 'The catalog: every registry entry with its curation level, pin and
+        evidence, and the environments that provide its classes'
+      operationId: list-registry-entries
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/CatalogEntry'
+                type: array
+                title: Response List-Registry-Entries
   /health:
     get:
       tags:
@@ -916,6 +993,67 @@ components:
       required:
       - sbml
       title: Body_run-tellurium
+    CatalogEntry:
+      properties:
+        id:
+          type: string
+          title: Id
+        package:
+          type: string
+          title: Package
+        source:
+          type: string
+          title: Source
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+        commit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Commit
+        level:
+          $ref: '#/components/schemas/CurationLevel'
+        module_roots:
+          items:
+            type: string
+          type: array
+          title: Module Roots
+        bundles:
+          items:
+            type: string
+          type: array
+          title: Bundles
+        evidence:
+          items:
+            type: string
+          type: array
+          title: Evidence
+        reviewer:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reviewer
+        environments:
+          items:
+            $ref: '#/components/schemas/EntryEnvironment'
+          type: array
+          title: Environments
+      type: object
+      required:
+      - id
+      - package
+      - source
+      - level
+      - module_roots
+      title: CatalogEntry
+      description: 'A registry entry as the catalog shows it (docs/plan-sedml.md,
+        "Concepts"): what it is, how far it is trusted,
+
+        and which of this deployment''s environments provide its classes. Most `listed`
+        entries are in none.'
     ContainerizationEngine:
       type: integer
       enum:
@@ -1035,6 +1173,21 @@ components:
       - datasets
       - total
       title: DatasetPage
+    EntryEnvironment:
+      properties:
+        name:
+          type: string
+          title: Name
+        components:
+          type: integer
+          title: Components
+      type: object
+      required:
+      - name
+      - components
+      title: EntryEnvironment
+      description: An environment that provides some of a registry entry's classes,
+        and how many.
     EntryRef:
       properties:
         id:
@@ -1576,6 +1729,21 @@ components:
           - type: string
           - type: 'null'
           title: Trace Id
+        labels:
+          additionalProperties:
+            type: string
+          type: object
+          title: Labels
+        tags:
+          items:
+            type: string
+          type: array
+          title: Tags
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
         event_count:
           type: integer
           title: Event Count
@@ -1694,6 +1862,21 @@ components:
           - type: string
           - type: 'null'
           title: Trace Id
+        labels:
+          additionalProperties:
+            type: string
+          type: object
+          title: Labels
+        tags:
+          items:
+            type: string
+          type: array
+          title: Tags
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
       type: object
       required:
       - simulation_id
