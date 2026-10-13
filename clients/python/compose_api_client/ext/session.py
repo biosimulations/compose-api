@@ -33,7 +33,11 @@ from compose_api_client.api.compute import get_processes_list, get_simulator_lis
 from compose_api_client.api.curated import run_copasi, run_tellurium
 from compose_api_client.api.datasets import get_dataset, get_dataset_content, get_dataset_file, list_datasets
 from compose_api_client.api.registry import (
+    build_environment,
+    build_simulator,
+    get_environment_images,
     get_environment_manifest,
+    get_simulator_images,
     list_environments,
     list_registry_entries,
     list_solvers,
@@ -88,6 +92,7 @@ from compose_api_client.models import (
     DatasetPage,
     EnvironmentSummary,
     HpcRun,
+    ImageStatus,
     InterfaceManifest,
     ListSimulationsStatusType0,
     ProjectInfo,
@@ -251,6 +256,22 @@ class ComposeSession:
     def environment_manifest(self, name: str) -> InterfaceManifest:
         """An environment's interface manifest (pbg-interfaces/1)."""
         return _parsed(get_environment_manifest.sync_detailed(name, client=self.client))  # type: ignore[no-any-return]
+
+    def environment_images(self, name: str) -> ImageStatus:
+        """Whether an environment's current image is built, with its image records and newest build run."""
+        return _parsed(get_environment_images.sync_detailed(name, client=self.client))  # type: ignore[no-any-return]
+
+    def build_environment(self, name: str) -> ImageStatus:
+        """Make an environment's current image available: pulled or built unless it is, joining a build under way."""
+        return _parsed(build_environment.sync_detailed(name, client=self.client))  # type: ignore[no-any-return]
+
+    def simulator_images(self, simulator_id: int) -> ImageStatus:
+        """Whether a simulator's image is built, with its image records and newest build run."""
+        return _parsed(get_simulator_images.sync_detailed(simulator_id, client=self.client))  # type: ignore[no-any-return]
+
+    def build_simulator(self, simulator_id: int) -> ImageStatus:
+        """Make a simulator's image available: pulled or built unless it is, joining a build under way."""
+        return _parsed(build_simulator.sync_detailed(simulator_id, client=self.client))  # type: ignore[no-any-return]
 
     # -- submit -----------------------------------------------------------------------------------------------------
 
@@ -670,6 +691,22 @@ class AsyncComposeSession:
     async def environment_manifest(self, name: str) -> InterfaceManifest:
         """An environment's interface manifest (pbg-interfaces/1)."""
         return _parsed(await get_environment_manifest.asyncio_detailed(name, client=self.client))  # type: ignore[no-any-return]
+
+    async def environment_images(self, name: str) -> ImageStatus:
+        """Whether an environment's current image is built, with its image records and newest build run."""
+        return _parsed(await get_environment_images.asyncio_detailed(name, client=self.client))  # type: ignore[no-any-return]
+
+    async def build_environment(self, name: str) -> ImageStatus:
+        """Make an environment's current image available: pulled or built unless it is, joining a build under way."""
+        return _parsed(await build_environment.asyncio_detailed(name, client=self.client))  # type: ignore[no-any-return]
+
+    async def simulator_images(self, simulator_id: int) -> ImageStatus:
+        """Whether a simulator's image is built, with its image records and newest build run."""
+        return _parsed(await get_simulator_images.asyncio_detailed(simulator_id, client=self.client))  # type: ignore[no-any-return]
+
+    async def build_simulator(self, simulator_id: int) -> ImageStatus:
+        """Make a simulator's image available: pulled or built unless it is, joining a build under way."""
+        return _parsed(await build_simulator.asyncio_detailed(simulator_id, client=self.client))  # type: ignore[no-any-return]
 
     async def submit(
         self,

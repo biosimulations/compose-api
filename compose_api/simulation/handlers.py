@@ -27,7 +27,7 @@ from compose_api.dependencies import (
 )
 from compose_api.observability.api_events import record_api_event
 from compose_api.registry.manifest import SERVICE_BUNDLE
-from compose_api.simulation import images
+from compose_api.simulation import builds, images
 from compose_api.simulation.hpc_utils import get_correlation_id, get_experiment_id, get_singularity_hash
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.labels import labels
@@ -219,21 +219,15 @@ async def _dispatch_job(
 ) -> None:
     simulator_version = simulation.simulator_version
     hpc_db = database_service.get_hpc_db()
-    simulator_db = database_service.get_simulator_db()
     random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
 
-    # Check, then fetch under the hash's lock (which _download_or_build_container checks again): submissions that
-    # arrive while the image is fetched wait for it instead of fetching it over the file the first one's jobs mount.
-    if not await _image_ready(simulator_db, simulator_version):
-        async with simulator_db.container_lock(simulator_version.container_def_hash):
-            await _download_or_build_container(
-                simulation_service_slurm=simulation_service_slurm,
-                simulator_version=simulator_version,
-                hpc_db=hpc_db,
-                job_monitor=job_monitor,
-                random_string=random_string_7_hex,
-                simulator_db=simulator_db,
-            )
+    await ensure_image(
+        simulator_version,
+        database_service=database_service,
+        simulation_service_slurm=simulation_service_slurm,
+        job_monitor=job_monitor,
+        random_string=random_string_7_hex,
+    )
 
     # Minted before submission so the job can carry the run's trace context (docs/plan-observability.md O1).
     correlation_id = get_correlation_id(random_string=random_string_7_hex, job_type=JobType.SIMULATION)
@@ -265,6 +259,34 @@ async def _dispatch_job(
 #: One build at a time per container definition: runs submitted together with a new definition (a SED-ML comparison's
 #: solvers) wait for the first one's build instead of starting their own (they would share its files on the cluster).
 _build_locks: dict[str, asyncio.Lock] = {}
+
+
+async def ensure_image(
+    simulator_version: SimulatorVersion,
+    *,
+    database_service: DatabaseService,
+    simulation_service_slurm: SimulationService,
+    job_monitor: JobMonitor,
+    random_string: str,
+) -> None:
+    """Make the simulator's image available: a run's preprocess, and a build invoked on its own (E5).
+
+    Check, then fetch under the hash's lock (held in Postgres, so across API processes; _download_or_build_container
+    checks again): submissions that arrive while the image is fetched wait for it instead of fetching it over the file
+    the first one's jobs mount.
+    """
+    simulator_db = database_service.get_simulator_db()
+    if await _image_ready(simulator_db, simulator_version):
+        return
+    async with simulator_db.container_lock(simulator_version.container_def_hash):
+        await _download_or_build_container(
+            simulation_service_slurm=simulation_service_slurm,
+            simulator_version=simulator_version,
+            hpc_db=database_service.get_hpc_db(),
+            job_monitor=job_monitor,
+            random_string=random_string,
+            simulator_db=simulator_db,
+        )
 
 
 async def _image_ready(simulator_db: SimulatorDatabaseService, simulator_version: SimulatorVersion) -> bool:
@@ -314,11 +336,19 @@ async def _download_or_build_container(
                     f"{images.sif_location(simulator_version)}"
                 )
             return
+        # a build of this definition that has not finished (started by another API process, or before a restart)
+        # is joined: its run's status is in the database, whichever backend it runs on
+        in_flight = await hpc_db.get_hpcrun_by_ref(
+            ref_id=simulator_version.database_id, job_type=JobType.BUILD_CONTAINER
+        )
         try:
-            if get_settings().build_backend == "k8s":
+            if in_flight is not None and in_flight.status not in builds.FINISHED:
+                logger.info(f"Joining build run {in_flight.database_id} of simulator {simulator_version.database_id}")
+                build: HpcRun | None = await builds.wait_for_run(in_flight, hpc_db)
+            elif get_settings().build_backend == "k8s":
                 from compose_api.simulation.build_k8s import build_and_wait
 
-                build: HpcRun | None = await build_and_wait(simulator_version, hpc_db, random_string)
+                build = await build_and_wait(simulator_version, hpc_db, random_string)
             else:
                 build = await _build_container_and_wait(
                     simulation_service_slurm=simulation_service_slurm,

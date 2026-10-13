@@ -458,6 +458,8 @@ $ compose-api simulators [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 * `list`: Simulator versions: id, definition hash,...
+* `images`: Whether a simulator's image is built: its...
+* `build`: Make a simulator's image available: pulled...
 
 ### `compose-api simulators list`
 
@@ -468,6 +470,44 @@ Simulator versions: id, definition hash, base image, creation time.
 ```console
 $ compose-api simulators list [OPTIONS]
 ```
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api simulators images`
+
+Whether a simulator's image is built: its image records and its newest build run.
+
+**Usage**:
+
+```console
+$ compose-api simulators images [OPTIONS] SIMULATOR_ID
+```
+
+**Arguments**:
+
+* `SIMULATOR_ID`: The simulator's id.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api simulators build`
+
+Make a simulator's image available: pulled or built unless it is, joining a build under way.
+
+**Usage**:
+
+```console
+$ compose-api simulators build [OPTIONS] SIMULATOR_ID
+```
+
+**Arguments**:
+
+* `SIMULATOR_ID`: The simulator's id.  [required]
 
 **Options**:
 
@@ -793,6 +833,8 @@ $ compose-api environments [OPTIONS] COMMAND [ARGS]...
 
 * `list`: Environments: the `--simulator` to run in...
 * `manifest`: An environment's interface manifest: its...
+* `images`: Whether an environment's current image is...
+* `build`: Make an environment's current image...
 
 ### `compose-api environments list`
 
@@ -819,6 +861,46 @@ An environment's interface manifest: its steps and processes, their config schem
 
 ```console
 $ compose-api environments manifest [OPTIONS] NAME
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments images`
+
+Whether an environment's current image is built: its image records and its newest build run.
+
+**Usage**:
+
+```console
+$ compose-api environments images [OPTIONS] NAME
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments build`
+
+Make an environment's current image available: pulled or built unless it is, joining a build under way.
+
+Returns at once; `environments images` follows the build.
+
+**Usage**:
+
+```console
+$ compose-api environments build [OPTIONS] NAME
 ```
 
 **Arguments**:

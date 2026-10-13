@@ -14,8 +14,9 @@ from pbest.utils.input_types import ContainerizationEngine, ContainerizationFile
 
 from compose_api.config import get_settings, override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
-from compose_api.simulation import build_k8s, handlers
-from compose_api.simulation.build_k8s import BuildFailedError, BuildSite, K8sPoller, build_job, job_name
+from compose_api.simulation import build_k8s, builds, handlers
+from compose_api.simulation.build_k8s import BuildSite, K8sPoller, build_job, job_name
+from compose_api.simulation.builds import BuildFailedError
 from compose_api.simulation.models import ImageKind, JobStatus, JobType
 
 SITE = BuildSite(
@@ -107,7 +108,7 @@ async def test_a_build_is_a_k8s_run_the_monitor_updates_and_its_image_is_recorde
     images_dir = k8s_site / get_settings().namespace / "images"
     fake = FakeK8s(outcome, sif=images_dir / f"{simulator.container_def_hash}.sif")
     monkeypatch.setattr(build_k8s, "k8s_builds", lambda: fake)
-    monkeypatch.setattr(build_k8s, "POLL_SECONDS", 0.05)
+    monkeypatch.setattr(builds, "POLL_SECONDS", 0.05)
 
     async def monitor() -> None:
         """The job monitor's k8s pass: unfinished k8s runs, their Jobs' states written back."""

@@ -30,8 +30,9 @@ from compose_api.common.hpc.models import SlurmJob
 from compose_api.config import Settings, get_settings
 from compose_api.db.services.hpc_db import HPCDatabaseService
 from compose_api.simulation import images
+from compose_api.simulation.builds import BuildFailedError, wait_for_run
 from compose_api.simulation.hpc_utils import get_slurm_singularity_container_file, get_slurm_singularity_def_file
-from compose_api.simulation.models import HpcRun, JobStatus, JobType, SimulatorVersion
+from compose_api.simulation.models import HpcRun, JobType, SimulatorVersion
 
 if TYPE_CHECKING:
     from kubernetes.client import V1Job
@@ -39,12 +40,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 WORK_DIR = "/work"
-POLL_SECONDS = 10.0  # how often a waiter reads its build run's status
 LABEL = "compose-api-build"
-
-
-class BuildFailedError(RuntimeError):
-    pass
 
 
 @dataclass(frozen=True)
@@ -277,24 +273,15 @@ async def submit_build(simulator_version: SimulatorVersion, hpc_db: HPCDatabaseS
 
 
 async def wait_for_build(run: HpcRun, hpc_db: HPCDatabaseService) -> HpcRun:
-    """Wait for the monitor to see the build finish, reading its status in the database (any API process may wait on
-    a build another started). `BuildFailedError` with the pods' logs if it fails or outlives its deadline."""
-    timeout = get_settings().build_k8s_timeout_seconds + 300
-    deadline = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
-    current: HpcRun | None = run
-    while current is not None and current.status not in (JobStatus.COMPLETED, JobStatus.FAILED):
-        if datetime.datetime.now() > deadline:
-            break
-        await asyncio.sleep(POLL_SECONDS)
-        current = await hpc_db.get_hpcrun(run.database_id)
-    if current is not None and current.status == JobStatus.COMPLETED:
-        return current
-    status = current.status if current is not None else "missing"
+    """Wait for the monitor to see the build finish (`builds.wait_for_run`); on failure, the pods' logs too."""
     try:
-        logs = await asyncio.to_thread(k8s_builds().logs, run.external_id or "")
-    except Exception as e:
-        logs = f"(no logs: {type(e).__name__}: {e})"
-    raise BuildFailedError(f"Container build Job {run.external_id} {status}\n{logs[-4000:]}")
+        return await wait_for_run(run, hpc_db)
+    except BuildFailedError as e:
+        try:
+            logs = await asyncio.to_thread(k8s_builds().logs, run.external_id or "")
+        except Exception as le:
+            logs = f"(no logs: {type(le).__name__}: {le})"
+        raise BuildFailedError(f"{e}\n{logs[-4000:]}") from e
 
 
 async def build_and_wait(simulator_version: SimulatorVersion, hpc_db: HPCDatabaseService, suffix: str) -> HpcRun:

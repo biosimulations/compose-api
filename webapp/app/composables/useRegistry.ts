@@ -70,3 +70,19 @@ export function fetchManifest(name: string): Promise<InterfaceManifest | null> {
   }
   return pending
 }
+
+export type ImageStatus = Schemas['ImageStatus']
+
+/** Whether an environment's current image is built (docs/plan-environment-builds.md, phase 4); never cached. */
+export async function fetchImageStatus(name: string): Promise<ImageStatus> {
+  const { data, error } = await useApi().GET('/registry/environments/{name}/images', { params: { path: { name } } })
+  if (error || !data) throw new Error(errorMessage(error, `Could not read the image status of ${name}`))
+  return data
+}
+
+/** Ask for the environment's image: answered at once when it is built, otherwise its pull or build starts. */
+export async function requestBuild(name: string): Promise<ImageStatus> {
+  const { data, error } = await useApi().POST('/registry/environments/{name}/build', { params: { path: { name } } })
+  if (error || !data) throw new Error(errorMessage(error, `Could not start the build of ${name}`))
+  return data
+}

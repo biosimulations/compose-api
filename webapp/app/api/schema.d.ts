@@ -433,6 +433,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/registry/environments/{name}/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether an environment's current image is built, with its image records and newest build run */
+        get: operations["get-environment-images"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/environments/{name}/build": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Make an environment's current image available: 200 if it is, 202 once its pull or build has started */
+        post: operations["build-environment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/simulators/{simulator_id}/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether a simulator's image is built, with its image records and newest build run */
+        get: operations["get-simulator-images"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/simulators/{simulator_id}/build": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Make a simulator's image available: 200 if it is, 202 once its pull or build has started */
+        post: operations["build-simulator"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sedml/preview": {
         parameters: {
             query?: never;
@@ -1081,6 +1149,36 @@ export interface components {
             id: string;
             level: components["schemas"]["CurationLevel"];
         };
+        /**
+         * EnvironmentImage
+         * @description A built or pulled image of a simulator's definition (docs/plan-environment-builds.md, E3).
+         *
+         *     Images are write-once (E4): one that turns out missing is marked unavailable, never replaced in place.
+         */
+        EnvironmentImage: {
+            /** Database Id */
+            database_id: number;
+            /** Simulator Id */
+            simulator_id: number;
+            kind: components["schemas"]["ImageKind"];
+            /** Location */
+            location: string;
+            /** Digest */
+            digest?: string | null;
+            /** Size Bytes */
+            size_bytes?: number | null;
+            /** Hpcrun Id */
+            hpcrun_id?: number | null;
+            /**
+             * Available
+             * @default true
+             */
+            available: boolean;
+            /** Created At */
+            created_at?: string | null;
+            /** Verified At */
+            verified_at?: string | null;
+        };
         /** EnvironmentSummary */
         EnvironmentSummary: {
             /** Name */
@@ -1162,6 +1260,41 @@ export interface components {
             error_message?: string | null;
             /** Trace Id */
             trace_id?: string | null;
+        };
+        /**
+         * ImageKind
+         * @enum {string}
+         */
+        ImageKind: "sif" | "oci";
+        /**
+         * ImageState
+         * @enum {string}
+         */
+        ImageState: "available" | "building" | "failed" | "missing";
+        /**
+         * ImageStatus
+         * @description Whether a simulator's image is there to run from, and the records behind that answer.
+         */
+        ImageStatus: {
+            /** Simulator Id */
+            simulator_id: number;
+            /** Container Def Hash */
+            container_def_hash: string;
+            /**
+             * Environment
+             * @description The environment whose current definition this is
+             */
+            environment?: string | null;
+            state: components["schemas"]["ImageState"];
+            /** @description The available image runs use */
+            image?: components["schemas"]["EnvironmentImage"] | null;
+            /** @description The newest build run of the definition */
+            build?: components["schemas"]["HpcRun"] | null;
+            /**
+             * Images
+             * @description Every image recorded, newest first
+             */
+            images?: components["schemas"]["EnvironmentImage"][];
         };
         /**
          * InterfaceComponent
@@ -2555,6 +2688,176 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Solver"][];
+                };
+            };
+        };
+    };
+    "get-environment-images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageStatus"];
+                };
+            };
+            /** @description No such environment here */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "build-environment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageStatus"];
+                };
+            };
+            /** @description Its pull or build has started (or was already under way) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageStatus"];
+                };
+            };
+            /** @description No such environment here */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "get-simulator-images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                simulator_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageStatus"];
+                };
+            };
+            /** @description No such simulator */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "build-simulator": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                simulator_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageStatus"];
+                };
+            };
+            /** @description Its pull or build has started (or was already under way) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageStatus"];
+                };
+            };
+            /** @description No such simulator */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

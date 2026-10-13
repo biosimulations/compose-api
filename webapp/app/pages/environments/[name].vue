@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { EnvironmentSummary, InterfaceManifest } from '~/composables/useRegistry'
+import type { EnvironmentSummary, ImageStatus, InterfaceManifest } from '~/composables/useRegistry'
 import type { Component } from '~/viewers/composite/interfaces'
 
 // One environment: its image, the versions its manifest was read with, and every class it provides with its config
@@ -12,6 +12,47 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const filter = ref('')
 const highlighted = ref<string | null>(null)
+const image = ref<ImageStatus | null>(null)
+const imageError = ref<string | null>(null)
+const requesting = ref(false)
+let imagePoll: ReturnType<typeof setInterval> | null = null
+
+const imageBadge = computed(() => {
+  switch (image.value?.state) {
+    case 'available': return { color: 'success' as const, label: 'built' }
+    case 'building': return { color: 'info' as const, label: 'building' }
+    case 'failed': return { color: 'error' as const, label: 'last build failed' }
+    default: return { color: 'neutral' as const, label: 'not built' }
+  }
+})
+
+async function refreshImage() {
+  try {
+    image.value = await fetchImageStatus(name.value)
+    imageError.value = null
+  } catch (e) {
+    imageError.value = (e as Error).message
+  }
+  // follow a build until it ends
+  if (image.value?.state === 'building' && !imagePoll) imagePoll = setInterval(refreshImage, 15000)
+  if (image.value?.state !== 'building' && imagePoll) {
+    clearInterval(imagePoll)
+    imagePoll = null
+  }
+}
+
+async function build() {
+  requesting.value = true
+  try {
+    image.value = await requestBuild(name.value)
+    await refreshImage()
+  } catch (e) {
+    imageError.value = (e as Error).message
+  } finally {
+    requesting.value = false
+  }
+}
+onBeforeUnmount(() => imagePoll && clearInterval(imagePoll))
 
 const environment = computed(() => (manifest.value?.environment ?? {}) as Record<string, unknown>)
 const versions = computed(() => {
@@ -37,6 +78,7 @@ onMounted(async () => {
     if (!summary.value) error.value = `There is no environment named ${name.value}.`
     else if (!m) error.value = `No interface manifest has been generated for ${name.value}.`
     manifest.value = m
+    if (summary.value) void refreshImage()
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -69,6 +111,20 @@ watch(() => route.hash, hash => (highlighted.value = decodeURIComponent(hash.sli
         <span>{{ summary.kind }}{{ summary.simulator ? ` · run with simulator=${summary.simulator}` : ' · the default for runs that name no simulator' }}</span>
         <span class="text-muted">Image</span>
         <code class="text-xs break-all">{{ summary.image ?? '—' }}</code>
+        <span class="text-muted">On the cluster</span>
+        <span class="flex flex-wrap items-center gap-2">
+          <template v-if="image">
+            <UBadge :color="imageBadge.color" variant="subtle" size="sm">{{ imageBadge.label }}</UBadge>
+            <span v-if="image.image?.size_bytes" class="text-xs text-muted">{{ (image.image.size_bytes / 1e9).toFixed(2) }} GB</span>
+            <span v-if="image.build" class="text-xs text-muted">newest build run {{ image.build.database_id }} · {{ image.build.backend }} · {{ image.build.status ?? 'submitted' }}</span>
+            <UButton
+              v-if="image.state === 'missing' || image.state === 'failed'"
+              size="xs" icon="i-lucide-hammer" label="Build" color="neutral" variant="subtle" :loading="requesting" @click="build"
+            />
+          </template>
+          <span v-else-if="imageError" class="text-xs text-error">{{ imageError }}</span>
+          <span v-else class="text-xs text-muted">…</span>
+        </span>
         <template v-if="summary.stale">
           <span class="text-muted">Manifest read from</span>
           <span><code class="text-xs break-all">{{ summary.manifest_image }}</code> <UBadge color="warning" variant="subtle" size="sm">earlier image</UBadge></span>
