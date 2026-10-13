@@ -66,6 +66,10 @@ class ORMHpcRun(DeclarativeTableBase):
     job_type: Mapped[JobTypeDB] = mapped_column(nullable=False)
     correlation_id: Mapped[str] = mapped_column(nullable=False, index=True, unique=True)
     slurmjobid: Mapped[int | None] = mapped_column(nullable=True)  # None: the submission failed before sbatch
+    # where the job runs and its id there (docs/plan-environment-builds.md, E1): slurm and the SLURM job id, or k8s
+    # and the Kubernetes Job's name; the monitor asks each backend about its own runs
+    backend: Mapped[str] = mapped_column(String(16), nullable=False, server_default="slurm", index=True)
+    external_id: Mapped[str | None] = mapped_column(nullable=True)
     start_time: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
     end_time: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
     status: Mapped[JobStatusDB] = mapped_column(nullable=False)
@@ -86,6 +90,8 @@ class ORMHpcRun(DeclarativeTableBase):
         return HpcRun(
             database_id=self.id,
             slurmjobid=self.slurmjobid,
+            backend=self.backend,
+            external_id=self.external_id,
             correlation_id=self.correlation_id,
             job_type=self.job_type.to_job_type(),
             sim_id=self.simulation_id,

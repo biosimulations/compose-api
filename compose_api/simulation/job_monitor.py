@@ -1,8 +1,9 @@
 import asyncio
 import logging
 from asyncio import Queue
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
+from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService
@@ -22,10 +23,18 @@ _FAILED = frozenset({
 })
 
 
+class BackendPoller(Protocol):
+    """A backend other than SLURM (docs/plan-environment-builds.md, E2): the state of each of its jobs, by external
+    id, as a SlurmJob (its `job_state` one of the JobStatus values, upper-case); a job it does not know is left out."""
+
+    async def states(self, external_ids: list[str]) -> dict[str, SlurmJob]: ...
+
+
 class JobMonitor:
     database_service: DatabaseService
     slurm_service: SlurmService
     internal_listeners: dict[int, Queue[HpcRun]] = {}
+    pollers: dict[str, "BackendPoller"]
     _polling_task: asyncio.Task[None] | None = None
     _stop_event: asyncio.Event
 
@@ -38,6 +47,7 @@ class JobMonitor:
         self.database_service = database_service
         self.slurm_service = slurm_service
         self.event_ingester = event_ingester
+        self.pollers = {}
         self._stop_event = asyncio.Event()
 
     async def start_polling(self, interval_seconds: int = 30) -> None:
@@ -89,6 +99,10 @@ class JobMonitor:
                 failed.append(simulation_id)
         return failed
 
+    def register_backend(self, name: str, poller: "BackendPoller") -> None:
+        """Poll runs whose backend is `name` with `poller` (docs/plan-environment-builds.md, E2); SLURM is built in."""
+        self.pollers[name] = poller
+
     async def update_running_jobs(self) -> None:
         # Every run that has not reached a terminal status, not only the RUNNING ones: a
         # job seen as PENDING on one poll must still be polled on the next, or it is
@@ -97,16 +111,9 @@ class JobMonitor:
         if not running_jobs:
             logger.debug("No unfinished jobs found for polling.")
             return
-        job_ids = [job.slurmjobid for job in running_jobs if job.slurmjobid]
-        if not job_ids:
-            logger.debug("No valid slurm job IDs found in running jobs.")
-            return
-        slurm_jobs_from_squeue = await self.slurm_service.get_job_status_squeue(job_ids)
-        slurm_jobs_from_sacct = await self.slurm_service.get_job_status_sacct(job_ids)
-        slurm_job_map = {job.job_id: job for job in slurm_jobs_from_squeue}
-        slurm_job_map.update({job.job_id: job for job in slurm_jobs_from_sacct})
+        observed = await self._observe(running_jobs)
         for hpc_run in running_jobs:
-            slurm_job = slurm_job_map.get(hpc_run.slurmjobid) if hpc_run.slurmjobid is not None else None
+            slurm_job = observed.get(hpc_run.database_id)
             if not slurm_job or not slurm_job.job_state:
                 continue
             try:
@@ -122,9 +129,10 @@ class JobMonitor:
                     await record_api_event(
                         self.database_service,
                         hpc_run,
-                        f"slurm.{new_status.value}",
+                        f"{hpc_run.backend}.{new_status.value}",
                         {
                             "slurm_job_id": hpc_run.slurmjobid,
+                            "external_id": hpc_run.external_id,
                             "previous": hpc_run.status.value if hpc_run.status else None,
                             "start_time": slurm_job.start_time,
                             "end_time": slurm_job.end_time,
@@ -146,8 +154,36 @@ class JobMonitor:
                 logger.exception(f"Error updating HpcRun {hpc_run.database_id}; polling the remaining runs.")
                 continue
 
-            if slurm_job.job_id in self.internal_listeners:
+            if hpc_run.backend == "slurm" and slurm_job.job_id in self.internal_listeners:
                 self.internal_listeners[slurm_job.job_id].put_nowait(hpc_run)
+
+    async def _observe(self, runs: list[HpcRun]) -> dict[int, SlurmJob]:
+        """Each run's job as its backend reports it, by run id: SLURM through squeue and sacct, any other backend
+        through its registered poller by external id. A backend that fails to answer is skipped this pass."""
+        observed: dict[int, SlurmJob] = {}
+        slurm_runs = [r for r in runs if r.backend == "slurm" and r.slurmjobid]
+        if slurm_runs:
+            job_ids = [r.slurmjobid for r in slurm_runs if r.slurmjobid is not None]
+            slurm_jobs_from_squeue = await self.slurm_service.get_job_status_squeue(job_ids)
+            slurm_jobs_from_sacct = await self.slurm_service.get_job_status_sacct(job_ids)
+            slurm_job_map = {job.job_id: job for job in slurm_jobs_from_squeue}
+            slurm_job_map.update({job.job_id: job for job in slurm_jobs_from_sacct})
+            for r in slurm_runs:
+                if r.slurmjobid in slurm_job_map:
+                    observed[r.database_id] = slurm_job_map[r.slurmjobid]
+        for backend, poller in self.pollers.items():
+            mine = [r for r in runs if r.backend == backend and r.external_id]
+            if not mine:
+                continue
+            try:
+                states = await poller.states([r.external_id for r in mine if r.external_id])
+            except Exception:
+                logger.exception(f"Could not poll the {backend} backend; its runs are polled again next pass.")
+                continue
+            for r in mine:
+                if r.external_id in states:
+                    observed[r.database_id] = states[r.external_id]
+        return observed
 
     def internal_subscribe(self, queue: Queue[HpcRun], job_id: int) -> None:
         self.internal_listeners[job_id] = queue
