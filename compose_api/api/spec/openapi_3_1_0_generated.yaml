@@ -886,6 +886,219 @@ paths:
                   $ref: '#/components/schemas/Solver'
                 type: array
                 title: Response List-Solvers
+  /sedml/preview:
+    post:
+      tags:
+      - SED-ML
+      summary: 'Translate a SED-ML archive without running it: its tasks, and what
+        each solver would run or why not'
+      operationId: preview-sedml
+      parameters:
+      - name: solvers
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Solvers to run (registry/solvers.yaml); all when omitted
+          title: Solvers
+        description: Solvers to run (registry/solvers.yaml); all when omitted
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_preview-sedml'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SedmlPreview'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sedml/run:
+    post:
+      tags:
+      - SED-ML
+      summary: Run each task of a SED-ML archive on several solvers, one run per solver,
+        grouped by a comparison
+      operationId: run-sedml
+      parameters:
+      - name: solvers
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Solvers to run (registry/solvers.yaml); all when omitted
+          title: Solvers
+        description: Solvers to run (registry/solvers.yaml); all when omitted
+      - name: task
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Only these SED-ML task ids; all when omitted
+          title: Task
+        description: Only these SED-ML task ids; all when omitted
+      - name: tags
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Tags for every run
+          title: Tags
+        description: Tags for every run
+      - name: description
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+      - name: rel_tol
+        in: query
+        required: false
+        schema:
+          type: number
+          exclusiveMinimum: 0
+          default: 0.0001
+          title: Rel Tol
+      - name: abs_tol_min
+        in: query
+        required: false
+        schema:
+          type: number
+          minimum: 0
+          default: 0.001
+          title: Abs Tol Min
+      - name: abs_tol_scale
+        in: query
+        required: false
+        schema:
+          type: number
+          minimum: 0
+          default: 1.0e-05
+          title: Abs Tol Scale
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_run-sedml'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SedmlRunResult'
+        '400':
+          description: Not an archive, an unknown solver, a bad tag, or no task any
+            solver accepted
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /comparisons:
+    get:
+      tags:
+      - SED-ML
+      summary: List comparisons, newest first
+      operationId: list-comparisons
+      parameters:
+      - name: source
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: "Only this source, e.g. upload:x.omex or biomodels:BIOMD\u2026"
+          title: Source
+        description: "Only this source, e.g. upload:x.omex or biomodels:BIOMD\u2026"
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonPage'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /comparisons/{comparison_id}:
+    get:
+      tags:
+      - SED-ML
+      summary: 'One comparison: its runs, and per report and data set each solver
+        pair''s score'
+      operationId: get-comparison
+      parameters:
+      - name: comparison_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Comparison Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comparison'
+        '404':
+          description: No such comparison
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /health:
     get:
       tags:
@@ -980,6 +1193,16 @@ components:
       - outputs
       - database_id
       title: BiGraphStep
+    Body_preview-sedml:
+      properties:
+        archive:
+          type: string
+          title: Archive
+          format: binary
+      type: object
+      required:
+      - archive
+      title: Body_preview-sedml
     Body_run-copasi:
       properties:
         sbml:
@@ -990,6 +1213,16 @@ components:
       required:
       - sbml
       title: Body_run-copasi
+    Body_run-sedml:
+      properties:
+        archive:
+          type: string
+          title: Archive
+          format: binary
+      type: object
+      required:
+      - archive
+      title: Body_run-sedml
     Body_run-simulation:
       properties:
         uploaded_file:
@@ -1071,6 +1304,109 @@ components:
 
         and which of this deployment''s environments provide its classes. Most `listed`
         entries are in none.'
+    Comparison:
+      properties:
+        comparison_id:
+          type: integer
+          title: Comparison Id
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+        name:
+          type: string
+          title: Name
+        source:
+          type: string
+          title: Source
+        sedml:
+          type: string
+          title: Sedml
+        task:
+          type: string
+          title: Task
+        status:
+          type: string
+          enum:
+          - running
+          - complete
+          - incomplete
+          title: Status
+        settings:
+          additionalProperties: true
+          type: object
+          title: Settings
+        members:
+          items:
+            $ref: '#/components/schemas/ComparisonMember'
+          type: array
+          title: Members
+        result:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Result
+        close:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Close
+          description: every compared data set close, every member completed
+      type: object
+      required:
+      - comparison_id
+      - name
+      - source
+      - sedml
+      - task
+      - status
+      - settings
+      - members
+      title: Comparison
+      description: 'One SED-ML task run on several solvers. `result` is filled once
+        every member has finished: per report and
+
+        data set label, each solver pair''s score and whether it is close.'
+    ComparisonMember:
+      properties:
+        solver:
+          type: string
+          title: Solver
+        simulation_id:
+          type: integer
+          title: Simulation Id
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      type: object
+      required:
+      - solver
+      - simulation_id
+      title: ComparisonMember
+    ComparisonPage:
+      properties:
+        comparisons:
+          items:
+            $ref: '#/components/schemas/Comparison'
+          type: array
+          title: Comparisons
+        total:
+          type: integer
+          title: Total
+        next_offset:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Next Offset
+      type: object
+      required:
+      - comparisons
+      - total
+      title: ComparisonPage
     ContainerizationEngine:
       type: integer
       enum:
@@ -1686,6 +2022,128 @@ components:
       - roots
       title: RunTraceTree
       description: A simulation's spans as a forest, each span carrying its own events.
+    SedmlFinding:
+      properties:
+        severity:
+          type: string
+          enum:
+          - error
+          - warning
+          - info
+          title: Severity
+        code:
+          type: string
+          title: Code
+        message:
+          type: string
+          title: Message
+        solver:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Solver
+        task:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task
+        path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Path
+      type: object
+      required:
+      - severity
+      - code
+      - message
+      title: SedmlFinding
+      description: A finding of the translation (process-bigraph-lang's `X4xx`) or
+        of the checker on a solver's instance.
+    SedmlPreview:
+      properties:
+        source:
+          type: string
+          title: Source
+        tasks:
+          items:
+            $ref: '#/components/schemas/SedmlTask'
+          type: array
+          title: Tasks
+        findings:
+          items:
+            $ref: '#/components/schemas/SedmlFinding'
+          type: array
+          title: Findings
+      type: object
+      required:
+      - source
+      - tasks
+      - findings
+      title: SedmlPreview
+    SedmlRunResult:
+      properties:
+        comparisons:
+          items:
+            $ref: '#/components/schemas/Comparison'
+          type: array
+          title: Comparisons
+        findings:
+          items:
+            $ref: '#/components/schemas/SedmlFinding'
+          type: array
+          title: Findings
+      type: object
+      required:
+      - comparisons
+      - findings
+      title: SedmlRunResult
+    SedmlTask:
+      properties:
+        sedml:
+          type: string
+          title: Sedml
+        task:
+          type: string
+          title: Task
+        name:
+          type: string
+          title: Name
+        template:
+          type: string
+          title: Template
+        solvers:
+          items:
+            type: string
+          type: array
+          title: Solvers
+          description: the solvers whose instance compiled
+        refused:
+          items:
+            type: string
+          type: array
+          title: Refused
+          description: the solvers refused by an error finding
+        reports:
+          items:
+            type: string
+          type: array
+          title: Reports
+        plots:
+          items:
+            type: string
+          type: array
+          title: Plots
+      type: object
+      required:
+      - sedml
+      - task
+      - name
+      - template
+      - solvers
+      title: SedmlTask
+      description: 'One SED-ML task: its translation''s template text, the solvers
+        that accept it, and its reports and plots.'
     SimulationDetail:
       properties:
         simulation_id:

@@ -87,11 +87,17 @@ app.add_typer(curated_app, name="curated")
 datasets_app = typer.Typer(help="The files runs produced.", no_args_is_help=True)
 app.add_typer(datasets_app, name="datasets")
 simulations_app = typer.Typer(help="Find simulations and their ids.", no_args_is_help=True)
+sedml_app = typer.Typer(help="Run SED-ML archives on several solvers and compare them.", no_args_is_help=True)
+comparisons_app = typer.Typer(
+    help="A SED-ML task's runs on several solvers, and how they compare.", no_args_is_help=True
+)
 app.add_typer(simulations_app, name="simulations")
 environments_app = typer.Typer(
     help="The environments documents run in, and the process interfaces each provides.", no_args_is_help=True
 )
 app.add_typer(environments_app, name="environments")
+app.add_typer(sedml_app, name="sedml")
+app.add_typer(comparisons_app, name="comparisons")
 
 
 @app.callback()
@@ -869,3 +875,109 @@ def openapi(
 
 def main() -> None:
     app()
+
+
+# -- SED-ML runs and comparisons ----------------------------------------------------------------------------------
+
+Archive = Annotated[
+    Path, typer.Argument(help="A COMBINE/OMEX archive with SED-ML and its models.", exists=True, dir_okay=False)
+]
+SolverOption = Annotated[
+    list[str] | None, typer.Option("--solver", "-s", help="A solver id (repeatable); all when omitted.")
+]
+
+
+def _listed(value: object) -> list[str]:
+    """A generated model's optional list field (`UNSET` when absent) as a list."""
+    return [str(v) for v in value] if isinstance(value, list) else []
+
+
+@sedml_app.command("preview")
+@claims("sedml preview", "preview-sedml")
+@handled
+def sedml_preview(ctx: typer.Context, archive: Archive, solver: SolverOption = None) -> None:
+    """Translate an archive without running it: its tasks, the solvers that accept each, and the findings."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        preview = s.sedml_preview(archive, solvers=solver or ())
+    if settings.output is Output.JSON:
+        emit(Output.JSON, preview.to_dict())
+        return
+    rows = [
+        {
+            "task": t.task,
+            "sedml": t.sedml,
+            "solvers": ", ".join(t.solvers),
+            "refused": ", ".join(_listed(t.refused)) or None,
+            "reports": ", ".join(_listed(t.reports)),
+        }
+        for t in preview.tasks
+    ]
+    emit(settings.output, rows, ["task", "sedml", "solvers", "refused", "reports"])
+    for f in preview.findings:
+        err.print(f"{f.severity} {f.code} {f.solver or ''} {f.task or ''}: {f.message}")
+
+
+@sedml_app.command("run")
+@claims("sedml run", "run-sedml")
+@handled
+def sedml_run(
+    ctx: typer.Context,
+    archive: Archive,
+    solver: SolverOption = None,
+    task: Annotated[list[str] | None, typer.Option(help="A SED-ML task id (repeatable); all when omitted.")] = None,
+    tag: Annotated[list[str] | None, typer.Option("--tag", "-t", help="A tag for every run (repeatable).")] = None,
+    description: Annotated[str | None, typer.Option(help="What the runs are for.")] = None,
+) -> None:
+    """Run each task once per solver; prints each task's comparison and its runs."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        result = s.sedml_run(archive, solvers=solver or (), tasks=task or (), tags=tag or (), description=description)
+    if settings.output is Output.JSON:
+        emit(Output.JSON, result.to_dict())
+        return
+    rows = [
+        {"comparison": c.comparison_id, "task": c.task, "solver": m.solver, "simulation": m.simulation_id}
+        for c in result.comparisons
+        for m in c.members
+    ]
+    emit(settings.output, rows, ["comparison", "task", "solver", "simulation"])
+
+
+@comparisons_app.command("list")
+@claims("comparisons list", "list-comparisons")
+@handled
+def comparisons_list(
+    ctx: typer.Context,
+    source: Annotated[str | None, typer.Option(help="Only this source, e.g. upload:x.omex.")] = None,
+    limit: Annotated[int, typer.Option(help="At most this many.")] = 25,
+    offset: Annotated[int, typer.Option(help="Skip this many.")] = 0,
+) -> None:
+    """Comparisons, newest first."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        page = s.comparisons(source=source, limit=limit, offset=offset)
+    rows = [
+        {
+            "comparison": c.comparison_id,
+            "name": c.name,
+            "status": str(c.status),
+            "close": c.close,
+            "solvers": ", ".join(m.solver for m in c.members),
+        }
+        for c in page.comparisons
+    ]
+    emit(settings.output, rows if settings.output is not Output.JSON else [c.to_dict() for c in page.comparisons],
+         ["comparison", "name", "status", "close", "solvers"])  # fmt: skip
+
+
+@comparisons_app.command("show")
+@claims("comparisons show", "get-comparison")
+@handled
+def comparisons_show(
+    ctx: typer.Context, comparison_id: Annotated[int, typer.Argument(help="The comparison id.")]
+) -> None:
+    """One comparison: its runs, and per report the worst data set once every run has finished."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.comparison(comparison_id).to_dict())

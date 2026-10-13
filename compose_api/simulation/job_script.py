@@ -91,6 +91,14 @@ announce_input() {  # the submitted file, before the simulator runs, with what t
     sum=$(sha256_of "$EXPERIMENT/$f")
     emit artifact.written info "{\"uri\":\"$f\",\"kind\":\"input\",\"name\":\"Simulation input\",\"bytes\":$size,\"sha256\":\"$sum\",\"attributes\":{\"file_type\":\"@@SUFFIX@@\",\"end_time\":@@END_TIME_JSON@@,\"batch\":@@BATCH@@}}"
 }
+announce_source() {  # a SED-ML run's original archive (docs/plan-sedml.md, D6), uploaded beside the input
+    local f="source.omex" size sum
+    [ -f "$EXPERIMENT/$f" ] || return 0
+    chmod a+r "$EXPERIMENT/$f" 2>/dev/null || true
+    size=$(wc -c < "$EXPERIMENT/$f" | tr -d ' ')
+    sum=$(sha256_of "$EXPERIMENT/$f")
+    emit artifact.written info "{\"uri\":\"$f\",\"kind\":\"sedml-omex\",\"name\":\"SED-ML source\",\"bytes\":$size,\"sha256\":\"$sum\"}"
+}
 finish() {
     code=$?
     trap - EXIT
@@ -107,6 +115,7 @@ trap 'exit 143' TERM
 emit span.start info "{\"name\":\"job\",\"attrs\":$JOB_ATTRS,\"start_ts\":\"$JOB_START_TS\"}"
 emit job.start info "$JOB_ATTRS"
 announce_input || true
+announce_source || true
 
 cat > "$EVENTS/pbg.env" <<'PBG_ENV'
 PBG_TRACEPARENT=00-@@TRACE_ID@@-@@JOB_SPAN@@-01
@@ -130,6 +139,10 @@ singularity run \
 (cd "$EXPERIMENT/output" && zip -r ../results.zip ./*)
 echo "Simulation run completed. data saved to $EXPERIMENT."
 """
+
+
+#: A SED-ML run's original archive in the experiment directory (``announce_source`` in the script above).
+SOURCE_FILE_NAME = "source.omex"
 
 
 @dataclass(frozen=True)

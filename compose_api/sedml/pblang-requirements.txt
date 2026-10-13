@@ -1,0 +1,4 @@
+# process-bigraph-lang, installed in its own environment (.pblang; settings.pblang_python). PyYAML: 0.3.0's
+# `sedml translate` reads its solvers file with it but does not require it (fixed in process-bigraph-lang 0.3.1).
+process-bigraph-lang==0.3.0
+pyyaml>=6
