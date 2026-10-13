@@ -1,6 +1,6 @@
 # SED-ML models as process-bigraph runs across solvers, compared
 
-**Status (2026-10-13): phases 0 to 5 merged and released in 0.7.18; phase 6 in review.** One PR per phase and repository, merged with a merge commit on
+**Status (2026-10-13): every phase merged; phases 0 to 5 released in 0.7.18, phase 6 in 0.7.19. Verified on the cluster: not yet (see "Verification"; the first live comparison waited on environment builds, `docs/plan-environment-builds.md`).** One PR per phase and repository, merged with a merge commit on
 the maintainer's word; each PR updates the table below. A merge deploys nothing by itself: the next release's image
 ships it (CLAUDE.md, "Deploys are GitOps"). The language side is planned in process-bigraph-lang's
 [`docs/v2/sedml-plan.md`](https://github.com/biosimulations/process-bigraph-lang/blob/main/docs/v2/sedml-plan.md).
@@ -13,7 +13,7 @@ ships it (CLAUDE.md, "Deploys are GitOps"). The language side is planned in proc
 | 3 | `POST /sedml/run` and `/sedml/preview`; the `sedml-omex` and `input` datasets; comparisons computed on the server | compose-api | merged (#285) |
 | 4 | BioModels and biosimulations.org source routes, cached; run shortcuts; references (original results); the curated routes on the same path | compose-api | merged (#286; the curated routes and interpolation deferred) |
 | 5 | Web app: ad-hoc SED-ML page, sources, a Plotly viewer, the comparison page | compose-api `webapp/` | merged (#287) |
-| 6 | Regression and reproducibility suites, rerun on a schedule, with their pages | compose-api | in review |
+| 6 | Regression and reproducibility suites, rerun on a schedule, with their pages | compose-api | merged (#289); the `smoke` suite added |
 
 Phases 0, 1 and the inventory that opens phase 2 do not depend on each other. Phase 3 needs 1 and 2.
 
@@ -197,6 +197,8 @@ goes into the shared image) and `manifest.yaml` (what is admitted) from one list
     unavailable);
   - `biosimulations-reference`: ten biosimulations.org projects whose original runs used different simulators
     (Tellurium, COPASI, AMICI, PySCeS), each compared with its original results.
+  - `smoke`: two models (BIOMD0000000012, the Ciliberto project with its original results), the quick end-to-end
+    check after a release or an environment change.
 - **A suite run** (`POST /suites/{name}/run`, `compose_api/sedml/suite_runs.py`) gets the next number, then fetches,
   translates and submits every source in the background: one comparison per source and task, labelled
   `collection=<suite>` and `suite_run=<n>` (columns `comparison.collection`, `comparison.suite_run`, migration

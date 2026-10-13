@@ -19,7 +19,8 @@ from tests.sedml.conftest import PROJECT, needs_translator
 
 def test_the_seed_suites_parse() -> None:
     found = load_suites()
-    assert {"biomodels-ode-sample", "biosimulations-reference"} <= set(found)
+    assert {"biomodels-ode-sample", "biosimulations-reference", "smoke"} <= set(found)
+    assert len(found["smoke"].sources) == 2
     assert len(found["biomodels-ode-sample"].sources) == 20
     assert all(s.startswith("biosimulations:") for s in found["biosimulations-reference"].sources)
     with pytest.raises(ValueError):
