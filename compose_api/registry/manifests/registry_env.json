@@ -3,21 +3,74 @@
   "schema_version": "pbg-interfaces/1",
   "environment": {
     "name": "registry_env",
-    "image": "ghcr.io/biosimulations/registry_env:c7e984d31f441805315590a4c53e7f9f",
+    "image": "ghcr.io/biosimulations/registry_env:f10645d9db96012af5b844c704f6b129",
     "python": "3.12.15",
     "process_bigraph": "1.0.5",
     "bigraph_schema": "1.0.14",
     "packages": {
+      "biosim-toolkit": "0.1.0",
       "pb_multiscale_actin": "1.3.1",
       "pbsim-common": "0.1.2"
     },
     "roots": [
+      "biosim_toolkit",
       "pb_multiscale_actin",
       "pbsim_common"
     ],
     "generated_by": "process_bigraph_lang/v2/describe_env.py"
   },
   "components": [
+    {
+      "name": "DataGenerators",
+      "kind": "step",
+      "address": "local:!biosim_toolkit.sedml.DataGenerators",
+      "module": "biosim_toolkit.sedml",
+      "config_schema": {
+        "generators": "map",
+        "constants": "map[float]",
+        "skip": "integer"
+      },
+      "inputs": {
+        "result": "numeric_result"
+      },
+      "outputs": {
+        "data": "overwrite[map[string,list[float]]]"
+      },
+      "dynamic_ports": false,
+      "description": "`generators` maps each SED-ML data generator to its terms (`variable`, `coefficient`); a variable is `time`, a\nresult column (an SBML id), or a key of `constants` (constant parameters and compartments). `skip` drops that\nmany leading points (those before the SED-ML output start)."
+    },
+    {
+      "name": "Plots",
+      "kind": "step",
+      "address": "local:!biosim_toolkit.sedml.Plots",
+      "module": "biosim_toolkit.sedml",
+      "config_schema": {
+        "output_dir": "string",
+        "plots": "map"
+      },
+      "inputs": {
+        "data": "overwrite[map[string,list[float]]]"
+      },
+      "outputs": {},
+      "dynamic_ports": false,
+      "description": "`plots` maps each SED-ML plot to `file` (relative to `output_dir`), `name`, `kind` (`plot2D`, `plot3D`),\n`curves` (`name`, `x`, `y`: data generators), `surfaces` (`name`, `x`, `y`, `z`) and log axes; each is written\nas a Plotly figure with its data."
+    },
+    {
+      "name": "Report",
+      "kind": "step",
+      "address": "local:!biosim_toolkit.sedml.Report",
+      "module": "biosim_toolkit.sedml",
+      "config_schema": {
+        "output_dir": "string",
+        "reports": "map"
+      },
+      "inputs": {
+        "data": "overwrite[map[string,list[float]]]"
+      },
+      "outputs": {},
+      "dynamic_ports": false,
+      "description": "`reports` maps each SED-ML report to `file` (relative to `output_dir`), `name` and `data_sets` (`label`,\n`data_generator`); each is written as a CSV whose header is the labels."
+    },
     {
       "name": "ReaddyActinMembrane",
       "kind": "process",
