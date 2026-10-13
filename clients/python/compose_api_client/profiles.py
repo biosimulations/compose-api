@@ -9,6 +9,8 @@ Profile selection is `--profile` > `COMPOSE_API_CLI_PROFILE` > `production`. Eac
 The config file lives in the platform's user config directory; the working directory is never consulted.
 """
 
+from __future__ import annotations
+
 import hashlib
 import ipaddress
 import json
@@ -26,7 +28,7 @@ from urllib.parse import SplitResult, urlsplit
 import platformdirs
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
-from compose_api.cli.errors import ConfigError
+from compose_api_client.ext.errors import ConfigError
 
 APP_NAME = "compose-api"
 ENV_PREFIX = "COMPOSE_API_CLI_"
@@ -145,7 +147,7 @@ def canonical_auth0_domain(raw: str) -> str:
     return host
 
 
-class CliSettings(BaseModel):
+class Profile(BaseModel):
     """One resolved, validated profile. Every field is public; `binding_key` names the session it may use."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -253,11 +255,14 @@ class CliSettings(BaseModel):
         return hashlib.sha256(canonical.encode()).hexdigest()
 
 
+CliSettings = Profile
+
+
 @dataclass(frozen=True)
-class LoadedSettings:
+class LoadedProfile:
     """Validated settings plus where each value came from, for `config show`."""
 
-    settings: CliSettings
+    settings: Profile
     sources: Mapping[str, str]
     config_path: Path
     config_found: bool
@@ -277,9 +282,12 @@ class LoadedSettings:
         }
 
 
-def load_cli_settings(
+LoadedSettings = LoadedProfile
+
+
+def load_profile(
     profile: str | None = None, *, environ: Mapping[str, str] | None = None, config_path: Path | None = None
-) -> LoadedSettings:
+) -> LoadedProfile:
     """Resolve and validate one profile. Raises ConfigError before anything touches the network or a browser."""
     environ = os.environ if environ is None else environ
     config_path = default_config_path() if config_path is None else config_path
@@ -302,15 +310,16 @@ def load_cli_settings(
                 f"{field} ({sources[field]}) looks like a token; tokens never belong in CLI configuration"
             )
     try:
-        settings = CliSettings.model_validate({"profile": name, **values})
+        settings = Profile.model_validate({"profile": name, **values})
     except ValidationError as exc:
         raise ConfigError(_describe_validation_error(exc, sources, name, config_path))
 
     for field in PROFILE_FIELDS:
         sources.setdefault(field, "unset" if getattr(settings, field) is None else "default")
-    return LoadedSettings(
-        settings=settings, sources=sources, config_path=config_path, config_found=profiles is not None
-    )
+    return LoadedProfile(settings=settings, sources=sources, config_path=config_path, config_found=profiles is not None)
+
+
+load_cli_settings = load_profile
 
 
 def _select_profile(flag: str | None, env_values: Mapping[str, str]) -> tuple[str, str]:

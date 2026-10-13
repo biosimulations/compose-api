@@ -1,5 +1,7 @@
 """Non-secret generation/journal state and process locks. Never receives credential material."""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import os
@@ -16,7 +18,7 @@ import portalocker
 from platformdirs import user_state_path
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from compose_api.cli.errors import StorageError
+from compose_api_client.ext.errors import StorageError
 
 
 class SessionState(BaseModel):
@@ -53,7 +55,7 @@ class FileState:
             existed = self.root.exists()
             self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
             if os.name == "nt":
-                from compose_api.cli.auth import windows_state
+                from compose_api_client.auth import windows_state
 
                 if not existed:
                     windows_state.protect(self.root)
@@ -95,7 +97,7 @@ class FileState:
             os.close(descriptor)
             raise StorageError("Session files must be private, owned, regular files")
         if os.name == "nt":
-            from compose_api.cli.auth import windows_state
+            from compose_api_client.auth import windows_state
 
             try:
                 windows_state.validate(path)
@@ -157,7 +159,7 @@ class FileState:
                 handle.flush()
                 os.fsync(handle.fileno())
             if os.name == "nt":
-                from compose_api.cli.auth import windows_state
+                from compose_api_client.auth import windows_state
 
                 windows_state.validate(Path(temporary))
                 windows_state.replace(temporary, self.path)

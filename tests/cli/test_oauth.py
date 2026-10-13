@@ -11,15 +11,15 @@ from urllib.parse import parse_qsl, urlsplit
 import httpx
 import jwt
 import pytest
+from compose_api_client.auth import oauth
+from compose_api_client.auth.models import AuthTransaction, SessionRecord, TokenGrant
+from compose_api_client.auth.oauth import Auth0OAuthClient
+from compose_api_client.ext.errors import AuthError, NetworkError, NotTransmitted, ProtocolError
+from compose_api_client.profiles import OFFLINE_ACCESS_SCOPE, requested_scopes
 from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic import SecretStr
 
 from compose_api import authentication
-from compose_api.cli.auth import oauth
-from compose_api.cli.auth.models import AuthTransaction, SessionRecord, TokenGrant
-from compose_api.cli.auth.oauth import Auth0OAuthClient
-from compose_api.cli.config import OFFLINE_ACCESS_SCOPE, requested_scopes
-from compose_api.cli.errors import AuthError, NetworkError, NotTransmitted, ProtocolError
 from tests.fixtures.auth_fixtures import AUTH0_TEST_AUDIENCE, AUTH0_TEST_DOMAIN, AUTH0_TEST_ISSUER
 from tests.fixtures.cli_fixtures import CLI_CLIENT_ID, DESCRIPTION_CANARY, REFRESH_TOKEN, FakeTenant, cli_settings
 

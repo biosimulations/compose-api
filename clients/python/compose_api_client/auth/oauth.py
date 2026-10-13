@@ -11,6 +11,8 @@ whole, so nothing unvalidated can be stored or sent to the API. Error messages n
 token, a code or the server's own error description.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import re
@@ -18,6 +20,7 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Final, Self
 from urllib.parse import urlsplit
 
@@ -29,10 +32,14 @@ from authlib.oidc.core import CodeIDToken
 from joserfc.errors import JoseError
 from pydantic import SecretStr
 
-from compose_api.cli.auth.models import AuthTransaction, Identity, TokenGrant
-from compose_api.cli.config import OFFLINE_ACCESS_SCOPE, CliSettings
-from compose_api.cli.errors import AuthError, CliError, NetworkError, NotTransmitted, ProtocolError
-from compose_api.version import __version__
+from compose_api_client.auth.models import AuthTransaction, Identity, TokenGrant
+from compose_api_client.ext.errors import AuthError, CliError, NetworkError, NotTransmitted, ProtocolError
+from compose_api_client.profiles import OFFLINE_ACCESS_SCOPE, CliSettings
+
+try:
+    _CLIENT_VERSION = version("compose-api-client")
+except PackageNotFoundError:
+    _CLIENT_VERSION = "0.0.0"
 
 # The same contract the API enforces (compose_api.authentication), restated rather than imported: that module
 # loads the server's configuration. tests/cli/test_oauth.py keeps the two in step.
@@ -91,7 +98,7 @@ class Auth0OAuthClient:
             timeout=TIMEOUT,
             follow_redirects=False,
             trust_env=False,
-            headers={"Accept": "application/json", "User-Agent": f"compose-api-cli/{__version__}"},
+            headers={"Accept": "application/json", "User-Agent": f"compose-api-cli/{_CLIENT_VERSION}"},
         )
         self._monotonic = monotonic
         self._metadata: ProviderMetadata | None = None

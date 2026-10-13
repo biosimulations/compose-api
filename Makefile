@@ -41,7 +41,7 @@ check-clients: ## Fail if the committed spec or client differs from a fresh gene
 	uv run python compose_api/api/openapi_spec.py "$$tmp/spec.yaml" >/dev/null && \
 	diff -u compose_api/api/spec/openapi_3_1_0_generated.yaml "$$tmp/spec.yaml" && \
 	scripts/generate-api-client.sh "$$tmp/client" >/dev/null && \
-	diff -r -x __pycache__ -x utils -x ext -x cli clients/python/compose_api_client "$$tmp/client" && \
+	diff -r -x __pycache__ -x utils -x ext -x cli -x auth -x profiles.py clients/python/compose_api_client "$$tmp/client" && \
 	cp docs/cli.md "$$tmp/cli.md" && scripts/cli-docs.sh "$$tmp/cli.md" && diff -u docs/cli.md "$$tmp/cli.md" || \
 	{ echo "❌ The spec, the client or the CLI reference is stale: run 'make clients cli-docs' and commit."; exit 1; }
 

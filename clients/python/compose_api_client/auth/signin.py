@@ -1,19 +1,21 @@
 """Choosing a sign-in flow, and keeping its result only once it is fully validated."""
 
+from __future__ import annotations
+
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import replace
 
 import httpx
 
-from compose_api.cli.auth.browser import BrowserLauncher, browser_sign_in, open_system_browser
-from compose_api.cli.auth.device import device_sign_in
-from compose_api.cli.auth.models import Notify, Provider, SessionRecord, SignInRequest, TokenGrant
-from compose_api.cli.auth.oauth import Auth0OAuthClient
-from compose_api.cli.auth.session import AuthSession
-from compose_api.cli.auth.storage import CredentialStore, MemoryCredentialStore
-from compose_api.cli.config import CliSettings
-from compose_api.cli.errors import ConfigError
+from compose_api_client.auth.browser import BrowserLauncher, browser_sign_in, open_system_browser
+from compose_api_client.auth.device import device_sign_in
+from compose_api_client.auth.models import Notify, Provider, SessionRecord, SignInRequest, TokenGrant
+from compose_api_client.auth.oauth import Auth0OAuthClient
+from compose_api_client.auth.session import AuthSession
+from compose_api_client.auth.storage import CredentialStore, MemoryCredentialStore
+from compose_api_client.ext.errors import ConfigError
+from compose_api_client.profiles import CliSettings
 
 
 def connection_for(settings: CliSettings, request: SignInRequest) -> str | None:

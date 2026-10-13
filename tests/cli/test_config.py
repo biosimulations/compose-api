@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 import yaml
-
-from compose_api.cli.config import (
+from compose_api_client.ext.errors import ConfigError
+from compose_api_client.profiles import (
     BUILTIN_PROFILES,
     DEFAULT_CALLBACK_PORT,
     OFFLINE_ACCESS_SCOPE,
@@ -17,7 +17,7 @@ from compose_api.cli.config import (
     load_cli_settings,
     requested_scopes,
 )
-from compose_api.cli.errors import ConfigError
+
 from compose_api.common.gateway.models import ServerMode
 from compose_api.config import REPO_ROOT
 from tests.fixtures.cli_fixtures import write_cli_config

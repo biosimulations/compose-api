@@ -284,7 +284,10 @@ Stamp `owner_sub` from the principal at `POST /simulation/run`; `can_read` becom
 7. ~~**Which role reads everything?**~~ *Decided 2026-10-07: settle it with #192.* `admin` stays a placeholder in
    `compose_api/authorization.py` until the Auth0 tenant's role name is known. *Answered 2026-10-08 (#192): the
    tenant's roles arrive in the `https://api.biosimulations.org/roles` claim, and `ADMIN_ROLE = "admin"` is the
-   tenant role, kept in step with auth0-pulumi.*
+   tenant role, kept in step with auth0-pulumi.* *Revised 2026-10-13 (Gate G1, pending maintainer sign-off in the CLI
+   PR):* the bypass is `Settings.admin_role`, default empty, so the shared BioSim tenant `admin` role no longer reads
+   every private simulation unless a deployment configures it; set `ADMIN_ROLE` once a compose-specific admin role is
+   provisioned in auth0-pulumi.
 8. ~~**Before the step-1 deploy**~~ *Done 2026-10-07 (prod was at `eb3903fb35a7`; migrated to `c41f0b7a9d20` on
    the 0.7.0 deploy).* check the production database's `alembic_version` (expected `eb3903fb35a7`, or no
    table at all). Either is handled, but a different value means someone migrated by hand.

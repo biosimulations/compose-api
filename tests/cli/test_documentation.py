@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 import yaml
+from compose_api_client.cli.commands import build_parser
+from compose_api_client.ext import errors
+from compose_api_client.ext.errors import CliError, ExitCode
+from compose_api_client.profiles import _ENV_FIELDS, BUILTIN_PROFILES
 
-from compose_api.cli import errors
-from compose_api.cli.config import _ENV_FIELDS, BUILTIN_PROFILES
-from compose_api.cli.errors import CliError, ExitCode
-from compose_api.cli.main import build_parser
 from compose_api.config import REPO_ROOT
 
 ROOT = Path(REPO_ROOT)
@@ -63,7 +63,8 @@ def test_the_built_in_profiles_are_documented_as_they_are(name: str) -> None:
 
 def test_the_cli_page_is_published_and_linked() -> None:
     navigation = yaml.safe_load((ROOT / "mkdocs.yml").read_text())["nav"]
-    assert {"Command-line client": "cli.md"} in navigation
+    published = [title for entry in navigation for title, page in entry.items() if page == "cli.md"]
+    assert len(published) == 1, published  # listed exactly once, under whatever title the nav gives it
     assert "](cli.md)" in (ROOT / "docs" / "index.md").read_text()
     assert "](cli.md)" in (ROOT / "docs" / "authentication.md").read_text()
     assert "docs/cli.md" in (ROOT / "README.md").read_text()

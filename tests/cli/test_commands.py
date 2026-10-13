@@ -8,14 +8,13 @@ import tomllib
 import zipfile
 from pathlib import Path
 
+import compose_api_client.profiles
 import pytest
+from compose_api_client.cli.commands import __version__, build_parser, main
+from compose_api_client.ext.errors import ExitCode
+from compose_api_client.profiles import BUILTIN_PROFILES, PROFILE_FIELDS
 
-import compose_api.cli.config
-from compose_api.cli.config import BUILTIN_PROFILES, PROFILE_FIELDS
-from compose_api.cli.errors import ExitCode
-from compose_api.cli.main import build_parser, main
 from compose_api.config import REPO_ROOT
-from compose_api.version import __version__
 from tests.fixtures.cli_fixtures import write_cli_config
 
 CLIENT_ID = "AbCdEf0123456789AbCdEf0123456789"
@@ -49,13 +48,20 @@ ALL_COMMANDS = [["config", "show"], *SIGN_IN_COMMANDS]
 # server's dotenv files were loaded into the environment.
 PROBE = """
 import json, os, sys
-from compose_api.cli.main import main
+from compose_api_client.cli.commands import main
 code = main(sys.argv[1:])
-watched = ("compose_api.config", "compose_api.api", "compose_api.dependencies", "compose_api.authentication",
-           "httpx", "pydantic", "platformdirs")
+watched = ("compose_api", "compose_api.config", "compose_api.api", "compose_api.dependencies",
+           "compose_api.authentication", "pydantic", "platformdirs", "keyring", "authlib", "jwt", "portalocker")
 report = {"code": code, "imported": [m for m in watched if m in sys.modules],
           "server_env_loaded": "POSTGRES_PASSWORD" in os.environ}
 print("PROBE " + json.dumps(report), file=sys.stderr)
+"""
+
+EXT_PROBE = """
+import json, sys
+import compose_api_client.ext
+watched = ("compose_api", "pydantic", "keyring", "authlib", "jwt", "portalocker")
+print("EXT_PROBE " + json.dumps([m for m in watched if m in sys.modules]), file=sys.stderr)
 """
 
 
@@ -68,6 +74,7 @@ def test_exit_codes_are_the_documented_contract() -> None:
         "FORBIDDEN": 4,
         "NETWORK": 5,
         "CONFIG": 6,
+        "WAIT_TIMEOUT": 7,
         "CANCELLED": 130,
     }
 
@@ -289,14 +296,16 @@ def test_ctrl_c_exits_130(
     def interrupted(*_args: object, **_kwargs: object) -> None:
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(compose_api.cli.config, "load_cli_settings", interrupted)
+    monkeypatch.setattr(compose_api_client.profiles, "load_cli_settings", interrupted)
     assert main(["config", "show"]) == ExitCode.CANCELLED
     assert capsys.readouterr().err == "compose-api: cancelled\n"
 
 
 def test_entry_point_is_declared() -> None:
-    project = tomllib.loads((Path(REPO_ROOT) / "pyproject.toml").read_text())["project"]
-    assert project["scripts"] == {"compose-api": "compose_api.cli.main:main"}
+    root_project = tomllib.loads((Path(REPO_ROOT) / "pyproject.toml").read_text())["project"]
+    assert "scripts" not in root_project
+    client_project = tomllib.loads((Path(REPO_ROOT) / "clients" / "python" / "pyproject.toml").read_text())["project"]
+    assert client_project["scripts"] == {"compose-api": "compose_api_client.cli:main"}
 
 
 def _run(command: list[str], env: dict[str, str], cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -311,7 +320,7 @@ def test_installed_entry_point_and_module_are_the_same_program(
     if entry_point is None:
         pytest.fail("the compose-api entry point is not installed in this environment: run `uv sync`")
     installed = _run([entry_point, *argv], cli_subprocess_env, tmp_path)
-    module = _run([sys.executable, "-m", "compose_api.cli", *argv], cli_subprocess_env, tmp_path)
+    module = _run([sys.executable, "-m", "compose_api_client.cli", *argv], cli_subprocess_env, tmp_path)
     assert installed.returncode == module.returncode == 0, installed.stderr + module.stderr
     assert installed.stdout == module.stdout
     assert installed.stdout.startswith(f"compose-api {__version__}" if argv == ["--version"] else "usage: compose-api")
@@ -343,13 +352,20 @@ def test_runs_without_server_settings_or_imports(
     assert "evil.example" not in result.stdout
 
 
+def test_ext_import_leaves_auth_dependencies_unloaded(cli_subprocess_env: dict[str, str], tmp_path: Path) -> None:
+    result = _run([sys.executable, "-c", EXT_PROBE], cli_subprocess_env, tmp_path)
+    assert result.returncode == 0, result.stderr
+    *_, probe_line = result.stderr.splitlines()
+    assert json.loads(probe_line.removeprefix("EXT_PROBE ")) == []
+
+
 def test_local_status_and_logout_json(
     monkeypatch: pytest.MonkeyPatch,
     cli_config_path: Path,
     capsys: pytest.CaptureFixture[str],
     no_network_or_browser: list[str],
 ) -> None:
-    from compose_api.cli.auth import storage
+    from compose_api_client.auth import storage
 
     store = storage.MemoryCredentialStore()
     monkeypatch.setenv("COMPOSE_API_CLI_AUTH0_CLIENT_ID", CLIENT_ID)

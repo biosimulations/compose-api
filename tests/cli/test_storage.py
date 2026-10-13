@@ -4,14 +4,14 @@ import json
 from pathlib import Path
 
 import pytest
+from compose_api_client.auth.models import SessionRecord
+from compose_api_client.auth.state import FileState, SessionState
+from compose_api_client.auth.storage import MAX_RECORD_BYTES, SERVICE, KeyringCredentialStore
+from compose_api_client.ext.errors import StorageError
 from keyring.backends import macOS
 from keyring.backends.fail import Keyring as FailKeyring
 from keyring.errors import KeyringLocked
 
-from compose_api.cli.auth.models import SessionRecord
-from compose_api.cli.auth.state import FileState, SessionState
-from compose_api.cli.auth.storage import MAX_RECORD_BYTES, SERVICE, KeyringCredentialStore
-from compose_api.cli.errors import StorageError
 from tests.cli.test_session import grant
 from tests.fixtures.cli_fixtures import cli_settings
 
@@ -165,7 +165,7 @@ def test_windows_writer_replaces_one_item_without_shadow_copy(monkeypatch: pytes
     import sys
     from types import SimpleNamespace
 
-    from compose_api.cli.auth.windows_state import write_credential
+    from compose_api_client.auth.windows_state import write_credential
 
     writes: list[dict[str, object]] = []
     monkeypatch.setitem(

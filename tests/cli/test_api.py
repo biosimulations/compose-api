@@ -12,15 +12,7 @@ from typing import Any, cast
 
 import httpx
 import pytest
-from compose_api.api.client.models import JobStatus
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import NameOID
-
-from compose_api.api.main import app
-from compose_api.authentication import Auth0Verifier, JwksCache, get_auth0_verifier
-from compose_api.cli.api import (
+from compose_api_client.auth.identity import (
     CURRENT_PRINCIPAL,
     ComposeApi,
     OneCommandSession,
@@ -28,12 +20,12 @@ from compose_api.cli.api import (
     TokenSource,
     UnsafeRequestError,
 )
-from compose_api.cli.auth.oauth import Auth0OAuthClient
-from compose_api.cli.auth.session import AuthSession
-from compose_api.cli.auth.storage import MemoryCredentialStore
-from compose_api.cli.commands.common import Wiring
-from compose_api.cli.config import CliSettings
-from compose_api.cli.errors import (
+from compose_api_client.auth.oauth import Auth0OAuthClient
+from compose_api_client.auth.session import AuthSession
+from compose_api_client.auth.storage import MemoryCredentialStore
+from compose_api_client.cli.commands import main
+from compose_api_client.cli.wiring import Wiring
+from compose_api_client.ext.errors import (
     ApiError,
     AuthError,
     ConfigError,
@@ -46,7 +38,15 @@ from compose_api.cli.errors import (
     RateLimitedError,
     ServerError,
 )
-from compose_api.cli.main import main
+from compose_api_client.models import JobStatus
+from compose_api_client.profiles import CliSettings
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID
+
+from compose_api.api.main import app
+from compose_api.authentication import Auth0Verifier, JwksCache, get_auth0_verifier
 from tests.fixtures.auth_fixtures import AUTH0_TEST_DOMAIN, AUTH0_TEST_ISSUER, FakeAuth0
 from tests.fixtures.cli_fixtures import (
     DESCRIPTION_CANARY,

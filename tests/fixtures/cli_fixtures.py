@@ -26,6 +26,12 @@ import httpx
 import keyring
 import platformdirs
 import pytest
+from compose_api_client.auth.models import Identity, SessionRecord, TokenGrant
+from compose_api_client.auth.session import AuthSession
+from compose_api_client.auth.storage import MemoryCredentialStore
+from compose_api_client.cli import auth_commands
+from compose_api_client.cli.wiring import Wiring
+from compose_api_client.profiles import ENV_PREFIX, CliSettings, default_config_path, requested_scopes
 from fastapi import HTTPException, UploadFile
 from keyring.backends.fail import Keyring as FailKeyring
 from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
@@ -36,20 +42,16 @@ from compose_api.api.routers import compute as compute_router
 from compose_api.api.routers import results as results_router
 from compose_api.api.routers import simulation as simulation_router
 from compose_api.authentication import Auth0Verifier, get_auth0_verifier
-from compose_api.cli.auth.models import Identity, SessionRecord, TokenGrant
-from compose_api.cli.auth.session import AuthSession
-from compose_api.cli.auth.storage import MemoryCredentialStore
-from compose_api.cli.commands import api as api_commands
-from compose_api.cli.commands import auth as auth_commands
-from compose_api.cli.commands.common import Wiring
-from compose_api.cli.config import ENV_PREFIX, CliSettings, default_config_path, requested_scopes
+from compose_api.authorization import readable_simulation
 from compose_api.simulation.models import (
     HpcRun,
     JobStatus,
     JobType,
     RegisteredSimulators,
+    SimulationAccess,
     SimulationExperiment,
     SimulatorVersion,
+    Visibility,
 )
 from tests.fixtures.auth_fixtures import AUTH0_TEST_AUDIENCE, AUTH0_TEST_DOMAIN, AUTH0_TEST_ISSUER, FakeAuth0
 
@@ -334,8 +336,7 @@ def use_profile(monkeypatch: pytest.MonkeyPatch, settings: CliSettings) -> None:
 
 def wire(monkeypatch: pytest.MonkeyPatch, wiring: Wiring) -> None:
     """Make every command reached through `main()` use `wiring` instead of the real store, browser and network."""
-    for module in (api_commands, auth_commands):
-        monkeypatch.setattr(module, "Wiring", lambda: wiring)
+    monkeypatch.setattr(auth_commands, "Wiring", lambda: wiring)
 
 
 async def seed_session(
@@ -415,6 +416,8 @@ class FakeComposeApi:
                 simulator_id=self.SIMULATOR_ID,
                 status=JobStatus.RUNNING,
                 start_time="2026-10-07T12:00:00",
+                backend="slurm",
+                external_id="4567",
             )
         }
         self.uploads: list[dict[str, Any]] = []
@@ -435,7 +438,7 @@ class FakeComposeApi:
             "content": await uploaded_file.read(),
             "batch": batch_submission,
         })
-        return SimpleNamespace(end_time_point=None)
+        return SimpleNamespace(end_time_point=None, request_file_path=None, simulation_file_type=None)
 
     async def run_simulation(self, *, simulation_request: SimpleNamespace, **_services: object) -> SimulationExperiment:
         self.created += 1
@@ -447,13 +450,28 @@ class FakeComposeApi:
 def fake_compose_api(auth0_verifier: Auth0Verifier, monkeypatch: pytest.MonkeyPatch) -> Generator[FakeComposeApi]:
     fake = FakeComposeApi()
     previous = app.dependency_overrides.get(get_auth0_verifier)
+    prev_readable = app.dependency_overrides.get(readable_simulation)
+
+    async def fake_readable(simulation_id: int) -> SimulationAccess:
+        if simulation_id not in fake.runs:
+            raise HTTPException(status_code=404, detail=DESCRIPTION_CANARY)
+        return SimulationAccess(
+            simulation_id=simulation_id,
+            experiment_id="exp-1",
+            owner_sub=None,
+            visibility=Visibility.PUBLIC,
+        )
+
     app.dependency_overrides[get_auth0_verifier] = lambda: auth0_verifier
+    app.dependency_overrides[readable_simulation] = fake_readable
     monkeypatch.setattr(compute_router, "get_simulator_versions", fake.simulator_versions)
     monkeypatch.setattr(results_router, "get_database_service", object)
     monkeypatch.setattr(results_router, "get_hpc_run_status", fake.hpc_run_status)
     for name in ("get_simulation_service", "get_database_service", "get_job_monitor"):
         monkeypatch.setattr(simulation_router, name, object)
     monkeypatch.setattr(simulation_router, "get_simulation_request_from_uploaded_file", fake.request_from_upload)
+    monkeypatch.setattr(simulation_router, "validate_submission", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(simulation_router, "wrap_document_in_omex", lambda req: req)
     monkeypatch.setattr(simulation_router, "run_simulation", fake.run_simulation)
     try:
         yield fake
@@ -462,3 +480,7 @@ def fake_compose_api(auth0_verifier: Auth0Verifier, monkeypatch: pytest.MonkeyPa
             app.dependency_overrides.pop(get_auth0_verifier, None)
         else:
             app.dependency_overrides[get_auth0_verifier] = previous
+        if prev_readable is None:
+            app.dependency_overrides.pop(readable_simulation, None)
+        else:
+            app.dependency_overrides[readable_simulation] = prev_readable

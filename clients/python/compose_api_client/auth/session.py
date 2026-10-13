@@ -1,5 +1,7 @@
 """Session mutations serialized by binding; uncertain refresh credentials are never replayed."""
 
+from __future__ import annotations
+
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager, suppress
@@ -8,11 +10,11 @@ from typing import Protocol
 
 from pydantic import BaseModel, SecretStr
 
-from compose_api.cli.auth.models import Identity, SessionRecord, TokenGrant
-from compose_api.cli.auth.state import FileState, MemoryState, SessionState
-from compose_api.cli.auth.storage import CredentialStore, MemoryCredentialStore, validate_record
-from compose_api.cli.config import CliSettings
-from compose_api.cli.errors import AuthError, CliError, NotTransmitted, ProtocolError, StorageError
+from compose_api_client.auth.models import Identity, SessionRecord, TokenGrant
+from compose_api_client.auth.state import FileState, MemoryState, SessionState
+from compose_api_client.auth.storage import CredentialStore, MemoryCredentialStore, validate_record
+from compose_api_client.ext.errors import AuthError, CliError, NotTransmitted, ProtocolError, StorageError
+from compose_api_client.profiles import CliSettings
 
 
 class OAuthSessionClient(Protocol):

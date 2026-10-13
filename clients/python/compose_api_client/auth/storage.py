@@ -1,5 +1,7 @@
 """Whole-record OS credential persistence. Secret serialization exists only at this boundary."""
 
+from __future__ import annotations
+
 import json
 import re
 import uuid
@@ -10,10 +12,10 @@ from keyring.backend import KeyringBackend
 from keyring.errors import PasswordDeleteError
 from pydantic import ValidationError
 
-from compose_api.cli.auth.models import SessionRecord
-from compose_api.cli.auth.state import MemoryState
-from compose_api.cli.config import CliSettings
-from compose_api.cli.errors import StorageError
+from compose_api_client.auth.models import SessionRecord
+from compose_api_client.auth.state import MemoryState
+from compose_api_client.ext.errors import StorageError
+from compose_api_client.profiles import CliSettings
 
 SERVICE = "compose-api.cli.v1"
 MAX_RECORD_BYTES = 65536
@@ -138,7 +140,7 @@ class KeyringCredentialStore:
             raise StorageError("Credential record exceeds this OS backend's atomic item limit; session not saved")
         try:
             if windows:
-                from compose_api.cli.auth.windows_state import write_credential
+                from compose_api_client.auth.windows_state import write_credential
 
                 # keyring's Windows set_password backs up the previous item under a compound name. Use the
                 # native single-item replacement instead so spent credentials never survive as shadow copies.

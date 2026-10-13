@@ -4,12 +4,14 @@ Every token, code and verifier is a `SecretStr` or a `repr=False` field, so prin
 these objects shows a mask, never the credential. Only `issuer` and `subject` identify a person; email is not kept.
 """
 
+from __future__ import annotations
+
 import secrets
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
-from typing import Final, Literal
+from typing import Final, Literal, TypeAlias
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, SecretStr
 
@@ -18,7 +20,7 @@ SESSION_SCHEMA_VERSION: Literal[1] = 1
 SIGN_IN_TIMEOUT_SECONDS: Final = 300.0
 
 # Progress and instructions for the person signing in. Never given a token, code or verifier.
-type Notify = Callable[[str], None]
+Notify: TypeAlias = Callable[[str], None]
 
 
 class Provider(StrEnum):
@@ -88,7 +90,7 @@ class SessionRecord(BaseModel):
     api_verified_at: AwareDatetime | None = None  # None until the Compose API has confirmed this identity
 
     @classmethod
-    def from_grant(cls, grant: TokenGrant, *, binding_key: str, generation: int = 0) -> "SessionRecord":
+    def from_grant(cls, grant: TokenGrant, *, binding_key: str, generation: int = 0) -> SessionRecord:
         return cls(
             binding_key=binding_key,
             identity=grant.identity,

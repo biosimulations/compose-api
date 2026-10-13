@@ -53,7 +53,7 @@ Every route that reads something a simulation owns asks the server's read policy
 - `GET /datasets`, `GET /datasets/<id>`, `GET /datasets/<id>/content` and `GET /datasets/<id>/files/<subpath>`
 - `GET /comparisons`, `GET /comparisons/<id>` and `GET /comparisons/<id>/series`, readable only when every run in the comparison is readable by the caller
 
-The policy lets anyone read a public simulation, and only its owner, or a caller with the `admin` role, read a private one. Submitting a simulation does not record an owner yet, so every simulation is public. Anyone who has the id can read its status, events and datasets and, when the results file exists, download it. Anonymous and authenticated callers see the same record. A missing simulation, or results that are not ready yet, is 404.
+The policy lets anyone read a public simulation, and only its owner read a private one. A deployment can also let one role read every private simulation by setting `ADMIN_ROLE` (`Settings.admin_role`); it is empty by default, so no role does. Submitting a simulation does not record an owner yet, so every simulation is public. Anyone who has the id can read its status, events and datasets and, when the results file exists, download it. Anonymous and authenticated callers see the same record. A missing simulation, or results that are not ready yet, is 404.
 
 Do not treat bearer authentication as an access-control boundary for simulation status or results.
 
@@ -115,7 +115,7 @@ A server started from `assets/dev/config/.dev_env` uses whatever `AUTH0_AUDIENCE
 
 A verified caller is recorded with the role `user`. If the access token includes the `https://api.biosimulations.org/roles` claim (tokens for a person signed in through BioSim do; client-credentials tokens do not), those role names are recorded as well. An anonymous caller has no role.
 
-Roles identify the caller. One role is checked: the read policy lets a caller with the role `admin` read private simulations. No simulation is private yet, so today no role changes what a caller can read. Do not assume any other role grants or denies access unless this API later documents that check.
+Roles identify the caller. At most one role is checked: when a deployment sets `ADMIN_ROLE` (`Settings.admin_role`, empty by default), the read policy lets a caller with that role read private simulations. The shared BioSim `admin` role grants nothing here unless a deployment names it. No simulation is private yet, so today no role changes what a caller can read. Do not assume any other role grants or denies access unless this API later documents that check.
 
 ## Do not
 

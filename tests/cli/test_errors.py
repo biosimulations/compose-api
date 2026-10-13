@@ -11,17 +11,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, BinaryIO
 
+import compose_api_client.profiles
 import httpx
 import pytest
-from compose_api.api.client.models import SimulationExperiment
+from compose_api_client.auth.identity import ComposeApi
+from compose_api_client.auth.storage import MemoryCredentialStore
+from compose_api_client.cli.commands import main
+from compose_api_client.cli.wiring import Wiring
+from compose_api_client.ext import errors
+from compose_api_client.ext.errors import CliError, ExitCode
+from compose_api_client.models import SimulationExperiment
 
-import compose_api.cli.config
-from compose_api.cli import errors
-from compose_api.cli.api import ComposeApi
-from compose_api.cli.auth.storage import MemoryCredentialStore
-from compose_api.cli.commands.common import Wiring
-from compose_api.cli.errors import CliError, ExitCode
-from compose_api.cli.main import main
 from tests.fixtures.cli_fixtures import (
     DESCRIPTION_CANARY,
     FakeBrowser,
@@ -49,6 +49,9 @@ CONTRACT: dict[type[CliError], tuple[ExitCode, str]] = {
     errors.InvalidRequestError: (ExitCode.FAILURE, "invalid_request"),
     errors.ServerError: (ExitCode.FAILURE, "server_error"),
     errors.ApiError: (ExitCode.FAILURE, "api_error"),
+    errors.UncertainOutcomeError: (ExitCode.FAILURE, "uncertain"),
+    errors.JobFailedError: (ExitCode.FAILURE, "job_failed"),
+    errors.ApiTimeout: (ExitCode.WAIT_TIMEOUT, "wait_timeout"),
 }
 
 
@@ -79,7 +82,7 @@ def test_each_error_reports_one_line_and_one_json_object(
     def fail(*_args: object, **_kwargs: object) -> None:
         raise error("what went wrong; what to do next")
 
-    monkeypatch.setattr(compose_api.cli.config, "load_cli_settings", fail)
+    monkeypatch.setattr(compose_api_client.profiles, "load_cli_settings", fail)
     assert main(["config", "show", "--json"]) == code
     captured = capsys.readouterr()
     assert captured.err == "compose-api: error: what went wrong; what to do next\n"
@@ -94,7 +97,7 @@ def test_an_unexpected_failure_shows_its_type_only(
     def bug(*_args: object, **_kwargs: object) -> None:
         raise ValueError(f"something holding {DESCRIPTION_CANARY}")
 
-    monkeypatch.setattr(compose_api.cli.config, "load_cli_settings", bug)
+    monkeypatch.setattr(compose_api_client.profiles, "load_cli_settings", bug)
     assert main(["config", "show", "--json"]) == ExitCode.FAILURE
     captured = capsys.readouterr()
     assert json.loads(captured.out)["error"]["category"] == "internal"
@@ -113,7 +116,7 @@ def test_control_characters_never_reach_the_terminal(
         raise errors.ProtocolError("a value with \x1b[2J a screen clear and \x07 a bell\nsecond line")
 
     with monkeypatch.context() as patched:
-        patched.setattr(compose_api.cli.config, "load_cli_settings", hostile)
+        patched.setattr(compose_api_client.profiles, "load_cli_settings", hostile)
         main(["config", "show"])
     err = capsys.readouterr().err
     assert "\x1b" not in err and "\x07" not in err and "\\x1b[2J" in err

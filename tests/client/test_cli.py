@@ -286,10 +286,10 @@ def test_a_failed_job_exits_1(service: Callable[..., FakeService], tmp_path: Pat
     assert not (tmp_path / "out").exists()
 
 
-def test_wait_timeout_exits_5(service: Callable[..., FakeService]) -> None:
+def test_wait_timeout_exits_7(service: Callable[..., FakeService]) -> None:
     service(["running"])
     r = invoke("wait", "7", "--poll", "0.01", "--wait-timeout", "0.05")
-    assert r.exit_code == 5
+    assert r.exit_code == 7
 
 
 def test_status_one_and_several(service: Callable[..., FakeService]) -> None:
@@ -334,16 +334,16 @@ def test_errors_have_messages_and_exit_codes(monkeypatch: pytest.MonkeyPatch, tm
     doc.write_bytes(b"PK")
     respond(400, {"detail": {"message": "invalid document", "violations": ["state.x: unknown address"]}})
     r = invoke("run", str(doc))
-    assert r.exit_code == 3 and "invalid document" in r.stderr and "state.x: unknown address" in r.stderr
+    assert r.exit_code == 1 and "invalid document" in r.stderr and "state.x: unknown address" in r.stderr
     respond(404, {"detail": "Simulation 7 not found"})
     r = invoke("results", "7")
-    assert r.exit_code == 4 and "Simulation 7 not found" in r.stderr
+    assert r.exit_code == 1 and "Simulation 7 not found" in r.stderr
     respond(500, {"detail": "boom"})
-    assert invoke("version").exit_code == 3
+    assert invoke("version").exit_code == 1
     assert invoke("run", str(tmp_path / "missing.omex")).exit_code == 2  # typer validates the path
 
 
-def test_unreachable_service_exits_3(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_unreachable_service_exits_5(monkeypatch: pytest.MonkeyPatch) -> None:
     def refuse(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("connection refused", request=request)
 
@@ -351,7 +351,7 @@ def test_unreachable_service_exits_3(monkeypatch: pytest.MonkeyPatch) -> None:
         cli_module, "make_session", lambda s: ComposeSession(s.url, transport=httpx.MockTransport(refuse))
     )
     r = invoke("health")
-    assert r.exit_code == 3 and "cannot reach" in r.stderr
+    assert r.exit_code == 5 and "cannot reach" in r.stderr
 
 
 def test_openapi_diff_reports_skew(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -414,7 +414,7 @@ def test_datasets_list_show_and_get(service: Callable[..., FakeService], tmp_pat
     assert json.loads(invoke("datasets", "show", DATASET_ID).stdout)["media_type"] == "text/csv"
     got = json.loads(invoke("datasets", "get", DATASET_ID, "--out", str(tmp_path)).stdout)
     assert got["files"] == [str(tmp_path / "a.csv")] and (tmp_path / "a.csv").read_bytes() == b"a,b\n"
-    assert invoke("datasets", "show", "00000000-0000-0000-0000-000000000000").exit_code == 4
+    assert invoke("datasets", "show", "00000000-0000-0000-0000-000000000000").exit_code == 1
 
 
 def test_simulations_list_and_show(service: Callable[..., FakeService]) -> None:
@@ -457,3 +457,10 @@ def test_every_command_takes_json(service: Callable[..., FakeService]) -> None:
     r = runner.invoke(app, ["--output", "table", "simulations", "show", "4334", "--json"])
     assert r.exit_code == 0 and json.loads(r.stdout)["event_count"] == 21
     assert json.loads(runner.invoke(app, ["--output", "table", "version", "--json"]).stdout) == "0.6.0"
+
+
+def test_token_flag_is_rejected_without_echoing_value() -> None:
+    sentinel = "SECRET-SENTINEL-TOKEN-991"
+    r = runner.invoke(app, ["--token", sentinel, "health"])
+    assert r.exit_code == 2
+    assert sentinel not in r.stdout + r.stderr

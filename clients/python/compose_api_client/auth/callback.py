@@ -6,6 +6,8 @@ A request that is malformed, misdirected or carries the wrong state is refused w
 a stray or hostile request cannot end a sign-in that is still waiting for the real redirect.
 """
 
+from __future__ import annotations
+
 import asyncio
 import hmac
 import re
@@ -14,7 +16,7 @@ from http import HTTPStatus
 from typing import Final, Self
 from urllib.parse import parse_qsl
 
-from compose_api.cli.errors import AuthError, InteractionError
+from compose_api_client.ext.errors import AuthError, InteractionError
 
 CALLBACK_PATH: Final = "/callback"
 MAX_REQUEST_HEAD_BYTES: Final = 8 * 1024

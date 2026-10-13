@@ -61,7 +61,7 @@ dev = [
     "openapi-python-client>=0.29.1,<0.30",
     "types-python-dateutil>=2.9.0.20250708,<3",
     # The client is a workspace package (clients/python): the service never calls it, its tests do.
-    "compose-api-client[cli]",
+    "compose-api-client[auth,cli]",
 ]
 docs = [
     "mkdocs>=1.4.2,<2",
@@ -77,7 +77,7 @@ default-groups = [
 # pbest pins compose-api-client==0.2.0, the release of the package that now lives at clients/python. Resolve every
 # requirement on it to the workspace copy (docs/plan-cli.md, decision C6). The service imports none of pbest's
 # client-using code (pbest.execution.remote), and the workspace copy keeps every name that code uses.
-override-dependencies = ["compose-api-client"]
+override-dependencies = ["compose-api-client[auth,cli]"]
 
 [tool.uv.workspace]
 members = ["clients/python"]
@@ -103,13 +103,20 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.mypy]
-files = ["compose_api", "tests", "clients/python/compose_api_client/ext", "clients/python/compose_api_client/cli"]
+files = [
+    "compose_api",
+    "tests",
+    "clients/python/compose_api_client/auth",
+    "clients/python/compose_api_client/ext",
+    "clients/python/compose_api_client/cli",
+    "clients/python/compose_api_client/profiles.py",
+]
 strict = true
 # The generated client (and the 0.2.0 helper it carries); hand-written client code (compose_api_client.ext) is checked.
 exclude = ['^clients/python/compose_api_client/(api|models|utils)/', '^clients/python/compose_api_client/(__init__|client|errors|types)\.py$']
 
 [[tool.mypy.overrides]]
-module = ["process_bigraph.*"]
+module = ["process_bigraph.*", "authlib.*", "win32api", "win32con", "win32security", "win32file", "win32cred"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
@@ -125,6 +132,7 @@ markers = [
 [tool.deptry]
 exclude = [".venv/*", ".pblang/*", "alembic/*", "webapp/*"]  # webapp/test/fixtures/make_fixture.py runs in viva-pde-particle's env
 ignore = ["DEP002", "DEP003", "DEP004"]
+per_rule_ignores = {DEP001 = ["win32api", "win32con", "win32security", "win32file", "win32cred"]}
 
 [tool.ruff]
 target-version = 'py313'  # the floor in requires-python; the runtime is 3.14

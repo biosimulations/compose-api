@@ -5,14 +5,14 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from compose_api_client.auth.models import Identity, SessionRecord, TokenGrant
+from compose_api_client.auth.session import AuthSession
+from compose_api_client.auth.state import FileState, SessionState
+from compose_api_client.auth.storage import MemoryCredentialStore
+from compose_api_client.ext.errors import AuthError, NetworkError, NotTransmitted, ProtocolError, StorageError
+from compose_api_client.profiles import requested_scopes
 from pydantic import SecretStr
 
-from compose_api.cli.auth.models import Identity, SessionRecord, TokenGrant
-from compose_api.cli.auth.session import AuthSession
-from compose_api.cli.auth.state import FileState, SessionState
-from compose_api.cli.auth.storage import MemoryCredentialStore
-from compose_api.cli.config import requested_scopes
-from compose_api.cli.errors import AuthError, NetworkError, NotTransmitted, ProtocolError, StorageError
 from tests.fixtures.cli_fixtures import cli_settings
 
 NOW = datetime(2026, 10, 7, tzinfo=UTC)
@@ -495,7 +495,8 @@ async def test_login_write_failure_cannot_resurrect(tmp_path: Path, monkeypatch:
 async def test_session_refresh_uses_real_signed_provider_validation(tmp_path: Path, fake_tenant: object) -> None:
     from typing import cast
 
-    from compose_api.cli.auth.oauth import Auth0OAuthClient
+    from compose_api_client.auth.oauth import Auth0OAuthClient
+
     from tests.fixtures.cli_fixtures import FakeTenant
 
     tenant = cast(FakeTenant, fake_tenant)

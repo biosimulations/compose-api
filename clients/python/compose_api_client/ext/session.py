@@ -1,15 +1,8 @@
 """Sessions over the generated client: submit, status, wait, results, the catalogue.
 
 ``ComposeSession`` is synchronous and ``AsyncComposeSession`` asynchronous; they offer the same methods. Both wrap a
-generated ``Client`` (or ``AuthenticatedClient`` when given a token) and turn its detailed responses into return values
-or the typed errors of :mod:`compose_api_client.ext.errors`.
-
-    with ComposeSession() as s:                       # https://compose.cam.uchc.edu
-        sim = s.submit("experiment.omex", simulator="viva-pde-particle")
-        run = s.wait(sim.simulation_database_id)
-        s.extract(sim.simulation_database_id, "out/")
-
-In tests, ``AsyncComposeSession.in_process(app)`` talks to the FastAPI app through ``httpx.ASGITransport``.
+generated ``Client`` (or ``AuthenticatedClient`` when given a token/TokenSource) with destination guarding,
+``trust_env=False``, redirect refusal, and one-renewal 401 replay for read operations.
 """
 
 from __future__ import annotations
@@ -21,13 +14,15 @@ import time
 import uuid
 import zipfile
 from collections.abc import Awaitable, Callable, Iterator, Sequence
+from contextlib import suppress
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from attrs import define
 
 from compose_api_client import AuthenticatedClient, Client
+from compose_api_client.api.authentication import get_current_principal
 from compose_api_client.api.biosim_api import check_health_health_get, get_version_version_get
 from compose_api_client.api.compute import get_processes_list, get_simulator_list, get_steps_list
 from compose_api_client.api.curated import run_copasi, run_tellurium
@@ -74,7 +69,35 @@ from compose_api_client.api.sources import (
     search_biosimulations_projects,
 )
 from compose_api_client.api.suites import get_suite_run, list_suite_runs, list_suites, run_suite
-from compose_api_client.ext.errors import ApiTimeout, raise_for
+from compose_api_client.ext._policy import (
+    _UNKNOWN_OUTCOME,
+    COMMAND_DEADLINE_SECONDS,
+    CURRENT_PRINCIPAL,
+    Operation,
+    UnsafeRequestError,
+    _DestinationGuard,
+    rejected_message,
+    tls_verification,
+    unanswered,
+)
+from compose_api_client.ext.credentials import (
+    TOKEN_ENV_VAR,
+    AsyncTokenSource,
+    Credential,
+    EnvironmentToken,
+    StaticToken,
+    TokenSource,
+)
+from compose_api_client.ext.errors import (
+    ApiTimeout,
+    AuthError,
+    CliError,
+    ExitCode,
+    NetworkError,
+    ProtocolError,
+    UncertainOutcomeError,
+    raise_for,
+)
 from compose_api_client.models import (
     BiGraphProcess,
     BiGraphStep,
@@ -89,6 +112,7 @@ from compose_api_client.models import (
     Comparison,
     ComparisonPage,
     ComparisonSeries,
+    CurrentPrincipalResponse,
     Dataset,
     DatasetPage,
     EnvironmentHeaders,
@@ -153,15 +177,32 @@ def _file(source: FileSource, name: str | None = None) -> File:
     return File(payload=io.BytesIO(path.read_bytes()), file_name=name or path.name)
 
 
-def _parsed(response: Response[Any]) -> Any:
+def _parsed(response: Response[Any], *, op: Operation | None = None) -> Any:
+    code = int(response.status_code)
+    if 300 <= code < 400:
+        label = str(op) if op is not None else "request"
+        raise ProtocolError(
+            f"the API answered {label} with a redirect (HTTP {code}); credentials are never sent to a redirect."
+            " Check api_base_url"
+        )
+    if code >= 500 and op is not None and not op.replayable:
+        raise UncertainOutcomeError(
+            f"the API failed while handling {op} (HTTP {code}). {_UNKNOWN_OUTCOME}.",
+            exit_code=ExitCode.FAILURE,
+        )
     raise_for(response)
+    if response.parsed is None and op is not None and not op.replayable:
+        raise UncertainOutcomeError(
+            f"the API's answer to {op} could not be read. {_UNKNOWN_OUTCOME}.",
+            exit_code=ExitCode.FAILURE,
+        )
     return response.parsed
 
 
-def _state(response: Response[Any]) -> JobState:
+def _state(response: Response[Any], *, op: Operation | None = None) -> JobState:
     if int(response.status_code) == 404:
         return JobState(SUBMITTING)
-    run = _parsed(response)
+    run = _parsed(response, op=op)
     return JobState.of(run)
 
 
@@ -194,13 +235,43 @@ def _extract(content: bytes, dest: str | Path) -> list[Path]:
 
 
 def _make_client(
-    base_url: str, token: str | None, timeout: float, transport: httpx.BaseTransport | httpx.AsyncBaseTransport | None
+    base_url: str,
+    token: str | None,
+    timeout: float,
+    transport: httpx.BaseTransport | httpx.AsyncBaseTransport | None,
+    *,
+    verify_ssl: Any = True,
+    guard: _DestinationGuard | None = None,
+    is_async: bool = False,
 ) -> Client | AuthenticatedClient:
-    args: dict[str, Any] = {"transport": transport} if transport is not None else {}
-    t = httpx.Timeout(timeout)
+    hooks: dict[str, Any] = {}
+    if guard is not None:
+        hooks["request"] = [guard.async_hook if is_async else guard]
+    args: dict[str, Any] = {"trust_env": False}
+    if transport is not None:
+        args["transport"] = transport
+    if hooks:
+        args["event_hooks"] = hooks
+    read_timeout = min(timeout, 60.0) if timeout > 0 else timeout
+    t = httpx.Timeout(read_timeout, connect=5.0, write=60.0, pool=5.0)
     if token:
-        return AuthenticatedClient(base_url=base_url, token=token, timeout=t, httpx_args=args)
-    return Client(base_url=base_url, timeout=t, httpx_args=args)
+        return AuthenticatedClient(
+            base_url=base_url,
+            token=token,
+            timeout=t,
+            verify_ssl=verify_ssl,
+            follow_redirects=False,
+            raise_on_unexpected_status=False,
+            httpx_args=args,
+        )
+    return Client(
+        base_url=base_url,
+        timeout=t,
+        verify_ssl=verify_ssl,
+        follow_redirects=False,
+        raise_on_unexpected_status=False,
+        httpx_args=args,
+    )
 
 
 class ComposeSession:
@@ -210,12 +281,30 @@ class ComposeSession:
         self,
         base_url: str = DEFAULT_URL,
         *,
+        tokens: TokenSource | None = None,
         token: str | None = None,
         timeout: float = 300.0,
         client: Client | AuthenticatedClient | None = None,
         transport: httpx.BaseTransport | None = None,
+        ca_bundle: Path | None = None,
+        allowed_paths: frozenset[str] | None = None,
     ) -> None:
-        self.client = client or _make_client(base_url, token, timeout, transport)
+        self.base_url = base_url
+        self.timeout = timeout
+        self._transport = transport
+        self._verify = tls_verification(ca_bundle)
+        self._guard = _DestinationGuard(base_url, allowed_paths=allowed_paths)
+        self.tokens: TokenSource | None = tokens if tokens is not None else (StaticToken(token) if token else None)
+        self._provided_client = client
+        self.client = client or _make_client(
+            base_url,
+            token,
+            timeout,
+            transport,
+            verify_ssl=self._verify,
+            guard=self._guard,
+            is_async=False,
+        )
 
     def __enter__(self) -> ComposeSession:
         return self
@@ -226,58 +315,190 @@ class ComposeSession:
     def close(self) -> None:
         self.client.get_httpx_client().close()
 
+    def _send(
+        self,
+        op: Operation,
+        call: Callable[[Any], Response[Any]],
+        *,
+        download: bool = False,
+    ) -> tuple[Response[Any], Credential | None]:
+        if self._provided_client is not None and self.tokens is None:
+            return call(self.client), None
+        credential = self.tokens.current() if self.tokens is not None else None
+        response = self._attempt(op, credential, call, download=download)
+        if int(response.status_code) == 401 and self.tokens is not None and credential is not None:
+            credential, response = self._after_unauthorized(op, credential, call, download=download)
+        return response, credential
+
+    def _after_unauthorized(
+        self,
+        op: Operation,
+        rejected: Credential,
+        call: Callable[[Any], Response[Any]],
+        *,
+        download: bool = False,
+    ) -> tuple[Credential, Response[Any]]:
+        is_env = isinstance(self.tokens, EnvironmentToken)
+        if not op.replayable:
+            renewed: Credential | None = None
+            if self.tokens is not None:
+                with suppress(CliError):
+                    renewed = self.tokens.renew(rejected)
+            hint = "the session was renewed, so" if renewed is not None else "sign in again, then"
+            raise AuthError(
+                f"the API rejected this session's credentials, so the simulation was not submitted; {hint} run the"
+                " command again"
+            )
+        renewed = self.tokens.renew(rejected) if self.tokens is not None else None
+        if renewed is None:
+            raise AuthError(rejected_message(renewable=False, env_var=TOKEN_ENV_VAR if is_env else None))
+        response = self._attempt(op, renewed, call, download=download)
+        if int(response.status_code) == 401:
+            raise AuthError(rejected_message(renewable=True))
+        return renewed, response
+
+    def _attempt(
+        self,
+        op: Operation,
+        credential: Credential | None,
+        call: Callable[[Any], Response[Any]],
+        *,
+        download: bool = False,
+    ) -> Response[Any]:
+        eff_timeout = self.timeout if download else min(self.timeout, 60.0)
+        client = _make_client(
+            self.base_url,
+            credential.access_token if credential is not None else None,
+            eff_timeout,
+            self._transport,
+            verify_ssl=self._verify,
+            guard=self._guard,
+            is_async=False,
+        )
+        try:
+            with client:
+                return call(client)
+        except UnsafeRequestError:
+            raise ProtocolError(f"refused to send credentials for {op} anywhere but {self.base_url}") from None
+        except (httpx.ConnectError, httpx.ConnectTimeout):
+            raise NetworkError(
+                f"cannot reach {self.base_url}: could not connect to the API at {self.base_url}; check the connection"
+                " and api_base_url"
+            ) from None
+        except (TimeoutError, httpx.TimeoutException):
+            if not op.replayable:
+                raise UncertainOutcomeError(
+                    unanswered(op, "did not answer in time"), exit_code=ExitCode.NETWORK
+                ) from None
+            raise NetworkError(unanswered(op, "did not answer in time")) from None
+        except httpx.HTTPError:
+            if not op.replayable:
+                raise UncertainOutcomeError(
+                    unanswered(op, "connection failed before an answer arrived"), exit_code=ExitCode.NETWORK
+                ) from None
+            raise NetworkError(unanswered(op, "connection failed before an answer arrived")) from None
+
     # -- service ----------------------------------------------------------------------------------------------------
 
+    def whoami(self) -> CurrentPrincipalResponse:
+        """The identity the service sees for this session's bearer token (GET /auth/me)."""
+        r, credential = self._send(
+            CURRENT_PRINCIPAL,
+            lambda c: get_current_principal.sync_detailed(client=cast(AuthenticatedClient, c)),
+        )
+        principal: CurrentPrincipalResponse = _parsed(r, op=CURRENT_PRINCIPAL)
+        if (
+            credential is not None
+            and credential.issuer is not None
+            and credential.subject is not None
+            and (principal.issuer, principal.subject) != (credential.issuer, credential.subject)
+        ):
+            raise ProtocolError(
+                "the API identifies this session as a different user than the one that signed in; check that"
+                " api_base_url, auth0_domain and auth0_audience describe the same deployment"
+            )
+        if self.tokens is not None and credential is not None:
+            self.tokens.confirmed(credential, datetime.datetime.now(datetime.UTC))
+        return principal
+
     def health(self) -> dict[str, str]:
-        return dict(_parsed(check_health_health_get.sync_detailed(client=self.client)).to_dict())
+        op = Operation("GET", "/health", replayable=True)
+        r, _ = self._send(op, lambda c: check_health_health_get.sync_detailed(client=c))
+        return dict(_parsed(r, op=op).to_dict())
 
     def version(self) -> str:
-        return str(_parsed(get_version_version_get.sync_detailed(client=self.client)))
+        op = Operation("GET", "/version", replayable=True)
+        r, _ = self._send(op, lambda c: get_version_version_get.sync_detailed(client=c))
+        return str(_parsed(r, op=op))
 
     def simulators(self) -> RegisteredSimulators:
-        return _parsed(get_simulator_list.sync_detailed(client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", "/core/simulator/list", replayable=True)
+        r, _ = self._send(op, lambda c: get_simulator_list.sync_detailed(client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def processes(self) -> list[BiGraphProcess]:
-        return list(_parsed(get_processes_list.sync_detailed(client=self.client)))
+        op = Operation("GET", "/core/processes/list", replayable=True)
+        r, _ = self._send(op, lambda c: get_processes_list.sync_detailed(client=c))
+        return list(_parsed(r, op=op))
 
     def steps(self) -> list[BiGraphStep]:
-        return list(_parsed(get_steps_list.sync_detailed(client=self.client)))
+        op = Operation("GET", "/core/steps/list", replayable=True)
+        r, _ = self._send(op, lambda c: get_steps_list.sync_detailed(client=c))
+        return list(_parsed(r, op=op))
 
     def environments(self) -> list[EnvironmentSummary]:
         """The environments documents run in, with what their interface manifests hold."""
-        return list(_parsed(list_environments.sync_detailed(client=self.client)))
+        op = Operation("GET", "/registry/environments", replayable=True)
+        r, _ = self._send(op, lambda c: list_environments.sync_detailed(client=c))
+        return list(_parsed(r, op=op))
 
     def catalog(self) -> list[CatalogEntry]:
         """Every registry entry with its curation level and the environments that provide its classes."""
-        return list(_parsed(list_registry_entries.sync_detailed(client=self.client)))
+        op = Operation("GET", "/registry/entries", replayable=True)
+        r, _ = self._send(op, lambda c: list_registry_entries.sync_detailed(client=c))
+        return list(_parsed(r, op=op))
 
     def solvers(self) -> list[Solver]:
         """The solvers SED-ML runs can use: class, environment, KiSAO algorithms, what each returns."""
-        return list(_parsed(list_solvers.sync_detailed(client=self.client)))
+        op = Operation("GET", "/registry/solvers", replayable=True)
+        r, _ = self._send(op, lambda c: list_solvers.sync_detailed(client=c))
+        return list(_parsed(r, op=op))
 
     def environment_manifest(self, name: str) -> InterfaceManifest:
         """An environment's interface manifest (pbg-interfaces/1)."""
-        return _parsed(get_environment_manifest.sync_detailed(name, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", f"/registry/environments/{name}/manifest", replayable=True)
+        r, _ = self._send(op, lambda c: get_environment_manifest.sync_detailed(name, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def environment_headers(self, name: str) -> EnvironmentHeaders:
         """An environment's interfaces as .pblang header files, and each class's declaration."""
-        return _parsed(get_environment_headers.sync_detailed(name, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", f"/registry/environments/{name}/headers", replayable=True)
+        r, _ = self._send(op, lambda c: get_environment_headers.sync_detailed(name, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def environment_images(self, name: str) -> ImageStatus:
         """Whether an environment's current image is built, with its image records and newest build run."""
-        return _parsed(get_environment_images.sync_detailed(name, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", f"/registry/environments/{name}/images", replayable=True)
+        r, _ = self._send(op, lambda c: get_environment_images.sync_detailed(name, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def build_environment(self, name: str) -> ImageStatus:
         """Make an environment's current image available: pulled or built unless it is, joining a build under way."""
-        return _parsed(build_environment.sync_detailed(name, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("POST", f"/registry/environments/{name}/build", replayable=False)
+        r, _ = self._send(op, lambda c: build_environment.sync_detailed(name, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def simulator_images(self, simulator_id: int) -> ImageStatus:
         """Whether a simulator's image is built, with its image records and newest build run."""
-        return _parsed(get_simulator_images.sync_detailed(simulator_id, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", f"/registry/simulators/{simulator_id}/images", replayable=True)
+        r, _ = self._send(op, lambda c: get_simulator_images.sync_detailed(simulator_id, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def build_simulator(self, simulator_id: int) -> ImageStatus:
         """Make a simulator's image available: pulled or built unless it is, joining a build under way."""
-        return _parsed(build_simulator.sync_detailed(simulator_id, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("POST", f"/registry/simulators/{simulator_id}/build", replayable=False)
+        r, _ = self._send(op, lambda c: build_simulator.sync_detailed(simulator_id, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     # -- submit -----------------------------------------------------------------------------------------------------
 
@@ -293,55 +514,73 @@ class ComposeSession:
     ) -> SimulationExperiment:
         """Submit an ``.omex`` (or ``.pbg``). ``simulator`` names a prebuilt simulator image; ``tags`` and
         ``description`` are stored with the run and filter ``simulations()``."""
-        r = run_simulation.sync_detailed(
-            client=self.client,
-            body=BodyRunSimulation(uploaded_file=_file(document)),
-            interval_time=interval,
-            batch_submission=batch,
-            simulator=simulator if simulator is not None else UNSET,
-            tags=list(tags) if tags else UNSET,
-            description=description if description is not None else UNSET,
+        op = Operation("POST", "/simulation/run", replayable=False)
+        r, _ = self._send(
+            op,
+            lambda c: run_simulation.sync_detailed(
+                client=c,
+                body=BodyRunSimulation(uploaded_file=_file(document)),
+                interval_time=interval,
+                batch_submission=batch,
+                simulator=simulator if simulator is not None else UNSET,
+                tags=list(tags) if tags else UNSET,
+                description=description if description is not None else UNSET,
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def submit_copasi(self, sbml: FileSource, *, start: float, duration: float, points: int) -> SimulationExperiment:
-        r = run_copasi.sync_detailed(
-            client=self.client,
-            body=BodyRunCopasi(sbml=_file(sbml)),
-            start_time=start,
-            duration=duration,
-            num_data_points=points,
+        op = Operation("POST", "/curated/copasi", replayable=False)
+        r, _ = self._send(
+            op,
+            lambda c: run_copasi.sync_detailed(
+                client=c,
+                body=BodyRunCopasi(sbml=_file(sbml)),
+                start_time=start,
+                duration=duration,
+                num_data_points=points,
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def submit_tellurium(self, sbml: FileSource, *, start: float, end: float, points: int) -> SimulationExperiment:
-        r = run_tellurium.sync_detailed(
-            client=self.client,
-            body=BodyRunTellurium(sbml=_file(sbml)),
-            start_time=start,
-            end_time=end,
-            num_data_points=points,
+        op = Operation("POST", "/curated/tellurium", replayable=False)
+        r, _ = self._send(
+            op,
+            lambda c: run_tellurium.sync_detailed(
+                client=c,
+                body=BodyRunTellurium(sbml=_file(sbml)),
+                start_time=start,
+                end_time=end,
+                num_data_points=points,
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     # -- status and waiting ---------------------------------------------------------------------------------------
 
     def status(self, simulation_id: int) -> JobState:
-        return _state(get_simulation_status.sync_detailed(client=self.client, simulation_id=simulation_id))
+        op = Operation("GET", "/results/simulation/status", replayable=True)
+        r, _ = self._send(op, lambda c: get_simulation_status.sync_detailed(client=c, simulation_id=simulation_id))
+        return _state(r, op=op)
 
     def statuses(self, simulation_ids: Sequence[int]) -> list[HpcRun]:
         """Several simulations' job records in one call (only those with a SLURM job yet)."""
-        r = get_simulations_status_batch.sync_detailed(client=self.client, body=list(simulation_ids))
-        return list(_parsed(r))
+        op = Operation("GET", "/results/simulations/status/batch", replayable=True)
+        r, _ = self._send(op, lambda c: get_simulations_status_batch.sync_detailed(client=c, body=list(simulation_ids)))
+        return list(_parsed(r, op=op))
 
     def build_log(self, simulator_id: int) -> str:
         """The SLURM log of the simulator's newest container build (its last 200 KB)."""
-        r = get_simulator_build_log.sync_detailed(client=self.client, simulator_id=simulator_id)
+        op = Operation("GET", "/results/simulator/build/log", replayable=True)
+        r, _ = self._send(op, lambda c: get_simulator_build_log.sync_detailed(client=c, simulator_id=simulator_id))
         raise_for(r)
         return r.content.decode(errors="replace")
 
     def build_status(self, simulator_id: int) -> JobState:
-        return _state(get_simulator_build_status.sync_detailed(client=self.client, simulator_id=simulator_id))
+        op = Operation("GET", "/results/simulator/build/status", replayable=True)
+        r, _ = self._send(op, lambda c: get_simulator_build_status.sync_detailed(client=c, simulator_id=simulator_id))
+        return _state(r, op=op)
 
     def wait(
         self,
@@ -379,21 +618,29 @@ class ComposeSession:
     ) -> SimulationPage:
         """Simulations the caller may read, newest first, each with its latest SLURM job. ``status`` is a job state
         or ``"submitting"``; ``simulator`` a prebuilt simulator's name or a container-definition hash prefix."""
-        r = list_simulations.sync_detailed(
-            client=self.client, **_simulation_filters(status, simulator, since, labels, tags, limit, offset)
+        op = Operation("GET", "/simulations", replayable=True)
+        r, _ = self._send(
+            op,
+            lambda c: list_simulations.sync_detailed(
+                client=c, **_simulation_filters(status, simulator, since, labels, tags, limit, offset)
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     # -- SED-ML -----------------------------------------------------------------------------------------------------
 
     def sedml_preview(self, archive: FileSource, *, solvers: Sequence[str] = ()) -> SedmlPreview:
         """Translate a SED-ML archive without running it: its tasks, and what each solver would run or why not."""
-        r = preview_sedml.sync_detailed(
-            client=self.client,
-            body=BodyPreviewSedml(archive=_file(archive)),
-            solvers=list(solvers) if solvers else UNSET,
+        op = Operation("POST", "/sedml/preview", replayable=True)
+        r, _ = self._send(
+            op,
+            lambda c: preview_sedml.sync_detailed(
+                client=c,
+                body=BodyPreviewSedml(archive=_file(archive)),
+                solvers=list(solvers) if solvers else UNSET,
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def sedml_run(
         self,
@@ -405,54 +652,71 @@ class ComposeSession:
         description: str | None = None,
     ) -> SedmlRunResult:
         """Run each task of a SED-ML archive once per solver; one comparison per task."""
-        r = run_sedml.sync_detailed(
-            client=self.client,
-            body=BodyRunSedml(archive=_file(archive)),
-            solvers=list(solvers) if solvers else UNSET,
-            task=list(tasks) if tasks else UNSET,
-            tags=list(tags) if tags else UNSET,
-            description=description if description is not None else UNSET,
+        op = Operation("POST", "/sedml/run", replayable=False)
+        r, _ = self._send(
+            op,
+            lambda c: run_sedml.sync_detailed(
+                client=c,
+                body=BodyRunSedml(archive=_file(archive)),
+                solvers=list(solvers) if solvers else UNSET,
+                task=list(tasks) if tasks else UNSET,
+                tags=list(tags) if tags else UNSET,
+                description=description if description is not None else UNSET,
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     # -- sources (BioModels, biosimulations.org) --------------------------------------------------------------------
 
     def biomodels_search(self, query: str, *, limit: int = 20, curated: bool = True) -> list[BiomodelHit]:
-        r = search_biomodels.sync_detailed(client=self.client, q=query, limit=limit, curated=curated)
-        return list(_parsed(r))
+        op = Operation("GET", "/sources/biomodels/search", replayable=True)
+        r, _ = self._send(op, lambda c: search_biomodels.sync_detailed(client=c, q=query, limit=limit, curated=curated))
+        return list(_parsed(r, op=op))
 
     def biomodel(self, model_id: str) -> BiomodelInfo:
-        return _parsed(get_biomodel.sync_detailed(model_id, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", f"/sources/biomodels/{model_id}", replayable=True)
+        r, _ = self._send(op, lambda c: get_biomodel.sync_detailed(model_id, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def biomodel_omex(self, model_id: str) -> bytes:
-        r = get_biomodel_omex.sync_detailed(model_id, client=self.client)
+        op = Operation("GET", f"/sources/biomodels/{model_id}/omex", replayable=True)
+        r, _ = self._send(op, lambda c: get_biomodel_omex.sync_detailed(model_id, client=c), download=True)
         raise_for(r)
         return r.content
 
     def run_biomodel(self, model_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()) -> SedmlRunResult:
-        r = run_biomodel.sync_detailed(
-            model_id,
-            client=self.client,
-            solvers=list(solvers) if solvers else UNSET,
-            tags=list(tags) if tags else UNSET,
+        op = Operation("POST", f"/sources/biomodels/{model_id}/run", replayable=False)
+        r, _ = self._send(
+            op,
+            lambda c: run_biomodel.sync_detailed(
+                model_id,
+                client=c,
+                solvers=list(solvers) if solvers else UNSET,
+                tags=list(tags) if tags else UNSET,
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def biosimulations_search(self, query: str = "", *, limit: int = 20) -> list[ProjectInfo]:
-        r = search_biosimulations_projects.sync_detailed(client=self.client, q=query, limit=limit)
-        return list(_parsed(r))
+        op = Operation("GET", "/sources/biosimulations/projects", replayable=True)
+        r, _ = self._send(op, lambda c: search_biosimulations_projects.sync_detailed(client=c, q=query, limit=limit))
+        return list(_parsed(r, op=op))
 
     def biosimulations_project(self, project_id: str) -> ProjectInfo:
-        return _parsed(get_biosimulations_project.sync_detailed(project_id, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", f"/sources/biosimulations/{project_id}", replayable=True)
+        r, _ = self._send(op, lambda c: get_biosimulations_project.sync_detailed(project_id, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def biosimulations_omex(self, project_id: str) -> bytes:
-        r = get_biosimulations_omex.sync_detailed(project_id, client=self.client)
+        op = Operation("GET", f"/sources/biosimulations/{project_id}/omex", replayable=True)
+        r, _ = self._send(op, lambda c: get_biosimulations_omex.sync_detailed(project_id, client=c), download=True)
         raise_for(r)
         return r.content
 
     def biosimulations_reference(self, project_id: str) -> dict[str, dict[str, list[float]]]:
         """The project's original results: `{"<sedml>/<report>": {label: values}}`."""
-        r = get_biosimulations_reference.sync_detailed(project_id, client=self.client)
+        op = Operation("GET", f"/sources/biosimulations/{project_id}/reference", replayable=True)
+        r, _ = self._send(op, lambda c: get_biosimulations_reference.sync_detailed(project_id, client=c))
         raise_for(r)
         data: dict[str, dict[str, list[float]]] = r.parsed.to_dict()  # type: ignore[union-attr]
         return data
@@ -460,48 +724,69 @@ class ComposeSession:
     def run_biosimulations_project(
         self, project_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()
     ) -> SedmlRunResult:
-        r = run_biosimulations_project.sync_detailed(
-            project_id,
-            client=self.client,
-            solvers=list(solvers) if solvers else UNSET,
-            tags=list(tags) if tags else UNSET,
+        op = Operation("POST", f"/sources/biosimulations/{project_id}/run", replayable=False)
+        r, _ = self._send(
+            op,
+            lambda c: run_biosimulations_project.sync_detailed(
+                project_id,
+                client=c,
+                solvers=list(solvers) if solvers else UNSET,
+                tags=list(tags) if tags else UNSET,
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     # -- suites -----------------------------------------------------------------------------------------------------
 
     def suites(self) -> list[Suite]:
-        return list(_parsed(list_suites.sync_detailed(client=self.client)))
+        op = Operation("GET", "/suites", replayable=True)
+        r, _ = self._send(op, lambda c: list_suites.sync_detailed(client=c))
+        return list(_parsed(r, op=op))
 
     def suite_runs(self, name: str) -> list[SuiteRunInfo]:
-        return list(_parsed(list_suite_runs.sync_detailed(name, client=self.client)))
+        op = Operation("GET", f"/suites/{name}/runs", replayable=True)
+        r, _ = self._send(op, lambda c: list_suite_runs.sync_detailed(name, client=c))
+        return list(_parsed(r, op=op))
 
     def suite_run(self, name: str, number: int) -> SuiteRunView:
         """One suite run: per source, agreement, references, and drift from the baseline run."""
-        return _parsed(get_suite_run.sync_detailed(name, number, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", f"/suites/{name}/runs/{number}", replayable=True)
+        r, _ = self._send(op, lambda c: get_suite_run.sync_detailed(name, number, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def run_suite(self, name: str) -> SuiteRunInfo:
         """Run every source of the suite (submitted in the background); the new run's number."""
-        return _parsed(run_suite.sync_detailed(name, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("POST", f"/suites/{name}/run", replayable=False)
+        r, _ = self._send(op, lambda c: run_suite.sync_detailed(name, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def comparisons(self, *, source: str | None = None, limit: int = 25, offset: int = 0) -> ComparisonPage:
-        r = list_comparisons.sync_detailed(
-            client=self.client, source=source if source is not None else UNSET, limit=limit, offset=offset
+        op = Operation("GET", "/comparisons", replayable=True)
+        r, _ = self._send(
+            op,
+            lambda c: list_comparisons.sync_detailed(
+                client=c, source=source if source is not None else UNSET, limit=limit, offset=offset
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def comparison_series(self, comparison_id: int, report: str) -> ComparisonSeries:
         """One report's columns from each run and each reference."""
-        r = get_comparison_series.sync_detailed(comparison_id, client=self.client, report=report)
-        return _parsed(r)  # type: ignore[no-any-return]
+        op = Operation("GET", f"/comparisons/{comparison_id}/series", replayable=True)
+        r, _ = self._send(op, lambda c: get_comparison_series.sync_detailed(comparison_id, client=c, report=report))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def comparison(self, comparison_id: int) -> Comparison:
         """One comparison: its runs, and per report and data set each solver pair's score once all have finished."""
-        return _parsed(get_comparison.sync_detailed(comparison_id, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", f"/comparisons/{comparison_id}", replayable=True)
+        r, _ = self._send(op, lambda c: get_comparison.sync_detailed(comparison_id, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def simulation(self, simulation_id: int) -> SimulationDetail:
         """One simulation: its latest SLURM job and how many events and datasets its run recorded."""
-        return _parsed(get_simulation.sync_detailed(simulation_id, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", f"/simulations/{simulation_id}", replayable=True)
+        r, _ = self._send(op, lambda c: get_simulation.sync_detailed(simulation_id, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     # -- events and traces ----------------------------------------------------------------------------------------
 
@@ -517,10 +802,14 @@ class ComposeSession:
     ) -> RunEventPage:
         """A page of the run's events, in the order they were recorded. Pass ``page.next_cursor`` as ``after`` for the
         next page."""
-        r = get_simulation_events.sync_detailed(
-            client=self.client, simulation_id=simulation_id, **_event_filters(after, limit, level, event, span_id)
+        op = Operation("GET", "/results/simulation/events", replayable=True)
+        r, _ = self._send(
+            op,
+            lambda c: get_simulation_events.sync_detailed(
+                client=c, simulation_id=simulation_id, **_event_filters(after, limit, level, event, span_id)
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def iter_events(
         self,
@@ -547,13 +836,17 @@ class ComposeSession:
 
     def trace(self, simulation_id: int) -> RunTraceTree:
         """The run's spans as a tree, each span with its own events."""
-        r = get_simulation_trace.sync_detailed(client=self.client, simulation_id=simulation_id)
-        return _parsed(r)  # type: ignore[no-any-return]
+        op = Operation("GET", "/results/simulation/trace", replayable=True)
+        r, _ = self._send(op, lambda c: get_simulation_trace.sync_detailed(client=c, simulation_id=simulation_id))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def trace_chrome(self, simulation_id: int) -> dict[str, Any]:
         """The run's trace as a Chrome Trace Event document: save it as JSON and open it in ui.perfetto.dev."""
-        r = get_simulation_trace_chrome.sync_detailed(client=self.client, simulation_id=simulation_id)
-        return dict(_parsed(r).to_dict())
+        op = Operation("GET", "/results/simulation/trace/chrome", replayable=True)
+        r, _ = self._send(
+            op, lambda c: get_simulation_trace_chrome.sync_detailed(client=c, simulation_id=simulation_id)
+        )
+        return dict(_parsed(r, op=op).to_dict())
 
     # -- datasets ---------------------------------------------------------------------------------------------------
 
@@ -568,23 +861,37 @@ class ComposeSession:
         offset: int = 0,
     ) -> DatasetPage:
         """The files runs advertised: one simulation's, or all those the caller may read. ``page.next_offset`` pages."""
-        r = list_datasets.sync_detailed(
-            client=self.client, **_dataset_filters(simulation_id, kind, q, available, limit, offset)
+        op = Operation("GET", "/datasets", replayable=True)
+        r, _ = self._send(
+            op,
+            lambda c: list_datasets.sync_detailed(
+                client=c, **_dataset_filters(simulation_id, kind, q, available, limit, offset)
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def dataset(self, dataset_id: str | uuid.UUID) -> Dataset:
-        return _parsed(get_dataset.sync_detailed(uuid.UUID(str(dataset_id)), client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", f"/datasets/{dataset_id}", replayable=True)
+        r, _ = self._send(op, lambda c: get_dataset.sync_detailed(uuid.UUID(str(dataset_id)), client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def dataset_content(self, dataset_id: str | uuid.UUID) -> bytes:
-        r = get_dataset_content.sync_detailed(uuid.UUID(str(dataset_id)), client=self.client)
+        op = Operation("GET", f"/datasets/{dataset_id}/content", replayable=True)
+        r, _ = self._send(
+            op, lambda c: get_dataset_content.sync_detailed(uuid.UUID(str(dataset_id)), client=c), download=True
+        )
         raise_for(r)
         return r.content
 
     def dataset_file(self, dataset_id: str | uuid.UUID, subpath: str) -> bytes:
         """One file inside a directory dataset (a ``*.fenics`` results bundle or a ``*.zarr`` store), e.g.
         ``.zattrs`` or a chunk such as ``u/0.0``."""
-        r = get_dataset_file.sync_detailed(uuid.UUID(str(dataset_id)), subpath, client=self.client)
+        op = Operation("GET", f"/datasets/{dataset_id}/files/{subpath}", replayable=True)
+        r, _ = self._send(
+            op,
+            lambda c: get_dataset_file.sync_detailed(uuid.UUID(str(dataset_id)), subpath, client=c),
+            download=True,
+        )
         raise_for(r)
         return r.content
 
@@ -602,7 +909,12 @@ class ComposeSession:
 
     def results(self, simulation_id: int) -> bytes:
         """The results archive (zip). :class:`NotFound` until the simulation has finished."""
-        r = get_simulation_results_file.sync_detailed(client=self.client, simulation_id=simulation_id)
+        op = Operation("GET", "/results/simulation/results/file", replayable=True)
+        r, _ = self._send(
+            op,
+            lambda c: get_simulation_results_file.sync_detailed(client=c, simulation_id=simulation_id),
+            download=True,
+        )
         raise_for(r)
         return r.content
 
@@ -644,19 +956,48 @@ class AsyncComposeSession:
         self,
         base_url: str = DEFAULT_URL,
         *,
+        tokens: AsyncTokenSource | None = None,
         token: str | None = None,
         timeout: float = 300.0,
         client: Client | AuthenticatedClient | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
+        ca_bundle: Path | None = None,
+        allowed_paths: frozenset[str] | None = None,
     ) -> None:
-        self.client = client or _make_client(base_url, token, timeout, transport)
+        self.base_url = base_url
+        self.timeout = timeout
+        self._transport = transport
+        self._verify = tls_verification(ca_bundle)
+        self._guard = _DestinationGuard(base_url, allowed_paths=allowed_paths)
+        self.tokens: AsyncTokenSource | None = (
+            tokens if tokens is not None else (StaticToken(token).as_async() if token else None)
+        )
+        self._provided_client = client
+        self.client = client or _make_client(
+            base_url,
+            token,
+            timeout,
+            transport,
+            verify_ssl=self._verify,
+            guard=self._guard,
+            is_async=True,
+        )
 
     @classmethod
-    def in_process(cls, app: Any, base_url: str = "http://testserver") -> AsyncComposeSession:
+    def in_process(
+        cls,
+        app: Any,
+        base_url: str = "http://testserver",
+        *,
+        token: str | None = None,
+        tokens: AsyncTokenSource | None = None,
+    ) -> AsyncComposeSession:
         """A session on an ASGI app (the FastAPI app) with no network: for tests."""
+        if token is not None or tokens is not None:
+            return cls(base_url=base_url, token=token, tokens=tokens, transport=httpx.ASGITransport(app=app))
         client = Client(base_url=base_url, raise_on_unexpected_status=False)
         client.set_async_httpx_client(httpx.AsyncClient(base_url=base_url, transport=httpx.ASGITransport(app=app)))
-        return cls(client=client)
+        return cls(base_url=base_url, client=client)
 
     async def __aenter__(self) -> AsyncComposeSession:
         return self
@@ -667,56 +1008,187 @@ class AsyncComposeSession:
     async def aclose(self) -> None:
         await self.client.get_async_httpx_client().aclose()
 
+    async def _send(
+        self,
+        op: Operation,
+        call: Callable[[Any], Awaitable[Response[Any]]],
+        *,
+        download: bool = False,
+    ) -> tuple[Response[Any], Credential | None]:
+        if self._provided_client is not None and self.tokens is None:
+            return await call(self.client), None
+        credential = await self.tokens.current() if self.tokens is not None else None
+        response = await self._attempt(op, credential, call, download=download)
+        if int(response.status_code) == 401 and self.tokens is not None and credential is not None:
+            credential, response = await self._after_unauthorized(op, credential, call, download=download)
+        return response, credential
+
+    async def _after_unauthorized(
+        self,
+        op: Operation,
+        rejected: Credential,
+        call: Callable[[Any], Awaitable[Response[Any]]],
+        *,
+        download: bool = False,
+    ) -> tuple[Credential, Response[Any]]:
+        if not op.replayable:
+            renewed: Credential | None = None
+            if self.tokens is not None:
+                with suppress(CliError):
+                    renewed = await self.tokens.renew(rejected)
+            hint = "the session was renewed, so" if renewed is not None else "sign in again, then"
+            raise AuthError(
+                f"the API rejected this session's credentials, so the simulation was not submitted; {hint} run the"
+                " command again"
+            )
+        renewed = await self.tokens.renew(rejected) if self.tokens is not None else None
+        if renewed is None:
+            raise AuthError(rejected_message(renewable=False))
+        response = await self._attempt(op, renewed, call, download=download)
+        if int(response.status_code) == 401:
+            raise AuthError(rejected_message(renewable=True))
+        return renewed, response
+
+    async def _attempt(
+        self,
+        op: Operation,
+        credential: Credential | None,
+        call: Callable[[Any], Awaitable[Response[Any]]],
+        *,
+        download: bool = False,
+    ) -> Response[Any]:
+        eff_timeout = self.timeout if download else min(self.timeout, 60.0)
+        client = _make_client(
+            self.base_url,
+            credential.access_token if credential is not None else None,
+            eff_timeout,
+            self._transport,
+            verify_ssl=self._verify,
+            guard=self._guard,
+            is_async=True,
+        )
+        try:
+            async with client, asyncio.timeout(COMMAND_DEADLINE_SECONDS):
+                return await call(client)
+        except UnsafeRequestError:
+            raise ProtocolError(f"refused to send credentials for {op} anywhere but {self.base_url}") from None
+        except (httpx.ConnectError, httpx.ConnectTimeout):
+            raise NetworkError(
+                f"cannot reach {self.base_url}: could not connect to the API at {self.base_url}; check the connection"
+                " and api_base_url"
+            ) from None
+        except (TimeoutError, httpx.TimeoutException):
+            if not op.replayable:
+                raise UncertainOutcomeError(
+                    unanswered(op, "did not answer in time"), exit_code=ExitCode.NETWORK
+                ) from None
+            raise NetworkError(unanswered(op, "did not answer in time")) from None
+        except httpx.HTTPError:
+            if not op.replayable:
+                raise UncertainOutcomeError(
+                    unanswered(op, "connection failed before an answer arrived"), exit_code=ExitCode.NETWORK
+                ) from None
+            raise NetworkError(unanswered(op, "connection failed before an answer arrived")) from None
+
+    async def whoami(self) -> CurrentPrincipalResponse:
+        """The identity the service sees for this session's bearer token (GET /auth/me)."""
+        r, credential = await self._send(
+            CURRENT_PRINCIPAL,
+            lambda c: get_current_principal.asyncio_detailed(client=cast(AuthenticatedClient, c)),
+        )
+        principal: CurrentPrincipalResponse = _parsed(r, op=CURRENT_PRINCIPAL)
+        if (
+            credential is not None
+            and credential.issuer is not None
+            and credential.subject is not None
+            and (principal.issuer, principal.subject) != (credential.issuer, credential.subject)
+        ):
+            raise ProtocolError(
+                "the API identifies this session as a different user than the one that signed in; check that"
+                " api_base_url, auth0_domain and auth0_audience describe the same deployment"
+            )
+        if self.tokens is not None and credential is not None:
+            await self.tokens.confirmed(credential, datetime.datetime.now(datetime.UTC))
+        return principal
+
     async def health(self) -> dict[str, str]:
-        return dict(_parsed(await check_health_health_get.asyncio_detailed(client=self.client)).to_dict())
+        op = Operation("GET", "/health", replayable=True)
+        r, _ = await self._send(op, lambda c: check_health_health_get.asyncio_detailed(client=c))
+        return dict(_parsed(r, op=op).to_dict())
 
     async def version(self) -> str:
-        return str(_parsed(await get_version_version_get.asyncio_detailed(client=self.client)))
+        op = Operation("GET", "/version", replayable=True)
+        r, _ = await self._send(op, lambda c: get_version_version_get.asyncio_detailed(client=c))
+        return str(_parsed(r, op=op))
 
     async def simulators(self) -> RegisteredSimulators:
-        return _parsed(await get_simulator_list.asyncio_detailed(client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", "/core/simulator/list", replayable=True)
+        r, _ = await self._send(op, lambda c: get_simulator_list.asyncio_detailed(client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def processes(self) -> list[BiGraphProcess]:
-        return list(_parsed(await get_processes_list.asyncio_detailed(client=self.client)))
+        op = Operation("GET", "/core/processes/list", replayable=True)
+        r, _ = await self._send(op, lambda c: get_processes_list.asyncio_detailed(client=c))
+        return list(_parsed(r, op=op))
 
     async def steps(self) -> list[BiGraphStep]:
-        return list(_parsed(await get_steps_list.asyncio_detailed(client=self.client)))
+        op = Operation("GET", "/core/steps/list", replayable=True)
+        r, _ = await self._send(op, lambda c: get_steps_list.asyncio_detailed(client=c))
+        return list(_parsed(r, op=op))
 
     async def environments(self) -> list[EnvironmentSummary]:
         """The environments documents run in, with what their interface manifests hold."""
-        return list(_parsed(await list_environments.asyncio_detailed(client=self.client)))
+        op = Operation("GET", "/registry/environments", replayable=True)
+        r, _ = await self._send(op, lambda c: list_environments.asyncio_detailed(client=c))
+        return list(_parsed(r, op=op))
 
     async def catalog(self) -> list[CatalogEntry]:
         """Every registry entry with its curation level and the environments that provide its classes."""
-        return list(_parsed(await list_registry_entries.asyncio_detailed(client=self.client)))
+        op = Operation("GET", "/registry/entries", replayable=True)
+        r, _ = await self._send(op, lambda c: list_registry_entries.asyncio_detailed(client=c))
+        return list(_parsed(r, op=op))
 
     async def solvers(self) -> list[Solver]:
         """The solvers SED-ML runs can use: class, environment, KiSAO algorithms, what each returns."""
-        return list(_parsed(await list_solvers.asyncio_detailed(client=self.client)))
+        op = Operation("GET", "/registry/solvers", replayable=True)
+        r, _ = await self._send(op, lambda c: list_solvers.asyncio_detailed(client=c))
+        return list(_parsed(r, op=op))
 
     async def environment_manifest(self, name: str) -> InterfaceManifest:
         """An environment's interface manifest (pbg-interfaces/1)."""
-        return _parsed(await get_environment_manifest.asyncio_detailed(name, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", f"/registry/environments/{name}/manifest", replayable=True)
+        r, _ = await self._send(op, lambda c: get_environment_manifest.asyncio_detailed(name, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def environment_headers(self, name: str) -> EnvironmentHeaders:
         """An environment's interfaces as .pblang header files, and each class's declaration."""
-        return _parsed(await get_environment_headers.asyncio_detailed(name, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", f"/registry/environments/{name}/headers", replayable=True)
+        r, _ = await self._send(op, lambda c: get_environment_headers.asyncio_detailed(name, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def environment_images(self, name: str) -> ImageStatus:
         """Whether an environment's current image is built, with its image records and newest build run."""
-        return _parsed(await get_environment_images.asyncio_detailed(name, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", f"/registry/environments/{name}/images", replayable=True)
+        r, _ = await self._send(op, lambda c: get_environment_images.asyncio_detailed(name, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def build_environment(self, name: str) -> ImageStatus:
         """Make an environment's current image available: pulled or built unless it is, joining a build under way."""
-        return _parsed(await build_environment.asyncio_detailed(name, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("POST", f"/registry/environments/{name}/build", replayable=False)
+        r, _ = await self._send(op, lambda c: build_environment.asyncio_detailed(name, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def simulator_images(self, simulator_id: int) -> ImageStatus:
         """Whether a simulator's image is built, with its image records and newest build run."""
-        return _parsed(await get_simulator_images.asyncio_detailed(simulator_id, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", f"/registry/simulators/{simulator_id}/images", replayable=True)
+        r, _ = await self._send(op, lambda c: get_simulator_images.asyncio_detailed(simulator_id, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def build_simulator(self, simulator_id: int) -> ImageStatus:
         """Make a simulator's image available: pulled or built unless it is, joining a build under way."""
-        return _parsed(await build_simulator.asyncio_detailed(simulator_id, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("POST", f"/registry/simulators/{simulator_id}/build", replayable=False)
+        r, _ = await self._send(op, lambda c: build_simulator.asyncio_detailed(simulator_id, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def submit(
         self,
@@ -728,56 +1200,82 @@ class AsyncComposeSession:
         tags: Sequence[str] = (),
         description: str | None = None,
     ) -> SimulationExperiment:
-        r = await run_simulation.asyncio_detailed(
-            client=self.client,
-            body=BodyRunSimulation(uploaded_file=_file(document)),
-            interval_time=interval,
-            batch_submission=batch,
-            simulator=simulator if simulator is not None else UNSET,
-            tags=list(tags) if tags else UNSET,
-            description=description if description is not None else UNSET,
+        op = Operation("POST", "/simulation/run", replayable=False)
+        r, _ = await self._send(
+            op,
+            lambda c: run_simulation.asyncio_detailed(
+                client=c,
+                body=BodyRunSimulation(uploaded_file=_file(document)),
+                interval_time=interval,
+                batch_submission=batch,
+                simulator=simulator if simulator is not None else UNSET,
+                tags=list(tags) if tags else UNSET,
+                description=description if description is not None else UNSET,
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def submit_copasi(
         self, sbml: FileSource, *, start: float, duration: float, points: int
     ) -> SimulationExperiment:
-        r = await run_copasi.asyncio_detailed(
-            client=self.client,
-            body=BodyRunCopasi(sbml=_file(sbml)),
-            start_time=start,
-            duration=duration,
-            num_data_points=points,
+        op = Operation("POST", "/curated/copasi", replayable=False)
+        r, _ = await self._send(
+            op,
+            lambda c: run_copasi.asyncio_detailed(
+                client=c,
+                body=BodyRunCopasi(sbml=_file(sbml)),
+                start_time=start,
+                duration=duration,
+                num_data_points=points,
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def submit_tellurium(
         self, sbml: FileSource, *, start: float, end: float, points: int
     ) -> SimulationExperiment:
-        r = await run_tellurium.asyncio_detailed(
-            client=self.client,
-            body=BodyRunTellurium(sbml=_file(sbml)),
-            start_time=start,
-            end_time=end,
-            num_data_points=points,
+        op = Operation("POST", "/curated/tellurium", replayable=False)
+        r, _ = await self._send(
+            op,
+            lambda c: run_tellurium.asyncio_detailed(
+                client=c,
+                body=BodyRunTellurium(sbml=_file(sbml)),
+                start_time=start,
+                end_time=end,
+                num_data_points=points,
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def status(self, simulation_id: int) -> JobState:
-        return _state(await get_simulation_status.asyncio_detailed(client=self.client, simulation_id=simulation_id))
+        op = Operation("GET", "/results/simulation/status", replayable=True)
+        r, _ = await self._send(
+            op, lambda c: get_simulation_status.asyncio_detailed(client=c, simulation_id=simulation_id)
+        )
+        return _state(r, op=op)
 
     async def statuses(self, simulation_ids: Sequence[int]) -> list[HpcRun]:
-        r = await get_simulations_status_batch.asyncio_detailed(client=self.client, body=list(simulation_ids))
-        return list(_parsed(r))
+        op = Operation("GET", "/results/simulations/status/batch", replayable=True)
+        r, _ = await self._send(
+            op, lambda c: get_simulations_status_batch.asyncio_detailed(client=c, body=list(simulation_ids))
+        )
+        return list(_parsed(r, op=op))
 
     async def build_log(self, simulator_id: int) -> str:
         """The SLURM log of the simulator's newest container build (its last 200 KB)."""
-        r = await get_simulator_build_log.asyncio_detailed(client=self.client, simulator_id=simulator_id)
+        op = Operation("GET", "/results/simulator/build/log", replayable=True)
+        r, _ = await self._send(
+            op, lambda c: get_simulator_build_log.asyncio_detailed(client=c, simulator_id=simulator_id)
+        )
         raise_for(r)
         return r.content.decode(errors="replace")
 
     async def build_status(self, simulator_id: int) -> JobState:
-        return _state(await get_simulator_build_status.asyncio_detailed(client=self.client, simulator_id=simulator_id))
+        op = Operation("GET", "/results/simulator/build/status", replayable=True)
+        r, _ = await self._send(
+            op, lambda c: get_simulator_build_status.asyncio_detailed(client=c, simulator_id=simulator_id)
+        )
+        return _state(r, op=op)
 
     async def wait(
         self,
@@ -810,21 +1308,29 @@ class AsyncComposeSession:
         limit: int = 50,
         offset: int = 0,
     ) -> SimulationPage:
-        r = await list_simulations.asyncio_detailed(
-            client=self.client, **_simulation_filters(status, simulator, since, labels, tags, limit, offset)
+        op = Operation("GET", "/simulations", replayable=True)
+        r, _ = await self._send(
+            op,
+            lambda c: list_simulations.asyncio_detailed(
+                client=c, **_simulation_filters(status, simulator, since, labels, tags, limit, offset)
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     # -- SED-ML -----------------------------------------------------------------------------------------------------
 
     async def sedml_preview(self, archive: FileSource, *, solvers: Sequence[str] = ()) -> SedmlPreview:
         """Translate a SED-ML archive without running it: its tasks, and what each solver would run or why not."""
-        r = await preview_sedml.asyncio_detailed(
-            client=self.client,
-            body=BodyPreviewSedml(archive=_file(archive)),
-            solvers=list(solvers) if solvers else UNSET,
+        op = Operation("POST", "/sedml/preview", replayable=True)
+        r, _ = await self._send(
+            op,
+            lambda c: preview_sedml.asyncio_detailed(
+                client=c,
+                body=BodyPreviewSedml(archive=_file(archive)),
+                solvers=list(solvers) if solvers else UNSET,
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def sedml_run(
         self,
@@ -836,56 +1342,79 @@ class AsyncComposeSession:
         description: str | None = None,
     ) -> SedmlRunResult:
         """Run each task of a SED-ML archive once per solver; one comparison per task."""
-        r = await run_sedml.asyncio_detailed(
-            client=self.client,
-            body=BodyRunSedml(archive=_file(archive)),
-            solvers=list(solvers) if solvers else UNSET,
-            task=list(tasks) if tasks else UNSET,
-            tags=list(tags) if tags else UNSET,
-            description=description if description is not None else UNSET,
+        op = Operation("POST", "/sedml/run", replayable=False)
+        r, _ = await self._send(
+            op,
+            lambda c: run_sedml.asyncio_detailed(
+                client=c,
+                body=BodyRunSedml(archive=_file(archive)),
+                solvers=list(solvers) if solvers else UNSET,
+                task=list(tasks) if tasks else UNSET,
+                tags=list(tags) if tags else UNSET,
+                description=description if description is not None else UNSET,
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     # -- sources (BioModels, biosimulations.org) --------------------------------------------------------------------
 
     async def biomodels_search(self, query: str, *, limit: int = 20, curated: bool = True) -> list[BiomodelHit]:
-        r = await search_biomodels.asyncio_detailed(client=self.client, q=query, limit=limit, curated=curated)
-        return list(_parsed(r))
+        op = Operation("GET", "/sources/biomodels/search", replayable=True)
+        r, _ = await self._send(
+            op, lambda c: search_biomodels.asyncio_detailed(client=c, q=query, limit=limit, curated=curated)
+        )
+        return list(_parsed(r, op=op))
 
     async def biomodel(self, model_id: str) -> BiomodelInfo:
-        return _parsed(await get_biomodel.asyncio_detailed(model_id, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", f"/sources/biomodels/{model_id}", replayable=True)
+        r, _ = await self._send(op, lambda c: get_biomodel.asyncio_detailed(model_id, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def biomodel_omex(self, model_id: str) -> bytes:
-        r = await get_biomodel_omex.asyncio_detailed(model_id, client=self.client)
+        op = Operation("GET", f"/sources/biomodels/{model_id}/omex", replayable=True)
+        r, _ = await self._send(op, lambda c: get_biomodel_omex.asyncio_detailed(model_id, client=c), download=True)
         raise_for(r)
         return r.content
 
     async def run_biomodel(
         self, model_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()
     ) -> SedmlRunResult:
-        r = await run_biomodel.asyncio_detailed(
-            model_id,
-            client=self.client,
-            solvers=list(solvers) if solvers else UNSET,
-            tags=list(tags) if tags else UNSET,
+        op = Operation("POST", f"/sources/biomodels/{model_id}/run", replayable=False)
+        r, _ = await self._send(
+            op,
+            lambda c: run_biomodel.asyncio_detailed(
+                model_id,
+                client=c,
+                solvers=list(solvers) if solvers else UNSET,
+                tags=list(tags) if tags else UNSET,
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def biosimulations_search(self, query: str = "", *, limit: int = 20) -> list[ProjectInfo]:
-        r = await search_biosimulations_projects.asyncio_detailed(client=self.client, q=query, limit=limit)
-        return list(_parsed(r))
+        op = Operation("GET", "/sources/biosimulations/projects", replayable=True)
+        r, _ = await self._send(
+            op, lambda c: search_biosimulations_projects.asyncio_detailed(client=c, q=query, limit=limit)
+        )
+        return list(_parsed(r, op=op))
 
     async def biosimulations_project(self, project_id: str) -> ProjectInfo:
-        return _parsed(await get_biosimulations_project.asyncio_detailed(project_id, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", f"/sources/biosimulations/{project_id}", replayable=True)
+        r, _ = await self._send(op, lambda c: get_biosimulations_project.asyncio_detailed(project_id, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def biosimulations_omex(self, project_id: str) -> bytes:
-        r = await get_biosimulations_omex.asyncio_detailed(project_id, client=self.client)
+        op = Operation("GET", f"/sources/biosimulations/{project_id}/omex", replayable=True)
+        r, _ = await self._send(
+            op, lambda c: get_biosimulations_omex.asyncio_detailed(project_id, client=c), download=True
+        )
         raise_for(r)
         return r.content
 
     async def biosimulations_reference(self, project_id: str) -> dict[str, dict[str, list[float]]]:
         """The project's original results: `{"<sedml>/<report>": {label: values}}`."""
-        r = await get_biosimulations_reference.asyncio_detailed(project_id, client=self.client)
+        op = Operation("GET", f"/sources/biosimulations/{project_id}/reference", replayable=True)
+        r, _ = await self._send(op, lambda c: get_biosimulations_reference.asyncio_detailed(project_id, client=c))
         raise_for(r)
         data: dict[str, dict[str, list[float]]] = r.parsed.to_dict()  # type: ignore[union-attr]
         return data
@@ -893,47 +1422,70 @@ class AsyncComposeSession:
     async def run_biosimulations_project(
         self, project_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()
     ) -> SedmlRunResult:
-        r = await run_biosimulations_project.asyncio_detailed(
-            project_id,
-            client=self.client,
-            solvers=list(solvers) if solvers else UNSET,
-            tags=list(tags) if tags else UNSET,
+        op = Operation("POST", f"/sources/biosimulations/{project_id}/run", replayable=False)
+        r, _ = await self._send(
+            op,
+            lambda c: run_biosimulations_project.asyncio_detailed(
+                project_id,
+                client=c,
+                solvers=list(solvers) if solvers else UNSET,
+                tags=list(tags) if tags else UNSET,
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     # -- suites -----------------------------------------------------------------------------------------------------
 
     async def suites(self) -> list[Suite]:
-        return list(_parsed(await list_suites.asyncio_detailed(client=self.client)))
+        op = Operation("GET", "/suites", replayable=True)
+        r, _ = await self._send(op, lambda c: list_suites.asyncio_detailed(client=c))
+        return list(_parsed(r, op=op))
 
     async def suite_runs(self, name: str) -> list[SuiteRunInfo]:
-        return list(_parsed(await list_suite_runs.asyncio_detailed(name, client=self.client)))
+        op = Operation("GET", f"/suites/{name}/runs", replayable=True)
+        r, _ = await self._send(op, lambda c: list_suite_runs.asyncio_detailed(name, client=c))
+        return list(_parsed(r, op=op))
 
     async def suite_run(self, name: str, number: int) -> SuiteRunView:
         """One suite run: per source, agreement, references, and drift from the baseline run."""
-        return _parsed(await get_suite_run.asyncio_detailed(name, number, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", f"/suites/{name}/runs/{number}", replayable=True)
+        r, _ = await self._send(op, lambda c: get_suite_run.asyncio_detailed(name, number, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def run_suite(self, name: str) -> SuiteRunInfo:
         """Run every source of the suite (submitted in the background); the new run's number."""
-        return _parsed(await run_suite.asyncio_detailed(name, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("POST", f"/suites/{name}/run", replayable=False)
+        r, _ = await self._send(op, lambda c: run_suite.asyncio_detailed(name, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def comparisons(self, *, source: str | None = None, limit: int = 25, offset: int = 0) -> ComparisonPage:
-        r = await list_comparisons.asyncio_detailed(
-            client=self.client, source=source if source is not None else UNSET, limit=limit, offset=offset
+        op = Operation("GET", "/comparisons", replayable=True)
+        r, _ = await self._send(
+            op,
+            lambda c: list_comparisons.asyncio_detailed(
+                client=c, source=source if source is not None else UNSET, limit=limit, offset=offset
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def comparison_series(self, comparison_id: int, report: str) -> ComparisonSeries:
         """One report's columns from each run and each reference."""
-        r = await get_comparison_series.asyncio_detailed(comparison_id, client=self.client, report=report)
-        return _parsed(r)  # type: ignore[no-any-return]
+        op = Operation("GET", f"/comparisons/{comparison_id}/series", replayable=True)
+        r, _ = await self._send(
+            op, lambda c: get_comparison_series.asyncio_detailed(comparison_id, client=c, report=report)
+        )
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def comparison(self, comparison_id: int) -> Comparison:
         """One comparison: its runs, and per report and data set each solver pair's score once all have finished."""
-        return _parsed(await get_comparison.asyncio_detailed(comparison_id, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", f"/comparisons/{comparison_id}", replayable=True)
+        r, _ = await self._send(op, lambda c: get_comparison.asyncio_detailed(comparison_id, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def simulation(self, simulation_id: int) -> SimulationDetail:
-        return _parsed(await get_simulation.asyncio_detailed(simulation_id, client=self.client))  # type: ignore[no-any-return]
+        op = Operation("GET", f"/simulations/{simulation_id}", replayable=True)
+        r, _ = await self._send(op, lambda c: get_simulation.asyncio_detailed(simulation_id, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def events(
         self,
@@ -945,18 +1497,28 @@ class AsyncComposeSession:
         event: str | None = None,
         span_id: str | None = None,
     ) -> RunEventPage:
-        r = await get_simulation_events.asyncio_detailed(
-            client=self.client, simulation_id=simulation_id, **_event_filters(after, limit, level, event, span_id)
+        op = Operation("GET", "/results/simulation/events", replayable=True)
+        r, _ = await self._send(
+            op,
+            lambda c: get_simulation_events.asyncio_detailed(
+                client=c, simulation_id=simulation_id, **_event_filters(after, limit, level, event, span_id)
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def trace(self, simulation_id: int) -> RunTraceTree:
-        r = await get_simulation_trace.asyncio_detailed(client=self.client, simulation_id=simulation_id)
-        return _parsed(r)  # type: ignore[no-any-return]
+        op = Operation("GET", "/results/simulation/trace", replayable=True)
+        r, _ = await self._send(
+            op, lambda c: get_simulation_trace.asyncio_detailed(client=c, simulation_id=simulation_id)
+        )
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def trace_chrome(self, simulation_id: int) -> dict[str, Any]:
-        r = await get_simulation_trace_chrome.asyncio_detailed(client=self.client, simulation_id=simulation_id)
-        return dict(_parsed(r).to_dict())
+        op = Operation("GET", "/results/simulation/trace/chrome", replayable=True)
+        r, _ = await self._send(
+            op, lambda c: get_simulation_trace_chrome.asyncio_detailed(client=c, simulation_id=simulation_id)
+        )
+        return dict(_parsed(r, op=op).to_dict())
 
     async def datasets(
         self,
@@ -968,22 +1530,35 @@ class AsyncComposeSession:
         limit: int = 100,
         offset: int = 0,
     ) -> DatasetPage:
-        r = await list_datasets.asyncio_detailed(
-            client=self.client, **_dataset_filters(simulation_id, kind, q, available, limit, offset)
+        op = Operation("GET", "/datasets", replayable=True)
+        r, _ = await self._send(
+            op,
+            lambda c: list_datasets.asyncio_detailed(
+                client=c, **_dataset_filters(simulation_id, kind, q, available, limit, offset)
+            ),
         )
-        return _parsed(r)  # type: ignore[no-any-return]
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def dataset(self, dataset_id: str | uuid.UUID) -> Dataset:
-        r = await get_dataset.asyncio_detailed(uuid.UUID(str(dataset_id)), client=self.client)
-        return _parsed(r)  # type: ignore[no-any-return]
+        op = Operation("GET", f"/datasets/{dataset_id}", replayable=True)
+        r, _ = await self._send(op, lambda c: get_dataset.asyncio_detailed(uuid.UUID(str(dataset_id)), client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def dataset_content(self, dataset_id: str | uuid.UUID) -> bytes:
-        r = await get_dataset_content.asyncio_detailed(uuid.UUID(str(dataset_id)), client=self.client)
+        op = Operation("GET", f"/datasets/{dataset_id}/content", replayable=True)
+        r, _ = await self._send(
+            op, lambda c: get_dataset_content.asyncio_detailed(uuid.UUID(str(dataset_id)), client=c), download=True
+        )
         raise_for(r)
         return r.content
 
     async def results(self, simulation_id: int) -> bytes:
-        r = await get_simulation_results_file.asyncio_detailed(client=self.client, simulation_id=simulation_id)
+        op = Operation("GET", "/results/simulation/results/file", replayable=True)
+        r, _ = await self._send(
+            op,
+            lambda c: get_simulation_results_file.asyncio_detailed(client=c, simulation_id=simulation_id),
+            download=True,
+        )
         raise_for(r)
         return r.content
 

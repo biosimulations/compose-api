@@ -5,15 +5,15 @@ from typing import Any
 
 import httpx
 import pytest
+from compose_api_client.auth import signin
+from compose_api_client.auth.device import DEFAULT_INTERVAL_SECONDS, device_sign_in
+from compose_api_client.auth.models import Provider, SignInRequest, TokenGrant
+from compose_api_client.auth.oauth import DEVICE_CODE_GRANT, Auth0OAuthClient
+from compose_api_client.auth.signin import ephemeral_session, sign_in
+from compose_api_client.auth.storage import MemoryCredentialStore
+from compose_api_client.ext.errors import AuthError, NetworkError, ProtocolError
+from compose_api_client.profiles import OFFLINE_ACCESS_SCOPE, CliSettings, requested_scopes
 
-from compose_api.cli.auth import signin
-from compose_api.cli.auth.device import DEFAULT_INTERVAL_SECONDS, device_sign_in
-from compose_api.cli.auth.models import Provider, SignInRequest, TokenGrant
-from compose_api.cli.auth.oauth import DEVICE_CODE_GRANT, Auth0OAuthClient
-from compose_api.cli.auth.signin import ephemeral_session, sign_in
-from compose_api.cli.auth.storage import MemoryCredentialStore
-from compose_api.cli.config import OFFLINE_ACCESS_SCOPE, CliSettings, requested_scopes
-from compose_api.cli.errors import AuthError, NetworkError, ProtocolError
 from tests.fixtures.auth_fixtures import AUTH0_TEST_AUDIENCE, AUTH0_TEST_ISSUER
 from tests.fixtures.cli_fixtures import (
     CLI_CLIENT_ID,
@@ -308,7 +308,7 @@ async def test_an_ephemeral_session_lives_for_one_block_only(
     def no_persistent_store(_settings: CliSettings) -> None:
         raise AssertionError("an ephemeral session never opens the persistent store")
 
-    monkeypatch.setattr("compose_api.cli.auth.storage.open_persistent_store", no_persistent_store)
+    monkeypatch.setattr("compose_api_client.auth.storage.open_persistent_store", no_persistent_store)
     settings = cli_settings()
     if device:
         fake_tenant.queue(FakeTenant.DEVICE, fake_tenant.device_response(interval=1))

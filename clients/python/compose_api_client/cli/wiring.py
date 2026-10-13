@@ -1,19 +1,22 @@
 """What the network commands share: what they talk to, and the single `asyncio.run` boundary each one crosses."""
 
+from __future__ import annotations
+
 import asyncio
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeAlias, TypeVar
 
 import httpx
 
-from compose_api.cli.auth import storage
-from compose_api.cli.auth.browser import BrowserLauncher, open_system_browser
-from compose_api.cli.auth.storage import CredentialStore
-from compose_api.cli.config import CliSettings
-from compose_api.cli.output import quiet_http_logging
+from compose_api_client.auth import storage
+from compose_api_client.auth.browser import BrowserLauncher, open_system_browser
+from compose_api_client.auth.storage import CredentialStore
+from compose_api_client.cli.render import quiet_http_logging
+from compose_api_client.profiles import CliSettings
 
-type StoreFactory = Callable[[CliSettings], CredentialStore]
+StoreFactory: TypeAlias = Callable[[CliSettings], CredentialStore]
+T = TypeVar("T")
 
 
 @dataclass(frozen=True)
@@ -36,7 +39,7 @@ class Wiring:
         return self.launcher or open_system_browser
 
 
-def run[T](work: Coroutine[Any, Any, T]) -> T:
+def run(work: Coroutine[Any, Any, T]) -> T:
     """Run a command's network work. httpx's request logging is silenced for the duration."""
     with quiet_http_logging():
         return asyncio.run(work)

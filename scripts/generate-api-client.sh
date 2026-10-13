@@ -35,10 +35,11 @@ generate() {
   # the live service. Written as the pre-commit pretty-format-json hook would (indent 2, key order kept).
   uv run --project "${ROOT_DIR}" python -c 'import json, sys, yaml; json.dump(yaml.safe_load(open(sys.argv[1])), open(sys.argv[2], "w"), indent=2); open(sys.argv[2], "a").write("\n")' \
     "${SPEC}" "${work}/client/openapi.json"
-  # Hand-written code inside the package is carried over, not deleted with the old generated tree: ext/ and cli/
-  # (the application layer and the command line, docs/plan-cli.md) and utils/ (the 0.2.0 helper pbest uses).
-  for keep in ext cli utils; do
-    if [ -d "${out}/${keep}" ]; then cp -R "${out}/${keep}" "${work}/client/${keep}"; fi
+  # Hand-written code inside the package is carried over, not deleted with the old generated tree: ext/, cli/
+  # and auth/ (the application layer, the command line and sign-in), profiles.py (the CLI's profiles), and
+  # utils/ (the 0.2.0 helper pbest uses). -e, not -d: profiles.py is a file.
+  for keep in ext cli auth utils profiles.py; do
+    if [ -e "${out}/${keep}" ]; then cp -R "${out}/${keep}" "${work}/client/${keep}"; fi
   done
   rm -rf "${out}"
   mkdir -p "$(dirname "${out}")"

@@ -1,9 +1,11 @@
 """Windows owner-only ACL enforcement for non-secret concurrency state (loaded on Windows only)."""
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Any
 
-from compose_api.cli.errors import StorageError
+from compose_api_client.ext.errors import StorageError
 
 
 def _identity() -> Any:

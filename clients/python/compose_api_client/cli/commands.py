@@ -9,39 +9,74 @@ Exit codes: 0 success; 1 the job ended other than completed; 2 usage; 3 API erro
 
 from __future__ import annotations
 
+import argparse
 import dataclasses
 import datetime
 import functools
+import importlib.metadata
 import importlib.resources
 import inspect
 import json
+import math
+import os
 import sys
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any, TypeVar
+from typing import Annotated, Any, TypeAlias, TypeVar
 
 import click
 import httpx
 import typer
 
-from compose_api_client.cli.render import Output, emit, err, event_line, lines, resolve, span_tree
+from compose_api_client.cli.render import (
+    Output,
+    emit,
+    err,
+    event_line,
+    lines,
+    printable,
+    printable_lines,
+    resolve,
+    span_tree,
+)
 from compose_api_client.ext import (
     DEFAULT_URL,
     ApiTimeout,
     BadRequest,
+    CliError,
     ComposeApiError,
     ComposeSession,
+    EnvironmentToken,
+    ExitCode,
     JobState,
     NotFound,
 )
+from compose_api_client.ext.credentials import TOKEN_ENV_VAR
 from compose_api_client.types import Unset
 
-EXIT_JOB, EXIT_USAGE, EXIT_API, EXIT_NOT_FOUND, EXIT_TIMEOUT, EXIT_INTERRUPT = 1, 2, 3, 4, 5, 130
+try:
+    __version__ = importlib.metadata.version("compose-api-client")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "0.0.0"
+
+PROG = "compose-api"
+EXIT_JOB = int(ExitCode.FAILURE)
+EXIT_USAGE = int(ExitCode.USAGE)
+EXIT_AUTH = int(ExitCode.AUTH_REQUIRED)
+EXIT_FORBIDDEN = int(ExitCode.FORBIDDEN)
+EXIT_NETWORK = int(ExitCode.NETWORK)
+EXIT_CONFIG = int(ExitCode.CONFIG)
+EXIT_TIMEOUT = int(ExitCode.WAIT_TIMEOUT)
+EXIT_API = int(ExitCode.FAILURE)
+EXIT_NOT_FOUND = int(ExitCode.FAILURE)
+EXIT_INTERRUPT = int(ExitCode.CANCELLED)
 
 CLAIMS: dict[str, str] = {}  # operationId -> command
 F = TypeVar("F", bound=Callable[..., Any])
+Handler: TypeAlias = Callable[[argparse.Namespace], int]
+Subcommands: TypeAlias = "argparse._SubParsersAction[argparse.ArgumentParser]"
 
 
 def claims(command: str, *operation_ids: str) -> Callable[[F], F]:
@@ -60,16 +95,45 @@ def claims(command: str, *operation_ids: str) -> Callable[[F], F]:
 @dataclass
 class Settings:
     url: str = DEFAULT_URL
+    profile: str | None = None
     timeout: float = 300.0
     output: Output = Output.AUTO
     token: str | None = None
     verbose: bool = False
     quiet: bool = False
+    url_explicit: bool = False
 
 
 def make_session(settings: Settings) -> ComposeSession:
     """The session every command uses. Tests replace this to inject a transport."""
-    return ComposeSession(settings.url, token=settings.token, timeout=settings.timeout)
+    if settings.token is not None:
+        return ComposeSession(settings.url, token=settings.token, timeout=settings.timeout)
+    if TOKEN_ENV_VAR in os.environ:
+        env_token = EnvironmentToken()
+        from compose_api_client.profiles import canonical_api_base_url, load_profile
+
+        loaded = load_profile(settings.profile).settings
+        target_url = canonical_api_base_url(settings.url) if settings.url_explicit else loaded.api_base_url
+        if settings.url_explicit and target_url != loaded.api_base_url:
+            err.print(
+                f"compose-api: note: --url ({target_url}) does not match profile {loaded.profile!r}"
+                f" ({loaded.api_base_url}); calling anonymously without {TOKEN_ENV_VAR}",
+                markup=False,
+                highlight=False,
+            )
+            return ComposeSession(target_url, timeout=settings.timeout, ca_bundle=loaded.ca_bundle)
+        err.print(
+            f"compose-api: note: using {TOKEN_ENV_VAR} from the environment instead of a stored session",
+            markup=False,
+            highlight=False,
+        )
+        return ComposeSession(
+            target_url,
+            tokens=env_token,
+            timeout=settings.timeout,
+            ca_bundle=loaded.ca_bundle,
+        )
+    return ComposeSession(settings.url, timeout=settings.timeout)
 
 
 app = typer.Typer(
@@ -108,24 +172,49 @@ app.add_typer(biomodels_app, name="biomodels")
 app.add_typer(biosimulations_app, name="biosimulations")
 suites_app = typer.Typer(help="Regression and reproducibility suites of SED-ML models.", no_args_is_help=True)
 app.add_typer(suites_app, name="suites")
+auth_app = typer.Typer(help="Sign up, sign in, check or end a session.", no_args_is_help=True)
+app.add_typer(auth_app, name="auth")
+config_app = typer.Typer(help="Inspect the CLI configuration.", no_args_is_help=True)
+app.add_typer(config_app, name="config")
 
 
 @app.callback()
 def root(
     ctx: typer.Context,
-    url: Annotated[str, typer.Option(envvar="COMPOSE_API_URL", help="Service base URL.")] = DEFAULT_URL,
+    url: Annotated[str | None, typer.Option(envvar="COMPOSE_API_URL", help="Service base URL.")] = None,
+    profile: Annotated[
+        str | None,
+        typer.Option("--profile", envvar="COMPOSE_API_CLI_PROFILE", help="Profile to use (default: production)."),
+    ] = None,
     timeout: Annotated[float, typer.Option(envvar="COMPOSE_API_TIMEOUT", help="HTTP timeout, seconds.")] = 300.0,
     output: Annotated[
         Output,
         typer.Option("--output", "-o", envvar="COMPOSE_API_OUTPUT", help="auto: table on a terminal, else json."),
     ] = Output.AUTO,
-    token: Annotated[
-        str | None, typer.Option(envvar="COMPOSE_API_TOKEN", help="Bearer token (when auth is on).")
+    token_removed: Annotated[
+        str | None,
+        typer.Option("--token", hidden=True, help="Removed: use auth login or COMPOSE_API_TOKEN."),
     ] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Log HTTP requests; tracebacks on errors.")] = False,
     quiet: Annotated[bool, typer.Option("--quiet", "-q", help="No progress lines.")] = False,
 ) -> None:
-    ctx.obj = Settings(url=url, timeout=timeout, output=output, token=token, verbose=verbose, quiet=quiet)
+    if token_removed is not None:
+        err.print(
+            "compose-api: error: --token is no longer supported; use `compose-api auth login`, or set"
+            f" {TOKEN_ENV_VAR} for automation",
+            markup=False,
+            highlight=False,
+        )
+        raise typer.Exit(EXIT_USAGE)
+    ctx.obj = Settings(
+        url=url if url is not None else DEFAULT_URL,
+        profile=profile,
+        timeout=timeout,
+        output=output,
+        verbose=verbose,
+        quiet=quiet,
+        url_explicit=url is not None,
+    )
     if verbose:
         import logging
 
@@ -138,31 +227,46 @@ def _settings(ctx: click.Context) -> Settings:
     return obj if isinstance(obj, Settings) else Settings()
 
 
-def _report(e: BaseException, settings: Settings) -> int | None:
+def _emit_envelope(enabled: bool, category: str, message: str, code: int) -> int:
+    if enabled:
+        print(json.dumps({"error": {"category": category, "message": message, "exit_code": int(code)}}))
+    return int(code)
+
+
+def _report_api_error(e: ComposeApiError, *, emit_envelope: bool) -> int:
+    msg = _detail(e.detail) if e.detail is not None else e.message
+    if isinstance(e, NotFound):
+        err.print(f"[red]not found[/]: {printable_lines(msg)}", markup=True, highlight=False)
+    elif isinstance(e, BadRequest):
+        err.print(f"[red]rejected ({e.status_code})[/]: {printable_lines(msg)}", markup=True, highlight=False)
+        for v in e.violations[:5]:
+            rendered = v if isinstance(v, str) else json.dumps(v, default=str)
+            err.print(f"  - {printable(rendered)}", markup=False, highlight=False)
+    else:
+        err.print(f"[red]compose-api error ({e.status_code})[/]: {printable_lines(msg)}", markup=True, highlight=False)
+    return _emit_envelope(emit_envelope, e.category, msg, int(e.exit_code))
+
+
+def _report(e: BaseException, settings: Settings, *, emit_envelope: bool = False) -> int | None:
     """Print ``e`` to stderr and return its exit code; ``None`` for an exception the CLI does not own."""
     if isinstance(e, KeyboardInterrupt):
         err.print("[yellow]interrupted[/]")
         return EXIT_INTERRUPT
-    if isinstance(e, NotFound):
-        err.print(f"[red]not found[/]: {_detail(e.detail)}")
-        return EXIT_NOT_FOUND
-    if isinstance(e, BadRequest):
-        err.print(f"[red]rejected ({e.status_code})[/]: {_detail(e.detail)}")
-        for v in e.violations:
-            err.print(f"  - {v if isinstance(v, str) else json.dumps(v, default=str)}")
-        return EXIT_API
     if isinstance(e, ComposeApiError):
-        err.print(f"[red]compose-api error ({e.status_code})[/]: {_detail(e.detail)}")
-        return EXIT_API
+        return _report_api_error(e, emit_envelope=emit_envelope)
     if isinstance(e, ApiTimeout):
-        err.print(f"[red]timed out[/]: {e}")
-        return EXIT_TIMEOUT
+        err.print(f"[red]timed out[/]: {printable_lines(str(e))}", markup=True, highlight=False)
+        return _emit_envelope(emit_envelope, e.category, e.message, int(e.exit_code))
+    if isinstance(e, CliError):
+        err.print(f"compose-api: error: {printable_lines(e.message)}", markup=False, highlight=False)
+        return _emit_envelope(emit_envelope, e.category, e.message, int(e.exit_code))
     if isinstance(e, httpx.HTTPError):
-        err.print(f"[red]cannot reach {settings.url}[/]: {e}")
-        return EXIT_API
+        msg = f"cannot reach {settings.url}: {e}"
+        err.print(f"[red]cannot reach {printable(settings.url)}[/]: {printable_lines(str(e))}", highlight=False)
+        return _emit_envelope(emit_envelope, "network", msg, EXIT_NETWORK)
     if isinstance(e, (FileNotFoundError, IsADirectoryError)):
-        err.print(f"[red]{e}[/]")
-        return EXIT_USAGE
+        err.print(f"[red]{printable_lines(str(e))}[/]", highlight=False)
+        return _emit_envelope(emit_envelope, "usage", str(e), EXIT_USAGE)
     return None
 
 
@@ -193,7 +297,7 @@ def handled(fn: F) -> F:
         except typer.Exit:
             raise
         except (Exception, KeyboardInterrupt) as e:
-            code = _report(e, settings)
+            code = _report(e, settings, emit_envelope=bool(json_output))
             if code is None or settings.verbose:
                 raise
             raise typer.Exit(code) from None
@@ -987,8 +1091,402 @@ def openapi(
         raise typer.Exit(EXIT_JOB)
 
 
-def main() -> None:
-    app()
+@config_app.command("show")
+@handled
+def config_show(ctx: typer.Context) -> None:
+    """Print the effective profile and where each value came from."""
+    from compose_api_client.cli import auth_commands
+
+    settings = _settings(ctx)
+    ns = argparse.Namespace(profile=settings.profile, json=resolve(settings.output) is Output.JSON)
+    code = auth_commands.show_config(ns)
+    if code != 0:
+        raise typer.Exit(code)
+
+
+@auth_app.command("signup")
+@handled
+def auth_signup(
+    ctx: typer.Context,
+    provider: Annotated[str, typer.Option(help="Identity provider: email or google.")] = "email",
+    device: Annotated[bool, typer.Option("--device", help="Sign in on another device (RFC 8628).")] = False,
+    no_browser: Annotated[
+        bool, typer.Option("--no-browser", help="Print the sign-in URL instead of opening it.")
+    ] = False,
+) -> None:
+    """Create an account in the browser, then sign in."""
+    from compose_api_client.cli import auth_commands
+
+    if device and no_browser:
+        raise typer.BadParameter("--device and --no-browser are mutually exclusive")
+    settings = _settings(ctx)
+    ns = argparse.Namespace(
+        profile=settings.profile,
+        provider=provider,
+        device=device,
+        no_browser=no_browser,
+        json=resolve(settings.output) is Output.JSON,
+    )
+    code = auth_commands.signup(ns)
+    if code != 0:
+        raise typer.Exit(code)
+
+
+@auth_app.command("login")
+@handled
+def auth_login(
+    ctx: typer.Context,
+    provider: Annotated[str | None, typer.Option(help="Identity provider: email or google.")] = None,
+    device: Annotated[bool, typer.Option("--device", help="Sign in on another device (RFC 8628).")] = False,
+    no_browser: Annotated[
+        bool, typer.Option("--no-browser", help="Print the sign-in URL instead of opening it.")
+    ] = False,
+) -> None:
+    """Sign in in the browser or with a device code."""
+    from compose_api_client.cli import auth_commands
+
+    if device and no_browser:
+        raise typer.BadParameter("--device and --no-browser are mutually exclusive")
+    settings = _settings(ctx)
+    ns = argparse.Namespace(
+        profile=settings.profile,
+        provider=provider,
+        device=device,
+        no_browser=no_browser,
+        json=resolve(settings.output) is Output.JSON,
+    )
+    code = auth_commands.login(ns)
+    if code != 0:
+        raise typer.Exit(code)
+
+
+@auth_app.command("status")
+@claims("auth status", "get-current-principal")
+@handled
+def auth_status(
+    ctx: typer.Context,
+    verify: Annotated[
+        bool, typer.Option("--verify", help="Refresh if needed and confirm the identity with the API.")
+    ] = False,
+) -> None:
+    """Show the stored session without contacting any server, unless --verify is given."""
+    from compose_api_client.cli import auth_commands
+
+    settings = _settings(ctx)
+    ns = argparse.Namespace(
+        profile=settings.profile,
+        verify=verify,
+        json=resolve(settings.output) is Output.JSON,
+    )
+    code = auth_commands.status(ns)
+    if code != 0:
+        raise typer.Exit(code)
+
+
+@auth_app.command("logout")
+@handled
+def auth_logout(
+    ctx: typer.Context,
+    local_only: Annotated[
+        bool, typer.Option("--local-only", help="Erase the local session without contacting Auth0.")
+    ] = False,
+) -> None:
+    """Revoke the refresh token with Auth0 and erase the stored session."""
+    from compose_api_client.cli import auth_commands
+
+    settings = _settings(ctx)
+    ns = argparse.Namespace(
+        profile=settings.profile,
+        local_only=local_only,
+        json=resolve(settings.output) is Output.JSON,
+    )
+    code = auth_commands.logout(ns)
+    if code != 0:
+        raise typer.Exit(code)
+
+
+_EPILOG = """\
+exit status:
+  0    success
+  1    the API or command reported a failure
+  2    usage error
+  3    sign-in required, or the session has expired
+  4    the API refused the request (forbidden)
+  5    network failure or rate limit
+  6    configuration, credential storage or protocol error
+  7    a wait timed out
+  130  cancelled
+
+Profiles come from COMPOSE_API_CLI_* environment variables and config.toml in the user config directory;
+`compose-api config show` prints the effective values and where each came from.
+"""
+
+
+def build_parser() -> argparse.ArgumentParser:
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument(
+        "--profile",
+        metavar="NAME",
+        default=argparse.SUPPRESS,
+        help="profile to use: production (default), local, or one defined in config.toml",
+    )
+    common.add_argument(
+        "--json",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="write a machine-readable JSON object to stdout",
+    )
+
+    parser = argparse.ArgumentParser(
+        prog=PROG,
+        description="Sign in to the Compose API and call it from the command line.",
+        epilog=_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        parents=[common],
+    )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    commands_sub = parser.add_subparsers(title="commands", metavar="COMMAND", required=True)
+    _add_config_commands(commands_sub, common)
+    _add_auth_commands(commands_sub, common)
+    _add_api_commands(commands_sub, common)
+    return parser
+
+
+def _add_config_commands(commands_sub: Subcommands, common: argparse.ArgumentParser) -> None:
+    group = commands_sub.add_parser("config", parents=[common], help="inspect the CLI configuration")
+    subcommands = group.add_subparsers(title="commands", metavar="COMMAND", required=True)
+    show = subcommands.add_parser(
+        "show",
+        parents=[common],
+        help="print the effective profile and where each value came from",
+        description="Print the effective public profile and the source of each value. Profiles hold no secrets.",
+    )
+    show.set_defaults(handler=_dispatch_show_config)
+
+
+def _add_auth_commands(commands_sub: Subcommands, common: argparse.ArgumentParser) -> None:
+    group = commands_sub.add_parser("auth", parents=[common], help="sign up, sign in, check or end a session")
+    subcommands = group.add_subparsers(title="commands", metavar="COMMAND", required=True)
+
+    signup_cmd = subcommands.add_parser(
+        "signup",
+        parents=[common],
+        help="create an account in the browser, then sign in",
+        description="Open Auth0's hosted sign-up page. Passwords are entered there, never in this terminal.",
+    )
+    _add_provider_option(signup_cmd, default="email")
+    _add_interaction_options(signup_cmd)
+    signup_cmd.set_defaults(handler=_dispatch_auth_signup)
+
+    login_cmd = subcommands.add_parser(
+        "login",
+        parents=[common],
+        help="sign in in the browser",
+        description="Sign in through Auth0's hosted login page.",
+    )
+    _add_provider_option(login_cmd, default=None)
+    _add_interaction_options(login_cmd)
+    login_cmd.set_defaults(handler=_dispatch_auth_login)
+
+    status_cmd = subcommands.add_parser(
+        "status",
+        parents=[common],
+        help="show the stored session",
+        description="Show the stored session without contacting any server, unless --verify is given.",
+    )
+    status_cmd.add_argument(
+        "--verify", action="store_true", help="refresh if needed and confirm the identity with the API"
+    )
+    status_cmd.set_defaults(handler=_dispatch_auth_status)
+
+    logout_cmd = subcommands.add_parser(
+        "logout",
+        parents=[common],
+        help="revoke and erase the stored session",
+        description="Revoke the refresh token with Auth0 and erase the local session.",
+    )
+    logout_cmd.add_argument(
+        "--local-only", action="store_true", help="erase the local session without contacting Auth0"
+    )
+    logout_cmd.set_defaults(handler=_dispatch_auth_logout)
+
+
+def _add_api_commands(commands_sub: Subcommands, common: argparse.ArgumentParser) -> None:
+    simulators = commands_sub.add_parser("simulators", parents=[common], help="simulator catalog")
+    simulator_commands = simulators.add_subparsers(title="commands", metavar="COMMAND", required=True)
+    list_sims = simulator_commands.add_parser("list", parents=[common], help="list the available simulators")
+    _add_ephemeral_auth_options(list_sims)
+    list_sims.set_defaults(handler=_dispatch_simulators_list)
+
+    simulations = commands_sub.add_parser("simulations", parents=[common], help="submit simulations and check on them")
+    simulation_commands = simulations.add_subparsers(title="commands", metavar="COMMAND", required=True)
+
+    status_cmd = simulation_commands.add_parser("status", parents=[common], help="show a simulation's status")
+    status_cmd.add_argument("simulation_id", metavar="ID", type=_positive_int, help="the simulation's numeric ID")
+    _add_ephemeral_auth_options(status_cmd)
+    status_cmd.set_defaults(handler=_dispatch_simulations_status)
+
+    submit_cmd = simulation_commands.add_parser(
+        "submit",
+        parents=[common],
+        help="submit an OMEX archive",
+        description="Submit an existing OMEX archive. Prints the server's reference to the run; it does not wait.",
+    )
+    submit_cmd.add_argument("file", metavar="FILE", help="the .omex archive to upload")
+    submit_cmd.add_argument(
+        "--interval-time", metavar="N", type=_positive_float, help="output interval passed to the simulation"
+    )
+    submit_cmd.add_argument("--batch", action="store_true", help="submit as a batch job")
+    _add_ephemeral_auth_options(submit_cmd)
+    submit_cmd.set_defaults(handler=_dispatch_simulations_submit)
+
+
+def _add_provider_option(parser: argparse.ArgumentParser, *, default: str | None) -> None:
+    parser.add_argument(
+        "--provider",
+        choices=("email", "google"),
+        default=default,
+        help="identity provider to start with; with --device the choice is made on the hosted page instead",
+    )
+
+
+def _add_interaction_options(parser: argparse.ArgumentParser) -> None:
+    how = parser.add_mutually_exclusive_group()
+    how.add_argument("--device", action="store_true", help="sign in on another device (for SSH and headless use)")
+    how.add_argument(
+        "--no-browser", action="store_true", help="print the sign-in URL to open on this machine instead of opening it"
+    )
+
+
+def _add_ephemeral_auth_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--ephemeral-auth",
+        action="store_true",
+        help="sign in for this command only, keeping credentials in memory (for hosts without a credential store)",
+    )
+    _add_interaction_options(parser)
+
+
+def _positive_int(text: str) -> int:
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError("must be a whole number")
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return value
+
+
+def _positive_float(text: str) -> float:
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError("must be a number")
+    if not math.isfinite(value) or value <= 0:
+        raise argparse.ArgumentTypeError("must be a positive, finite number")
+    return value
+
+
+def _dispatch_show_config(args: argparse.Namespace) -> int:
+    from compose_api_client import profiles
+
+    loaded = profiles.load_cli_settings(args.profile)
+    view = loaded.public_view()
+    if args.json:
+        print(json.dumps(view, indent=2))
+    else:
+        profile, config_file = view["profile"], view["config_file"]
+        rows = [
+            ("profile", profile["value"], profile["source"]),
+            ("config file", config_file["path"], "found" if config_file["found"] else "not found"),
+            *((name, entry["value"], entry["source"]) for name, entry in view["settings"].items()),
+            *((name, value, "derived") for name, value in view["derived"].items()),
+        ]
+        width = max(len(name) for name, _, _ in rows)
+        for name, value, source in rows:
+            print(f"{name:<{width}}  {'-' if value is None else value}  ({source})")
+    if loaded.settings.auth0_client_id is None:
+        print(
+            f"{PROG}: note: auth0_client_id is not set, so profile {loaded.settings.profile!r} cannot sign in yet",
+            file=sys.stderr,
+        )
+    return int(ExitCode.OK)
+
+
+def _dispatch_auth_signup(args: argparse.Namespace) -> int:
+    from compose_api_client.cli.auth_commands import signup
+
+    return signup(args)
+
+
+def _dispatch_auth_login(args: argparse.Namespace) -> int:
+    from compose_api_client.cli.auth_commands import login
+
+    return login(args)
+
+
+def _dispatch_auth_status(args: argparse.Namespace) -> int:
+    from compose_api_client.cli.auth_commands import status
+
+    return status(args)
+
+
+def _dispatch_auth_logout(args: argparse.Namespace) -> int:
+    from compose_api_client.cli.auth_commands import logout
+
+    return logout(args)
+
+
+def _dispatch_simulators_list(args: argparse.Namespace) -> int:
+    from compose_api_client.cli.auth_commands import list_simulators
+
+    return list_simulators(args)
+
+
+def _dispatch_simulations_status(args: argparse.Namespace) -> int:
+    from compose_api_client.cli.auth_commands import simulation_status
+
+    return simulation_status(args)
+
+
+def _dispatch_simulations_submit(args: argparse.Namespace) -> int:
+    from compose_api_client.cli.auth_commands import submit_simulation
+
+    return submit_simulation(args)
+
+
+def _report_argparse(args: argparse.Namespace, category: str, message: str, code: ExitCode) -> int:
+    print(f"{PROG}: error: {printable_lines(message)}", file=sys.stderr)
+    if getattr(args, "json", False):
+        print(json.dumps({"error": {"category": category, "message": message, "exit_code": int(code)}}))
+    return int(code)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
+    try:
+        args = parser.parse_args(argv)
+        if getattr(args, "ephemeral_auth", True) is False and (args.device or args.no_browser):
+            parser.error(
+                "--device and --no-browser choose how --ephemeral-auth signs in, so they need --ephemeral-auth"
+            )
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else int(ExitCode.USAGE)
+    args.profile = getattr(args, "profile", None)
+    args.json = getattr(args, "json", False)
+
+    handler: Handler = args.handler
+    try:
+        return handler(args)
+    except CliError as exc:
+        return _report_argparse(args, exc.category, exc.message, exc.exit_code)
+    except KeyboardInterrupt:
+        print(f"{PROG}: cancelled", file=sys.stderr)
+        return int(ExitCode.CANCELLED)
+    except Exception as exc:
+        return _report_argparse(
+            args, "internal", f"internal error ({type(exc).__name__}); this is a bug in {PROG}", ExitCode.FAILURE
+        )
 
 
 # -- SED-ML runs and comparisons ----------------------------------------------------------------------------------

@@ -11,18 +11,18 @@ from urllib.parse import parse_qsl, urlsplit
 
 import httpx
 import pytest
+from compose_api_client.auth.browser import browser_sign_in
+from compose_api_client.auth.callback import CallbackListener, CallbackResult
+from compose_api_client.auth.models import Provider, SessionRecord, SignInRequest
+from compose_api_client.auth.oauth import Auth0OAuthClient
+from compose_api_client.auth.signin import persistent_sign_in, sign_in
+from compose_api_client.auth.storage import MemoryCredentialStore
+from compose_api_client.cli.auth_commands import sign_in_command
+from compose_api_client.cli.commands import build_parser
+from compose_api_client.cli.wiring import Wiring
+from compose_api_client.ext.errors import AuthError, ConfigError, ExitCode, InteractionError
+from compose_api_client.profiles import CliSettings
 
-from compose_api.cli.auth.browser import browser_sign_in
-from compose_api.cli.auth.callback import CallbackListener, CallbackResult
-from compose_api.cli.auth.models import Provider, SessionRecord, SignInRequest
-from compose_api.cli.auth.oauth import Auth0OAuthClient
-from compose_api.cli.auth.signin import persistent_sign_in, sign_in
-from compose_api.cli.auth.storage import MemoryCredentialStore
-from compose_api.cli.commands.auth import sign_in_command
-from compose_api.cli.commands.common import Wiring
-from compose_api.cli.config import CliSettings
-from compose_api.cli.errors import AuthError, ConfigError, ExitCode, InteractionError
-from compose_api.cli.main import build_parser
 from tests.fixtures.auth_fixtures import AUTH0_TEST_AUDIENCE, AUTH0_TEST_DOMAIN, AUTH0_TEST_ISSUER
 from tests.fixtures.cli_fixtures import (
     CLI_CLIENT_ID,

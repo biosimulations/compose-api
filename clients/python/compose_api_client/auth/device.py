@@ -5,18 +5,20 @@ are shown. Polling follows the server's interval, slows down when asked, backs o
 the deadline -- it never starts a new device authorization on its own.
 """
 
+from __future__ import annotations
+
 import asyncio
 import re
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Final
+from typing import Any, Final, TypeAlias
 from urllib.parse import parse_qs, urlsplit
 
-from compose_api.cli.auth.models import SIGN_IN_TIMEOUT_SECONDS, Notify, Provider, SignInRequest, TokenGrant
-from compose_api.cli.auth.oauth import Auth0OAuthClient, OAuthErrorResponse
-from compose_api.cli.config import requested_scopes
-from compose_api.cli.errors import AuthError, NetworkError, ProtocolError
+from compose_api_client.auth.models import SIGN_IN_TIMEOUT_SECONDS, Notify, Provider, SignInRequest, TokenGrant
+from compose_api_client.auth.oauth import Auth0OAuthClient, OAuthErrorResponse
+from compose_api_client.ext.errors import AuthError, NetworkError, ProtocolError
+from compose_api_client.profiles import requested_scopes
 
 DEFAULT_INTERVAL_SECONDS: Final = 5  # RFC 8628 §3.2, when the server names none
 SLOW_DOWN_SECONDS: Final = 5  # RFC 8628 §3.5: added to the interval for this and every later poll
@@ -26,7 +28,7 @@ MAX_EXPIRES_IN_SECONDS: Final = 3600
 _USER_CODE = re.compile(r"[A-Za-z0-9-]{1,32}")
 _DEVICE_CODE = re.compile(r"[\x21-\x7e]{1,2048}")
 
-type Sleep = Callable[[float], Awaitable[None]]
+Sleep: TypeAlias = Callable[[float], Awaitable[None]]
 
 
 @dataclass(frozen=True)

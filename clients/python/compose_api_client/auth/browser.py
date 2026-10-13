@@ -5,14 +5,17 @@ the CLI never sees them and never embeds a web view. The callback listener is bo
 taken port fails the command before anything else happens.
 """
 
+from __future__ import annotations
+
 import asyncio
 import os
 import sys
 import webbrowser
 from collections.abc import Callable
+from typing import TypeAlias
 
-from compose_api.cli.auth.callback import CallbackListener
-from compose_api.cli.auth.models import (
+from compose_api_client.auth.callback import CallbackListener
+from compose_api_client.auth.models import (
     SIGN_IN_TIMEOUT_SECONDS,
     AuthTransaction,
     Notify,
@@ -20,11 +23,11 @@ from compose_api.cli.auth.models import (
     SignInRequest,
     TokenGrant,
 )
-from compose_api.cli.auth.oauth import Auth0OAuthClient
-from compose_api.cli.config import requested_scopes
-from compose_api.cli.errors import AuthError, CliError, InteractionError, NetworkError, ProtocolError
+from compose_api_client.auth.oauth import Auth0OAuthClient
+from compose_api_client.ext.errors import AuthError, CliError, InteractionError, NetworkError, ProtocolError
+from compose_api_client.profiles import requested_scopes
 
-type BrowserLauncher = Callable[[str], bool]
+BrowserLauncher: TypeAlias = Callable[[str], bool]
 
 
 def open_system_browser(url: str) -> bool:

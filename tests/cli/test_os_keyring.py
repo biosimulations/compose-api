@@ -17,12 +17,11 @@ from datetime import UTC, datetime, timedelta
 import jwt
 import keyring.core
 import pytest
+from compose_api_client.auth.models import Identity, SessionRecord
+from compose_api_client.auth.storage import SERVICE, KeyringCredentialStore
+from compose_api_client.ext.errors import StorageError
 from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic import SecretStr
-
-from compose_api.cli.auth.models import Identity, SessionRecord
-from compose_api.cli.auth.storage import SERVICE, KeyringCredentialStore
-from compose_api.cli.errors import StorageError
 
 WINDOWS_CREDENTIAL_BLOB_LIMIT = 2560  # bytes; the store writes UTF-16, so about 1280 characters
 ISSUER = "https://dev-bu7yo7484tyxu6a1.us.auth0.com/"
