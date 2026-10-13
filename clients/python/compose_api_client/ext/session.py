@@ -45,6 +45,7 @@ from compose_api_client.api.results import (
     get_simulation_trace,
     get_simulation_trace_chrome,
     get_simulations_status_batch,
+    get_simulator_build_log,
     get_simulator_build_status,
 )
 from compose_api_client.api.sed_ml import (
@@ -301,6 +302,12 @@ class ComposeSession:
         """Several simulations' job records in one call (only those with a SLURM job yet)."""
         r = get_simulations_status_batch.sync_detailed(client=self.client, body=list(simulation_ids))
         return list(_parsed(r))
+
+    def build_log(self, simulator_id: int) -> str:
+        """The SLURM log of the simulator's newest container build (its last 200 KB)."""
+        r = get_simulator_build_log.sync_detailed(client=self.client, simulator_id=simulator_id)
+        raise_for(r)
+        return r.content.decode(errors="replace")
 
     def build_status(self, simulator_id: int) -> JobState:
         return _state(get_simulator_build_status.sync_detailed(client=self.client, simulator_id=simulator_id))
@@ -695,6 +702,12 @@ class AsyncComposeSession:
     async def statuses(self, simulation_ids: Sequence[int]) -> list[HpcRun]:
         r = await get_simulations_status_batch.asyncio_detailed(client=self.client, body=list(simulation_ids))
         return list(_parsed(r))
+
+    async def build_log(self, simulator_id: int) -> str:
+        """The SLURM log of the simulator's newest container build (its last 200 KB)."""
+        r = await get_simulator_build_log.asyncio_detailed(client=self.client, simulator_id=simulator_id)
+        raise_for(r)
+        return r.content.decode(errors="replace")
 
     async def build_status(self, simulator_id: int) -> JobState:
         return _state(await get_simulator_build_status.asyncio_detailed(client=self.client, simulator_id=simulator_id))

@@ -264,6 +264,11 @@ async def _dispatch_job(
     )
 
 
+#: One build at a time per container definition: runs submitted together with a new definition (a SED-ML comparison's
+#: solvers) wait for the first one's build instead of starting their own (they would share its files on the cluster).
+_build_locks: dict[str, asyncio.Lock] = {}
+
+
 async def _download_or_build_container(
     simulation_service_slurm: SimulationService,
     simulator_version: SimulatorVersion,
@@ -271,23 +276,29 @@ async def _download_or_build_container(
     job_monitor: JobMonitor,
     random_string: str,
 ) -> None:
-    download_succeeded = False
-    # a prebuilt simulator is pulled from its own image; any other from the shared repository by hash
-    prebuilt = prebuilt_image_of(simulator_version.container_def)
-    try:
-        await simulation_service_slurm.download_container(
-            RemoteContainerImage.from_container_version(
-                simulator_version, source_url=f"docker://{prebuilt}" if prebuilt else None
+    lock = _build_locks.setdefault(simulator_version.container_def_hash, asyncio.Lock())
+    async with lock:
+        download_succeeded = False
+        # a prebuilt simulator is pulled from its own image; any other from the shared repository by hash
+        prebuilt = prebuilt_image_of(simulator_version.container_def)
+        try:
+            await simulation_service_slurm.download_container(
+                RemoteContainerImage.from_container_version(
+                    simulator_version, source_url=f"docker://{prebuilt}" if prebuilt else None
+                )
             )
-        )
-        download_succeeded = True
-    except Exception as e:
-        logger.exception("Failed to download simulator slurm container, will attempt to build container.", exc_info=e)
+            download_succeeded = True
+        except Exception as e:
+            logger.exception(
+                "Failed to download simulator slurm container, will attempt to build container.", exc_info=e
+            )
 
-    if download_succeeded:
-        return
-    built_simulator = await hpc_db.get_hpcrun_id_by_simulator_id(simulator_id=simulator_version.database_id)
-    if built_simulator is None:
+        if download_succeeded:
+            return
+        # built already only if the newest build of this definition completed; a failed one is retried
+        build = await hpc_db.get_hpcrun_by_ref(ref_id=simulator_version.database_id, job_type=JobType.BUILD_CONTAINER)
+        if build is not None and build.status == JobStatus.COMPLETED:
+            return
         try:
             await _build_container_and_wait(
                 simulation_service_slurm=simulation_service_slurm,
@@ -297,7 +308,7 @@ async def _download_or_build_container(
                 random_prefix=random_string,
             )
         except Exception as e:
-            logger.exception("Failed to build simulator container, will attempt to build container.", exc_info=e)
+            logger.exception("Failed to build simulator container", exc_info=e)
             raise e
 
 
