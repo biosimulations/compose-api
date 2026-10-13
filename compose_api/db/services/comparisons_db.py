@@ -7,13 +7,14 @@ from typing import Any, override
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from compose_api.db.tables.comparison_tables import ORMComparison, ORMComparisonMember
+from compose_api.db.tables.comparison_tables import ORMComparison, ORMComparisonMember, ORMComparisonReference
 
 
 @dataclass
 class ComparisonRow:
     comparison: ORMComparison
     members: list[ORMComparisonMember] = field(default_factory=list)
+    references: list[ORMComparisonReference] = field(default_factory=list)
 
 
 class ComparisonsDatabaseService(ABC):
@@ -23,6 +24,9 @@ class ComparisonsDatabaseService(ABC):
 
     @abstractmethod
     async def add_member(self, comparison_id: int, simulation_id: int, solver: str) -> None: ...
+
+    @abstractmethod
+    async def add_reference(self, comparison_id: int, origin: str, reports: dict[str, Any]) -> None: ...
 
     @abstractmethod
     async def get(self, comparison_id: int) -> ComparisonRow | None: ...
@@ -53,12 +57,20 @@ class ComparisonsORMExecutor(ComparisonsDatabaseService):
             session.add(ORMComparisonMember(comparison_id=comparison_id, simulation_id=simulation_id, solver=solver))
 
     @override
+    async def add_reference(self, comparison_id: int, origin: str, reports: dict[str, Any]) -> None:
+        async with self.session_maker() as session, session.begin():
+            session.add(ORMComparisonReference(comparison_id=comparison_id, origin=origin, reports=reports))
+
+    @override
     async def get(self, comparison_id: int) -> ComparisonRow | None:
         async with self.session_maker() as session:
             comparison = await session.get(ORMComparison, comparison_id)
             if comparison is None:
                 return None
-            return ComparisonRow(comparison, await _members(session, comparison_id))
+            references = await session.execute(
+                select(ORMComparisonReference).where(ORMComparisonReference.comparison_id == comparison_id)
+            )
+            return ComparisonRow(comparison, await _members(session, comparison_id), list(references.scalars()))
 
     @override
     async def page(self, limit: int, offset: int, source: str | None = None) -> tuple[list[ComparisonRow], int]:

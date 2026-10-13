@@ -64,8 +64,12 @@ async def submit(
     description: str | None,
     tolerances: Tolerances,
     background_tasks: BackgroundTasks,
+    references: dict[str, dict[str, dict[str, list[float]]]] | None = None,
 ) -> list[int]:
-    """One comparison per accepted task (all, or those named), one run per solver that accepted it; the ids."""
+    """One comparison per accepted task (all, or those named), one run per solver that accepted it; the ids.
+    `references[origin]["<sedml>/<report>"]` (the archive's own `reports.h5`, a biosimulations.org run's) are stored
+    with the comparison of the task whose SED-ML and report they match."""
+    references = {**archive_references(source), **(references or {})}
     db = get_required_database_service()
     by_id = {s.id: s for s in solvers}
     source_kind, _, source_id = source_label.partition(":")
@@ -93,6 +97,14 @@ async def submit(
                 "solvers": list(task.archives),
             },
         )
+        for origin, by_output in references.items():
+            matched = {
+                report_id: by_output[f"{task.sedml}/{report_id}"]
+                for report_id in task.reports
+                if f"{task.sedml}/{report_id}" in by_output
+            }
+            if matched:
+                await db.get_comparisons_db().add_reference(comparison_id, origin, matched)
         for solver_id, archive in task.archives.items():
             run_dir = Path(tempfile.mkdtemp(prefix="sedml-run-"))
             input_file = run_dir / f"{task.name}.{solver_id}.omex"
@@ -143,7 +155,8 @@ async def comparison_view(row: ComparisonRow) -> Comparison:
     c = row.comparison
     status, result = c.status, c.result
     if status == "running" and members and all(m.status in TERMINAL for m in members):
-        result = await _compute(c.settings, row)
+        full = await db.get_comparisons_db().get(c.id)  # a page's rows carry no references
+        result = await _compute(c.settings, full or row)
         status = "complete" if all(m.status == "completed" for m in members) else "incomplete"
         await db.get_comparisons_db().set_result(c.id, status, result)
     return Comparison(
@@ -178,7 +191,10 @@ async def _compute(settings: dict[str, object], row: ComparisonRow) -> dict[str,
             except OSError:
                 missing.setdefault(m.solver, []).append(report_id)
     labels_by_report = {r: list(info.get("labels", [])) for r, info in report_files.items()}  # type: ignore[call-overload]
-    result = compare(reports, labels_by_report, Tolerances.model_validate(settings.get("tolerances", {})))
+    references = {ref.origin: ref.reports for ref in row.references}
+    result = compare(
+        reports, labels_by_report, Tolerances.model_validate(settings.get("tolerances", {})), references=references
+    )
     result["missing_reports"] = missing
     return result
 
@@ -188,6 +204,24 @@ def _iso(value: datetime.datetime | None) -> str | None:
         return None
     aware = value if value.tzinfo else value.replace(tzinfo=datetime.UTC)
     return aware.astimezone(datetime.UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def archive_references(source: Path) -> dict[str, dict[str, dict[str, list[float]]]]:
+    """Results shipped in the archive (`reports.h5`, as biosimulations.org projects carry them), as a reference."""
+    import zipfile
+
+    from compose_api.sedml.sources import reports_from_h5
+
+    try:
+        with zipfile.ZipFile(source) as z:
+            name = next((n for n in z.namelist() if n.rsplit("/", 1)[-1] == "reports.h5"), None)
+            if name is None:
+                return {}
+            reports = reports_from_h5(z.read(name))
+    except (OSError, zipfile.BadZipFile, ValueError):
+        logger.warning("could not read the reports.h5 in %s", source.name)
+        return {}
+    return {"archive": reports} if reports else {}
 
 
 def findings_for(translation: Translation, task: str | None = None) -> list[SedmlFinding]:

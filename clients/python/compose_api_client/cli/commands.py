@@ -98,6 +98,12 @@ environments_app = typer.Typer(
 app.add_typer(environments_app, name="environments")
 app.add_typer(sedml_app, name="sedml")
 app.add_typer(comparisons_app, name="comparisons")
+biomodels_app = typer.Typer(help="EBI BioModels: search, describe, download, run.", no_args_is_help=True)
+biosimulations_app = typer.Typer(
+    help="biosimulations.org projects: search, describe, download, run.", no_args_is_help=True
+)
+app.add_typer(biomodels_app, name="biomodels")
+app.add_typer(biosimulations_app, name="biosimulations")
 
 
 @app.callback()
@@ -981,3 +987,151 @@ def comparisons_show(
     settings = _settings(ctx)
     with make_session(settings) as s:
         emit(settings.output, s.comparison(comparison_id).to_dict())
+
+
+# -- sources -------------------------------------------------------------------------------------------------------
+
+Out = Annotated[Path | None, typer.Option("--out", "-O", help="Write the archive here (a file or a directory).")]
+
+
+def _save_archive(content: bytes, name: str, out: Path | None) -> Path:
+    target = out if out is not None else Path.cwd()
+    path = target / name if target.is_dir() else target
+    path.write_bytes(content)
+    return path
+
+
+def _run_rows(result: Any) -> list[dict[str, Any]]:
+    return [
+        {"comparison": c.comparison_id, "task": c.task, "solver": m.solver, "simulation": m.simulation_id}
+        for c in result.comparisons
+        for m in c.members
+    ]
+
+
+@biomodels_app.command("search")
+@claims("biomodels search", "search-biomodels")
+@handled
+def biomodels_search(
+    ctx: typer.Context,
+    query: Annotated[str, typer.Argument(help="Words to search for.")],
+    limit: Annotated[int, typer.Option(help="At most this many.")] = 20,
+    all_models: Annotated[bool, typer.Option("--all", help="Not only manually curated models.")] = False,
+) -> None:
+    """Search EBI BioModels (manually curated models unless --all)."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        hits = s.biomodels_search(query, limit=limit, curated=not all_models)
+    emit(settings.output, [h.to_dict() for h in hits], ["id", "name", "format"])
+
+
+@biomodels_app.command("show")
+@claims("biomodels show", "get-biomodel")
+@handled
+def biomodels_show(ctx: typer.Context, model_id: Annotated[str, typer.Argument(help="e.g. BIOMD0000000012")]) -> None:
+    """One BioModels entry: name, curation status, latest revision."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.biomodel(model_id).to_dict())
+
+
+@biomodels_app.command("get")
+@claims("biomodels get", "get-biomodel-omex")
+@handled
+def biomodels_get(
+    ctx: typer.Context, model_id: Annotated[str, typer.Argument(help="e.g. BIOMD0000000012")], out: Out = None
+) -> None:
+    """Download the entry's COMBINE archive."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        path = _save_archive(s.biomodel_omex(model_id), f"{model_id}.omex", out)
+    emit(settings.output, {"model": model_id, "file": str(path)})
+
+
+@biomodels_app.command("run")
+@claims("biomodels run", "run-biomodel")
+@handled
+def biomodels_run(
+    ctx: typer.Context,
+    model_id: Annotated[str, typer.Argument(help="e.g. BIOMD0000000012")],
+    solver: SolverOption = None,
+    tag: Annotated[list[str] | None, typer.Option("--tag", "-t", help="A tag for every run (repeatable).")] = None,
+) -> None:
+    """Run the entry's SED-ML once per solver; prints each task's comparison and its runs."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        result = s.run_biomodel(model_id, solvers=solver or (), tags=tag or ())
+    emit(settings.output, _run_rows(result) if settings.output is not Output.JSON else result.to_dict(),
+         ["comparison", "task", "solver", "simulation"])  # fmt: skip
+
+
+@biosimulations_app.command("search")
+@claims("biosimulations search", "search-biosimulations-projects")
+@handled
+def biosimulations_search(
+    ctx: typer.Context,
+    query: Annotated[str, typer.Argument(help="Part of a project id.")] = "",
+    limit: Annotated[int, typer.Option(help="At most this many.")] = 20,
+) -> None:
+    """biosimulations.org projects whose id contains the query."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        found = s.biosimulations_search(query, limit=limit)
+    emit(settings.output, [p.to_dict() for p in found], ["id", "run", "updated"])
+
+
+@biosimulations_app.command("show")
+@claims("biosimulations show", "get-biosimulations-project")
+@handled
+def biosimulations_show(ctx: typer.Context, project_id: Annotated[str, typer.Argument(help="The project id.")]) -> None:
+    """One project: its run and the simulator that ran it."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.biosimulations_project(project_id).to_dict())
+
+
+@biosimulations_app.command("get")
+@claims("biosimulations get", "get-biosimulations-omex")
+@handled
+def biosimulations_get(
+    ctx: typer.Context, project_id: Annotated[str, typer.Argument(help="The project id.")], out: Out = None
+) -> None:
+    """Download the project's archive."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        path = _save_archive(s.biosimulations_omex(project_id), f"{project_id}.omex", out)
+    emit(settings.output, {"project": project_id, "file": str(path)})
+
+
+@biosimulations_app.command("reference")
+@claims("biosimulations reference", "get-biosimulations-reference")
+@handled
+def biosimulations_reference(
+    ctx: typer.Context, project_id: Annotated[str, typer.Argument(help="The project id.")]
+) -> None:
+    """The project's original results: each report's labels and number of points (--output json for the values)."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        reference = s.biosimulations_reference(project_id)
+    if settings.output is Output.JSON:
+        emit(Output.JSON, reference)
+        return
+    rows = [{"report": k, "labels": len(v), "points": len(next(iter(v.values()), []))} for k, v in reference.items()]
+    emit(settings.output, rows, ["report", "labels", "points"])
+
+
+@biosimulations_app.command("run")
+@claims("biosimulations run", "run-biosimulations-project")
+@handled
+def biosimulations_run(
+    ctx: typer.Context,
+    project_id: Annotated[str, typer.Argument(help="The project id.")],
+    solver: SolverOption = None,
+    tag: Annotated[list[str] | None, typer.Option("--tag", "-t", help="A tag for every run (repeatable).")] = None,
+) -> None:
+    """Run the project's SED-ML once per solver, its original results as the reference."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        result = s.run_biosimulations_project(project_id, solvers=solver or (), tags=tag or ())
+    emit(settings.output, _run_rows(result) if settings.output is not Output.JSON else result.to_dict(),
+         ["comparison", "task", "solver", "simulation"])  # fmt: skip

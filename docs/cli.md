@@ -183,6 +183,8 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 * `environments`: The environments documents run in, and the...
 * `sedml`: Run SED-ML archives on several solvers and...
 * `comparisons`: A SED-ML task's runs on several solvers,...
+* `biomodels`: EBI BioModels: search, describe, download,...
+* `biosimulations`: biosimulations.org projects: search,...
 
 ## `compose-api health`
 
@@ -922,5 +924,228 @@ $ compose-api comparisons show [OPTIONS] COMPARISON_ID
 
 **Options**:
 
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+## `compose-api biomodels`
+
+EBI BioModels: search, describe, download, run.
+
+**Usage**:
+
+```console
+$ compose-api biomodels [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `search`: Search EBI BioModels (manually curated...
+* `show`: One BioModels entry: name, curation...
+* `get`: Download the entry's COMBINE archive.
+* `run`: Run the entry's SED-ML once per solver;...
+
+### `compose-api biomodels search`
+
+Search EBI BioModels (manually curated models unless --all).
+
+**Usage**:
+
+```console
+$ compose-api biomodels search [OPTIONS] QUERY
+```
+
+**Arguments**:
+
+* `QUERY`: Words to search for.  [required]
+
+**Options**:
+
+* `--limit INTEGER`: At most this many.  [default: 20]
+* `--all`: Not only manually curated models.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api biomodels show`
+
+One BioModels entry: name, curation status, latest revision.
+
+**Usage**:
+
+```console
+$ compose-api biomodels show [OPTIONS] MODEL_ID
+```
+
+**Arguments**:
+
+* `MODEL_ID`: e.g. BIOMD0000000012  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api biomodels get`
+
+Download the entry's COMBINE archive.
+
+**Usage**:
+
+```console
+$ compose-api biomodels get [OPTIONS] MODEL_ID
+```
+
+**Arguments**:
+
+* `MODEL_ID`: e.g. BIOMD0000000012  [required]
+
+**Options**:
+
+* `-O, --out PATH`: Write the archive here (a file or a directory).
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api biomodels run`
+
+Run the entry's SED-ML once per solver; prints each task's comparison and its runs.
+
+**Usage**:
+
+```console
+$ compose-api biomodels run [OPTIONS] MODEL_ID
+```
+
+**Arguments**:
+
+* `MODEL_ID`: e.g. BIOMD0000000012  [required]
+
+**Options**:
+
+* `-s, --solver TEXT`: A solver id (repeatable); all when omitted.
+* `-t, --tag TEXT`: A tag for every run (repeatable).
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+## `compose-api biosimulations`
+
+biosimulations.org projects: search, describe, download, run.
+
+**Usage**:
+
+```console
+$ compose-api biosimulations [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `search`: biosimulations.org projects whose id...
+* `show`: One project: its run and the simulator...
+* `get`: Download the project's archive.
+* `reference`: The project's original results: each...
+* `run`: Run the project's SED-ML once per solver,...
+
+### `compose-api biosimulations search`
+
+biosimulations.org projects whose id contains the query.
+
+**Usage**:
+
+```console
+$ compose-api biosimulations search [OPTIONS] [QUERY]
+```
+
+**Arguments**:
+
+* `[QUERY]`: Part of a project id.
+
+**Options**:
+
+* `--limit INTEGER`: At most this many.  [default: 20]
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api biosimulations show`
+
+One project: its run and the simulator that ran it.
+
+**Usage**:
+
+```console
+$ compose-api biosimulations show [OPTIONS] PROJECT_ID
+```
+
+**Arguments**:
+
+* `PROJECT_ID`: The project id.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api biosimulations get`
+
+Download the project's archive.
+
+**Usage**:
+
+```console
+$ compose-api biosimulations get [OPTIONS] PROJECT_ID
+```
+
+**Arguments**:
+
+* `PROJECT_ID`: The project id.  [required]
+
+**Options**:
+
+* `-O, --out PATH`: Write the archive here (a file or a directory).
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api biosimulations reference`
+
+The project's original results: each report's labels and number of points (--output json for the values).
+
+**Usage**:
+
+```console
+$ compose-api biosimulations reference [OPTIONS] PROJECT_ID
+```
+
+**Arguments**:
+
+* `PROJECT_ID`: The project id.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api biosimulations run`
+
+Run the project's SED-ML once per solver, its original results as the reference.
+
+**Usage**:
+
+```console
+$ compose-api biosimulations run [OPTIONS] PROJECT_ID
+```
+
+**Arguments**:
+
+* `PROJECT_ID`: The project id.  [required]
+
+**Options**:
+
+* `-s, --solver TEXT`: A solver id (repeatable); all when omitted.
+* `-t, --tag TEXT`: A tag for every run (repeatable).
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.

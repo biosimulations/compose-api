@@ -1099,6 +1099,396 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /sources/biomodels/search:
+    get:
+      tags:
+      - Sources
+      summary: Search EBI BioModels (manually curated models unless curated=false)
+      operationId: search-biomodels
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: curated
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: true
+          title: Curated
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BiomodelHit'
+                title: Response Search-Biomodels
+        '502':
+          description: The upstream service did not answer as expected
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sources/biomodels/{model_id}:
+    get:
+      tags:
+      - Sources
+      summary: 'One BioModels entry: name, curation status, latest revision'
+      operationId: get-biomodel
+      parameters:
+      - name: model_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Model Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BiomodelInfo'
+        '404':
+          description: No such model or project upstream
+        '502':
+          description: The upstream service did not answer as expected
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sources/biomodels/{model_id}/omex:
+    get:
+      tags:
+      - Sources
+      summary: The entry's COMBINE archive (its latest revision)
+      operationId: get-biomodel-omex
+      parameters:
+      - name: model_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Model Id
+      responses:
+        '200':
+          description: Successful Response
+        '404':
+          description: No such model or project upstream
+        '502':
+          description: The upstream service did not answer as expected
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sources/biomodels/{model_id}/run:
+    post:
+      tags:
+      - Sources
+      summary: Run a BioModels entry's SED-ML on several solvers (as /sedml/run)
+      operationId: run-biomodel
+      parameters:
+      - name: model_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Model Id
+      - name: solvers
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Solvers to run (registry/solvers.yaml); all when omitted
+          title: Solvers
+        description: Solvers to run (registry/solvers.yaml); all when omitted
+      - name: task
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Only these SED-ML task ids; all when omitted
+          title: Task
+        description: Only these SED-ML task ids; all when omitted
+      - name: tags
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Tags for every run
+          title: Tags
+        description: Tags for every run
+      - name: description
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SedmlRunResult'
+        '404':
+          description: No such model or project upstream
+        '502':
+          description: The upstream service did not answer as expected
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sources/biosimulations/projects:
+    get:
+      tags:
+      - Sources
+      summary: biosimulations.org projects whose id contains q
+      operationId: search-biosimulations-projects
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 200
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectInfo'
+                title: Response Search-Biosimulations-Projects
+        '502':
+          description: The upstream service did not answer as expected
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sources/biosimulations/{project_id}:
+    get:
+      tags:
+      - Sources
+      summary: 'One biosimulations.org project: its run and the simulator that ran
+        it'
+      operationId: get-biosimulations-project
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectInfo'
+        '404':
+          description: No such model or project upstream
+        '502':
+          description: The upstream service did not answer as expected
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sources/biosimulations/{project_id}/omex:
+    get:
+      tags:
+      - Sources
+      summary: The project's archive
+      operationId: get-biosimulations-omex
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+        '404':
+          description: No such model or project upstream
+        '502':
+          description: The upstream service did not answer as expected
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sources/biosimulations/{project_id}/reference:
+    get:
+      tags:
+      - Sources
+      summary: 'The project''s original results: each report as {label: values}'
+      operationId: get-biosimulations-reference
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+                  additionalProperties:
+                    type: array
+                    items:
+                      type: number
+                title: Response Get-Biosimulations-Reference
+        '404':
+          description: No such model or project upstream
+        '502':
+          description: The upstream service did not answer as expected
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sources/biosimulations/{project_id}/run:
+    post:
+      tags:
+      - Sources
+      summary: Run a project's SED-ML on several solvers, its original results as
+        the reference
+      operationId: run-biosimulations-project
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      - name: solvers
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Solvers to run (registry/solvers.yaml); all when omitted
+          title: Solvers
+        description: Solvers to run (registry/solvers.yaml); all when omitted
+      - name: task
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Only these SED-ML task ids; all when omitted
+          title: Task
+        description: Only these SED-ML task ids; all when omitted
+      - name: tags
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Tags for every run
+          title: Tags
+        description: Tags for every run
+      - name: description
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SedmlRunResult'
+        '404':
+          description: No such model or project upstream
+        '502':
+          description: The upstream service did not answer as expected
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /health:
     get:
       tags:
@@ -1193,6 +1583,66 @@ components:
       - outputs
       - database_id
       title: BiGraphStep
+    BiomodelHit:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        format:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Format
+        url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Url
+      type: object
+      required:
+      - id
+      - name
+      title: BiomodelHit
+    BiomodelInfo:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        format:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Format
+        curation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Curation
+        revision:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Revision
+        publication:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Publication
+        url:
+          type: string
+          title: Url
+      type: object
+      required:
+      - id
+      - name
+      - url
+      title: BiomodelInfo
     Body_preview-sedml:
       properties:
         archive:
@@ -1800,6 +2250,43 @@ components:
       - pypi
       - conda
       title: PackageType
+    ProjectInfo:
+      properties:
+        id:
+          type: string
+          title: Id
+        run:
+          type: string
+          title: Run
+        created:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created
+        updated:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updated
+        simulator:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Simulator
+        simulator_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Simulator Version
+        url:
+          type: string
+          title: Url
+      type: object
+      required:
+      - id
+      - run
+      - url
+      title: ProjectInfo
     RegisteredPackage:
       properties:
         database_id:

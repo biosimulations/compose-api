@@ -1,0 +1,55 @@
+{
+  "name": "Elowitz2000 - Repressilator",
+  "format": {
+    "name": "SBML",
+    "identifier": "SBML",
+    "version": "L2V3"
+  },
+  "publication": {
+    "type": "PubMed ID",
+    "accession": "10659856",
+    "journal": "Nature",
+    "title": "A synthetic oscillatory network of transcriptional regulators.",
+    "affiliation": "Department of Molecular Biology and Physics, Princeton University, New Jersey 08544, USA. melowitz@princeton.edu",
+    "synopsis": "Networks of interacting biomolecules carry out many essential functions in living cells, but the 'design principles' underlying the functioning of such intracellular networks remain poorly understood, despite intensive efforts including quantitative analysis of relatively simple systems. Here we present a complementary approach to this problem: the design and construction of a synthetic network to implement a particular function. We used three transcriptional repressor systems that are not part of any natural biological clock to build an oscillating network, termed the repressilator, in Escherichia coli. The network periodically induces the synthesis of green fluorescent protein as a readout of its state in individual cells. The resulting oscillations, with typical periods of hours, are slower than the cell-division cycle, so the state of the oscillator has to be transmitted from generation to generation. This artificial clock displays noisy behaviour, possibly because of stochastic fluctuations of its components. Such 'rational network design may lead both to the engineering of new cellular behaviours and to an improved understanding of naturally occurring networks.",
+    "year": 2000,
+    "month": "1",
+    "volume": "403",
+    "issue": "6767",
+    "pages": "335-338",
+    "link": "http://identifiers.org/pubmed/10659856",
+    "authors": [
+      {
+        "name": "M B Elowitz",
+        "institution": "Department of Molecular Biology and Physics, Princeton University, New Jersey 08544, USA. melowitz@princeton.edu"
+      },
+      {
+        "name": "S Leibler"
+      }
+    ]
+  },
+  "history": {
+    "revisions": [
+      {
+        "version": 1,
+        "submitted": 1126619011,
+        "submitter": "Nicolas Le Nov\u00e8re",
+        "comment": "Original import of Elowitz2000_Repressilator"
+      },
+      {
+        "version": 2,
+        "submitted": 1373457570,
+        "submitter": "Nicolas Le Nov\u00e8re",
+        "comment": "Current version of Elowitz2000 - Repressilator"
+      },
+      {
+        "version": 3,
+        "submitted": 1724264961,
+        "submitter": "Lucian Smith",
+        "comment": "CRBM-sponsored manual and automated updates."
+      }
+    ]
+  },
+  "curationStatus": "CURATED",
+  "publicationId": "BIOMD0000000012"
+}
