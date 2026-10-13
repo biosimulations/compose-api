@@ -3,7 +3,8 @@ import type * as monaco from 'monaco-editor/editor/editor.api'
 import { CompileError, Pblang, type Diagnostic } from 'process-bigraph-lang'
 import { PblangLanguageClient } from '~/viewers/composite/languageClient'
 import { LANGUAGE, registerLanguage, toMarkers } from '~/viewers/composite/monaco'
-import { compositeDocuments, documentName } from '~/viewers/composite/archive'
+import { zipSync } from 'fflate'
+import { companionFiles, compositeDocuments, documentName } from '~/viewers/composite/archive'
 import type { EnvironmentSummary, InterfaceManifest } from '~/composables/useRegistry'
 
 // Write a composite in .pblang and run it (docs/plan-authoring.md, step C). The language server checks the text as it
@@ -33,6 +34,8 @@ const busy = ref(false)
 // values too large for the text, which it references with file("…"): carried along and compiled back in
 const assets = shallowRef<Record<string, string>>({})
 const shownAsset = ref<string | null>(null)
+// the files the starting document ran with in its archive (an SBML model, data): sent with it, in an .omex, on Run
+const companions = shallowRef<Record<string, Uint8Array>>({})
 
 const editorHost = ref<HTMLElement | null>(null)
 let editor: monaco.editor.IStandaloneCodeEditor | null = null
@@ -49,16 +52,22 @@ const environmentItems = computed(() =>
 const compositeName = () => /composite\s+([A-Za-z_][\w]*)/.exec(editor?.getValue() ?? '')?.[1] ?? 'composite'
 
 /** The starting text: a submitted composite decompiled against its run's environment, or the starter. */
-async function startingText(): Promise<{ text: string, environment: string | null, assets: Record<string, string> }> {
+async function startingText(): Promise<{
+  text: string
+  environment: string | null
+  assets: Record<string, string>
+  companions: Record<string, Uint8Array>
+}> {
   const from = typeof route.query.from === 'string' ? route.query.from : null
-  if (!from) return { text: STARTER, environment: null, assets: {} }
+  if (!from) return { text: STARTER, environment: null, assets: {}, companions: {} }
   const api = useApi()
   const { data: dataset } = await api.GET('/datasets/{dataset_id}', { params: { path: { dataset_id: from } } })
   if (!dataset) throw new Error(`Dataset ${from} was not found`)
   const response = await fetchContent(`/datasets/${from}/content`)
   if (!response.ok) throw new Error(`Could not read dataset ${from} (HTTP ${response.status})`)
   const fileName = dataset.path.split('/').pop() ?? 'composite'
-  const documents = compositeDocuments(new Uint8Array(await response.arrayBuffer()), fileName)
+  const bytes = new Uint8Array(await response.arrayBuffer())
+  const documents = compositeDocuments(bytes, fileName)
   const member = typeof route.query.member === 'string' ? route.query.member : null
   const document = documents.find(d => d.path === member) ?? documents[0]
   if (!document) throw new Error(`Dataset ${from} holds no composite document`)
@@ -71,7 +80,7 @@ async function startingText(): Promise<{ text: string, environment: string | nul
   if (runManifest) session.addManifest(runManifest)
   const name = documentName(document.path).replace(/\W/g, '_')
   const printed = session.decompile(document.text, { name })
-  return { text: printed.text, environment: env?.name ?? null, assets: printed.assets }
+  return { text: printed.text, environment: env?.name ?? null, assets: printed.assets, companions: companionFiles(bytes, document.path) }
 }
 
 onMounted(async () => {
@@ -79,6 +88,7 @@ onMounted(async () => {
     const [list, start] = await Promise.all([listEnvironments(), startingText()])
     environments.value = list
     assets.value = start.assets
+    companions.value = start.companions
     environment.value = start.environment ?? list.find(e => !e.simulator)?.name ?? list[0]?.name
     const m = registerLanguage()
     const model = m.editor.createModel(start.text, LANGUAGE, m.Uri.parse(`inmemory://editor/${Date.now()}.pblang`))
@@ -154,7 +164,11 @@ async function submit() {
   try {
     const text = await compile()
     if (text == null) return
-    const file = new File([text], `${compositeName()}.pbg`, { type: 'application/json' })
+    const name = compositeName()
+    // with the files it names, in an archive; alone, as a document
+    const file = Object.keys(companions.value).length
+      ? new File([zipSync({ ...companions.value, [`${name}.pbg`]: new TextEncoder().encode(text) })], `${name}.omex`, { type: 'application/zip' })
+      : new File([text], `${name}.pbg`, { type: 'application/json' })
     const outcome = await submitRun(file, {
       intervalTime: intervalTime.value,
       batch: batch.value,
@@ -212,6 +226,10 @@ function reveal(d: Diagnostic) {
         </span>
       </div>
       <div ref="editorHost" class="h-[65vh] rounded border border-default overflow-hidden" />
+      <p v-if="Object.keys(companions).length" class="text-sm text-muted">
+        Runs with the files it had in its archive, sent along in an .omex:
+        <code v-for="(content, path) in companions" :key="path" class="me-2">{{ path }} ({{ formatBytes(content.length) }})</code>
+      </p>
       <div v-if="Object.keys(assets).length" class="flex flex-col gap-2 text-sm">
         <p class="text-muted">
           Values too large for the text are in sidecar files it references with <code>file("…")</code>; they are compiled
