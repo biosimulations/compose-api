@@ -166,3 +166,48 @@ def summarize(spec: EnvironmentSpec, prebuilt: dict[str, str] | None = None) -> 
         errors=len(manifest.errors) if manifest else 0,
         entries=entries,
     )
+
+
+class EntryEnvironment(BaseModel):
+    """An environment that provides some of a registry entry's classes, and how many."""
+
+    name: str
+    components: int
+
+
+class CatalogEntry(BaseModel):
+    """A registry entry as the catalog shows it (docs/plan-sedml.md, "Concepts"): what it is, how far it is trusted,
+    and which of this deployment's environments provide its classes. Most `listed` entries are in none."""
+
+    id: str
+    package: str
+    source: str
+    version: str | None = None
+    commit: str | None = None
+    level: CurationLevel
+    module_roots: list[str]
+    bundles: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+    reviewer: str | None = None
+    environments: list[EntryEnvironment] = Field(default_factory=list)
+
+
+def catalog_entries(prebuilt: dict[str, str] | None = None) -> list[CatalogEntry]:
+    """Every registry entry (manifest.yaml over catalog.yaml), highest level first, then by id, each with the offered
+    environments whose manifest lists its classes."""
+    registry = load_manifest()
+    provided: dict[str, list[EntryEnvironment]] = {}
+    for spec in load_environments().environments:
+        if deployed_image(spec, prebuilt) is None:
+            continue
+        manifest = read_manifest(spec.name, registry)
+        counts: dict[str, int] = {}
+        for component in manifest.components if manifest else []:
+            if component.registry_entry is not None:
+                counts[component.registry_entry.id] = counts.get(component.registry_entry.id, 0) + 1
+        for entry_id, n in counts.items():
+            provided.setdefault(entry_id, []).append(EntryEnvironment(name=spec.name, components=n))
+    entries = [
+        CatalogEntry(**entry.model_dump(), environments=provided.get(entry.id, [])) for entry in registry.entries
+    ]
+    return sorted(entries, key=lambda e: (-e.level.rank, e.id))

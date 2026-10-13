@@ -133,6 +133,14 @@ const fields = computed(() => {
               <UCard>
                 <template #header><h3 class="font-semibold">Run</h3></template>
                 <dl class="grid grid-cols-[9rem_1fr] gap-y-2 text-sm">
+                  <template v-if="sim?.description">
+                    <dt class="text-muted">Description</dt>
+                    <dd class="self-center">{{ sim.description }}</dd>
+                  </template>
+                  <template v-if="sim && (Object.keys(sim.labels ?? {}).length || sim.tags?.length)">
+                    <dt class="text-muted">Labels and tags</dt>
+                    <dd><RunLabels :labels="sim.labels" :tags="sim.tags" /></dd>
+                  </template>
                   <template v-for="[k, v] in fields" :key="k">
                     <dt class="text-muted">{{ k }}</dt>
                     <dd class="font-mono text-xs break-all self-center">{{ v }}</dd>

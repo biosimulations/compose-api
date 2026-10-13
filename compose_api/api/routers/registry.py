@@ -1,4 +1,5 @@
-"""The environments this service runs documents in, and the process interfaces each one provides.
+"""The catalog of registry entries, the environments this service runs documents in, and the process interfaces each
+one provides (docs/plan-sedml.md, "Concepts": the catalog is discovery and trust, an environment is execution).
 
 The web app's composite editor and viewer check `.pblang` text against the manifest of the environment the document
 runs in (docs/plan-authoring.md). The manifests are generated in CI inside each environment's image and ship with
@@ -12,8 +13,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from compose_api.authentication import OptionalPrincipal, get_optional_principal
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.registry.environments import (
+    CatalogEntry,
     EnvironmentSummary,
     InterfaceManifest,
+    catalog_entries,
     load_environments,
     manifest_path,
     read_manifest,
@@ -62,3 +65,16 @@ async def get_environment_manifest(
     response.headers["ETag"] = etag
     response.headers["Cache-Control"] = "no-cache"
     return manifest
+
+
+@config.router.get(
+    path="/entries",
+    response_model=list[CatalogEntry],
+    operation_id="list-registry-entries",
+    tags=["Registry"],
+    summary="The catalog: every registry entry with its curation level, pin and evidence, and the environments that "
+    "provide its classes",
+)
+async def list_registry_entries(principal: OptionalPrincipal) -> list[CatalogEntry]:
+    # public: the same for every caller
+    return catalog_entries()

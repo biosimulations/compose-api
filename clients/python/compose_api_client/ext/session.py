@@ -32,7 +32,7 @@ from compose_api_client.api.biosim_api import check_health_health_get, get_versi
 from compose_api_client.api.compute import get_processes_list, get_simulator_list, get_steps_list
 from compose_api_client.api.curated import run_copasi, run_tellurium
 from compose_api_client.api.datasets import get_dataset, get_dataset_content, get_dataset_file, list_datasets
-from compose_api_client.api.registry import get_environment_manifest, list_environments
+from compose_api_client.api.registry import get_environment_manifest, list_environments, list_registry_entries
 from compose_api_client.api.results import (
     get_simulation_events,
     get_simulation_results_file,
@@ -51,6 +51,7 @@ from compose_api_client.models import (
     BodyRunCopasi,
     BodyRunSimulation,
     BodyRunTellurium,
+    CatalogEntry,
     Dataset,
     DatasetPage,
     EnvironmentSummary,
@@ -200,6 +201,10 @@ class ComposeSession:
         """The environments documents run in, with what their interface manifests hold."""
         return list(_parsed(list_environments.sync_detailed(client=self.client)))
 
+    def catalog(self) -> list[CatalogEntry]:
+        """Every registry entry with its curation level and the environments that provide its classes."""
+        return list(_parsed(list_registry_entries.sync_detailed(client=self.client)))
+
     def environment_manifest(self, name: str) -> InterfaceManifest:
         """An environment's interface manifest (pbg-interfaces/1)."""
         return _parsed(get_environment_manifest.sync_detailed(name, client=self.client))  # type: ignore[no-any-return]
@@ -207,15 +212,25 @@ class ComposeSession:
     # -- submit -----------------------------------------------------------------------------------------------------
 
     def submit(
-        self, document: FileSource, *, simulator: str | None = None, interval: float = 1.0, batch: bool = False
+        self,
+        document: FileSource,
+        *,
+        simulator: str | None = None,
+        interval: float = 1.0,
+        batch: bool = False,
+        tags: Sequence[str] = (),
+        description: str | None = None,
     ) -> SimulationExperiment:
-        """Submit an ``.omex`` (or ``.pbg``). ``simulator`` names a prebuilt simulator image."""
+        """Submit an ``.omex`` (or ``.pbg``). ``simulator`` names a prebuilt simulator image; ``tags`` and
+        ``description`` are stored with the run and filter ``simulations()``."""
         r = run_simulation.sync_detailed(
             client=self.client,
             body=BodyRunSimulation(uploaded_file=_file(document)),
             interval_time=interval,
             batch_submission=batch,
             simulator=simulator if simulator is not None else UNSET,
+            tags=list(tags) if tags else UNSET,
+            description=description if description is not None else UNSET,
         )
         return _parsed(r)  # type: ignore[no-any-return]
 
@@ -281,13 +296,15 @@ class ComposeSession:
         status: str | None = None,
         simulator: str | None = None,
         since: datetime.datetime | None = None,
+        labels: dict[str, str] | None = None,
+        tags: Sequence[str] = (),
         limit: int = 50,
         offset: int = 0,
     ) -> SimulationPage:
         """Simulations the caller may read, newest first, each with its latest SLURM job. ``status`` is a job state
         or ``"submitting"``; ``simulator`` a prebuilt simulator's name or a container-definition hash prefix."""
         r = list_simulations.sync_detailed(
-            client=self.client, **_simulation_filters(status, simulator, since, limit, offset)
+            client=self.client, **_simulation_filters(status, simulator, since, labels, tags, limit, offset)
         )
         return _parsed(r)  # type: ignore[no-any-return]
 
@@ -478,12 +495,23 @@ class AsyncComposeSession:
         """The environments documents run in, with what their interface manifests hold."""
         return list(_parsed(await list_environments.asyncio_detailed(client=self.client)))
 
+    async def catalog(self) -> list[CatalogEntry]:
+        """Every registry entry with its curation level and the environments that provide its classes."""
+        return list(_parsed(await list_registry_entries.asyncio_detailed(client=self.client)))
+
     async def environment_manifest(self, name: str) -> InterfaceManifest:
         """An environment's interface manifest (pbg-interfaces/1)."""
         return _parsed(await get_environment_manifest.asyncio_detailed(name, client=self.client))  # type: ignore[no-any-return]
 
     async def submit(
-        self, document: FileSource, *, simulator: str | None = None, interval: float = 1.0, batch: bool = False
+        self,
+        document: FileSource,
+        *,
+        simulator: str | None = None,
+        interval: float = 1.0,
+        batch: bool = False,
+        tags: Sequence[str] = (),
+        description: str | None = None,
     ) -> SimulationExperiment:
         r = await run_simulation.asyncio_detailed(
             client=self.client,
@@ -491,6 +519,8 @@ class AsyncComposeSession:
             interval_time=interval,
             batch_submission=batch,
             simulator=simulator if simulator is not None else UNSET,
+            tags=list(tags) if tags else UNSET,
+            description=description if description is not None else UNSET,
         )
         return _parsed(r)  # type: ignore[no-any-return]
 
@@ -554,11 +584,13 @@ class AsyncComposeSession:
         status: str | None = None,
         simulator: str | None = None,
         since: datetime.datetime | None = None,
+        labels: dict[str, str] | None = None,
+        tags: Sequence[str] = (),
         limit: int = 50,
         offset: int = 0,
     ) -> SimulationPage:
         r = await list_simulations.asyncio_detailed(
-            client=self.client, **_simulation_filters(status, simulator, since, limit, offset)
+            client=self.client, **_simulation_filters(status, simulator, since, labels, tags, limit, offset)
         )
         return _parsed(r)  # type: ignore[no-any-return]
 
@@ -644,12 +676,20 @@ class AsyncComposeSession:
 
 
 def _simulation_filters(
-    status: str | None, simulator: str | None, since: datetime.datetime | None, limit: int, offset: int
+    status: str | None,
+    simulator: str | None,
+    since: datetime.datetime | None,
+    labels: dict[str, str] | None,
+    tags: Sequence[str],
+    limit: int,
+    offset: int,
 ) -> dict[str, Any]:
     return {
         "status": ListSimulationsStatusType0(status) if status is not None else UNSET,
         "simulator": simulator if simulator is not None else UNSET,
         "since": since if since is not None else UNSET,
+        "label": [f"{k}:{v}" for k, v in labels.items()] if labels else UNSET,
+        "tag": list(tags) if tags else UNSET,
         "limit": limit,
         "offset": offset,
     }

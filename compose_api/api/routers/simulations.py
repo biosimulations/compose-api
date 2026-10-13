@@ -17,6 +17,7 @@ from compose_api.db.services.datasets_db import DatasetQuery
 from compose_api.db.services.simulators_db import SUBMITTING, SimulationQuery, SimulationRow
 from compose_api.dependencies import get_required_database_service
 from compose_api.simulation.hpc_utils import get_singularity_hash
+from compose_api.simulation.labels import LABEL_KEYS, LabelError, parse_label_filters
 from compose_api.simulation.models import (
     SimulationDetail,
     SimulationPage,
@@ -80,6 +81,9 @@ def _summary(row: SimulationRow) -> SimulationSummary:
         exit_code=run.exit_code if run is not None else None,
         error_message=run.error_message if run is not None else None,
         trace_id=run.trace_id if run is not None else None,
+        labels=dict(row.simulation.labels or {}),
+        tags=list(row.simulation.tags or []),
+        description=row.simulation.description,
     )
 
 
@@ -106,13 +110,29 @@ async def list_simulations(
     since: Annotated[
         datetime.datetime | None, Query(description="Only simulations created at or after this time")
     ] = None,
+    label: Annotated[
+        list[str] | None,
+        Query(
+            description="Only simulations with this label, as key:value; repeatable, all must match. "
+            f"Keys: {', '.join(LABEL_KEYS)}"
+        ),
+    ] = None,
+    tag: Annotated[
+        list[str] | None, Query(description="Only simulations with this tag; repeatable, all must match")
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> SimulationPage:
+    try:
+        labels = parse_label_filters(label)
+    except LabelError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     query = SimulationQuery(
         status=status,
         container_def_hash=_container_hash(simulator) if simulator else None,
         since=since if since is None or since.tzinfo else since.replace(tzinfo=datetime.UTC),
+        labels=labels,
+        tags=[t.strip() for t in tag or [] if t.strip()],
         limit=limit,
         offset=offset,
     )

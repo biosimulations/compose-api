@@ -218,6 +218,10 @@ class SimulationRequest(BaseModel):
     is_batch: bool
     # A prebuilt simulator by name (settings.prebuilt_simulators); None runs the shared container.
     simulator: str | None = None
+    # Stored on the simulation (compose_api/simulation/labels.py): the service's labels, the submitter's tags and text.
+    labels: dict[str, str] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
+    description: str | None = None
 
 
 class SimulationResults(BaseModel):
@@ -278,6 +282,9 @@ class SimulationSummary(BaseModel):
     exit_code: int | None = None
     error_message: str | None = None
     trace_id: str | None = None
+    labels: dict[str, str] = Field(default_factory=dict)  # written by the service: what the run is
+    tags: list[str] = Field(default_factory=list)  # the submitter's
+    description: str | None = None
 
 
 class SimulationDetail(SimulationSummary):

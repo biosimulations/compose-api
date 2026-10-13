@@ -130,7 +130,7 @@ themselves when the service is `None`. Two consequences worth knowing:
 **Routers** are registered by name from `APP_ROUTERS` in `api/main.py` via `importlib`, and each module must expose a
 module-level `config = RouterConfig(router=APIRouter(), prefix=..., dependencies=[])`. Registration failures are logged
 and swallowed — an import error in a router silently drops its endpoints rather than failing startup. Prefixes:
-`/simulation` (submit), `/results` (status, results file, events, trace), `/core` (simulator/process/step catalogs),
+`/simulation` (submit), `/results` (status, results file, events, trace), `/core` (deprecated Postgres simulator/process/step lists),
 `/curated` (pre-baked copasi/tellurium runs), `/simulations` (listing), `/datasets` (a run's files). Every endpoint sets an explicit `operation_id` because those become the generated
 client's method names.
 
@@ -181,7 +181,13 @@ catalog wrapper at `listed`; never hand-edit it — raising an entry means addin
 `environments.yaml`, inside each image over the module roots of the entries whose `bundles` name it. The format is the
 shared `pbg-interfaces/1`. `GET /registry/environments[/{name}/manifest]` serves them to the web app. A test fails when
 a committed manifest was read from another image than the one deployed (regenerate it) or lists an unregistered
-component. Plan: `docs/plan-authoring.md`.
+component. Plan: `docs/plan-authoring.md`. `GET /registry/entries` is the catalog (every entry, its level, the
+environments providing its classes); catalog = discovery and trust, environment = execution (`docs/plan-sedml.md`).
+
+**Labels, tags, description** (`simulation/labels.py`, `docs/plan-sedml.md`). The service writes `simulation.labels`
+under reserved keys only (`source`, `environment`, `solver`, `model`, ...); submitters give `tags` and a
+`description` at submission (runs are anonymous; nothing edits them). `GET /simulations?label=k:v&tag=t` filters by
+JSONB/array containment (GIN indexes). Add a key to `LABEL_KEYS` before writing it.
 
 **Job tracking.** An `HpcRun` row links a SLURM job id, a `correlation_id`, and a `JobType`
 (`SIMULATION` / `BUILD_CONTAINER`). `JobMonitor` updates status two ways: a 5-second polling loop reconciling

@@ -53,8 +53,13 @@ $ compose-api results 4195 --extract out/
   $ compose-api simulations list                          # newest first, with status and SLURM job
   $ compose-api simulations list --status running --since 6h
   $ compose-api simulations list --simulator viva-pde-particle --limit 20
+  $ compose-api simulations list --label source:biomodels --tag repressilator
   $ compose-api simulations show 4334                     # plus how many events and datasets it recorded
   ```
+
+  Runs carry **labels**, written by the service (`source`, `environment`, `solver`, `model`, ...), and **tags** and a
+  **description** given at submission: `compose-api run x.omex --tag demo --tag repressilator --description "..."`.
+  `--label key:value` and `--tag` filter the list; each is repeatable, and all must match.
 
   The list shows only simulations you can read; once auth is in place, that's yours and the public ones.
 - `--simulator` names a prebuilt simulator image the service is configured with. Without it, the service builds one
@@ -159,6 +164,7 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 
 * `health`: Is the service up, and which version.
 * `version`: The service's version.
+* `catalog`: The catalog: every registry entry with its...
 * `run`: Submit a simulation.
 * `status`: Job state of one simulation, or of several...
 * `wait`: Wait until each simulation finishes; exit...
@@ -205,6 +211,23 @@ $ compose-api version [OPTIONS]
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
+## `compose-api catalog`
+
+The catalog: every registry entry with its curation level, and the environments that provide its classes.
+
+Discovery and trust, not runnability: most `listed` entries are in no environment (docs/plan-sedml.md).
+
+**Usage**:
+
+```console
+$ compose-api catalog [OPTIONS]
+```
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
 ## `compose-api run`
 
 Submit a simulation. Prints its ids; with --wait, its final state (and the files, with --download).
@@ -224,6 +247,8 @@ $ compose-api run [OPTIONS] DOCUMENT
 * `--simulator TEXT`: A prebuilt simulator image by name.
 * `--interval FLOAT`: Simulation interval passed to the runner.  [default: 1.0]
 * `--batch / --no-batch`: Submit as a batch job (smaller partition, 1 CPU).  [default: no-batch]
+* `-t, --tag TEXT`: A tag to find the run by later (repeatable).
+* `--description TEXT`: What the run is for.
 * `-w, --wait`: Wait for the job to finish; exit 1 unless it completed.
 * `-d, --download PATH`: With --wait: save the results archive into this directory.
 * `--extract / --no-extract`: With --download: unpack the archive instead of saving the zip.  [default: no-extract]
@@ -683,6 +708,8 @@ $ compose-api simulations list [OPTIONS]
 * `--status TEXT`: Only this state: submitting, running, completed, failed, timeout, ...
 * `--simulator TEXT`: Only this prebuilt simulator (name), or a container-definition hash prefix.
 * `--since TEXT`: Only those created since: 30m, 6h, 2d, 1w, or an ISO time.
+* `--label TEXT`: Only those with this label, key:value, e.g. source:biomodels (repeatable, all must match).
+* `--tag TEXT`: Only those with this tag (repeatable, all must match).
 * `--limit INTEGER`: At most this many.  [default: 50]
 * `--offset INTEGER`: Skip this many (for the next page).  [default: 0]
 * `--json`: Print JSON (the same as --output json).

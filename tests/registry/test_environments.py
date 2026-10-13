@@ -18,6 +18,7 @@ from compose_api.registry import environments
 from compose_api.registry.environments import (
     INTERFACES_VERSION,
     EnvironmentSpec,
+    catalog_entries,
     load_environments,
     module_roots,
     read_manifest,
@@ -169,3 +170,23 @@ def test_committed_manifests_are_current_and_their_components_are_registered(pat
     assert (manifest.environment or {}).get("image") == image, f"{path.name} was read from another image: regenerate it"
     for component in manifest.components:
         assert component.registry_entry is not None, f"{component.address} belongs to no registry entry"
+
+
+def test_catalog_entries_carry_their_level_and_the_environments_that_provide_them(manifests_dir: Path) -> None:
+    entries = catalog_entries(prebuilt={"viva-pde-particle": PDE_IMAGE})
+    levels = [e.level.rank for e in entries]
+    assert levels == sorted(levels, reverse=True)  # most trusted first
+    pde = next(e for e in entries if e.id == "viva-pde-particle")
+    assert pde.level == CurationLevel.TESTED and [(x.name, x.components) for x in pde.environments] == [
+        ("viva-pde-particle", 1)
+    ]
+    assert any(e.level == CurationLevel.LISTED and not e.environments for e in entries)  # catalog.yaml's, in none
+    offered_nowhere = catalog_entries(prebuilt={})
+    assert not next(e for e in offered_nowhere if e.id == "viva-pde-particle").environments
+
+
+@pytest.mark.asyncio
+async def test_route_lists_the_catalog(client: httpx.AsyncClient) -> None:
+    listing = (await client.get("/registry/entries")).json()
+    pde = next(e for e in listing if e["id"] == "viva-pde-particle")
+    assert pde["level"] == "tested" and pde["environments"] == [{"name": "viva-pde-particle", "components": 1}]

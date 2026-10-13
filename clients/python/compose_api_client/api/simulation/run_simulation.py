@@ -17,6 +17,8 @@ def _get_kwargs(
     interval_time: float | Unset = 1.0,
     batch_submission: bool | Unset = False,
     simulator: None | str | Unset = UNSET,
+    tags: list[str] | None | Unset = UNSET,
+    description: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
 
@@ -32,6 +34,23 @@ def _get_kwargs(
     else:
         json_simulator = simulator
     params["simulator"] = json_simulator
+
+    json_tags: list[str] | None | Unset
+    if isinstance(tags, Unset):
+        json_tags = UNSET
+    elif isinstance(tags, list):
+        json_tags = tags
+
+    else:
+        json_tags = tags
+    params["tags"] = json_tags
+
+    json_description: None | str | Unset
+    if isinstance(description, Unset):
+        json_description = UNSET
+    else:
+        json_description = description
+    params["description"] = json_description
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -90,16 +109,25 @@ def sync_detailed(
     interval_time: float | Unset = 1.0,
     batch_submission: bool | Unset = False,
     simulator: None | str | Unset = UNSET,
+    tags: list[str] | None | Unset = UNSET,
+    description: None | str | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError | SimulationExperiment]:
     """Run a simulation
 
      `simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);
     the job then runs in that image instead of the shared container. Omitted: the shared container.
 
+    The run is labelled `source=upload` and `environment=<simulator or registry_env>`; `tags` and
+    `description` are
+    stored with it as given (compose_api/simulation/labels.py) and filter `GET /simulations`.
+
     Args:
         interval_time (float | Unset):  Default: 1.0.
         batch_submission (bool | Unset):  Default: False.
         simulator (None | str | Unset):
+        tags (list[str] | None | Unset): Tags to find the run by later; at most 20, each up to 64
+            characters
+        description (None | str | Unset): What the run is for; up to 2000 characters
         body (BodyRunSimulation):
 
     Raises:
@@ -115,6 +143,8 @@ def sync_detailed(
         interval_time=interval_time,
         batch_submission=batch_submission,
         simulator=simulator,
+        tags=tags,
+        description=description,
     )
 
     response = client.get_httpx_client().request(
@@ -131,16 +161,25 @@ def sync(
     interval_time: float | Unset = 1.0,
     batch_submission: bool | Unset = False,
     simulator: None | str | Unset = UNSET,
+    tags: list[str] | None | Unset = UNSET,
+    description: None | str | Unset = UNSET,
 ) -> Any | HTTPValidationError | SimulationExperiment | None:
     """Run a simulation
 
      `simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);
     the job then runs in that image instead of the shared container. Omitted: the shared container.
 
+    The run is labelled `source=upload` and `environment=<simulator or registry_env>`; `tags` and
+    `description` are
+    stored with it as given (compose_api/simulation/labels.py) and filter `GET /simulations`.
+
     Args:
         interval_time (float | Unset):  Default: 1.0.
         batch_submission (bool | Unset):  Default: False.
         simulator (None | str | Unset):
+        tags (list[str] | None | Unset): Tags to find the run by later; at most 20, each up to 64
+            characters
+        description (None | str | Unset): What the run is for; up to 2000 characters
         body (BodyRunSimulation):
 
     Raises:
@@ -157,6 +196,8 @@ def sync(
         interval_time=interval_time,
         batch_submission=batch_submission,
         simulator=simulator,
+        tags=tags,
+        description=description,
     ).parsed
 
 
@@ -167,16 +208,25 @@ async def asyncio_detailed(
     interval_time: float | Unset = 1.0,
     batch_submission: bool | Unset = False,
     simulator: None | str | Unset = UNSET,
+    tags: list[str] | None | Unset = UNSET,
+    description: None | str | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError | SimulationExperiment]:
     """Run a simulation
 
      `simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);
     the job then runs in that image instead of the shared container. Omitted: the shared container.
 
+    The run is labelled `source=upload` and `environment=<simulator or registry_env>`; `tags` and
+    `description` are
+    stored with it as given (compose_api/simulation/labels.py) and filter `GET /simulations`.
+
     Args:
         interval_time (float | Unset):  Default: 1.0.
         batch_submission (bool | Unset):  Default: False.
         simulator (None | str | Unset):
+        tags (list[str] | None | Unset): Tags to find the run by later; at most 20, each up to 64
+            characters
+        description (None | str | Unset): What the run is for; up to 2000 characters
         body (BodyRunSimulation):
 
     Raises:
@@ -192,6 +242,8 @@ async def asyncio_detailed(
         interval_time=interval_time,
         batch_submission=batch_submission,
         simulator=simulator,
+        tags=tags,
+        description=description,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -206,16 +258,25 @@ async def asyncio(
     interval_time: float | Unset = 1.0,
     batch_submission: bool | Unset = False,
     simulator: None | str | Unset = UNSET,
+    tags: list[str] | None | Unset = UNSET,
+    description: None | str | Unset = UNSET,
 ) -> Any | HTTPValidationError | SimulationExperiment | None:
     """Run a simulation
 
      `simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);
     the job then runs in that image instead of the shared container. Omitted: the shared container.
 
+    The run is labelled `source=upload` and `environment=<simulator or registry_env>`; `tags` and
+    `description` are
+    stored with it as given (compose_api/simulation/labels.py) and filter `GET /simulations`.
+
     Args:
         interval_time (float | Unset):  Default: 1.0.
         batch_submission (bool | Unset):  Default: False.
         simulator (None | str | Unset):
+        tags (list[str] | None | Unset): Tags to find the run by later; at most 20, each up to 64
+            characters
+        description (None | str | Unset): What the run is for; up to 2000 characters
         body (BodyRunSimulation):
 
     Raises:
@@ -233,5 +294,7 @@ async def asyncio(
             interval_time=interval_time,
             batch_submission=batch_submission,
             simulator=simulator,
+            tags=tags,
+            description=description,
         )
     ).parsed

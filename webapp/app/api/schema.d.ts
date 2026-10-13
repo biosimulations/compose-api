@@ -51,6 +51,9 @@ export interface paths {
          * Run a simulation
          * @description `simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);
          *     the job then runs in that image instead of the shared container. Omitted: the shared container.
+         *
+         *     The run is labelled `source=upload` and `environment=<simulator or registry_env>`; `tags` and `description` are
+         *     stored with it as given (compose_api/simulation/labels.py) and filter `GET /simulations`.
          */
         post: operations["run-simulation"];
         delete?: never;
@@ -219,7 +222,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get the list of simulators */
+        /**
+         * Get the list of simulators
+         * @deprecated
+         */
         get: operations["get-simulator-list"];
         put?: never;
         post?: never;
@@ -236,7 +242,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get the list of processes */
+        /**
+         * Get the list of processes
+         * @deprecated
+         */
         get: operations["get-processes-list"];
         put?: never;
         post?: never;
@@ -253,7 +262,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get the list of processes */
+        /**
+         * Get the list of processes
+         * @deprecated
+         */
         get: operations["get-steps-list"];
         put?: never;
         post?: never;
@@ -370,6 +382,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/registry/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The catalog: every registry entry with its curation level, pin and evidence, and the environments that provide its classes */
+        get: operations["list-registry-entries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -466,6 +495,34 @@ export interface components {
             sbml: string;
         };
         /**
+         * CatalogEntry
+         * @description A registry entry as the catalog shows it (docs/plan-sedml.md, "Concepts"): what it is, how far it is trusted,
+         *     and which of this deployment's environments provide its classes. Most `listed` entries are in none.
+         */
+        CatalogEntry: {
+            /** Id */
+            id: string;
+            /** Package */
+            package: string;
+            /** Source */
+            source: string;
+            /** Version */
+            version?: string | null;
+            /** Commit */
+            commit?: string | null;
+            level: components["schemas"]["CurationLevel"];
+            /** Module Roots */
+            module_roots: string[];
+            /** Bundles */
+            bundles?: string[];
+            /** Evidence */
+            evidence?: string[];
+            /** Reviewer */
+            reviewer?: string | null;
+            /** Environments */
+            environments?: components["schemas"]["EntryEnvironment"][];
+        };
+        /**
          * ContainerizationEngine
          * @enum {integer}
          */
@@ -529,6 +586,16 @@ export interface components {
             total: number;
             /** Next Offset */
             next_offset?: number | null;
+        };
+        /**
+         * EntryEnvironment
+         * @description An environment that provides some of a registry entry's classes, and how many.
+         */
+        EntryEnvironment: {
+            /** Name */
+            name: string;
+            /** Components */
+            components: number;
         };
         /**
          * EntryRef
@@ -827,6 +894,14 @@ export interface components {
             error_message?: string | null;
             /** Trace Id */
             trace_id?: string | null;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            };
+            /** Tags */
+            tags?: string[];
+            /** Description */
+            description?: string | null;
             /**
              * Event Count
              * @default 0
@@ -893,6 +968,14 @@ export interface components {
             error_message?: string | null;
             /** Trace Id */
             trace_id?: string | null;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            };
+            /** Tags */
+            tags?: string[];
+            /** Description */
+            description?: string | null;
         };
         /** SimulatorVersion */
         SimulatorVersion: {
@@ -1025,6 +1108,10 @@ export interface operations {
                 interval_time?: number;
                 batch_submission?: boolean;
                 simulator?: string | null;
+                /** @description Tags to find the run by later; at most 20, each up to 64 characters */
+                tags?: string[] | null;
+                /** @description What the run is for; up to 2000 characters */
+                description?: string | null;
             };
             header?: never;
             path?: never;
@@ -1072,6 +1159,10 @@ export interface operations {
                 simulator?: string | null;
                 /** @description Only simulations created at or after this time */
                 since?: string | null;
+                /** @description Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, solver, model, project, sedml_task, comparison, collection, suite_run */
+                label?: string[] | null;
+                /** @description Only simulations with this tag; repeatable, all must match */
+                tag?: string[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -1694,6 +1785,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "list-registry-entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogEntry"][];
                 };
             };
         };

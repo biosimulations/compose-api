@@ -4,7 +4,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import override
 
 from pbest.utils.input_types import ContainerizationFileRepr
@@ -354,6 +354,9 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
                 simulator_id=simulator_version.database_id,
                 owner_sub=owner_sub,
                 visibility=visibility.value,
+                labels=dict(sim_request.labels),
+                tags=list(sim_request.tags),
+                description=sim_request.description,
             )
             session.add(orm_simulation)
             await session.flush()  # Ensure the ORM object is inserted and has an ID
@@ -475,6 +478,8 @@ class SimulationQuery:
     status: str | None = None  # a JobStatus value, or "submitting" (no SLURM job yet)
     container_def_hash: str | None = None
     since: datetime.datetime | None = None  # created at or after (UTC)
+    labels: dict[str, str] = field(default_factory=dict)  # every one must match
+    tags: list[str] = field(default_factory=list)  # every one must be present
     limit: int = 50
     offset: int = 0
 
@@ -520,6 +525,10 @@ async def _page_simulations(
         stmt = stmt.where(ORMSimulator.container_def_hash.startswith(query.container_def_hash))
     if query.since is not None:
         stmt = stmt.where(ORMSimulation.created_at >= query.since.astimezone(datetime.UTC).replace(tzinfo=None))
+    if query.labels:
+        stmt = stmt.where(ORMSimulation.labels.contains(query.labels))
+    if query.tags:
+        stmt = stmt.where(ORMSimulation.tags.contains(query.tags))
     async with session_maker() as session:
         total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
         result = await session.execute(stmt.order_by(ORMSimulation.id.desc()).limit(query.limit).offset(query.offset))

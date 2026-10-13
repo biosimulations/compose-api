@@ -2,7 +2,8 @@ import datetime
 import logging
 
 from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
-from sqlalchemy import ForeignKey, func
+from sqlalchemy import ForeignKey, Index, String, Text, func, text
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from compose_api.db.db_utils import DeclarativeTableBase, package_table_name
@@ -85,6 +86,18 @@ class ORMSimulation(DeclarativeTableBase):
     # Written periodically by the task submitting the simulation, until it reaches SLURM. A simulation with no run
     # whose heartbeat (or, before the first one, creation) is stale lost its task, e.g. to an API restart (#238).
     dispatch_heartbeat_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
+
+    # What the run is, for finding it again (docs/plan-sedml.md, phase 0). Labels are written by the service under
+    # reserved keys (compose_api/simulation/labels.py); tags and the description are the submitter's, given at
+    # submission. Both are queried by containment, through the GIN indexes below.
+    labels: Mapped[dict[str, str]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    tags: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, server_default=text("'{}'::varchar[]"))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        Index("ix_simulation_labels", "labels", postgresql_using="gin"),
+        Index("ix_simulation_tags", "tags", postgresql_using="gin"),
+    )
 
     def to_simulation_access(self) -> SimulationAccess:
         return SimulationAccess(

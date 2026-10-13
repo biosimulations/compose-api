@@ -25,8 +25,10 @@ from compose_api.dependencies import (
     get_required_simulation_service,
 )
 from compose_api.observability.api_events import record_api_event
+from compose_api.registry.manifest import SERVICE_BUNDLE
 from compose_api.simulation.hpc_utils import get_correlation_id, get_experiment_id, get_singularity_hash
 from compose_api.simulation.job_monitor import JobMonitor
+from compose_api.simulation.labels import labels
 from compose_api.simulation.models import (
     HpcRun,
     JobStatus,
@@ -139,7 +141,10 @@ async def run_curated_pbif(
         if omex.filename is None:
             raise HTTPException(500, "Can't create omex file.")
         simulator_request = SimulationRequest(
-            request_file_path=Path(omex.filename), simulation_file_type=SimulationFileType.OMEX, is_batch=False
+            request_file_path=Path(omex.filename),
+            simulation_file_type=SimulationFileType.OMEX,
+            is_batch=False,
+            labels=labels(source="curated", solver=simulator_name.lower(), environment=SERVICE_BUNDLE),
         )
 
         try:
