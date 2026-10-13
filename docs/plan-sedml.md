@@ -1,6 +1,6 @@
 # SED-ML models as process-bigraph runs across solvers, compared
 
-**Status (2026-10-13): phases 0 to 2 merged; phases 3 and 4 in review.** One PR per phase and repository, merged with a merge commit on
+**Status (2026-10-13): phases 0 to 2 merged; phases 3 to 5 in review.** One PR per phase and repository, merged with a merge commit on
 the maintainer's word; each PR updates the table below. A merge deploys nothing by itself: the next release's image
 ships it (CLAUDE.md, "Deploys are GitOps"). The language side is planned in process-bigraph-lang's
 [`docs/v2/sedml-plan.md`](https://github.com/biosimulations/process-bigraph-lang/blob/main/docs/v2/sedml-plan.md).
@@ -12,7 +12,7 @@ ships it (CLAUDE.md, "Deploys are GitOps"). The language side is planned in proc
 | 2 | SED-ML adapter steps around generic COPASI and Tellurium steps; `solvers.yaml` and `GET /registry/solvers` | biosim-toolkit 0.1.0 (released), compose-api | merged (#284) |
 | 3 | `POST /sedml/run` and `/sedml/preview`; the `sedml-omex` and `input` datasets; comparisons computed on the server | compose-api | in review |
 | 4 | BioModels and biosimulations.org source routes, cached; run shortcuts; references (original results); the curated routes on the same path | compose-api | in review (the curated routes and interpolation deferred) |
-| 5 | Web app: ad-hoc SED-ML page, sources, a Plotly viewer, the comparison page | compose-api `webapp/` | planned |
+| 5 | Web app: ad-hoc SED-ML page, sources, a Plotly viewer, the comparison page | compose-api `webapp/` | in review |
 | 6 | Regression and reproducibility suites, rerun on a schedule, with their pages | compose-api | planned |
 
 Phases 0, 1 and the inventory that opens phase 2 do not depend on each other. Phase 3 needs 1 and 2.
@@ -168,6 +168,24 @@ goes into the shared image) and `manifest.yaml` (what is admitted) from one list
   solvers and the references share the SED-ML grid), and reimplementing `/curated/copasi|tellurium` on this path
   (their cluster tests compare today's outputs; the SED-ML path makes them redundant rather than wrong).
 - CLI: `biomodels search|show|get|run`, `biosimulations search|show|get|reference|run`.
+
+## Phase 5: what exists after it
+
+- **`/ui/sedml`**: an archive from three places (an upload, a BioModels search, a biosimulations.org search; or
+  `?source=biomodels:ID` / `biosimulations:ID`), its translation previewed (each task, the solvers that accept it
+  and those refused, the findings, the `.pblang` template), then solvers, tags and a description chosen, and Run,
+  which opens the comparison. A BioModels or biosimulations.org source runs through its shortcut, so its runs are
+  labelled with it and a project's original results become the reference (`SedmlRunPanel.vue`, `useSedml.ts`).
+- **`/ui/comparisons`, `/ui/comparisons/{id}`**: the verdict (the solvers agree or differ; whether they match the
+  original results), the runs, a score matrix per report (data sets by solver and reference pairs, close in green,
+  far in red, the worst named), one data set from every run and reference overlaid
+  (`GET /comparisons/{id}/series?report=`), and each SED-ML plot with every run's traces overlaid, dashed per solver.
+  It refreshes while the runs are going.
+- **A Plotly viewer** for figure datasets (`*.plotly.json`) on any run's page.
+- Checked in headless Chrome against the API answered with data made by the real code: the Ciliberto project's
+  translation, COPASI and Tellurium outputs from biosim-toolkit's steps, and `compare()` against the project's
+  original Tellurium 2.2.1 results. The solvers agree with each other and with the original results (worst score
+  0.02, Cdh1).
 
 ## Data model (phase 0, phase 3)
 

@@ -6,9 +6,11 @@ const { rejected, clearRejected } = useAuth()
 
 const items: NavigationMenuItem[][] = [
   [
-    { label: 'Run a simulation', icon: 'i-lucide-play', to: '/simulations/new' },
-    { label: 'Write a composite', icon: 'i-lucide-square-pen', to: '/composites/new' },
+    { label: 'Run', icon: 'i-lucide-play', to: '/simulations/new' },
+    { label: 'Write', icon: 'i-lucide-square-pen', to: '/composites/new' },
+    { label: 'SED-ML', icon: 'i-lucide-scale', to: '/sedml' },
     { label: 'Simulations', icon: 'i-lucide-list', to: '/simulations' },
+    { label: 'Comparisons', icon: 'i-lucide-git-compare', to: '/comparisons' },
     { label: 'Datasets', icon: 'i-lucide-files', to: '/datasets' },
     { label: 'Environments', icon: 'i-lucide-package-check', to: '/environments' },
     { label: 'Catalog', icon: 'i-lucide-boxes', to: '/catalog' }

@@ -78,3 +78,12 @@ class ComparisonPage(BaseModel):
 class SedmlRunResult(BaseModel):
     comparisons: list[Comparison]
     findings: list[SedmlFinding]
+
+
+class ComparisonSeries(BaseModel):
+    """One report's columns from each member (by solver) and each reference (by origin), for overlays."""
+
+    report: str
+    labels: list[str]
+    solvers: dict[str, dict[str, list[float | None]]]
+    references: dict[str, dict[str, list[float | None]]]

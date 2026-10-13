@@ -484,6 +484,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/comparisons/{comparison_id}/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One report's columns from each run and each reference, for overlays */
+        get: operations["get-comparison-series"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sources/biomodels/search": {
         parameters: {
             query?: never;
@@ -860,6 +877,28 @@ export interface components {
             total: number;
             /** Next Offset */
             next_offset?: number | null;
+        };
+        /**
+         * ComparisonSeries
+         * @description One report's columns from each member (by solver) and each reference (by origin), for overlays.
+         */
+        ComparisonSeries: {
+            /** Report */
+            report: string;
+            /** Labels */
+            labels: string[];
+            /** Solvers */
+            solvers: {
+                [key: string]: {
+                    [key: string]: (number | null)[];
+                };
+            };
+            /** References */
+            references: {
+                [key: string]: {
+                    [key: string]: (number | null)[];
+                };
+            };
         };
         /**
          * ContainerizationEngine
@@ -2415,6 +2454,46 @@ export interface operations {
                 };
             };
             /** @description No such comparison */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "get-comparison-series": {
+        parameters: {
+            query: {
+                report: string;
+            };
+            header?: never;
+            path: {
+                comparison_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComparisonSeries"];
+                };
+            };
+            /** @description No such comparison or report */
             404: {
                 headers: {
                     [name: string]: unknown;

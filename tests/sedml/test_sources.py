@@ -124,3 +124,14 @@ async def test_running_a_project_compares_its_solvers_and_its_original_results(
     assert done["result"]["close_to_references"] is True
     pair = done["result"]["reports"]["report"]["labels"]["Clb2"]["copasi|biosimulations:tellurium"]
     assert pair == {"score": 0.0, "close": True, "reference": True}
+
+    series = (
+        await client.get(f"/comparisons/{comparison['comparison_id']}/series", params={"report": "report"})
+    ).json()
+    assert sorted(series["solvers"]) == ["copasi", "tellurium"] and list(series["references"]) == [
+        "biosimulations:tellurium"
+    ]
+    assert series["solvers"]["copasi"]["Clb2"] == series["references"]["biosimulations:tellurium"]["Clb2"]
+    assert len(series["labels"]) == 21
+    missing = await client.get(f"/comparisons/{comparison['comparison_id']}/series", params={"report": "nope"})
+    assert missing.status_code == 404

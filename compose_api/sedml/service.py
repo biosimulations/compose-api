@@ -174,7 +174,11 @@ async def comparison_view(row: ComparisonRow) -> Comparison:
     )
 
 
-async def _compute(settings: dict[str, object], row: ComparisonRow) -> dict[str, object]:
+async def member_reports(
+    settings: dict[str, object], row: ComparisonRow
+) -> tuple[dict[str, dict[str, dict[str, list[float]]]], dict[str, list[str]]]:
+    """Each member's report CSVs, read from its experiment directory: `{solver: {report: {label: series}}}`, and the
+    reports each member lacks."""
     db = get_required_database_service()
     namespace = Namespace(get_settings().namespace)
     report_files: dict[str, dict[str, object]] = settings.get("reports", {})  # type: ignore[assignment]
@@ -190,6 +194,12 @@ async def _compute(settings: dict[str, object], row: ComparisonRow) -> dict[str,
                 reports[m.solver][report_id] = read_report(path.read_text(encoding="utf-8"))
             except OSError:
                 missing.setdefault(m.solver, []).append(report_id)
+    return reports, missing
+
+
+async def _compute(settings: dict[str, object], row: ComparisonRow) -> dict[str, object]:
+    report_files: dict[str, dict[str, object]] = settings.get("reports", {})  # type: ignore[assignment]
+    reports, missing = await member_reports(settings, row)
     labels_by_report = {r: list(info.get("labels", [])) for r, info in report_files.items()}  # type: ignore[call-overload]
     references = {ref.origin: ref.reports for ref in row.references}
     result = compare(
