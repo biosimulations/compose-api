@@ -5,7 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, U
 
 from compose_api.authentication import OptionalPrincipal, describe_caller, get_optional_principal
 from compose_api.common.gateway.models import RouterConfig
-from compose_api.common.gateway.utils import get_simulation_request_from_uploaded_file
+from compose_api.common.gateway.utils import get_simulation_request_from_uploaded_file, wrap_document_in_omex
 from compose_api.config import get_settings
 from compose_api.dependencies import (
     get_database_service,
@@ -119,6 +119,8 @@ async def submit_simulation(
                 status_code=400,
                 detail={"message": e.message, "violations": [v.model_dump() for v in e.violations]},
             ) from e
+
+    simulation_request = wrap_document_in_omex(simulation_request)
 
     sim_service = get_simulation_service()
     if sim_service is None:

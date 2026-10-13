@@ -1,5 +1,6 @@
 import logging
 import tempfile
+import zipfile
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
@@ -69,3 +70,18 @@ async def get_simulation_request_from_uploaded_file(
         simulation_file_type=file_type,
         is_batch=batch_submission,
     )
+
+
+def wrap_document_in_omex(request: SimulationRequest) -> SimulationRequest:
+    """A bare `.pbg` as an archive holding it, which every runner reads: pbest 0.6.3 opens any `.pbg` it is given as
+    a zip (to test for a bundle of archives) and fails with BadZipFile before running it. Other requests are
+    returned as they are."""
+    if request.simulation_file_type is not SimulationFileType.PBG:
+        return request
+    document = request.request_file_path
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".omex") as tmp_file:
+        archive = Path(tmp_file.name)
+    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as omex:
+        omex.write(document, arcname="simulation.pbg")
+    document.unlink(missing_ok=True)
+    return request.model_copy(update={"request_file_path": archive, "simulation_file_type": SimulationFileType.OMEX})
