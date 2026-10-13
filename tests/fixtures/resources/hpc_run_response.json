@@ -1,6 +1,8 @@
 {
   "database_id": 0,
   "slurmjobid": 424242,
+  "backend": "slurm",
+  "external_id": "424242",
   "correlation_id": "hpc-run-round-trip-fixture",
   "job_type": "simulation",
   "sim_id": 0,
