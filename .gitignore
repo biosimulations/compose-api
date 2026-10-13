@@ -30,6 +30,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+.DS_Store
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -235,4 +236,5 @@ assets/dev/config/compose_known_hosts
 .kilo/
 .agents/
 .crush/
+.perch/
 .freebuff/
