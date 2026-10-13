@@ -59,3 +59,20 @@ entries:
         package's own CI on every push to main (.github/workflows/compose-image.yml): a smoke ensemble in Docker,
         then this service's exact job contract under `apptainer run --compat` with /experiment bound, before the
         image is pushed. The pinned digest passed both.
+
+  - id: biosim-toolkit
+    package: biosim-toolkit
+    source: https://github.com/biosimulations/biosim-toolkit
+    version: "0.1.0"
+    module_roots:
+      - biosim_toolkit
+    level: tested
+    bundles:
+      - registry_env
+    evidence:
+      - >-
+        Added at tested on 2026-10-13 (docs/plan-sedml.md, D11). Its CI runs translated SED-ML archives
+        (BIOMD0000000012, Ciliberto 2003) end to end the way this service's runner does, on pbsim-common's COPASI and
+        Tellurium steps, with registry_env's process-bigraph 1.0.5 and bigraph-schema 1.0.14, and checks that the two
+        solvers agree. The gate here, as for pbsim-common, is this repository's cluster test inside the built
+        registry_env image (tests/simulators/test_sedml.py).

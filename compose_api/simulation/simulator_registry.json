@@ -23,6 +23,12 @@
       "url": "https://anaconda.org/channels/conda-forge/packages/readdy/overview",
       "package_registry": "conda-forge",
       "version": "2.0.13"
+    },
+    {
+      "name": "biosim-toolkit",
+      "url": "https://pypi.org/project/biosim-toolkit/",
+      "package_registry": "pypi",
+      "version": "0.1.0"
     }
   ]
 }

@@ -165,6 +165,7 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 * `health`: Is the service up, and which version.
 * `version`: The service's version.
 * `catalog`: The catalog: every registry entry with its...
+* `solvers`: The solvers SED-ML runs can use: each...
 * `run`: Submit a simulation.
 * `status`: Job state of one simulation, or of several...
 * `wait`: Wait until each simulation finishes; exit...
@@ -221,6 +222,21 @@ Discovery and trust, not runnability: most `listed` entries are in no environmen
 
 ```console
 $ compose-api catalog [OPTIONS]
+```
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+## `compose-api solvers`
+
+The solvers SED-ML runs can use: each one's class, environment, KiSAO algorithms (default first).
+
+**Usage**:
+
+```console
+$ compose-api solvers [OPTIONS]
 ```
 
 **Options**:

@@ -361,6 +361,31 @@ def catalog(ctx: typer.Context) -> None:
     )
 
 
+@app.command()
+@claims("solvers", "list-solvers")
+@handled
+def solvers(ctx: typer.Context) -> None:
+    """The solvers SED-ML runs can use: each one's class, environment, KiSAO algorithms (default first)."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        found = s.solvers()
+    rows = [
+        {
+            "id": x.id,
+            "name": x.name,
+            "environment": x.environment,
+            "algorithms": ", ".join(x.algorithms),
+            "address": x.address,
+        }
+        for x in found
+    ]
+    emit(
+        settings.output,
+        rows if settings.output is not Output.JSON else [x.to_dict() for x in found],
+        ["id", "name", "environment", "algorithms", "address"],
+    )
+
+
 @environments_app.command("manifest")
 @claims("environments manifest", "get-environment-manifest")
 @handled

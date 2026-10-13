@@ -52,6 +52,7 @@ from .simulation_page import SimulationPage
 from .simulation_summary import SimulationSummary
 from .simulation_summary_labels import SimulationSummaryLabels
 from .simulator_version import SimulatorVersion
+from .solver import Solver
 from .span_tree import SpanTree
 from .validation_error import ValidationError
 from .validation_error_context import ValidationErrorContext
@@ -108,6 +109,7 @@ __all__ = (
     "SimulationSummary",
     "SimulationSummaryLabels",
     "SimulatorVersion",
+    "Solver",
     "SpanTree",
     "ValidationError",
     "ValidationErrorContext",
