@@ -3,7 +3,6 @@ BioModels search, metadata and archive; a biosimulations.org project, its archiv
 run shortcuts, whose comparisons carry the original results as a reference."""
 
 import json
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -23,35 +22,8 @@ PROJECT = "Morphogenesis-checkpoint-continuous-Ciliberto-J-Cell-Biol-2003"
 
 
 @pytest.fixture(autouse=True)
-def recorded(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[list[str]]:
-    """Upstream answered from fixtures; every URL asked is listed."""
-    asked: list[str] = []
-    run = json.loads((RECORDED / "ciliberto_project.json").read_text())["simulationRun"]
-    answers: dict[str, Any] = {
-        f"{sources.BIOMODELS}/search": json.loads((RECORDED / "biomodels_search.json").read_text()),
-        f"{sources.BIOMODELS}/BIOMD0000000012": json.loads((RECORDED / "BIOMD0000000012.json").read_text()),
-        f"{sources.BIOMODELS}/model/download/BIOMD0000000012": (RECORDED / "BIOMD0000000012.omex").read_bytes(),
-        f"{sources.BIOSIMULATIONS}/projects": [json.loads((RECORDED / "ciliberto_project.json").read_text())],
-        f"{sources.BIOSIMULATIONS}/projects/{PROJECT}": json.loads((RECORDED / "ciliberto_project.json").read_text()),
-        f"{sources.BIOSIMULATIONS}/runs/{run}": json.loads((RECORDED / "ciliberto_run.json").read_text()),
-        f"{sources.BIOSIMULATIONS}/runs/{run}/download": (
-            RESOURCES / "sedml" / "Ciliberto2003.source.omex"
-        ).read_bytes(),
-        f"{sources.BIOSIMULATIONS}/results/{run}/download": (RECORDED / "ciliberto_results.zip").read_bytes(),
-    }
-
-    async def get(url: str, *, json: bool = True, params: dict[str, Any] | None = None) -> Any:
-        asked.append(url)
-        if url not in answers:
-            raise sources.SourceNotFoundError(url)
-        return answers[url]
-
-    monkeypatch.setattr(sources, "_get", get)
-    monkeypatch.setattr(sources, "_memo", {})
-    from compose_api.config import override_settings
-
-    with override_settings(sources_cache_dir=str(tmp_path / "cache")):
-        yield asked
+def recorded(recorded_sources: list[str]) -> list[str]:
+    return recorded_sources
 
 
 @pytest.mark.asyncio

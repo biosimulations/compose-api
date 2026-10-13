@@ -11,6 +11,7 @@ const items: NavigationMenuItem[][] = [
     { label: 'SED-ML', icon: 'i-lucide-scale', to: '/sedml' },
     { label: 'Simulations', icon: 'i-lucide-list', to: '/simulations' },
     { label: 'Comparisons', icon: 'i-lucide-git-compare', to: '/comparisons' },
+    { label: 'Suites', icon: 'i-lucide-list-checks', to: '/suites' },
     { label: 'Datasets', icon: 'i-lucide-files', to: '/datasets' },
     { label: 'Environments', icon: 'i-lucide-package-check', to: '/environments' },
     { label: 'Catalog', icon: 'i-lucide-boxes', to: '/catalog' }

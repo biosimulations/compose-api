@@ -1,7 +1,8 @@
 """Shared by the SED-ML route tests: runs recorded instead of submitted, a client, and the translator's presence."""
 
 import itertools
-from collections.abc import AsyncGenerator
+import json
+from collections.abc import AsyncGenerator, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -13,10 +14,14 @@ from httpx import ASGITransport
 from compose_api.api.main import app
 from compose_api.config import get_settings, override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
-from compose_api.sedml import service
+from compose_api.sedml import service, sources
 from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.models import SimulationExperiment, SimulationRequest
 from compose_api.simulation.prebuilt import prebuilt_definition
+
+RESOURCES = Path(__file__).resolve().parents[1] / "fixtures" / "resources"
+RECORDED = RESOURCES / "sources"
+PROJECT = "Morphogenesis-checkpoint-continuous-Ciliberto-J-Cell-Biol-2003"
 
 needs_translator = pytest.mark.skipif(
     not Path(get_settings().pblang_python).exists(), reason="process-bigraph-lang is not installed (make pblang)"
@@ -53,3 +58,33 @@ async def submitted(
 async def client() -> AsyncGenerator[httpx.AsyncClient]:
     async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test", timeout=120) as c:
         yield c
+
+
+@pytest.fixture
+def recorded_sources(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[list[str]]:
+    """Upstream answered from fixtures; every URL asked is listed."""
+    asked: list[str] = []
+    run = json.loads((RECORDED / "ciliberto_project.json").read_text())["simulationRun"]
+    answers: dict[str, Any] = {
+        f"{sources.BIOMODELS}/search": json.loads((RECORDED / "biomodels_search.json").read_text()),
+        f"{sources.BIOMODELS}/BIOMD0000000012": json.loads((RECORDED / "BIOMD0000000012.json").read_text()),
+        f"{sources.BIOMODELS}/model/download/BIOMD0000000012": (RECORDED / "BIOMD0000000012.omex").read_bytes(),
+        f"{sources.BIOSIMULATIONS}/projects": [json.loads((RECORDED / "ciliberto_project.json").read_text())],
+        f"{sources.BIOSIMULATIONS}/projects/{PROJECT}": json.loads((RECORDED / "ciliberto_project.json").read_text()),
+        f"{sources.BIOSIMULATIONS}/runs/{run}": json.loads((RECORDED / "ciliberto_run.json").read_text()),
+        f"{sources.BIOSIMULATIONS}/runs/{run}/download": (
+            RESOURCES / "sedml" / "Ciliberto2003.source.omex"
+        ).read_bytes(),
+        f"{sources.BIOSIMULATIONS}/results/{run}/download": (RECORDED / "ciliberto_results.zip").read_bytes(),
+    }
+
+    async def get(url: str, *, json: bool = True, params: dict[str, Any] | None = None) -> Any:
+        asked.append(url)
+        if url not in answers:
+            raise sources.SourceNotFoundError(url)
+        return answers[url]
+
+    monkeypatch.setattr(sources, "_get", get)
+    monkeypatch.setattr(sources, "_memo", {})
+    with override_settings(sources_cache_dir=str(tmp_path / "cache")):
+        yield asked

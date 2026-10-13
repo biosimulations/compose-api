@@ -16,6 +16,7 @@ serves it at **`/ui`** on the same host, and `/` redirects there.
 | `/ui/datasets`: every run's files | `list-datasets`, `get-dataset-content` |
 | `/ui/sedml`: a SED-ML archive (upload, BioModels, biosimulations.org) previewed and run on several solvers ([plan-sedml.md](plan-sedml.md)) | `preview-sedml`, `run-sedml`, `search-biomodels`, `get-biomodel-omex`, `run-biomodel`, `search-biosimulations-projects`, `get-biosimulations-omex`, `run-biosimulations-project`, `list-solvers` |
 | `/ui/comparisons`, `/ui/comparisons/{id}`: a task's runs, scores per report and data set, overlays of data sets and SED-ML plots | `list-comparisons`, `get-comparison`, `get-comparison-series`, `list-datasets`, `get-dataset-content` |
+| `/ui/suites`, `/ui/suites/{name}`: regression and reproducibility suites, their runs, agreement, references and drift from the baseline per model | `list-suites`, `list-suite-runs`, `get-suite-run`, `run-suite` |
 | `/ui/environments`: where composites run; `/ui/environments/{name}`: its image, versions, registry entries, and every class it provides with its config and ports (`#Name` opens on one) | `list-environments`, `get-environment-manifest` |
 | `/ui/catalog`: every registry entry with its curation level, pin and evidence, and the environments that run its classes ([plan-sedml.md](plan-sedml.md), "Concepts") | `list-registry-entries` |
 

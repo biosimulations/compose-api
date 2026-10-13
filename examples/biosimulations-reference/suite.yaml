@@ -1,0 +1,21 @@
+# A regression and reproducibility suite (docs/plan-sedml.md, phase 6): biosimulations.org projects whose original run
+# left results, each run on every solver here and compared with the others and with those original results (a
+# reference, not an arbiter: D7). Chosen on 2026-10-13 so that the original simulators differ (tellurium, copasi,
+# amici, pysces); each translates on both solvers (process-bigraph-lang 0.3.1).
+name: biosimulations-reference
+description: biosimulations.org projects run on COPASI and Tellurium, compared with each other and with their original results.
+solvers: [copasi, tellurium]
+tolerances: {rel_tol: 1.0e-4, abs_tol_min: 1.0e-3, abs_tol_scale: 1.0e-5}
+baseline: null
+expected: []
+sources:
+  - biosimulations:Morphogenesis-checkpoint-continuous-Ciliberto-J-Cell-Biol-2003  # tellurium 2.2.1
+  - biosimulations:Nicotinic-excitation-Edelstein-Biol-Cybern-1996  # pysces
+  - biosimulations:Repressilator-Elowitz-Nature-2000  # copasi
+  - biosimulations:BIOMD0000000022_amici_Interlocked_feedback_loops_wit  # amici
+  - biosimulations:BIOMD0000000062_amici_Dynamic_regulation_of_the_tryp  # amici
+  - biosimulations:BIOMD0000000202_copasi_Dynamic_simulation_of_the_effe  # copasi
+  - biosimulations:BIOMD0000000430_copasi_Integration_of_a_phosphatase_c  # copasi
+  - biosimulations:BIOMD0000000626_tellurium_Dynamic_modeling_of_yeast_meio  # tellurium
+  - biosimulations:BIOMD0000000073_tellurium_Toward_a_detailed_computationa  # tellurium
+  - biosimulations:BIOMD0000000009_tellurium_Ultrasensitivity_in_the_mitoge  # tellurium

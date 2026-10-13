@@ -7,7 +7,12 @@ from typing import Any, override
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from compose_api.db.tables.comparison_tables import ORMComparison, ORMComparisonMember, ORMComparisonReference
+from compose_api.db.tables.comparison_tables import (
+    ORMComparison,
+    ORMComparisonMember,
+    ORMComparisonReference,
+    ORMSuiteRun,
+)
 
 
 @dataclass
@@ -19,8 +24,32 @@ class ComparisonRow:
 
 class ComparisonsDatabaseService(ABC):
     @abstractmethod
-    async def insert(self, name: str, source: str, sedml: str, task: str, settings: dict[str, Any]) -> int:
+    async def insert(
+        self,
+        name: str,
+        source: str,
+        sedml: str,
+        task: str,
+        settings: dict[str, Any],
+        collection: str | None = None,
+        suite_run: int | None = None,
+    ) -> int:
         """A new comparison, `running`, with no members; its id."""
+
+    @abstractmethod
+    async def new_suite_run(self, collection: str) -> tuple[int, int]:
+        """The suite's next run (its number one more than the last): its id and number."""
+
+    @abstractmethod
+    async def finish_suite_run(self, run_id: int, failures: dict[str, Any]) -> None: ...
+
+    @abstractmethod
+    async def suite_runs(self, collection: str) -> list[ORMSuiteRun]:
+        """The suite's runs, newest first."""
+
+    @abstractmethod
+    async def suite_comparisons(self, collection: str, number: int) -> list[ComparisonRow]:
+        """One suite run's comparisons, with members and references."""
 
     @abstractmethod
     async def add_member(self, comparison_id: int, simulation_id: int, solver: str) -> None: ...
@@ -44,12 +73,64 @@ class ComparisonsORMExecutor(ComparisonsDatabaseService):
         self.session_maker = session_maker
 
     @override
-    async def insert(self, name: str, source: str, sedml: str, task: str, settings: dict[str, Any]) -> int:
+    async def insert(
+        self,
+        name: str,
+        source: str,
+        sedml: str,
+        task: str,
+        settings: dict[str, Any],
+        collection: str | None = None,
+        suite_run: int | None = None,
+    ) -> int:
         async with self.session_maker() as session, session.begin():
-            row = ORMComparison(name=name, source=source, sedml=sedml, task=task, settings=settings)
+            row = ORMComparison(
+                name=name, source=source, sedml=sedml, task=task, settings=settings, collection=collection,
+                suite_run=suite_run,
+            )  # fmt: skip
             session.add(row)
             await session.flush()
             return row.id
+
+    @override
+    async def new_suite_run(self, collection: str) -> tuple[int, int]:
+        async with self.session_maker() as session, session.begin():
+            last = (
+                await session.execute(select(func.max(ORMSuiteRun.number)).where(ORMSuiteRun.collection == collection))
+            ).scalar_one()
+            run = ORMSuiteRun(collection=collection, number=(last or 0) + 1)
+            session.add(run)
+            await session.flush()
+            return run.id, run.number
+
+    @override
+    async def finish_suite_run(self, run_id: int, failures: dict[str, Any]) -> None:
+        async with self.session_maker() as session, session.begin():
+            run = await session.get(ORMSuiteRun, run_id)
+            if run is not None:
+                run.status, run.failures = "submitted", failures
+
+    @override
+    async def suite_runs(self, collection: str) -> list[ORMSuiteRun]:
+        async with self.session_maker() as session:
+            rows = await session.execute(
+                select(ORMSuiteRun).where(ORMSuiteRun.collection == collection).order_by(ORMSuiteRun.number.desc())
+            )
+            return list(rows.scalars())
+
+    @override
+    async def suite_comparisons(self, collection: str, number: int) -> list[ComparisonRow]:
+        async with self.session_maker() as session:
+            ids = list(
+                (
+                    await session.execute(
+                        select(ORMComparison.id)
+                        .where(ORMComparison.collection == collection, ORMComparison.suite_run == number)
+                        .order_by(ORMComparison.id)
+                    )
+                ).scalars()
+            )
+        return [row for i in ids if (row := await self.get(i)) is not None]
 
     @override
     async def add_member(self, comparison_id: int, simulation_id: int, solver: str) -> None:

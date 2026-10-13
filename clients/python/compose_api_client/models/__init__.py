@@ -29,10 +29,12 @@ from .curation_level import CurationLevel
 from .dataset import Dataset
 from .dataset_attributes import DatasetAttributes
 from .dataset_page import DatasetPage
+from .drift import Drift
 from .entry_environment import EntryEnvironment
 from .entry_ref import EntryRef
 from .environment_summary import EnvironmentSummary
 from .environment_summary_kind import EnvironmentSummaryKind
+from .expected_failure import ExpectedFailure
 from .get_biosimulations_reference_response_get_biosimulations_reference import (
     GetBiosimulationsReferenceResponseGetBiosimulationsReference,
 )
@@ -81,6 +83,13 @@ from .simulation_summary_labels import SimulationSummaryLabels
 from .simulator_version import SimulatorVersion
 from .solver import Solver
 from .span_tree import SpanTree
+from .suite import Suite
+from .suite_run_info import SuiteRunInfo
+from .suite_run_row import SuiteRunRow
+from .suite_run_row_drift_type_0 import SuiteRunRowDriftType0
+from .suite_run_view import SuiteRunView
+from .suite_run_view_summary import SuiteRunViewSummary
+from .tolerances import Tolerances
 from .validation_error import ValidationError
 from .validation_error_context import ValidationErrorContext
 from .visibility import Visibility
@@ -115,10 +124,12 @@ __all__ = (
     "Dataset",
     "DatasetAttributes",
     "DatasetPage",
+    "Drift",
     "EntryEnvironment",
     "EntryRef",
     "EnvironmentSummary",
     "EnvironmentSummaryKind",
+    "ExpectedFailure",
     "GetBiosimulationsReferenceResponseGetBiosimulationsReference",
     "GetBiosimulationsReferenceResponseGetBiosimulationsReferenceAdditionalProperty",
     "GetSimulationTraceChromeResponseGetSimulationTraceChrome",
@@ -161,6 +172,13 @@ __all__ = (
     "SimulatorVersion",
     "Solver",
     "SpanTree",
+    "Suite",
+    "SuiteRunInfo",
+    "SuiteRunRow",
+    "SuiteRunRowDriftType0",
+    "SuiteRunView",
+    "SuiteRunViewSummary",
+    "Tolerances",
     "ValidationError",
     "ValidationErrorContext",
     "Visibility",

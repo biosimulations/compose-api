@@ -70,6 +70,8 @@ async def describe(source: Path) -> dict[str, Any]:
 async def translate(source: Path, solvers: list[Solver], workdir: Path) -> Translation:
     """Every task of the archive, compiled per solver against its environment's manifest, into `workdir`."""
     description = await describe(source)
+    if not description.get("files"):
+        raise ValueError("the archive holds no SED-ML file (its manifest declares none, and no member ends in .sedml)")
     solvers_file = workdir / "solvers.json"  # JSON: the CLI reads YAML only when PyYAML is installed
     solvers_file.write_text(json.dumps({"solvers": [s.as_translation_data() for s in solvers]}))
     out = workdir / "translated"

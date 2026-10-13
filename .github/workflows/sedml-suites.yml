@@ -1,0 +1,42 @@
+# Regression and reproducibility suites (docs/plan-sedml.md, phase 6): every suite in examples/ run on the deployed
+# service, monthly and on demand. Each run's results are read at /ui/suites/<name> (or `compose-api suites show`): the
+# solvers' agreement, the references, and drift from the suite's accepted baseline run. Run it after a release that
+# changes environments.yaml, registry/solvers.yaml, simulator_registry.json or sedml/pblang-requirements.txt.
+name: sedml-suites
+
+on:
+  schedule:
+    - cron: "17 6 1 * *"  # 06:17 UTC on the first of each month
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "One suite (blank: every suite)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      API: https://compose.cam.uchc.edu
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run the suites on the deployed service
+        run: |
+          set -euo pipefail
+          if [ -n "${{ github.event.inputs.suite }}" ]; then
+            suites="${{ github.event.inputs.suite }}"
+          else
+            suites=$(ls examples/*/suite.yaml | xargs -n1 dirname | xargs -n1 basename)
+          fi
+          for suite in $suites; do
+            echo "::group::$suite"
+            curl -fsS -X POST "$API/suites/$suite/run" | tee "run-$suite.json"
+            echo
+            echo "::endgroup::"
+            number=$(python3 -c "import json; print(json.load(open('run-$suite.json'))['number'])")
+            echo "- [$suite run $number]($API/ui/suites/$suite?run=$number)" >> "$GITHUB_STEP_SUMMARY"
+          done
