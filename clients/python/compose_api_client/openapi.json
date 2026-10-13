@@ -3635,6 +3635,22 @@
             ],
             "title": "Slurmjobid"
           },
+          "backend": {
+            "type": "string",
+            "title": "Backend",
+            "default": "slurm"
+          },
+          "external_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Id"
+          },
           "correlation_id": {
             "type": "string",
             "title": "Correlation Id"

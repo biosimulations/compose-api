@@ -36,7 +36,15 @@ class HPCDatabaseService(ABC):
         pass
 
     @abstractmethod
-    async def insert_hpcrun(self, slurmjobid: int, job_type: JobType, ref_id: int, correlation_id: str) -> HpcRun:
+    async def insert_hpcrun(
+        self,
+        slurmjobid: int | None,
+        job_type: JobType,
+        ref_id: int,
+        correlation_id: str,
+        backend: str = "slurm",
+        external_id: str | None = None,
+    ) -> HpcRun:
         """
         :param slurmjobid: (`int`) slurm job id for the associated `job_type`.
         :param job_type: (`JobType`) job type to be run. Choose one of the following:
@@ -144,7 +152,15 @@ class HPCORMExecutor(HPCDatabaseService):
         return orm_hpc_job
 
     @override
-    async def insert_hpcrun(self, slurmjobid: int, job_type: JobType, ref_id: int, correlation_id: str) -> HpcRun:
+    async def insert_hpcrun(
+        self,
+        slurmjobid: int | None,
+        job_type: JobType,
+        ref_id: int,
+        correlation_id: str,
+        backend: str = "slurm",
+        external_id: str | None = None,
+    ) -> HpcRun:
         async with self.async_session_maker() as session, session.begin():
             simulation_key = ref_id if job_type == JobType.SIMULATION else None
             simulator_key = ref_id if job_type == JobType.BUILD_CONTAINER else None
@@ -153,6 +169,8 @@ class HPCORMExecutor(HPCDatabaseService):
 
             orm_hpc_run = ORMHpcRun(
                 slurmjobid=slurmjobid,
+                backend=backend,
+                external_id=external_id if external_id is not None else (str(slurmjobid) if slurmjobid else None),
                 job_type=JobTypeDB.from_job_type(job_type),
                 status=JobStatusDB.RUNNING,
                 simulation_id=simulation_key,

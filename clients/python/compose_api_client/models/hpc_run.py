@@ -23,6 +23,8 @@ class HpcRun:
         job_type (JobType):
         sim_id (int | None):
         simulator_id (int | None):
+        backend (str | Unset):  Default: 'slurm'.
+        external_id (None | str | Unset):
         status (JobStatus | None | Unset):
         start_time (None | str | Unset):
         end_time (None | str | Unset):
@@ -36,6 +38,8 @@ class HpcRun:
     job_type: JobType
     sim_id: int | None
     simulator_id: int | None
+    backend: str | Unset = "slurm"
+    external_id: None | str | Unset = UNSET
     status: JobStatus | None | Unset = UNSET
     start_time: None | str | Unset = UNSET
     end_time: None | str | Unset = UNSET
@@ -58,6 +62,14 @@ class HpcRun:
 
         simulator_id: int | None
         simulator_id = self.simulator_id
+
+        backend = self.backend
+
+        external_id: None | str | Unset
+        if isinstance(self.external_id, Unset):
+            external_id = UNSET
+        else:
+            external_id = self.external_id
 
         status: None | str | Unset
         if isinstance(self.status, Unset):
@@ -101,6 +113,10 @@ class HpcRun:
             "sim_id": sim_id,
             "simulator_id": simulator_id,
         })
+        if backend is not UNSET:
+            field_dict["backend"] = backend
+        if external_id is not UNSET:
+            field_dict["external_id"] = external_id
         if status is not UNSET:
             field_dict["status"] = status
         if start_time is not UNSET:
@@ -143,6 +159,17 @@ class HpcRun:
             return cast(int | None, data)
 
         simulator_id = _parse_simulator_id(d.pop("simulator_id"))
+
+        backend = d.pop("backend", UNSET)
+
+        def _parse_external_id(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        external_id = _parse_external_id(d.pop("external_id", UNSET))
 
         def _parse_status(data: object) -> JobStatus | None | Unset:
             if data is None:
@@ -204,6 +231,8 @@ class HpcRun:
             job_type=job_type,
             sim_id=sim_id,
             simulator_id=simulator_id,
+            backend=backend,
+            external_id=external_id,
             status=status,
             start_time=start_time,
             end_time=end_time,

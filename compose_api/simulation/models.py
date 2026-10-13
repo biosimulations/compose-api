@@ -74,6 +74,8 @@ class JobStatus(StrEnum):
 class HpcRun(BaseModel):
     database_id: int
     slurmjobid: int | None  # Slurm job ID; None for a submission that failed before reaching SLURM
+    backend: str = "slurm"  # where the job runs: slurm, k8s (docs/plan-environment-builds.md, E1)
+    external_id: str | None = None  # its id there: the SLURM job id, or the Kubernetes Job's name
     correlation_id: str  # to correlate with the WorkerEvent, if applicable ("N/A" if not applicable)
     job_type: JobType
     sim_id: int | None

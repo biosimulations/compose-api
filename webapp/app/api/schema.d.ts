@@ -1139,6 +1139,13 @@ export interface components {
             database_id: number;
             /** Slurmjobid */
             slurmjobid: number | null;
+            /**
+             * Backend
+             * @default slurm
+             */
+            backend: string;
+            /** External Id */
+            external_id?: string | null;
             /** Correlation Id */
             correlation_id: string;
             job_type: components["schemas"]["JobType"];

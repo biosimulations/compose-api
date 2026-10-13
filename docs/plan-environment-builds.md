@@ -1,11 +1,11 @@
 # Environment builds: jobs and artifacts of their own
 
-**Status (2026-10-13): plan agreed; phase 1 next.** One PR per phase, merged with a merge commit; each PR updates the
+**Status (2026-10-13): plan agreed; phase 1 in review.** One PR per phase, merged with a merge commit; each PR updates the
 table below. A merge deploys nothing by itself: the next release's image ships it (CLAUDE.md, "Deploys are GitOps").
 
 | Phase | What | State |
 |---|---|---|
-| 1 | Runs carry their backend and external job id (`hpcrun.backend`, `hpcrun.external_id`); the monitor asks each backend about its own runs | planned |
+| 1 | Runs carry their backend and external job id (`hpcrun.backend`, `hpcrun.external_id`); the monitor asks each backend about its own runs | in review |
 | 2 | `environment_image`: an artifact record per built or pulled image (kind, location, digest, size, the run that produced it, available); "built" means an available artifact | planned |
 | 3 | The `k8s` build backend: a Kubernetes Job builds the image (privileged, scratch only) and copies it onto the shared filesystem as the service user | planned |
 | 4 | Builds invoked on their own: `POST /environments/{name}/build`, `GET /environments/{name}/images`; a run waits for an in-flight build of its definition instead of starting another | planned |
