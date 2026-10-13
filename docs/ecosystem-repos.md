@@ -100,7 +100,8 @@ requirements being well defined. Nothing below is a recommendation.
   makes them addressable. Consolidating them would trade a long list for a monorepo with fifty upstream pins.
 - **The tooling layer is where the duplication looks real.** Counting only what this project has already surveyed:
   `pbest`, `bsew` and `viva-compiler` all delegate to `process_bigraph.Composite`; `bsander`, `bigraph-schema`
-  validation, `process-bigraph-lang`'s language server and `viva-template`'s workspace lint are four partial static
+  validation, `process-bigraph-lang`'s language server (since 2026-10-12 fed this service's per-environment interface
+  manifests, a format other checkers can read) and `viva-template`'s workspace lint are four partial static
   checkers (`A3.3a` says so in the tracker); and `pbest containerize`, `bsew` and this service are three ways to get
   a composite into a container.
 - **Two of them are unreleased and idle.** `bsew` and `bsander` have no PyPI presence and have not been pushed in

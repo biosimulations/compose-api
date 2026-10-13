@@ -224,6 +224,10 @@ says should still apply: listing an image vouches for its contents, not for ever
   another repository, so any upstream commit changed the tag; it is pinned here since #182 (identity `c7e984d3…`).
   Still unpublished: the package is private and the cluster pulls with no credentials, so publishing also needs a
   visibility or credential decision.
+  *Update 2026-10-12:* still unpublished (the package holds one May image under an older identity). The
+  `registry-manifests` workflow, which reads the interfaces each environment provides, tries the service's tag and
+  otherwise builds the image from the same generated definition in CI; it does not push, so the cluster still builds
+  its own.
 - **Owner-published images (since 0.6.0, #190).** `prebuilt_simulators` maps a simulator name to an image reference;
   `POST /simulation/run?simulator=<name>` runs the job in it, pulled as `docker://<image>`, and an unlisted name is a
   400. The definition is just `Bootstrap: docker` / `From: <image>`, so its md5 identity is a function of the image

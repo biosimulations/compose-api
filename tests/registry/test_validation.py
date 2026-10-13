@@ -47,7 +47,11 @@ def document(*addresses: Any) -> bytes:
     return json.dumps(composite(*addresses)).encode()
 
 
-@pytest.mark.parametrize("fixture", ["phase_cycle.omex", "readdy.omex"])
+@pytest.mark.parametrize(
+    "fixture",
+    # the SED-ML archives address pbsim-common's solver and biosim-toolkit's steps (docs/plan-sedml.md, phase 2)
+    ["phase_cycle.omex", "readdy.omex", "sedml/Ciliberto2003.copasi.omex", "sedml/Ciliberto2003.tellurium.omex"],
+)
 def test_existing_fixtures_are_accepted(fixture: str) -> None:
     assert find_violations(RESOURCES / fixture, SimulationFileType.OMEX, load_manifest()) == []
 

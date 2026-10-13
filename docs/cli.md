@@ -87,8 +87,13 @@ $ compose-api results 4195 --extract out/
   $ compose-api simulations list                          # newest first, with status and SLURM job
   $ compose-api simulations list --status running --since 6h
   $ compose-api simulations list --simulator viva-pde-particle --limit 20
+  $ compose-api simulations list --label source:biomodels --tag repressilator
   $ compose-api simulations show 4334                     # plus how many events and datasets it recorded
   ```
+
+  Runs carry **labels**, written by the service (`source`, `environment`, `solver`, `model`, ...), and **tags** and a
+  **description** given at submission: `compose-api run x.omex --tag demo --tag repressilator --description "..."`.
+  `--label key:value` and `--tag` filter the list; each is repeatable, and all must match.
 
   The list shows only simulations you can read; once auth is in place, that's yours and the public ones.
 - `--simulator` names a prebuilt simulator image the service is configured with. Without it, the service builds one
@@ -193,6 +198,8 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 
 * `health`: Is the service up, and which version.
 * `version`: The service's version.
+* `catalog`: The catalog: every registry entry with its...
+* `solvers`: The solvers SED-ML runs can use: each...
 * `run`: Submit a simulation.
 * `status`: Job state of one simulation, or of several...
 * `wait`: Wait until each simulation finishes; exit...
@@ -201,6 +208,7 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 * `trace`: A simulation's spans as a tree, each with...
 * `build-status`: State of a simulator's container build.
 * `openapi`: The OpenAPI document: this client's...
+* `build-log`: The SLURM log of a simulator's newest...
 * `simulators`: Registered simulator versions.
 * `processes`: Registered process-bigraph processes.
 * `steps`: Registered process-bigraph steps.
@@ -208,6 +216,12 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 * `datasets`: The files runs produced.
 * `simulations`: Find simulations and their ids.
 * `auth`: Sign in through BioSimulations, sign out,...
+* `environments`: The environments documents run in, and the...
+* `sedml`: Run SED-ML archives on several solvers and...
+* `comparisons`: A SED-ML task's runs on several solvers,...
+* `biomodels`: EBI BioModels: search, describe, download,...
+* `biosimulations`: biosimulations.org projects: search,...
+* `suites`: Regression and reproducibility suites of...
 
 ## `compose-api health`
 
@@ -239,6 +253,38 @@ $ compose-api version [OPTIONS]
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
+## `compose-api catalog`
+
+The catalog: every registry entry with its curation level, and the environments that provide its classes.
+
+Discovery and trust, not runnability: most `listed` entries are in no environment (docs/plan-sedml.md).
+
+**Usage**:
+
+```console
+$ compose-api catalog [OPTIONS]
+```
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+## `compose-api solvers`
+
+The solvers SED-ML runs can use: each one's class, environment, KiSAO algorithms (default first).
+
+**Usage**:
+
+```console
+$ compose-api solvers [OPTIONS]
+```
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
 ## `compose-api run`
 
 Submit a simulation. Prints its ids; with --wait, its final state (and the files, with --download).
@@ -258,6 +304,8 @@ $ compose-api run [OPTIONS] DOCUMENT
 * `--simulator TEXT`: A prebuilt simulator image by name.
 * `--interval FLOAT`: Simulation interval passed to the runner.  [default: 1.0]
 * `--batch / --no-batch`: Submit as a batch job (smaller partition, 1 CPU).  [default: no-batch]
+* `-t, --tag TEXT`: A tag to find the run by later (repeatable).
+* `--description TEXT`: What the run is for.
 * `-w, --wait`: Wait for the job to finish; exit 1 unless it completed.
 * `-d, --download PATH`: With --wait: save the results archive into this directory.
 * `--extract / --no-extract`: With --download: unpack the archive instead of saving the zip.  [default: no-extract]
@@ -409,6 +457,25 @@ $ compose-api openapi [OPTIONS]
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
+## `compose-api build-log`
+
+The SLURM log of a simulator's newest container build.
+
+**Usage**:
+
+```console
+$ compose-api build-log [OPTIONS] SIMULATOR_ID
+```
+
+**Arguments**:
+
+* `SIMULATOR_ID`: The simulator id (a run's simulator_id).  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
 ## `compose-api simulators`
 
 Registered simulator versions.
@@ -426,6 +493,8 @@ $ compose-api simulators [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 * `list`: Simulator versions: id, definition hash,...
+* `images`: Whether a simulator's image is built: its...
+* `build`: Make a simulator's image available: pulled...
 
 ### `compose-api simulators list`
 
@@ -436,6 +505,44 @@ Simulator versions: id, definition hash, base image, creation time.
 ```console
 $ compose-api simulators list [OPTIONS]
 ```
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api simulators images`
+
+Whether a simulator's image is built: its image records and its newest build run.
+
+**Usage**:
+
+```console
+$ compose-api simulators images [OPTIONS] SIMULATOR_ID
+```
+
+**Arguments**:
+
+* `SIMULATOR_ID`: The simulator's id.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api simulators build`
+
+Make a simulator's image available: pulled or built unless it is, joining a build under way.
+
+**Usage**:
+
+```console
+$ compose-api simulators build [OPTIONS] SIMULATOR_ID
+```
+
+**Arguments**:
+
+* `SIMULATOR_ID`: The simulator's id.  [required]
 
 **Options**:
 
@@ -600,6 +707,7 @@ $ compose-api datasets [OPTIONS] COMMAND [ARGS]...
 * `list`: The files runs produced: one simulation's,...
 * `show`: Everything recorded about one dataset.
 * `get`: Download a dataset's file.
+* `file`: Download one file from inside a directory...
 
 ### `compose-api datasets list`
 
@@ -660,6 +768,27 @@ $ compose-api datasets get [OPTIONS] DATASET_ID
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
+### `compose-api datasets file`
+
+Download one file from inside a directory dataset.
+
+**Usage**:
+
+```console
+$ compose-api datasets file [OPTIONS] DATASET_ID SUBPATH
+```
+
+**Arguments**:
+
+* `DATASET_ID`: The dataset id (a directory dataset: a results bundle or zarr).  [required]
+* `SUBPATH`: The file inside it, e.g. .zattrs or u/0.0.  [required]
+
+**Options**:
+
+* `-O, --out PATH`: Write it here (a file, or a directory). Default: here.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
 ## `compose-api simulations`
 
 Find simulations and their ids.
@@ -695,6 +824,8 @@ $ compose-api simulations list [OPTIONS]
 * `--status TEXT`: Only this state: submitting, running, completed, failed, timeout, ...
 * `--simulator TEXT`: Only this prebuilt simulator (name), or a container-definition hash prefix.
 * `--since TEXT`: Only those created since: 30m, 6h, 2d, 1w, or an ISO time.
+* `--label TEXT`: Only those with this label, key:value, e.g. source:biomodels (repeatable, all must match).
+* `--tag TEXT`: Only those with this tag (repeatable, all must match).
 * `--limit INTEGER`: At most this many.  [default: 50]
 * `--offset INTEGER`: Skip this many (for the next page).  [default: 0]
 * `--json`: Print JSON (the same as --output json).
@@ -794,6 +925,583 @@ Who the service sees: the identity behind --token, COMPOSE_API_TOKEN, or auth lo
 ```console
 $ compose-api auth whoami [OPTIONS]
 ```
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+## `compose-api environments`
+
+The environments documents run in, and the process interfaces each provides.
+
+**Usage**:
+
+```console
+$ compose-api environments [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `list`: Environments: the `--simulator` to run in...
+* `manifest`: An environment's interface manifest: its...
+* `headers`: An environment's interfaces as .pblang...
+* `images`: Whether an environment's current image is...
+* `build`: Make an environment's current image...
+
+### `compose-api environments list`
+
+Environments: the `--simulator` to run in each, its image, and whether its manifest is current.
+
+**Usage**:
+
+```console
+$ compose-api environments list [OPTIONS]
+```
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments manifest`
+
+An environment's interface manifest: its steps and processes, their config schemas and ports.
+
+`--output json` prints the manifest itself (pbg-interfaces/1), which other tools read as it is.
+
+**Usage**:
+
+```console
+$ compose-api environments manifest [OPTIONS] NAME
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments headers`
+
+An environment's interfaces as .pblang header files: what a composite imports (`import module.{Name};`).
+
+Prints every module's file, or writes them into `--out`; `--output json` prints them with each class's
+declaration.
+
+**Usage**:
+
+```console
+$ compose-api environments headers [OPTIONS] NAME
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+
+**Options**:
+
+* `-o, --out PATH`: Write one &lt;module&gt;.pbl per module into this directory.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments images`
+
+Whether an environment's current image is built: its image records and its newest build run.
+
+**Usage**:
+
+```console
+$ compose-api environments images [OPTIONS] NAME
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments build`
+
+Make an environment's current image available: pulled or built unless it is, joining a build under way.
+
+Returns at once; `environments images` follows the build.
+
+**Usage**:
+
+```console
+$ compose-api environments build [OPTIONS] NAME
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+## `compose-api sedml`
+
+Run SED-ML archives on several solvers and compare them.
+
+**Usage**:
+
+```console
+$ compose-api sedml [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `preview`: Translate an archive without running it:...
+* `run`: Run each task once per solver; prints each...
+
+### `compose-api sedml preview`
+
+Translate an archive without running it: its tasks, the solvers that accept each, and the findings.
+
+**Usage**:
+
+```console
+$ compose-api sedml preview [OPTIONS] ARCHIVE
+```
+
+**Arguments**:
+
+* `ARCHIVE`: A COMBINE/OMEX archive with SED-ML and its models.  [required]
+
+**Options**:
+
+* `-s, --solver TEXT`: A solver id (repeatable); all when omitted.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api sedml run`
+
+Run each task once per solver; prints each task's comparison and its runs.
+
+**Usage**:
+
+```console
+$ compose-api sedml run [OPTIONS] ARCHIVE
+```
+
+**Arguments**:
+
+* `ARCHIVE`: A COMBINE/OMEX archive with SED-ML and its models.  [required]
+
+**Options**:
+
+* `-s, --solver TEXT`: A solver id (repeatable); all when omitted.
+* `--task TEXT`: A SED-ML task id (repeatable); all when omitted.
+* `-t, --tag TEXT`: A tag for every run (repeatable).
+* `--description TEXT`: What the runs are for.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+## `compose-api comparisons`
+
+A SED-ML task's runs on several solvers, and how they compare.
+
+**Usage**:
+
+```console
+$ compose-api comparisons [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `list`: Comparisons, newest first.
+* `show`: One comparison: its runs, and per report...
+* `series`: One report's columns from each run and...
+
+### `compose-api comparisons list`
+
+Comparisons, newest first.
+
+**Usage**:
+
+```console
+$ compose-api comparisons list [OPTIONS]
+```
+
+**Options**:
+
+* `--source TEXT`: Only this source, e.g. upload:x.omex.
+* `--limit INTEGER`: At most this many.  [default: 25]
+* `--offset INTEGER`: Skip this many.  [default: 0]
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api comparisons show`
+
+One comparison: its runs, and per report the worst data set once every run has finished.
+
+**Usage**:
+
+```console
+$ compose-api comparisons show [OPTIONS] COMPARISON_ID
+```
+
+**Arguments**:
+
+* `COMPARISON_ID`: The comparison id.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api comparisons series`
+
+One report's columns from each run and each reference (JSON; a table lists what is there).
+
+**Usage**:
+
+```console
+$ compose-api comparisons series [OPTIONS] COMPARISON_ID
+```
+
+**Arguments**:
+
+* `COMPARISON_ID`: The comparison id.  [required]
+
+**Options**:
+
+* `--report TEXT`: The SED-ML report id.  [required]
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+## `compose-api biomodels`
+
+EBI BioModels: search, describe, download, run.
+
+**Usage**:
+
+```console
+$ compose-api biomodels [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `search`: Search EBI BioModels (manually curated...
+* `show`: One BioModels entry: name, curation...
+* `get`: Download the entry's COMBINE archive.
+* `run`: Run the entry's SED-ML once per solver;...
+
+### `compose-api biomodels search`
+
+Search EBI BioModels (manually curated models unless --all).
+
+**Usage**:
+
+```console
+$ compose-api biomodels search [OPTIONS] QUERY
+```
+
+**Arguments**:
+
+* `QUERY`: Words to search for.  [required]
+
+**Options**:
+
+* `--limit INTEGER`: At most this many.  [default: 20]
+* `--all`: Not only manually curated models.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api biomodels show`
+
+One BioModels entry: name, curation status, latest revision.
+
+**Usage**:
+
+```console
+$ compose-api biomodels show [OPTIONS] MODEL_ID
+```
+
+**Arguments**:
+
+* `MODEL_ID`: e.g. BIOMD0000000012  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api biomodels get`
+
+Download the entry's COMBINE archive.
+
+**Usage**:
+
+```console
+$ compose-api biomodels get [OPTIONS] MODEL_ID
+```
+
+**Arguments**:
+
+* `MODEL_ID`: e.g. BIOMD0000000012  [required]
+
+**Options**:
+
+* `-O, --out PATH`: Write the archive here (a file or a directory).
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api biomodels run`
+
+Run the entry's SED-ML once per solver; prints each task's comparison and its runs.
+
+**Usage**:
+
+```console
+$ compose-api biomodels run [OPTIONS] MODEL_ID
+```
+
+**Arguments**:
+
+* `MODEL_ID`: e.g. BIOMD0000000012  [required]
+
+**Options**:
+
+* `-s, --solver TEXT`: A solver id (repeatable); all when omitted.
+* `-t, --tag TEXT`: A tag for every run (repeatable).
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+## `compose-api biosimulations`
+
+biosimulations.org projects: search, describe, download, run.
+
+**Usage**:
+
+```console
+$ compose-api biosimulations [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `search`: biosimulations.org projects whose id...
+* `show`: One project: its run and the simulator...
+* `get`: Download the project's archive.
+* `reference`: The project's original results: each...
+* `run`: Run the project's SED-ML once per solver,...
+
+### `compose-api biosimulations search`
+
+biosimulations.org projects whose id contains the query.
+
+**Usage**:
+
+```console
+$ compose-api biosimulations search [OPTIONS] [QUERY]
+```
+
+**Arguments**:
+
+* `[QUERY]`: Part of a project id.
+
+**Options**:
+
+* `--limit INTEGER`: At most this many.  [default: 20]
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api biosimulations show`
+
+One project: its run and the simulator that ran it.
+
+**Usage**:
+
+```console
+$ compose-api biosimulations show [OPTIONS] PROJECT_ID
+```
+
+**Arguments**:
+
+* `PROJECT_ID`: The project id.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api biosimulations get`
+
+Download the project's archive.
+
+**Usage**:
+
+```console
+$ compose-api biosimulations get [OPTIONS] PROJECT_ID
+```
+
+**Arguments**:
+
+* `PROJECT_ID`: The project id.  [required]
+
+**Options**:
+
+* `-O, --out PATH`: Write the archive here (a file or a directory).
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api biosimulations reference`
+
+The project's original results: each report's labels and number of points (--output json for the values).
+
+**Usage**:
+
+```console
+$ compose-api biosimulations reference [OPTIONS] PROJECT_ID
+```
+
+**Arguments**:
+
+* `PROJECT_ID`: The project id.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api biosimulations run`
+
+Run the project's SED-ML once per solver, its original results as the reference.
+
+**Usage**:
+
+```console
+$ compose-api biosimulations run [OPTIONS] PROJECT_ID
+```
+
+**Arguments**:
+
+* `PROJECT_ID`: The project id.  [required]
+
+**Options**:
+
+* `-s, --solver TEXT`: A solver id (repeatable); all when omitted.
+* `-t, --tag TEXT`: A tag for every run (repeatable).
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+## `compose-api suites`
+
+Regression and reproducibility suites of SED-ML models.
+
+**Usage**:
+
+```console
+$ compose-api suites [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `list`: The suites: their sources, solvers and...
+* `runs`: A suite's runs, newest first.
+* `show`: One suite run: per source, whether the...
+* `run`: Run every source of the suite on its...
+
+### `compose-api suites list`
+
+The suites: their sources, solvers and accepted baseline run.
+
+**Usage**:
+
+```console
+$ compose-api suites list [OPTIONS]
+```
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api suites runs`
+
+A suite's runs, newest first.
+
+**Usage**:
+
+```console
+$ compose-api suites runs [OPTIONS] NAME
+```
+
+**Arguments**:
+
+* `NAME`: The suite, e.g. biomodels-ode-sample.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api suites show`
+
+One suite run: per source, whether the solvers agree, match references, and drifted from the baseline.
+
+**Usage**:
+
+```console
+$ compose-api suites show [OPTIONS] NAME NUMBER
+```
+
+**Arguments**:
+
+* `NAME`: The suite, e.g. biomodels-ode-sample.  [required]
+* `NUMBER`: The run's number.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api suites run`
+
+Run every source of the suite on its solvers; prints the new run's number.
+
+**Usage**:
+
+```console
+$ compose-api suites run [OPTIONS] NAME
+```
+
+**Arguments**:
+
+* `NAME`: The suite, e.g. biomodels-ode-sample.  [required]
 
 **Options**:
 

@@ -63,7 +63,8 @@ tools, creating a growing catalog of interoperable components."*
 
 **G5. An adapter registry exists, with unit normalisation and concentration-to-count conversion available as
 processes a composite can wire in.** Adapters are a category of the same registry, on the same curation levels, and
-they require declared port types and units, which no registry stores today.
+they require declared port types and units. Port types are now stored per environment (2026-10-12,
+`compose_api/registry/manifests/`, [plan-authoring.md](plan-authoring.md)); units are not, in any registry.
 Trace: `A3.3e` (in-progress). Year 2 committed: *"development of an adapter registry will begin, targeting common
 translation challenges such as unit normalization and conversions between concentrations and counts."*
 

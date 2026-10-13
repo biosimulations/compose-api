@@ -4,6 +4,10 @@
 # Changes land by pull request. Raising an entry's level needs the evidence for the new level in `evidence`.
 # An address is accepted on HPC only if its module sits under one of an entry's `module_roots`, that entry is at
 # level `tested` or higher, and the entry is part of the bundle the service runs (`registry_env`).
+#
+# `bundles` names the environments an entry is installed in (environments.yaml): `registry_env`, or a prebuilt
+# image's simulator name. CI reads the interfaces each environment provides, over the module roots of its entries,
+# into manifests/<environment>.json (docs/plan-authoring.md); every component there must belong to an entry here.
 
 entries:
   - id: pbsim-common
@@ -37,3 +41,38 @@ entries:
         (tests/simulators/test_readdy.py with the readdy.omex fixture), which runs ReaddyActinMembrane and
         SimulariumEmitter inside the built registry_env image, not the package's own test suite. Phase B of
         decision 5 replaces this with a computed level.
+
+  - id: viva-pde-particle
+    package: viva-pde-particle
+    source: https://github.com/vivarium-collective/viva-pde-particle
+    # the commit behind the deployed image (PREBUILT_SIMULATORS pins its digest, tagged sha-fe20abc)
+    commit: fe20abce60eb627e627c7dcde07950d37131ef32
+    module_roots:
+      - viva_pde_particle
+    level: tested
+    # its own prebuilt image, not registry_env: it runs only with `simulator=viva-pde-particle`
+    bundles:
+      - viva-pde-particle
+    evidence:
+      - >-
+        Raised to tested on 2026-10-12. Its image, the environment it runs in here, is built and checked by the
+        package's own CI on every push to main (.github/workflows/compose-image.yml): a smoke ensemble in Docker,
+        then this service's exact job contract under `apptainer run --compat` with /experiment bound, before the
+        image is pushed. The pinned digest passed both.
+
+  - id: biosim-toolkit
+    package: biosim-toolkit
+    source: https://github.com/biosimulations/biosim-toolkit
+    version: "0.1.0"
+    module_roots:
+      - biosim_toolkit
+    level: tested
+    bundles:
+      - registry_env
+    evidence:
+      - >-
+        Added at tested on 2026-10-13 (docs/plan-sedml.md, D11). Its CI runs translated SED-ML archives
+        (BIOMD0000000012, Ciliberto 2003) end to end the way this service's runner does, on pbsim-common's COPASI and
+        Tellurium steps, with registry_env's process-bigraph 1.0.5 and bigraph-schema 1.0.14, and checks that the two
+        solvers agree. The gate here, as for pbsim-common, is this repository's cluster test inside the built
+        registry_env image (tests/simulators/test_sedml.py).

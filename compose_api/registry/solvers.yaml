@@ -1,0 +1,25 @@
+# Solvers: which implementation of a role a SED-ML run uses (docs/plan-sedml.md, "Concepts"). A solver is a
+# role-specific view of a class an environment provides: the class's address, the environment it runs in, the KiSAO
+# algorithms it implements (its default first), and the kinds of SBML variable its result has columns for.
+#
+# process-bigraph-lang's `sedml translate` fills the TimeCourseSolver role with each solver's class and checks it
+# against the environment's manifest; tests/registry/test_solvers.py checks every solver here against the committed
+# manifests. Changes land by pull request.
+
+solvers:
+  - id: copasi
+    name: COPASI (LSODA)
+    role: TimeCourseSolver
+    environment: registry_env
+    address: local:pbsim_common.simulators.copasi_process.CopasiUTCStep
+    # COPASI's deterministic method is the LSODA/LSODAR hybrid; LSODA itself is accepted too
+    algorithms: ["KISAO:0000560", "KISAO:0000088"]
+    provides: [species]
+
+  - id: tellurium
+    name: Tellurium (CVODE)
+    role: TimeCourseSolver
+    environment: registry_env
+    address: local:pbsim_common.simulators.tellurium_process.TelluriumUTCStep
+    algorithms: ["KISAO:0000019"]
+    provides: [species]

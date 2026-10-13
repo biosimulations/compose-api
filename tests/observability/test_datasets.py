@@ -2,6 +2,7 @@
 feeder wins (docs/plan-observability.md O5, O6)."""
 
 from compose_api.observability.datasets import (
+    DATASET_KINDS,
     ORIGIN_EVENT,
     ORIGIN_MANIFEST,
     ArtifactRecord,
@@ -53,6 +54,51 @@ def test_artifact_events_become_records() -> None:
     assert records[0].sha256 == SHA and records[0].size_bytes == 10
     assert records[1].kind == "table" and records[1].attributes == {"n": 3}
     assert records[2].available is False
+
+
+def test_a_producers_view_hint_is_kept() -> None:
+    (record,) = artifact_records([
+        _event(
+            "viva_pde_particle",
+            uri="output/run.fenics",
+            kind="results-bundle",
+            view={"variable": "u"},
+            attributes={"web": 1},
+        ),
+    ])
+    assert record.attributes == {"web": 1, "view": {"variable": "u"}}
+
+
+def test_bundles_and_stores_have_their_own_kind_and_media_type() -> None:
+    assert (infer_kind("output/run.fenics"), infer_media_type("output/run.fenics")) == (
+        "results-bundle",
+        "application/vnd.vcell.results-bundle+zarr",
+    )
+    assert infer_media_type("output/t.zarr") == "application/x-zarr"
+
+
+def test_the_submitted_input_is_a_dataset_of_kind_input() -> None:
+    (record,) = artifact_records([
+        _event(
+            "compose_api.job",
+            uri="x.pbg",
+            kind="input",
+            name="Simulation input",
+            bytes=12,
+            sha256=SHA,
+            attributes={"file_type": "pbg", "end_time": 10.0, "batch": False},
+        ),
+    ])
+    row = merge(None, record)
+    assert (row.path, row.kind, row.media_type, row.display_name) == (
+        "x.pbg",
+        "input",
+        "application/json",
+        "Simulation input",
+    )
+    assert row.attributes == {"file_type": "pbg", "end_time": 10.0, "batch": False}
+    assert infer_media_type("x.omex") == "application/zip"
+    assert "input" in DATASET_KINDS
 
 
 def test_a_simulators_event_wins_and_the_manifest_fills_in() -> None:

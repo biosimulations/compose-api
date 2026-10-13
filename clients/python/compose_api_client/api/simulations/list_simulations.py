@@ -17,6 +17,8 @@ def _get_kwargs(
     status: ListSimulationsStatusType0 | None | Unset = UNSET,
     simulator: None | str | Unset = UNSET,
     since: datetime.datetime | None | Unset = UNSET,
+    label: list[str] | None | Unset = UNSET,
+    tag: list[str] | None | Unset = UNSET,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
 ) -> dict[str, Any]:
@@ -47,6 +49,26 @@ def _get_kwargs(
     else:
         json_since = since
     params["since"] = json_since
+
+    json_label: list[str] | None | Unset
+    if isinstance(label, Unset):
+        json_label = UNSET
+    elif isinstance(label, list):
+        json_label = label
+
+    else:
+        json_label = label
+    params["label"] = json_label
+
+    json_tag: list[str] | None | Unset
+    if isinstance(tag, Unset):
+        json_tag = UNSET
+    elif isinstance(tag, list):
+        json_tag = tag
+
+    else:
+        json_tag = tag
+    params["tag"] = json_tag
 
     params["limit"] = limit
 
@@ -99,6 +121,8 @@ def sync_detailed(
     status: ListSimulationsStatusType0 | None | Unset = UNSET,
     simulator: None | str | Unset = UNSET,
     since: datetime.datetime | None | Unset = UNSET,
+    label: list[str] | None | Unset = UNSET,
+    tag: list[str] | None | Unset = UNSET,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
 ) -> Response[HTTPValidationError | SimulationPage]:
@@ -109,6 +133,10 @@ def sync_detailed(
         simulator (None | str | Unset): Only this prebuilt simulator (by name), or container
             definitions with this hash prefix
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
+        label (list[str] | None | Unset): Only simulations with this label, as key:value;
+            repeatable, all must match. Keys: source, environment, solver, model, project, sedml_task,
+            comparison, collection, suite_run
+        tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
 
@@ -124,6 +152,8 @@ def sync_detailed(
         status=status,
         simulator=simulator,
         since=since,
+        label=label,
+        tag=tag,
         limit=limit,
         offset=offset,
     )
@@ -141,6 +171,8 @@ def sync(
     status: ListSimulationsStatusType0 | None | Unset = UNSET,
     simulator: None | str | Unset = UNSET,
     since: datetime.datetime | None | Unset = UNSET,
+    label: list[str] | None | Unset = UNSET,
+    tag: list[str] | None | Unset = UNSET,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
 ) -> HTTPValidationError | SimulationPage | None:
@@ -151,6 +183,10 @@ def sync(
         simulator (None | str | Unset): Only this prebuilt simulator (by name), or container
             definitions with this hash prefix
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
+        label (list[str] | None | Unset): Only simulations with this label, as key:value;
+            repeatable, all must match. Keys: source, environment, solver, model, project, sedml_task,
+            comparison, collection, suite_run
+        tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
 
@@ -167,6 +203,8 @@ def sync(
         status=status,
         simulator=simulator,
         since=since,
+        label=label,
+        tag=tag,
         limit=limit,
         offset=offset,
     ).parsed
@@ -178,6 +216,8 @@ async def asyncio_detailed(
     status: ListSimulationsStatusType0 | None | Unset = UNSET,
     simulator: None | str | Unset = UNSET,
     since: datetime.datetime | None | Unset = UNSET,
+    label: list[str] | None | Unset = UNSET,
+    tag: list[str] | None | Unset = UNSET,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
 ) -> Response[HTTPValidationError | SimulationPage]:
@@ -188,6 +228,10 @@ async def asyncio_detailed(
         simulator (None | str | Unset): Only this prebuilt simulator (by name), or container
             definitions with this hash prefix
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
+        label (list[str] | None | Unset): Only simulations with this label, as key:value;
+            repeatable, all must match. Keys: source, environment, solver, model, project, sedml_task,
+            comparison, collection, suite_run
+        tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
 
@@ -203,6 +247,8 @@ async def asyncio_detailed(
         status=status,
         simulator=simulator,
         since=since,
+        label=label,
+        tag=tag,
         limit=limit,
         offset=offset,
     )
@@ -218,6 +264,8 @@ async def asyncio(
     status: ListSimulationsStatusType0 | None | Unset = UNSET,
     simulator: None | str | Unset = UNSET,
     since: datetime.datetime | None | Unset = UNSET,
+    label: list[str] | None | Unset = UNSET,
+    tag: list[str] | None | Unset = UNSET,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
 ) -> HTTPValidationError | SimulationPage | None:
@@ -228,6 +276,10 @@ async def asyncio(
         simulator (None | str | Unset): Only this prebuilt simulator (by name), or container
             definitions with this hash prefix
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
+        label (list[str] | None | Unset): Only simulations with this label, as key:value;
+            repeatable, all must match. Keys: source, environment, solver, model, project, sedml_task,
+            comparison, collection, suite_run
+        tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
 
@@ -245,6 +297,8 @@ async def asyncio(
             status=status,
             simulator=simulator,
             since=since,
+            label=label,
+            tag=tag,
             limit=limit,
             offset=offset,
         )

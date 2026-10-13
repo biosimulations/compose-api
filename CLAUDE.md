@@ -39,6 +39,11 @@ make check-clients    # fails if either is stale; part of `make check`, so CI en
 LIB_DIR=<compose-api-client checkout>/compose_api_client make clients   # also writes the external 0.2.x repo
 ```
 
+Web UI (`webapp/`, Nuxt 4 + Nuxt UI static SPA served by the API at `/ui`; [`docs/webapp.md`](docs/webapp.md)):
+`make webapp-install`, `make webapp-dev` (:4200/ui/ against `make run`; `COMPOSE_API_URL=` for another API), `make webapp-check`, `make webapp-build`.
+`webapp/app/api/schema.d.ts` is generated from the spec (`make clients` regenerates it; CI fails when stale) — never
+hand-edit. Use standard libraries there (VueUse, openapi-fetch, PapaParse, Nuxt UI components) over ad hoc code.
+
 Command line: `uv run compose-api --help` (the `compose-api-client[cli]` extra; guide and reference in
 [`docs/cli.md`](docs/cli.md), `make cli-docs` regenerates the reference). Every API operation must be claimed by a
 command (`@claims` in `compose_api_client/cli/commands.py`); `tests/client/test_cli.py` fails otherwise, so a new
@@ -54,7 +59,22 @@ Client release: publishing a GitHub release also publishes `compose-api-client` 
 PyPI via `.github/workflows/publish-client.yml`, a trusted publisher (OIDC, environment `pypi`; setup in
 [`docs/plan-cli.md`](docs/plan-cli.md) §D).
 
-Release & deploy: `make tag` (`tag.sh` bumps `pyproject.toml` + `compose_api/version.py`, commits, tags, pushes — the tag push triggers the image build workflow); `kustomize/scripts/build_and_push.sh` builds/pushes `ghcr.io/biosimulations/compose-api`; `make deploy` applies `kustomize/overlays/compose-api-rke`. Publishing a GitHub *release* (separate from the tag push) additionally archives it to Zenodo under concept DOI 10.5281/zenodo.21127421 via the reusable `virtualcell/zenodo-maint` workflow; keep `CITATION.cff` and `.zenodo.json` in step with the authors and version, as a weekly drift check flags mismatches.
+Release & deploy: `make tag` (`tag.sh` bumps `pyproject.toml` + `compose_api/version.py`, commits, tags, pushes — the tag push triggers the image build workflow); `kustomize/scripts/build_and_push.sh` builds/pushes `ghcr.io/biosimulations/compose-api`.
+
+**Deploys are GitOps.** Flux on the vxrails RKE2 cluster (configured in
+[`virtualcell/vcell-fluxcd`](https://github.com/virtualcell/vcell-fluxcd), `clusters/vxrails/compose-api-*.yaml`) watches
+this repo's `main`. It applies `kustomize/overlays/compose-api-rke` within a minute of a merge, with prune on. So
+**merging to main deploys**: a pin bump in `kustomize/config/compose-api-rke/api.env`, or a release PR's `newTag`.
+- **Image before tag:** push the release tag on the release PR's head commit and let the image build finish *before*
+  merging. Otherwise Flux rolls out a tag that does not exist yet. The rolling update keeps the old pod serving, but
+  the Kustomization reports unhealthy until the image appears.
+- **Status / force a sync** (needs VPN): `flux get kustomization compose-api`;
+  `flux reconcile kustomization compose-api --with-source`.
+- **Manual fallback:** `make deploy` (`KUBECONFIG=~/.kube/kubeconfig_vxrails.yaml`). Flux reverts anything that
+  diverges from `main` at its next reconcile.
+- **Any API pod restart drops submissions still in flight:** a run still pulling or building its container loses its
+  task (#238). The job monitor fails it once its dispatch heartbeat is `submission_stale_seconds` old, with a reason
+  saying to resubmit; nothing resubmits it. Avoid deploying while a first run of a new simulator image is in progress. Zenodo archiving is a **monthly rollup** (`zenodo-archive.yml`, 1st of the month): the reusable `virtualcell/zenodo-maint` workflow archives the latest GitHub *release*, if it isn't archived yet, under concept DOI 10.5281/zenodo.21127421. Run it by hand to archive now. Tags alone are never archived, and a published release also publishes the client to PyPI (above); keep `CITATION.cff` and `.zenodo.json` in step with the authors and version, as a weekly drift check flags mismatches.
 
 ## Test environment
 
@@ -110,7 +130,7 @@ themselves when the service is `None`. Two consequences worth knowing:
 **Routers** are registered by name from `APP_ROUTERS` in `api/main.py` via `importlib`, and each module must expose a
 module-level `config = RouterConfig(router=APIRouter(), prefix=..., dependencies=[])`. Registration failures are logged
 and swallowed — an import error in a router silently drops its endpoints rather than failing startup. Prefixes:
-`/simulation` (submit), `/results` (status, results file, events, trace), `/core` (simulator/process/step catalogs),
+`/simulation` (submit), `/results` (status, results file, events, trace), `/core` (deprecated Postgres simulator/process/step lists),
 `/curated` (pre-baked copasi/tellurium runs), `/simulations` (listing), `/datasets` (a run's files). Every endpoint sets an explicit `operation_id` because those become the generated
 client's method names.
 
@@ -154,6 +174,34 @@ runs means a manifest entry *and* the library in `simulation/simulator_registry.
 generated (`uv run python -m compose_api.registry.catalog`, read-only against GitHub) and lists every vivarium-collective
 catalog wrapper at `listed`; never hand-edit it — raising an entry means adding it to `manifest.yaml`, which wins.
 
+**Environments and interface manifests.** `registry/environments.yaml` lists the environments documents run in
+(`registry_env`, and each prebuilt image by its simulator name) and how to enter each one's Python.
+`registry/manifests/<name>.json` is generated, never hand-edited: `uv run python -m compose_api.registry.generate`
+(Docker; CI's `registry-manifests.yml` opens a PR) runs process-bigraph-lang's standalone describe script, pinned in
+`environments.yaml`, inside each image over the module roots of the entries whose `bundles` name it. The format is the
+shared `pbg-interfaces/1`. `GET /registry/environments[/{name}/manifest]` serves them to the web app. A test fails when
+a committed manifest was read from another image than the one deployed (regenerate it) or lists an unregistered
+component. Plan: `docs/plan-authoring.md`. `GET /registry/entries` is the catalog (every entry, its level, the
+environments providing its classes); catalog = discovery and trust, environment = execution (`docs/plan-sedml.md`).
+
+**Labels, tags, description** (`simulation/labels.py`, `docs/plan-sedml.md`). The service writes `simulation.labels`
+under reserved keys only (`source`, `environment`, `solver`, `model`, ...); submitters give `tags` and a
+`description` at submission (runs are anonymous; nothing edits them). `GET /simulations?label=k:v&tag=t` filters by
+JSONB/array containment (GIN indexes). Add a key to `LABEL_KEYS` before writing it.
+
+**Solvers** (`registry/solvers.yaml`, `registry/solvers.py`): the classes a SED-ML run can fill the TimeCourseSolver role
+with, per environment, with their KiSAO algorithms; served at `GET /registry/solvers`. A solver's class must be in its
+environment's committed manifest at `tested` or above (`tests/registry/test_solvers.py`). The SED-ML adapter steps are
+biosim-toolkit's (`local:biosim_toolkit.sedml.*`, installed in registry_env).
+
+**SED-ML runs** (`compose_api/sedml/`, routers `sedml.py`, `comparisons.py`; `docs/plan-sedml.md`). process-bigraph-lang
+needs bigraph-schema 1.6, so it is NOT a dependency of this environment: `translator.py` runs its CLI with
+`settings.pblang_python` (`.pblang/`; `make pblang`, CI and the API image install `sedml/pblang-requirements.txt`).
+`/sedml/run` submits one run per task and solver (the original archive rides along as `source.omex`, the
+`sedml-omex` dataset) grouped by a `comparison`, computed from the members' report CSVs when all have finished.
+Tests needing the translator skip without `.pblang/`. Suites: `examples/<name>/suite.yaml` (`sedml/suites.py`, `sedml/suite_runs.py`, `/suites`),
+rerun monthly by `.github/workflows/sedml-suites.yml`; a baseline is accepted by a PR setting `baseline`.
+
 **Job tracking.** An `HpcRun` row links a SLURM job id, a `correlation_id`, and a `JobType`
 (`SIMULATION` / `BUILD_CONTAINER`). `JobMonitor` updates status two ways: a 5-second polling loop reconciling
 `squeue`/`sacct` against running `HpcRun` rows, and the event ingester (below) on the same loop. The NATS path and its
@@ -171,16 +219,20 @@ parsing, span folding and Chrome Trace renderer are ported from viva-core.
 
 **Datasets (`observability/datasets.py`, `api/routers/datasets.py`).** Every `artifact.written` event becomes a
 `dataset` row (`DatasetsDatabaseService.register`, called by the ingester). The job script emits one per file under
-`output/` (kept now) and for `results.zip`, with size and sha256, and one for the SLURM log `job.out` (kind
+`output/` (kept now) and for `results.zip`, with size and sha256, one at job start for the submitted input `<experiment_id>.<suffix>` (kind `input`, with the request's file
+type, end time and batch flag; `python -m compose_api.observability.backfill_inputs` registers older runs'), and one for the SLURM log `job.out` (kind
 `log`, which simulation jobs now write in their experiment directory instead of `htclogs/`). A simulator's own event (any component but
 `compose_api.job`) wins over that manifest. Paths are relative to the experiment directory, and
-`resolve_content_path` keeps content reads inside it. Listings filter with `authorization.readable_clause`.
+`resolve_content_path` keeps content reads inside it. A zarr store (`*.fenics` results bundle, `*.zarr`) is ONE
+directory dataset: the manifest announces the directory, `/content` answers 409, and its files are read one at a time
+through `/datasets/{id}/files/{subpath}` (Range, ETag, `no-cache`), so the web UI's viewers fetch chunks with no
+server-side reduction ([`docs/plan-viewers.md`](docs/plan-viewers.md)). Listings filter with `authorization.readable_clause`.
 
 **Persistence.** `DatabaseServiceSQL` (async SQLAlchemy + asyncpg) is a facade over three ORM executors:
 `get_simulator_db()`, `get_hpc_db()`, `get_package_db()` (`compose_api/db/services/`, tables in `db/tables/`). Startup
 calls `create_db()`: `metadata.create_all` (new tables), a stamp for a database alembic doesn't track yet (head if it
 was empty, else the pre-tracking baseline), then `alembic upgrade head`. `create_all` never adds a column, so **a new
-column on an existing table needs an alembic revision**; write it idempotently (`ADD COLUMN IF NOT EXISTS`), because a
+column on an existing table, or a new member of a model enum, needs an alembic revision**; write it idempotently (`ADD COLUMN IF NOT EXISTS`, `ADD VALUE IF NOT EXISTS`), because a
 fresh database already has it (`tests/common/test_migrations.py`). MongoDB settings and fixtures exist but the live path
 is Postgres.
 

@@ -32,7 +32,18 @@ from compose_api_client.api.authentication import get_auth_me
 from compose_api_client.api.biosim_api import check_health_health_get, get_version_version_get
 from compose_api_client.api.compute import get_processes_list, get_simulator_list, get_steps_list
 from compose_api_client.api.curated import run_copasi, run_tellurium
-from compose_api_client.api.datasets import get_dataset, get_dataset_content, list_datasets
+from compose_api_client.api.datasets import get_dataset, get_dataset_content, get_dataset_file, list_datasets
+from compose_api_client.api.registry import (
+    build_environment,
+    build_simulator,
+    get_environment_headers,
+    get_environment_images,
+    get_environment_manifest,
+    get_simulator_images,
+    list_environments,
+    list_registry_entries,
+    list_solvers,
+)
 from compose_api_client.api.results import (
     get_simulation_events,
     get_simulation_results_file,
@@ -40,29 +51,68 @@ from compose_api_client.api.results import (
     get_simulation_trace,
     get_simulation_trace_chrome,
     get_simulations_status_batch,
+    get_simulator_build_log,
     get_simulator_build_status,
+)
+from compose_api_client.api.sed_ml import (
+    get_comparison,
+    get_comparison_series,
+    list_comparisons,
+    preview_sedml,
+    run_sedml,
 )
 from compose_api_client.api.simulation import run_simulation
 from compose_api_client.api.simulations import get_simulation, list_simulations
+from compose_api_client.api.sources import (
+    get_biomodel,
+    get_biomodel_omex,
+    get_biosimulations_omex,
+    get_biosimulations_project,
+    get_biosimulations_reference,
+    run_biomodel,
+    run_biosimulations_project,
+    search_biomodels,
+    search_biosimulations_projects,
+)
+from compose_api_client.api.suites import get_suite_run, list_suite_runs, list_suites, run_suite
 from compose_api_client.ext.errors import ApiTimeout, raise_for
 from compose_api_client.models import (
     AuthMeResponse,
     BiGraphProcess,
     BiGraphStep,
+    BiomodelHit,
+    BiomodelInfo,
+    BodyPreviewSedml,
     BodyRunCopasi,
+    BodyRunSedml,
     BodyRunSimulation,
     BodyRunTellurium,
+    CatalogEntry,
+    Comparison,
+    ComparisonPage,
+    ComparisonSeries,
     Dataset,
     DatasetPage,
+    EnvironmentHeaders,
+    EnvironmentSummary,
     HpcRun,
+    ImageStatus,
+    InterfaceManifest,
     ListSimulationsStatusType0,
+    ProjectInfo,
     RegisteredSimulators,
     RunEvent,
     RunEventPage,
     RunTraceTree,
+    SedmlPreview,
+    SedmlRunResult,
     SimulationDetail,
     SimulationExperiment,
     SimulationPage,
+    Solver,
+    Suite,
+    SuiteRunInfo,
+    SuiteRunView,
 )
 from compose_api_client.types import UNSET, File, Response
 
@@ -205,18 +255,64 @@ class ComposeSession:
     def steps(self) -> list[BiGraphStep]:
         return list(_parsed(get_steps_list.sync_detailed(client=self.client)))
 
+    def environments(self) -> list[EnvironmentSummary]:
+        """The environments documents run in, with what their interface manifests hold."""
+        return list(_parsed(list_environments.sync_detailed(client=self.client)))
+
+    def catalog(self) -> list[CatalogEntry]:
+        """Every registry entry with its curation level and the environments that provide its classes."""
+        return list(_parsed(list_registry_entries.sync_detailed(client=self.client)))
+
+    def solvers(self) -> list[Solver]:
+        """The solvers SED-ML runs can use: class, environment, KiSAO algorithms, what each returns."""
+        return list(_parsed(list_solvers.sync_detailed(client=self.client)))
+
+    def environment_manifest(self, name: str) -> InterfaceManifest:
+        """An environment's interface manifest (pbg-interfaces/1)."""
+        return _parsed(get_environment_manifest.sync_detailed(name, client=self.client))  # type: ignore[no-any-return]
+
+    def environment_headers(self, name: str) -> EnvironmentHeaders:
+        """An environment's interfaces as .pblang header files, and each class's declaration."""
+        return _parsed(get_environment_headers.sync_detailed(name, client=self.client))  # type: ignore[no-any-return]
+
+    def environment_images(self, name: str) -> ImageStatus:
+        """Whether an environment's current image is built, with its image records and newest build run."""
+        return _parsed(get_environment_images.sync_detailed(name, client=self.client))  # type: ignore[no-any-return]
+
+    def build_environment(self, name: str) -> ImageStatus:
+        """Make an environment's current image available: pulled or built unless it is, joining a build under way."""
+        return _parsed(build_environment.sync_detailed(name, client=self.client))  # type: ignore[no-any-return]
+
+    def simulator_images(self, simulator_id: int) -> ImageStatus:
+        """Whether a simulator's image is built, with its image records and newest build run."""
+        return _parsed(get_simulator_images.sync_detailed(simulator_id, client=self.client))  # type: ignore[no-any-return]
+
+    def build_simulator(self, simulator_id: int) -> ImageStatus:
+        """Make a simulator's image available: pulled or built unless it is, joining a build under way."""
+        return _parsed(build_simulator.sync_detailed(simulator_id, client=self.client))  # type: ignore[no-any-return]
+
     # -- submit -----------------------------------------------------------------------------------------------------
 
     def submit(
-        self, document: FileSource, *, simulator: str | None = None, interval: float = 1.0, batch: bool = False
+        self,
+        document: FileSource,
+        *,
+        simulator: str | None = None,
+        interval: float = 1.0,
+        batch: bool = False,
+        tags: Sequence[str] = (),
+        description: str | None = None,
     ) -> SimulationExperiment:
-        """Submit an ``.omex`` (or ``.pbg``). ``simulator`` names a prebuilt simulator image."""
+        """Submit an ``.omex`` (or ``.pbg``). ``simulator`` names a prebuilt simulator image; ``tags`` and
+        ``description`` are stored with the run and filter ``simulations()``."""
         r = run_simulation.sync_detailed(
             client=self.client,
             body=BodyRunSimulation(uploaded_file=_file(document)),
             interval_time=interval,
             batch_submission=batch,
             simulator=simulator if simulator is not None else UNSET,
+            tags=list(tags) if tags else UNSET,
+            description=description if description is not None else UNSET,
         )
         return _parsed(r)  # type: ignore[no-any-return]
 
@@ -250,6 +346,12 @@ class ComposeSession:
         r = get_simulations_status_batch.sync_detailed(client=self.client, body=list(simulation_ids))
         return list(_parsed(r))
 
+    def build_log(self, simulator_id: int) -> str:
+        """The SLURM log of the simulator's newest container build (its last 200 KB)."""
+        r = get_simulator_build_log.sync_detailed(client=self.client, simulator_id=simulator_id)
+        raise_for(r)
+        return r.content.decode(errors="replace")
+
     def build_status(self, simulator_id: int) -> JobState:
         return _state(get_simulator_build_status.sync_detailed(client=self.client, simulator_id=simulator_id))
 
@@ -282,15 +384,132 @@ class ComposeSession:
         status: str | None = None,
         simulator: str | None = None,
         since: datetime.datetime | None = None,
+        labels: dict[str, str] | None = None,
+        tags: Sequence[str] = (),
         limit: int = 50,
         offset: int = 0,
     ) -> SimulationPage:
         """Simulations the caller may read, newest first, each with its latest SLURM job. ``status`` is a job state
         or ``"submitting"``; ``simulator`` a prebuilt simulator's name or a container-definition hash prefix."""
         r = list_simulations.sync_detailed(
-            client=self.client, **_simulation_filters(status, simulator, since, limit, offset)
+            client=self.client, **_simulation_filters(status, simulator, since, labels, tags, limit, offset)
         )
         return _parsed(r)  # type: ignore[no-any-return]
+
+    # -- SED-ML -----------------------------------------------------------------------------------------------------
+
+    def sedml_preview(self, archive: FileSource, *, solvers: Sequence[str] = ()) -> SedmlPreview:
+        """Translate a SED-ML archive without running it: its tasks, and what each solver would run or why not."""
+        r = preview_sedml.sync_detailed(
+            client=self.client,
+            body=BodyPreviewSedml(archive=_file(archive)),
+            solvers=list(solvers) if solvers else UNSET,
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    def sedml_run(
+        self,
+        archive: FileSource,
+        *,
+        solvers: Sequence[str] = (),
+        tasks: Sequence[str] = (),
+        tags: Sequence[str] = (),
+        description: str | None = None,
+    ) -> SedmlRunResult:
+        """Run each task of a SED-ML archive once per solver; one comparison per task."""
+        r = run_sedml.sync_detailed(
+            client=self.client,
+            body=BodyRunSedml(archive=_file(archive)),
+            solvers=list(solvers) if solvers else UNSET,
+            task=list(tasks) if tasks else UNSET,
+            tags=list(tags) if tags else UNSET,
+            description=description if description is not None else UNSET,
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    # -- sources (BioModels, biosimulations.org) --------------------------------------------------------------------
+
+    def biomodels_search(self, query: str, *, limit: int = 20, curated: bool = True) -> list[BiomodelHit]:
+        r = search_biomodels.sync_detailed(client=self.client, q=query, limit=limit, curated=curated)
+        return list(_parsed(r))
+
+    def biomodel(self, model_id: str) -> BiomodelInfo:
+        return _parsed(get_biomodel.sync_detailed(model_id, client=self.client))  # type: ignore[no-any-return]
+
+    def biomodel_omex(self, model_id: str) -> bytes:
+        r = get_biomodel_omex.sync_detailed(model_id, client=self.client)
+        raise_for(r)
+        return r.content
+
+    def run_biomodel(self, model_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()) -> SedmlRunResult:
+        r = run_biomodel.sync_detailed(
+            model_id,
+            client=self.client,
+            solvers=list(solvers) if solvers else UNSET,
+            tags=list(tags) if tags else UNSET,
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    def biosimulations_search(self, query: str = "", *, limit: int = 20) -> list[ProjectInfo]:
+        r = search_biosimulations_projects.sync_detailed(client=self.client, q=query, limit=limit)
+        return list(_parsed(r))
+
+    def biosimulations_project(self, project_id: str) -> ProjectInfo:
+        return _parsed(get_biosimulations_project.sync_detailed(project_id, client=self.client))  # type: ignore[no-any-return]
+
+    def biosimulations_omex(self, project_id: str) -> bytes:
+        r = get_biosimulations_omex.sync_detailed(project_id, client=self.client)
+        raise_for(r)
+        return r.content
+
+    def biosimulations_reference(self, project_id: str) -> dict[str, dict[str, list[float]]]:
+        """The project's original results: `{"<sedml>/<report>": {label: values}}`."""
+        r = get_biosimulations_reference.sync_detailed(project_id, client=self.client)
+        raise_for(r)
+        data: dict[str, dict[str, list[float]]] = r.parsed.to_dict()  # type: ignore[union-attr]
+        return data
+
+    def run_biosimulations_project(
+        self, project_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()
+    ) -> SedmlRunResult:
+        r = run_biosimulations_project.sync_detailed(
+            project_id,
+            client=self.client,
+            solvers=list(solvers) if solvers else UNSET,
+            tags=list(tags) if tags else UNSET,
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    # -- suites -----------------------------------------------------------------------------------------------------
+
+    def suites(self) -> list[Suite]:
+        return list(_parsed(list_suites.sync_detailed(client=self.client)))
+
+    def suite_runs(self, name: str) -> list[SuiteRunInfo]:
+        return list(_parsed(list_suite_runs.sync_detailed(name, client=self.client)))
+
+    def suite_run(self, name: str, number: int) -> SuiteRunView:
+        """One suite run: per source, agreement, references, and drift from the baseline run."""
+        return _parsed(get_suite_run.sync_detailed(name, number, client=self.client))  # type: ignore[no-any-return]
+
+    def run_suite(self, name: str) -> SuiteRunInfo:
+        """Run every source of the suite (submitted in the background); the new run's number."""
+        return _parsed(run_suite.sync_detailed(name, client=self.client))  # type: ignore[no-any-return]
+
+    def comparisons(self, *, source: str | None = None, limit: int = 25, offset: int = 0) -> ComparisonPage:
+        r = list_comparisons.sync_detailed(
+            client=self.client, source=source if source is not None else UNSET, limit=limit, offset=offset
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    def comparison_series(self, comparison_id: int, report: str) -> ComparisonSeries:
+        """One report's columns from each run and each reference."""
+        r = get_comparison_series.sync_detailed(comparison_id, client=self.client, report=report)
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    def comparison(self, comparison_id: int) -> Comparison:
+        """One comparison: its runs, and per report and data set each solver pair's score once all have finished."""
+        return _parsed(get_comparison.sync_detailed(comparison_id, client=self.client))  # type: ignore[no-any-return]
 
     def simulation(self, simulation_id: int) -> SimulationDetail:
         """One simulation: its latest SLURM job and how many events and datasets its run recorded."""
@@ -373,6 +592,17 @@ class ComposeSession:
         r = get_dataset_content.sync_detailed(uuid.UUID(str(dataset_id)), client=self.client)
         raise_for(r)
         return r.content
+
+    def dataset_file(self, dataset_id: str | uuid.UUID, subpath: str) -> bytes:
+        """One file inside a directory dataset (a ``*.fenics`` results bundle or a ``*.zarr`` store), e.g.
+        ``.zattrs`` or a chunk such as ``u/0.0``."""
+        r = get_dataset_file.sync_detailed(uuid.UUID(str(dataset_id)), subpath, client=self.client)
+        raise_for(r)
+        return r.content
+
+    def download_dataset_file(self, dataset_id: str | uuid.UUID, subpath: str, dest: str | Path) -> Path:
+        """Save one file of a directory dataset to ``dest``: a file, or a directory for the file's own name."""
+        return _save_named(self.dataset_file(dataset_id, subpath), subpath, dest)
 
     def download_dataset(self, dataset_id: str | uuid.UUID, dest: str | Path) -> Path:
         """Save a dataset's file to ``dest``: a file, or a directory (existing, or written with a trailing slash) for
@@ -468,8 +698,51 @@ class AsyncComposeSession:
     async def steps(self) -> list[BiGraphStep]:
         return list(_parsed(await get_steps_list.asyncio_detailed(client=self.client)))
 
+    async def environments(self) -> list[EnvironmentSummary]:
+        """The environments documents run in, with what their interface manifests hold."""
+        return list(_parsed(await list_environments.asyncio_detailed(client=self.client)))
+
+    async def catalog(self) -> list[CatalogEntry]:
+        """Every registry entry with its curation level and the environments that provide its classes."""
+        return list(_parsed(await list_registry_entries.asyncio_detailed(client=self.client)))
+
+    async def solvers(self) -> list[Solver]:
+        """The solvers SED-ML runs can use: class, environment, KiSAO algorithms, what each returns."""
+        return list(_parsed(await list_solvers.asyncio_detailed(client=self.client)))
+
+    async def environment_manifest(self, name: str) -> InterfaceManifest:
+        """An environment's interface manifest (pbg-interfaces/1)."""
+        return _parsed(await get_environment_manifest.asyncio_detailed(name, client=self.client))  # type: ignore[no-any-return]
+
+    async def environment_headers(self, name: str) -> EnvironmentHeaders:
+        """An environment's interfaces as .pblang header files, and each class's declaration."""
+        return _parsed(await get_environment_headers.asyncio_detailed(name, client=self.client))  # type: ignore[no-any-return]
+
+    async def environment_images(self, name: str) -> ImageStatus:
+        """Whether an environment's current image is built, with its image records and newest build run."""
+        return _parsed(await get_environment_images.asyncio_detailed(name, client=self.client))  # type: ignore[no-any-return]
+
+    async def build_environment(self, name: str) -> ImageStatus:
+        """Make an environment's current image available: pulled or built unless it is, joining a build under way."""
+        return _parsed(await build_environment.asyncio_detailed(name, client=self.client))  # type: ignore[no-any-return]
+
+    async def simulator_images(self, simulator_id: int) -> ImageStatus:
+        """Whether a simulator's image is built, with its image records and newest build run."""
+        return _parsed(await get_simulator_images.asyncio_detailed(simulator_id, client=self.client))  # type: ignore[no-any-return]
+
+    async def build_simulator(self, simulator_id: int) -> ImageStatus:
+        """Make a simulator's image available: pulled or built unless it is, joining a build under way."""
+        return _parsed(await build_simulator.asyncio_detailed(simulator_id, client=self.client))  # type: ignore[no-any-return]
+
     async def submit(
-        self, document: FileSource, *, simulator: str | None = None, interval: float = 1.0, batch: bool = False
+        self,
+        document: FileSource,
+        *,
+        simulator: str | None = None,
+        interval: float = 1.0,
+        batch: bool = False,
+        tags: Sequence[str] = (),
+        description: str | None = None,
     ) -> SimulationExperiment:
         r = await run_simulation.asyncio_detailed(
             client=self.client,
@@ -477,6 +750,8 @@ class AsyncComposeSession:
             interval_time=interval,
             batch_submission=batch,
             simulator=simulator if simulator is not None else UNSET,
+            tags=list(tags) if tags else UNSET,
+            description=description if description is not None else UNSET,
         )
         return _parsed(r)  # type: ignore[no-any-return]
 
@@ -511,6 +786,12 @@ class AsyncComposeSession:
         r = await get_simulations_status_batch.asyncio_detailed(client=self.client, body=list(simulation_ids))
         return list(_parsed(r))
 
+    async def build_log(self, simulator_id: int) -> str:
+        """The SLURM log of the simulator's newest container build (its last 200 KB)."""
+        r = await get_simulator_build_log.asyncio_detailed(client=self.client, simulator_id=simulator_id)
+        raise_for(r)
+        return r.content.decode(errors="replace")
+
     async def build_status(self, simulator_id: int) -> JobState:
         return _state(await get_simulator_build_status.asyncio_detailed(client=self.client, simulator_id=simulator_id))
 
@@ -540,13 +821,132 @@ class AsyncComposeSession:
         status: str | None = None,
         simulator: str | None = None,
         since: datetime.datetime | None = None,
+        labels: dict[str, str] | None = None,
+        tags: Sequence[str] = (),
         limit: int = 50,
         offset: int = 0,
     ) -> SimulationPage:
         r = await list_simulations.asyncio_detailed(
-            client=self.client, **_simulation_filters(status, simulator, since, limit, offset)
+            client=self.client, **_simulation_filters(status, simulator, since, labels, tags, limit, offset)
         )
         return _parsed(r)  # type: ignore[no-any-return]
+
+    # -- SED-ML -----------------------------------------------------------------------------------------------------
+
+    async def sedml_preview(self, archive: FileSource, *, solvers: Sequence[str] = ()) -> SedmlPreview:
+        """Translate a SED-ML archive without running it: its tasks, and what each solver would run or why not."""
+        r = await preview_sedml.asyncio_detailed(
+            client=self.client,
+            body=BodyPreviewSedml(archive=_file(archive)),
+            solvers=list(solvers) if solvers else UNSET,
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    async def sedml_run(
+        self,
+        archive: FileSource,
+        *,
+        solvers: Sequence[str] = (),
+        tasks: Sequence[str] = (),
+        tags: Sequence[str] = (),
+        description: str | None = None,
+    ) -> SedmlRunResult:
+        """Run each task of a SED-ML archive once per solver; one comparison per task."""
+        r = await run_sedml.asyncio_detailed(
+            client=self.client,
+            body=BodyRunSedml(archive=_file(archive)),
+            solvers=list(solvers) if solvers else UNSET,
+            task=list(tasks) if tasks else UNSET,
+            tags=list(tags) if tags else UNSET,
+            description=description if description is not None else UNSET,
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    # -- sources (BioModels, biosimulations.org) --------------------------------------------------------------------
+
+    async def biomodels_search(self, query: str, *, limit: int = 20, curated: bool = True) -> list[BiomodelHit]:
+        r = await search_biomodels.asyncio_detailed(client=self.client, q=query, limit=limit, curated=curated)
+        return list(_parsed(r))
+
+    async def biomodel(self, model_id: str) -> BiomodelInfo:
+        return _parsed(await get_biomodel.asyncio_detailed(model_id, client=self.client))  # type: ignore[no-any-return]
+
+    async def biomodel_omex(self, model_id: str) -> bytes:
+        r = await get_biomodel_omex.asyncio_detailed(model_id, client=self.client)
+        raise_for(r)
+        return r.content
+
+    async def run_biomodel(
+        self, model_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()
+    ) -> SedmlRunResult:
+        r = await run_biomodel.asyncio_detailed(
+            model_id,
+            client=self.client,
+            solvers=list(solvers) if solvers else UNSET,
+            tags=list(tags) if tags else UNSET,
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    async def biosimulations_search(self, query: str = "", *, limit: int = 20) -> list[ProjectInfo]:
+        r = await search_biosimulations_projects.asyncio_detailed(client=self.client, q=query, limit=limit)
+        return list(_parsed(r))
+
+    async def biosimulations_project(self, project_id: str) -> ProjectInfo:
+        return _parsed(await get_biosimulations_project.asyncio_detailed(project_id, client=self.client))  # type: ignore[no-any-return]
+
+    async def biosimulations_omex(self, project_id: str) -> bytes:
+        r = await get_biosimulations_omex.asyncio_detailed(project_id, client=self.client)
+        raise_for(r)
+        return r.content
+
+    async def biosimulations_reference(self, project_id: str) -> dict[str, dict[str, list[float]]]:
+        """The project's original results: `{"<sedml>/<report>": {label: values}}`."""
+        r = await get_biosimulations_reference.asyncio_detailed(project_id, client=self.client)
+        raise_for(r)
+        data: dict[str, dict[str, list[float]]] = r.parsed.to_dict()  # type: ignore[union-attr]
+        return data
+
+    async def run_biosimulations_project(
+        self, project_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()
+    ) -> SedmlRunResult:
+        r = await run_biosimulations_project.asyncio_detailed(
+            project_id,
+            client=self.client,
+            solvers=list(solvers) if solvers else UNSET,
+            tags=list(tags) if tags else UNSET,
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    # -- suites -----------------------------------------------------------------------------------------------------
+
+    async def suites(self) -> list[Suite]:
+        return list(_parsed(await list_suites.asyncio_detailed(client=self.client)))
+
+    async def suite_runs(self, name: str) -> list[SuiteRunInfo]:
+        return list(_parsed(await list_suite_runs.asyncio_detailed(name, client=self.client)))
+
+    async def suite_run(self, name: str, number: int) -> SuiteRunView:
+        """One suite run: per source, agreement, references, and drift from the baseline run."""
+        return _parsed(await get_suite_run.asyncio_detailed(name, number, client=self.client))  # type: ignore[no-any-return]
+
+    async def run_suite(self, name: str) -> SuiteRunInfo:
+        """Run every source of the suite (submitted in the background); the new run's number."""
+        return _parsed(await run_suite.asyncio_detailed(name, client=self.client))  # type: ignore[no-any-return]
+
+    async def comparisons(self, *, source: str | None = None, limit: int = 25, offset: int = 0) -> ComparisonPage:
+        r = await list_comparisons.asyncio_detailed(
+            client=self.client, source=source if source is not None else UNSET, limit=limit, offset=offset
+        )
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    async def comparison_series(self, comparison_id: int, report: str) -> ComparisonSeries:
+        """One report's columns from each run and each reference."""
+        r = await get_comparison_series.asyncio_detailed(comparison_id, client=self.client, report=report)
+        return _parsed(r)  # type: ignore[no-any-return]
+
+    async def comparison(self, comparison_id: int) -> Comparison:
+        """One comparison: its runs, and per report and data set each solver pair's score once all have finished."""
+        return _parsed(await get_comparison.asyncio_detailed(comparison_id, client=self.client))  # type: ignore[no-any-return]
 
     async def simulation(self, simulation_id: int) -> SimulationDetail:
         return _parsed(await get_simulation.asyncio_detailed(simulation_id, client=self.client))  # type: ignore[no-any-return]
@@ -630,12 +1030,20 @@ class AsyncComposeSession:
 
 
 def _simulation_filters(
-    status: str | None, simulator: str | None, since: datetime.datetime | None, limit: int, offset: int
+    status: str | None,
+    simulator: str | None,
+    since: datetime.datetime | None,
+    labels: dict[str, str] | None,
+    tags: Sequence[str],
+    limit: int,
+    offset: int,
 ) -> dict[str, Any]:
     return {
         "status": ListSimulationsStatusType0(status) if status is not None else UNSET,
         "simulator": simulator if simulator is not None else UNSET,
         "since": since if since is not None else UNSET,
+        "label": [f"{k}:{v}" for k, v in labels.items()] if labels else UNSET,
+        "tag": list(tags) if tags else UNSET,
         "limit": limit,
         "offset": offset,
     }

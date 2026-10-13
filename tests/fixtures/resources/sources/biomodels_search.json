@@ -1,0 +1,23 @@
+{
+  "matches": 2,
+  "models": [
+    {
+      "format": "SBML",
+      "id": "BIOMD0000000012",
+      "lastModified": null,
+      "name": "Elowitz2000 - Repressilator",
+      "submissionDate": "2005-09-13T00:00:00Z",
+      "submitter": "Nicolas Le Nov\u00e8re",
+      "url": "https://www.biomodels.org/BIOMD0000000012"
+    },
+    {
+      "format": "SBML",
+      "id": "BIOMD0000000412",
+      "lastModified": null,
+      "name": "Pokhilko2012_CircClock_RepressilatorFeedbackloop",
+      "submissionDate": "2011-09-20T00:00:00Z",
+      "submitter": "Alexandra Pokhilko",
+      "url": "https://www.biomodels.org/BIOMD0000000412"
+    }
+  ]
+}

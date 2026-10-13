@@ -22,6 +22,9 @@ Several documents answer different questions. Start with the one that matches yo
 | how testing works, what was broken, what was fixed | [plan-testing.md](plan-testing.md) | analysis, partly implemented | 2026-10-06 |
 | the `compose-api` command line and the generated client it is built on | [plan-cli.md](plan-cli.md) | plan, implemented | 2026-10-07 |
 | run traces from process-bigraph events, datasets a run advertises, and the permission seam for auth | [plan-observability.md](plan-observability.md) | plan, implemented (0.7.0) | 2026-10-07 |
+| interface manifests per environment, and writing composites in the web app | [plan-authoring.md](plan-authoring.md) | plan, in progress | 2026-10-12 |
+| SED-ML models (BioModels, biosimulations.org, uploads) run on several solvers and compared; catalog, environments and solvers defined | [plan-sedml.md](plan-sedml.md) | plan, in progress | 2026-10-12 |
+| environment builds as jobs of their own, image artifacts recorded, builds on Kubernetes, publishing | [plan-environment-builds.md](plan-environment-builds.md) | plan, in progress | 2026-10-13 |
 
 **Direction** documents say what we intend. **Analysis** documents measure something and lay out options; they are
 dated because measurements go stale. **Record** documents track commitments. When two disagree, the direction

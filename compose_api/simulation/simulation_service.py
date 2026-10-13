@@ -23,7 +23,7 @@ from compose_api.simulation.hpc_utils import (
     get_slurm_singularity_def_file,
     get_slurm_submit_file,
 )
-from compose_api.simulation.job_script import SimulationJob, simulation_job_script
+from compose_api.simulation.job_script import SOURCE_FILE_NAME, SimulationJob, simulation_job_script
 from compose_api.simulation.models import HpcRun, JobType, RemoteContainerImage, Simulation, SimulatorVersion
 
 logger = logging.getLogger(__name__)
@@ -116,12 +116,21 @@ class SimulationServiceHpc(SimulationService):
                 f.write(script_content)
 
             await ssh_service.run_command(f"mkdir {experiment_path}")
+            if simulation.sim_request.source_file_path is not None:
+                # a SED-ML run's original archive, announced by the job script as the `sedml-omex` dataset
+                await ssh_service.scp_upload(
+                    local_file=simulation.sim_request.source_file_path,
+                    remote_path=experiment_path / SOURCE_FILE_NAME,
+                )
             # submit the build script to slurm
             slurm_jobid = await slurm_service.submit_job(
                 local_sbatch_file=local_submit_file,
                 remote_sbatch_file=get_slurm_submit_file(slurm_job_name=slurm_job_name),
                 local_input_file=simulation.sim_request.request_file_path,
-                remote_input_file=get_slurm_sim_input_file_path(experiment_id=slurm_job_name),
+                remote_input_file=get_slurm_sim_input_file_path(
+                    experiment_id=slurm_job_name,
+                    suffix=simulation.sim_request.simulation_file_type.get_files_suffix(),
+                ),
             )
             return slurm_jobid
 
@@ -171,13 +180,14 @@ class SimulationServiceHpc(SimulationService):
                     #SBATCH --output={get_slurm_log_file(slurm_job_name=slurm_job_name)}
 
                     set -e
-                    echo "Starting build for container {singularity_container_path}"
-                    pushd /tmp
-                    mv {singularity_def_file} /tmp/{def_file_name}
+                    echo "Starting build for container {singularity_container_path} on $(hostname)"
+                    # a working directory of this build's own: two builds of one definition must not share files
+                    work=$(mktemp -d /tmp/{slurm_job_name}.XXXXXX)
+                    trap 'rm -rf "$work"' EXIT
+                    cp {singularity_def_file} "$work/{def_file_name}"
+                    cd "$work"
                     singularity build --fakeroot {container_file_name} {def_file_name}
                     mv {container_file_name} {singularity_container_path}
-                    mv {def_file_name} {singularity_def_file} # Cleanup
-                    popd
                     echo "Finished building container."
                     """)
                 f.write(script_content)

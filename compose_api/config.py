@@ -63,6 +63,19 @@ class Settings(BaseSettings):
     slurm_partition: str = ""
     slurm_node_list: str = ""  # comma-separated list of nodes, e.g., "node1,node2"
     slurm_build_node: str = ""
+    # Where containers are built (compose_api/simulation/build_k8s.py): "slurm" (a fakeroot build on
+    # slurm_build_node) or "k8s" (a Kubernetes Job in build_k8s_namespace, the image placed on the shared filesystem
+    # through build_k8s_pvc_claim, mounted at build_k8s_pvc_mount_path: the path the SLURM nodes read it at).
+    build_backend: str = "slurm"
+    build_k8s_namespace: str = ""
+    build_k8s_image: str = "ghcr.io/apptainer/apptainer:1.3.6"
+    build_k8s_pvc_claim: str = ""
+    build_k8s_pvc_mount_path: str = ""
+    build_k8s_pvc_sub_path: str = ""
+    build_k8s_run_as_uid: int = 0
+    build_k8s_run_as_gid: int = 0
+    build_k8s_supplemental_groups: str = ""
+    build_k8s_timeout_seconds: int = 7200
     slurm_qos: str = ""
     batch_slurm_qos: str = ""
     batch_slurm_partition: str = ""
@@ -79,6 +92,12 @@ class Settings(BaseSettings):
     internal_mount_dir: str = "/mnt/projects/CRBM/compose_api"
     namespace: str = "test"
     containers_output_dir: str = "/experiment/output"
+    # The Python of the separate environment process-bigraph-lang is installed in (sedml/pblang-requirements.txt):
+    # it needs bigraph-schema 1.6, this service's environment has pbest's 1.0, so SED-ML translation runs its CLI there
+    # (docs/plan-sedml.md, phase 3). `make pblang` makes .pblang/ in a checkout; the API image builds the same at /app.
+    pblang_python: str = f"{REPO_ROOT}/.pblang/bin/python"
+    # Archives fetched from BioModels and biosimulations.org (sedml/sources.py), by id and upstream revision.
+    sources_cache_dir: str = f"{REPO_ROOT}/scratch/sources"
     container_service: str = "APPTAINER"
 
     # Repository holding the prebuilt simulator images, without a tag; the tag is the
@@ -95,6 +114,16 @@ class Settings(BaseSettings):
     # and the arbitrary-import `local:!` form -- are rejected under either policy.
     address_policy: Literal["enforce", "warn"] = "enforce"
 
+    # Submission supervision (#238). The task submitting a simulation (fetching or building its container, then
+    # sbatch) heartbeats on the simulation; the job monitor fails one whose heartbeat is older than
+    # submission_stale_seconds, since its task is gone (an API restart). A task running longer than
+    # submission_timeout_seconds is cancelled and fails the simulation; a first container build can take an hour.
+    submission_stale_seconds: int = 300
+    submission_timeout_seconds: int = 4 * 3600
+    # How often the API checks every simulator's SIF against the store and adopts unrecorded ones
+    # (compose_api/simulation/images.py); the first pass runs at startup.
+    image_verify_interval_seconds: int = 3600
+
     # Simulators published by their owners as OCI images, by name: a request's `simulator`
     # query parameter selects one and the job runs in that image instead of the shared one
     # (compose_api/simulation/prebuilt.py). Only these names are accepted, so a request can
@@ -107,6 +136,12 @@ class Settings(BaseSettings):
     # empty no token can be verified: anonymous requests still work and any supplied bearer token gets a 401.
     auth0_domain: str = ""  # e.g. dev-bu7yo7484tyxu6a1.us.auth0.com -- no scheme, no trailing slash
     auth0_audience: str = ""  # the Auth0 API Identifier, exactly as shown in the dashboard
+    # The web UI's Auth0 Single Page Application (compose_api/api/webapp.py). Not a secret: an SPA has none. The UI
+    # offers login only when this and both values above are set; it must be allowed to request auth0_audience.
+    auth0_spa_client_id: str = ""
+
+    # The static web UI build served at /ui (webapp/, `npm run generate`). Absent: the API runs without a UI.
+    webapp_dist_dir: str = f"{REPO_ROOT}/webapp/.output/public"
 
 
 @lru_cache
