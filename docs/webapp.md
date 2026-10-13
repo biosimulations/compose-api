@@ -14,6 +14,7 @@ serves it at **`/ui`** on the same host, and `/` redirects there.
 | `/ui/simulations/new`: upload a `.pbg`, `.omex` or `.sbml`, or a curated COPASI/Tellurium time course from SBML. Registry rejections are listed address by address | `run-simulation`, `run-copasi`, `run-tellurium` |
 | `/ui/simulations/{id}`: status (polled until terminal), SLURM and container-build details, live event log, span tree and Chrome trace (for Perfetto), datasets with inline previews (images, CSV/TSV plotted with Plotly, JSON, text) | `get-simulation`, `get-simulation-status`, `get-simulator-build-status`, `get-simulation-events`, `get-simulation-trace`, `get-simulation-trace-chrome`, `list-datasets`, `get-dataset-content`, `get-simulation-results-file` |
 | `/ui/datasets`: every run's files | `list-datasets`, `get-dataset-content` |
+| `/ui/environments`: where composites run; `/ui/environments/{name}`: its image, versions, registry entries, and every class it provides with its config and ports (`#Name` opens on one) | `list-environments`, `get-environment-manifest` |
 | `/ui/catalog`: processes, steps, simulator versions | `get-processes-list`, `get-steps-list`, `get-simulator-list` |
 
 **Viewers are registered per dataset type** (`webapp/app/viewers/registry.ts`, [plan](plan-viewers.md)). Each one
@@ -29,12 +30,16 @@ as the service finds them at submission: `.pbg` and `.json` members, nested `.om
 several, a picker chooses one) opens in the composite viewer
 (`webapp/app/viewers/CompositeViewer.vue`): the document is decompiled in the browser into `.pblang` text by
 [process-bigraph-lang](https://github.com/biosimulations/process-bigraph-lang) (the npm package of its `dsl/`), checked, and shown read-only in Monaco with
-the checker's findings as markers and as a list; a second tab draws the wiring (`viewers/composite/layout.ts`, stores
-left, processes and steps right, a link per wired port, nested composites below). The checker resolves addresses
-against interface manifests: one per environment documents run in, generated in CI inside each image and served by
-the API at `GET /registry/environments` and `GET /registry/environments/{name}/manifest` (same origin; in
-development, from whatever `NUXT_PUBLIC_API_BASE` points at). Until the viewer adds the run's manifest
-([plan-authoring.md](plan-authoring.md), step B), unknown-component findings are expected.
+the checker's findings as markers and as a list. The **Document** tab shows the process-bigraph JSON that was submitted
+and run, re-indented only (every token as submitted: `100.0` stays a float), with a download; the **Graph** tab draws
+the wiring (`viewers/composite/layout.ts`, stores left, processes and steps right, a link per wired port, nested
+composites below). The checker resolves addresses against interface manifests: one per environment documents run in,
+generated in CI inside each image and served by the API at `GET /registry/environments` and
+`GET /registry/environments/{name}/manifest` (same origin; in development, from whatever `NUXT_PUBLIC_API_BASE` points
+at). The viewer uses the manifest of the environment the run used (a prebuilt run is matched by its image's
+repository, whatever its digest). Hovering a class's name in the text, or its `address` in the document, shows the
+class's interface from that manifest (`viewers/composite/interfaces.ts`), linked to its environment's page; the
+"checked against" badge links there too.
 
 **Writing a composite** (`/ui/composites/new`, or "Edit a copy" from the viewer) opens `.pblang` text in an editable
 Monaco with process-bigraph-lang's language server running in a web worker (`viewers/composite/languageClient.ts`):
