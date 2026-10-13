@@ -3,6 +3,7 @@ the Job's shape; the poller's view of Jobs; and a build end to end against a fak
 the monitor updates, its image recorded as produced by that run."""
 
 import asyncio
+import base64
 import contextlib
 import uuid
 from collections.abc import Iterator
@@ -26,15 +27,19 @@ SITE = BuildSite(
 
 
 def test_the_build_runs_privileged_in_scratch_and_copies_as_the_service_user() -> None:
-    definition = Path("/projects/CRBM/compose_api/prod/images/abc.def")
+    definition = "Bootstrap: docker\nFrom: busybox\n%post\n  echo 'it is built'\n"
     container = Path("/projects/CRBM/compose_api/prod/images/abc.sif")
     job: Any = build_job("build-abc-x", SITE, definition, container)
     spec = job.spec.template.spec
     (build,) = spec.init_containers
     (copy,) = spec.containers
     assert build.security_context.privileged is True and build.security_context.run_as_user == 0
-    assert {m.mount_path: m.read_only for m in build.volume_mounts} == {"/projects/CRBM": True, "/work": None}
-    assert f'apptainer build /work/image.sif "{definition}"' in build.command[-1]
+    # the privileged container sees scratch only: the definition comes with the Job, not from the shared filesystem
+    assert [m.mount_path for m in build.volume_mounts] == ["/work"]
+    (env,) = build.env
+    assert base64.b64decode(env.value).decode() == definition
+    assert f'echo "${env.name}" | base64 -d > /work/image.def' in build.command[-1]
+    assert "apptainer build /work/image.sif /work/image.def" in build.command[-1]
     assert copy.security_context.privileged is False and copy.security_context.run_as_user == 16997
     assert {m.mount_path: m.read_only for m in copy.volume_mounts} == {"/projects/CRBM": None, "/work": None}
     assert f'mv -f "{container}.part-$HOSTNAME" "{container}"' in copy.command[-1]
@@ -70,7 +75,7 @@ class FakeK8s:
 @pytest.mark.asyncio
 async def test_the_poller_reports_job_states_and_a_vanished_job_as_failed(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = FakeK8s("completed")
-    fake.created.append(build_job("build-a", SITE, Path("/d"), Path("/c")))
+    fake.created.append(build_job("build-a", SITE, "Bootstrap: docker\nFrom: busybox\n", Path("/c")))
     monkeypatch.setattr(build_k8s, "k8s_builds", lambda: fake)
     states = await K8sPoller().states(["build-a", "build-gone"])
     assert states["build-a"].job_state == "COMPLETED" and states["build-gone"].job_state == "FAILED"
@@ -139,7 +144,6 @@ async def test_a_build_is_a_k8s_run_the_monitor_updates_and_its_image_is_recorde
         with contextlib.suppress(asyncio.CancelledError):
             await polling
 
-    assert (images_dir / f"{simulator.container_def_hash}.def").read_text() == definition.representation
     (job,) = fake.created
     assert job.metadata.name == job_name(simulator, "AbCdE")
     run = await hpc_db.get_hpcrun_by_ref(ref_id=simulator.database_id, job_type=JobType.BUILD_CONTAINER)

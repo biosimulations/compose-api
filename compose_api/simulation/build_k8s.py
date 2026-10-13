@@ -1,24 +1,26 @@
 """Container builds as Kubernetes Jobs (`settings.build_backend = "k8s"`): the shared image (and any definition this
 service builds) made where building is possible, then placed on the filesystem the SLURM nodes read.
 
-Why: the SLURM build (`simulation_service.build_container`) runs `singularity build --fakeroot` on a build node, and
-the service user has no subordinate id range there (`FATAL: could not use fakeroot: no mapping entry found in
-/etc/subuid for svc_compose`, simulator 283, 2026-10-13). A definition with a `%post` needs mount namespaces to build,
-so the build runs as root in a **privileged init container** that sees only scratch space and, read-only, the
-definition file; the **unprivileged main container**, running as the service user with the shared filesystem
-writable, copies the image into place. The privileged process never writes the filesystem the SLURM nodes read, and
-the writer is the user whose files they are. Init containers run to completion in order, so a failed build fails the
-pod and the Job.
+Why: the SLURM build (`simulation_service.build_container`) runs `singularity build --fakeroot` on a build node, and the
+service user has no subordinate id range there (`FATAL: could not use fakeroot: no mapping entry found in /etc/subuid
+for svc_compose`, simulator 283, 2026-10-13). A definition with a `%post` needs mount namespaces to build, so the build
+runs as root in a **privileged init container** that sees only scratch space, the definition handed to it in the Job
+itself (an environment variable); the **unprivileged main container**, running as the service user with the shared
+filesystem writable, copies the image into place. The privileged process never writes the filesystem the SLURM nodes
+read, and the writer is the user whose files they are. Init containers run to completion in order, so a failed build
+fails the pod and the Job.
 
-The definition is written onto the shared filesystem through the API pod's own mount of it (`internal_mount_dir`),
-and the Job mounts the claim at the path the SLURM nodes read it at, so every path in it is the path the SLURM job
-script uses. The build is a run like any other (docs/plan-environment-builds.md, E1, E2): backend `k8s`, external id
+The privileged container mounts nothing of the shared filesystem: a definition file there may be owned by another user
+(the SLURM path wrote them over SSH; simulation 4580 failed rewriting one), and root on a shared filesystem is squashed
+anyway. Only the copy mounts the claim, at the path the SLURM nodes read it at, so the image lands at the path the SLURM
+job script uses. The build is a run like any other (docs/plan-environment-builds.md, E1, E2): backend `k8s`, external id
 the Job's name, its status updated by the job monitor through `K8sPoller`; the handler records the image it leaves.
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
 import datetime
 import logging
 from dataclasses import dataclass
@@ -29,9 +31,8 @@ from typing import TYPE_CHECKING
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.config import Settings, get_settings
 from compose_api.db.services.hpc_db import HPCDatabaseService
-from compose_api.simulation import images
 from compose_api.simulation.builds import BuildFailedError, wait_for_run
-from compose_api.simulation.hpc_utils import get_slurm_singularity_container_file, get_slurm_singularity_def_file
+from compose_api.simulation.hpc_utils import get_slurm_singularity_container_file
 from compose_api.simulation.models import HpcRun, JobType, SimulatorVersion
 
 if TYPE_CHECKING:
@@ -76,12 +77,16 @@ class BuildSite:
         )
 
 
-def build_script(definition: Path) -> str:
-    """PRIVILEGED, as root, in scratch: the image built from the definition (read-only on the shared filesystem)."""
+DEFINITION_ENV = "CONTAINER_DEFINITION_B64"
+
+
+def build_script() -> str:
+    """PRIVILEGED, as root, in scratch: the image built from the definition the Job carries (base64, in the env)."""
     return dedent(f"""\
         set -eu
         apptainer --version
-        apptainer build {WORK_DIR}/image.sif "{definition}"
+        echo "${DEFINITION_ENV}" | base64 -d > {WORK_DIR}/image.def
+        apptainer build {WORK_DIR}/image.sif {WORK_DIR}/image.def
         ls -la {WORK_DIR}/image.sif
         """)
 
@@ -99,14 +104,11 @@ def publish_script(container: Path) -> str:
         """)
 
 
-def build_job(name: str, site: BuildSite, definition: Path, container: Path) -> V1Job:
+def build_job(name: str, site: BuildSite, definition: str, container: Path) -> V1Job:
     """The build Job, as a value (what a test reads)."""
     from kubernetes import client as k8s
 
     shared = k8s.V1VolumeMount(name="shared", mount_path=site.pvc_mount_path, sub_path=site.pvc_sub_path or None)
-    shared_read_only = k8s.V1VolumeMount(
-        name="shared", mount_path=site.pvc_mount_path, sub_path=site.pvc_sub_path or None, read_only=True
-    )
     work = k8s.V1VolumeMount(name="work", mount_path=WORK_DIR)
     labels = {"app": LABEL, "compose-api-build": name}
     return k8s.V1Job(
@@ -127,9 +129,12 @@ def build_job(name: str, site: BuildSite, definition: Path, container: Path) -> 
                         k8s.V1Container(
                             name="build",
                             image=site.image,
-                            command=["/bin/bash", "-c", build_script(definition)],
+                            command=["/bin/bash", "-c", build_script()],
+                            env=[
+                                k8s.V1EnvVar(name=DEFINITION_ENV, value=base64.b64encode(definition.encode()).decode())
+                            ],
                             security_context=k8s.V1SecurityContext(privileged=True, run_as_user=0),
-                            volume_mounts=[shared_read_only, work],
+                            volume_mounts=[work],
                         )
                     ],
                     containers=[
@@ -253,19 +258,14 @@ def job_name(simulator_version: SimulatorVersion, suffix: str) -> str:
 
 
 async def submit_build(simulator_version: SimulatorVersion, hpc_db: HPCDatabaseService, suffix: str) -> HpcRun:
-    """Write the definition onto the shared filesystem (through the API's mount of it), create the build Job, and
-    record it as the simulator's build run: backend ``k8s``, external id the Job's name; the monitor polls it."""
+    """Create the build Job, carrying the definition, and record it as the simulator's build run: backend ``k8s``,
+    external id the Job's name; the monitor polls it."""
     site = BuildSite.from_settings(get_settings())
-    definition = get_slurm_singularity_def_file(singularity_hash=simulator_version.container_def_hash)
     container = get_slurm_singularity_container_file(singularity_hash=simulator_version.container_def_hash)
-    local = images.internal_path(str(definition))
-    if local is None:
-        raise BuildFailedError(f"The store is not mounted here, so {definition} cannot be written for a build Job")
-    local.parent.mkdir(parents=True, exist_ok=True)
-    local.write_text(simulator_version.container_def.representation)
     name = job_name(simulator_version, suffix)
-    await asyncio.to_thread(k8s_builds().create, build_job(name, site, definition, container))
-    logger.info("Submitted container build %s as a Kubernetes Job (%s -> %s)", name, definition, container)
+    job = build_job(name, site, simulator_version.container_def.representation, container)
+    await asyncio.to_thread(k8s_builds().create, job)
+    logger.info("Submitted container build %s as a Kubernetes Job (-> %s)", name, container)
     return await hpc_db.insert_hpcrun(
         slurmjobid=None, job_type=JobType.BUILD_CONTAINER, ref_id=simulator_version.database_id,
         correlation_id=f"build_container-{name}", backend="k8s", external_id=name,

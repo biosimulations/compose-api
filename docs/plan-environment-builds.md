@@ -53,7 +53,7 @@ every way the service decides about images showed its limits:
 | E4 | **Images are write-once**: a build that finds the artifact's file already there adopts it and records it; it never replaces one | a simulator's image is part of what reproduced a result; replacing it under past runs would break that |
 | E5 | **Builds are invocable on their own, through the same code as a run's preprocess**: the run path asks for an available image of its definition, joining an in-flight build (a build run of that simulator that has not finished) instead of starting one | backfill, release preparation and publication need it; one path keeps them consistent |
 | E6 | **Where to build is a setting** (`build_backend`: `slurm`, `k8s`); the deployment uses `k8s`, since its SLURM nodes cannot build | the SLURM build stays for sites whose nodes can |
-| E7 | **The Kubernetes build** runs `apptainer build` as root in a privileged init container that mounts only scratch space and, read-only, the definition; the unprivileged main container copies the image onto the shared filesystem as the service user (the API pod's uid), beside its target and renamed | a definition with a `%post` needs mount namespaces; the privileged process never writes the filesystem the SLURM nodes read, and the writer is the user whose files they are (root squash respected, not bypassed) |
+| E7 | **The Kubernetes build** runs `apptainer build` as root in a privileged init container that mounts only scratch space, the definition carried in the Job itself; the unprivileged main container copies the image onto the shared filesystem as the service user (the API pod's uid), beside its target and renamed | a definition with a `%post` needs mount namespaces; the privileged process never writes the filesystem the SLURM nodes read, and the writer is the user whose files they are (root squash respected, not bypassed) |
 | E8 | **Publishing is a separate, explicit step** that pushes an image to a registry and records an `oci` artifact; the run path prefers pulling a published image over building | a cluster that cannot build can still pull; publication is a decision, not a side effect |
 
 ## The model after this
@@ -91,6 +91,9 @@ registry environment (environments.yaml: registry_env) ──► its current sim
    the waiter reads the run's status from the database and, on failure, raises with the pods' logs. The handler then
    records the image as produced by that run (phase 2). Whether the namespace admits a privileged init container is
    known only live: a refusal fails the build at once with the event's message.
+   *Live, 0.7.20 (simulations 4580, 4581):* the API pod could not rewrite an existing `images/<hash>.def` (written
+   over SSH by the SLURM path; `PermissionError`), so the dispatch failed before any Job. The definition now travels
+   in the Job (base64 in an environment variable) and the privileged container mounts no shared storage at all.
 4. **Builds on their own.** `POST /environments/{name}/build` (the environment's current definition; answers the
    build run, or the available image when there is one), `GET /environments/{name}/images`, and the same for a
    simulator id. The run path calls the same function and waits on the build run's status in the database (any API
