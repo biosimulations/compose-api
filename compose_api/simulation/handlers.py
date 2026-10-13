@@ -315,13 +315,18 @@ async def _download_or_build_container(
                 )
             return
         try:
-            build = await _build_container_and_wait(
-                simulation_service_slurm=simulation_service_slurm,
-                simulator_version=simulator_version,
-                hpc_db=hpc_db,
-                job_monitor=job_monitor,
-                random_prefix=random_string,
-            )
+            if get_settings().build_backend == "k8s":
+                from compose_api.simulation.build_k8s import build_and_wait
+
+                build: HpcRun | None = await build_and_wait(simulator_version, hpc_db, random_string)
+            else:
+                build = await _build_container_and_wait(
+                    simulation_service_slurm=simulation_service_slurm,
+                    simulator_version=simulator_version,
+                    hpc_db=hpc_db,
+                    job_monitor=job_monitor,
+                    random_prefix=random_string,
+                )
         except Exception as e:
             logger.exception("Failed to build simulator container", exc_info=e)
             raise e

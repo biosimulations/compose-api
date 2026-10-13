@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from pathlib import Path
 from typing import Annotated, Any
@@ -186,6 +187,15 @@ async def get_simulator_build_log(principal: OptionalPrincipal, simulator_id: in
     if simulator is None:
         raise HTTPException(status_code=404, detail=f"Simulator {simulator_id} not found.")
     settings = get_settings()
+    build = (
+        await get_required_database_service()
+        .get_hpc_db()
+        .get_hpcrun_by_ref(ref_id=simulator_id, job_type=JobType.BUILD_CONTAINER)
+    )
+    if build is not None and build.backend == "k8s" and build.external_id:
+        from compose_api.simulation.build_k8s import k8s_builds
+
+        return PlainTextResponse(await asyncio.to_thread(k8s_builds().logs, build.external_id))
     logs = Path(settings.internal_mount_dir) / settings.namespace / "htclogs"
     found = sorted(
         logs.glob(f"singularity_build_{simulator.container_def_hash[:5]}_*.out"), key=lambda p: p.stat().st_mtime
