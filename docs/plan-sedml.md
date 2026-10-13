@@ -8,7 +8,7 @@ ships it (CLAUDE.md, "Deploys are GitOps"). The language side is planned in proc
 | Phase | What | Repo | State |
 |---|---|---|---|
 | 0 | Labels, tags and a description on simulations, and filters on them; the concepts below documented; `GET /registry/entries` and `/ui/catalog` rebuilt on it | compose-api | in review |
-| 1 | SED-ML read into a `.pblang` template per task with the solver as an open site; plot templates; release 0.3.0 | process-bigraph-lang | planned |
+| 1 | SED-ML read into a `.pblang` template per task with the solver as an open site, one checked instance per solver; plots built at run time; release 0.3.0 | process-bigraph-lang | in review (#58, #59) |
 | 2 | SED-ML adapter steps around generic COPASI and Tellurium steps; `solvers.yaml` and `GET /registry/solvers` | adapters package, compose-api | planned |
 | 3 | `POST /sedml/run` and `/sedml/preview`; the `sedml-omex` and `input` datasets; comparisons computed on the server; references | compose-api | planned |
 | 4 | BioModels and biosimulations.org source routes, cached; run shortcuts; the curated routes on the same path | compose-api | planned |
@@ -44,6 +44,8 @@ runs, and nothing compares results.
 | D7 | **biosimulations.org's original results are a reference**, not a candidate | | a reference column in the comparison |
 | D8 | **SED-ML scope, version 1**: uniform time course tasks, attribute model changes, simple data generators, reports, plots | steady state, repeated tasks, math in data generators | what most curated models use; anything else is reported, never dropped silently |
 | D9 | **Runs stay anonymous**: tags and description are given at submission and not edited | owner edits | submissions carry no owner today |
+| D10 | **SED-ML model changes are applied at translation** (2026-10-13): the instance's solver reads a changed copy of the SBML, and the `.pblang` text's `meta` lists each change | a changes step before the solver | changes are constants; the generic solvers read their model from config, which no step can change at run time |
+| D11 | **The SED-ML adapters are a new package this project owns** (2026-10-13), `pbsim_sedml` until named; registered in `manifest.yaml` and installed in `registry_env` | adding them to pbsim-common; shipping them in process-bigraph-lang | our release cadence and tests; process-bigraph-lang keeps process code out of its package |
 
 **How this feeds the curation ladder.** strategy.md decision 5 defines `validated` as "at least one study whose
 findings confirm against a published reference or an independent simulator". A passing comparison (phase 3) is that
