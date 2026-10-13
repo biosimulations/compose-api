@@ -10,6 +10,7 @@ const items: NavigationMenuItem[][] = [
     { label: 'Write a composite', icon: 'i-lucide-square-pen', to: '/composites/new' },
     { label: 'Simulations', icon: 'i-lucide-list', to: '/simulations' },
     { label: 'Datasets', icon: 'i-lucide-files', to: '/datasets' },
+    { label: 'Environments', icon: 'i-lucide-package-check', to: '/environments' },
     { label: 'Catalog', icon: 'i-lucide-boxes', to: '/catalog' }
   ],
   [
