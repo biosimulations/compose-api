@@ -52,6 +52,29 @@ async function saveChrome() {
   }
 }
 
+const opening = ref(false)
+
+// Perfetto opened with this run's trace already loaded (utils/perfetto.ts), rather than empty for a dragged file.
+async function openPerfetto() {
+  opening.value = true
+  try {
+    await openInPerfetto(
+      async () => {
+        const url = apiUrl('/results/simulation/trace/chrome', { simulation_id: props.simulationId })
+        const response = await authFetch(url)
+        if (!response.ok) throw new Error(`Could not fetch the trace (${response.status})`)
+        return response.arrayBuffer()
+      },
+      `Simulation ${props.simulationId}`,
+      `simulation-${props.simulationId}-trace.json`
+    )
+  } catch (e) {
+    error.value = (e as Error).message
+  } finally {
+    opening.value = false
+  }
+}
+
 onMounted(load)
 useIntervalFn(() => {
   if (props.live) load()
@@ -70,9 +93,9 @@ useIntervalFn(() => {
           variant="subtle"
           color="neutral"
           label="Perfetto"
-          to="https://ui.perfetto.dev"
-          target="_blank"
-          title="Open Perfetto, then drag the downloaded Chrome trace into it"
+          :loading="opening"
+          title="Open this trace in Perfetto (ui.perfetto.dev)"
+          @click="openPerfetto"
         />
       </div>
     </div>
