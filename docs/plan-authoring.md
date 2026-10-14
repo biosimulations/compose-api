@@ -1,17 +1,18 @@
 # Authoring composites in the web app: interface manifests per environment, then an editor
 
-**Status (2026-10-12): plan agreed; step A in review.** One PR per step, merged with a merge commit on the
+~~**Status (2026-10-12): plan agreed; step A in review.**~~ **Status (2026-10-13): every step is merged; A, B and C
+shipped in 0.7.14 (#274).** One PR per step, merged with a merge commit on the
 maintainer's word. A merge deploys nothing by itself: the next release's image ships it (CLAUDE.md, "Deploys are
 GitOps"). The language side is planned in process-bigraph-lang's
 [`docs/v2/authoring-plan.md`](https://github.com/biosimulations/process-bigraph-lang/blob/main/docs/v2/authoring-plan.md).
 
 | Step | What | Repo | State |
 |---|---|---|---|
-| 1 | A standalone describe script; a shared manifest format (`pbg-interfaces/1`) with a JSON Schema; a replaceable registry and a `pblang/setManifests` channel in the language worker | process-bigraph-lang | in review (#56) |
-| A | Environments, their manifests generated in CI inside each image, `/registry/environments`; viva-pde-particle as a registry entry; these docs | compose-api | in review (#270) |
-| B | The composite viewer checks against the run's environment, so processes resolve | compose-api `webapp/` | in review (#271) |
-| C | An editor: language worker, environment picker, compile, submit | compose-api `webapp/` | in review |
-| R | process-bigraph-lang 0.2.0; compose-api bumps it and releases A, B and C together | both | planned |
+| 1 | A standalone describe script; a shared manifest format (`pbg-interfaces/1`) with a JSON Schema; a replaceable registry and a `pblang/setManifests` channel in the language worker | process-bigraph-lang | merged (#56, 2026-10-12) |
+| A | Environments, their manifests generated in CI inside each image, `/registry/environments`; viva-pde-particle as a registry entry; these docs | compose-api | merged (#270) |
+| B | The composite viewer checks against the run's environment, so processes resolve | compose-api `webapp/` | merged (#271) |
+| C | An editor: language worker, environment picker, compile, submit | compose-api `webapp/` | merged (#272) |
+| R | process-bigraph-lang 0.2.0; compose-api bumps it and releases A, B and C together | both | done (0.2.0 released 2026-10-12; #273; release 0.7.14, #274) |
 
 ## Why
 

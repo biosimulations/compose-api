@@ -14,6 +14,8 @@ serves it at **`/ui`** on the same host, and `/` redirects there.
 | `/ui/simulations/new`: upload a `.pbg`, `.omex` or `.sbml`, or a curated COPASI/Tellurium time course from SBML. Registry rejections are listed address by address | `run-simulation`, `run-copasi`, `run-tellurium` |
 | `/ui/simulations/{id}`: status (polled until terminal), SLURM and container-build details, live event log, span tree and Chrome trace (for Perfetto), datasets with inline previews (images, CSV/TSV plotted with Plotly, JSON, text) | `get-simulation`, `get-simulation-status`, `get-simulator-build-status`, `get-simulation-events`, `get-simulation-trace`, `get-simulation-trace-chrome`, `list-datasets`, `get-dataset-content`, `get-simulation-results-file` |
 | `/ui/datasets`: every run's files | `list-datasets`, `get-dataset-content` |
+| `/ui/datasets/{id}`: one dataset full width in its viewers (a results bundle file by file) | `get-dataset`, `get-dataset-content`, `get-dataset-file` |
+| `/ui/composites/new`: write a composite in `.pblang`, checked as you type, and run it (below) | `list-environments`, `get-environment-manifest`, `run-simulation` |
 | `/ui/sedml`: a SED-ML archive (upload, BioModels, biosimulations.org) previewed and run on several solvers ([plan-sedml.md](plan-sedml.md)) | `preview-sedml`, `run-sedml`, `search-biomodels`, `get-biomodel-omex`, `run-biomodel`, `search-biosimulations-projects`, `get-biosimulations-omex`, `run-biosimulations-project`, `list-solvers` |
 | `/ui/comparisons`, `/ui/comparisons/{id}`: a task's runs, scores per report and data set, overlays of data sets and SED-ML plots | `list-comparisons`, `get-comparison`, `get-comparison-series`, `list-datasets`, `get-dataset-content` |
 | `/ui/suites`, `/ui/suites/{name}`: regression and reproducibility suites, their runs, agreement, references and drift from the baseline per model | `list-suites`, `list-suite-runs`, `get-suite-run`, `run-suite` |
@@ -23,7 +25,8 @@ serves it at **`/ui`** on the same host, and `/` redirects there.
 **Viewers are registered per dataset type** (`webapp/app/viewers/registry.ts`, [plan](plan-viewers.md)). Each one
 declares which datasets it fits (by kind, media type and attributes) and is an async component, so a viewer and its
 libraries download only when first opened. `/ui/datasets/<id>` opens a dataset full width; the table's preview shows
-the same viewers. Built in: composite (below), image, table (plotted when numeric), text, and for results bundles (`*.fenics`) a
+the same viewers. Built in: composite (below), image, table (plotted when numeric), text, a Plotly figure (`application/vnd.plotly.v1+json`,
+SED-ML plots), and for results bundles (`*.fenics`) a
 statistics view and a **3D view** (vtk.js) read chunk by chunk with zarrita from `/datasets/{id}/files/`. The 3D view
 draws the bundle's web extension (a precomputed surface per domain, viva-pde-particle `docs/web-bundle.md`) coloured by
 one variable, fetches one row per frame, shows particles, and follows a running simulation.
@@ -85,6 +88,9 @@ Rules for the token:
 - Downloads by a signed-in user are fetched with the token, because a plain link cannot carry the header.
 
 Today a token changes nothing a caller can read, because every simulation is public.
+
+(2026-10-13: production publishes no `AUTH0_SPA_CLIENT_ID` yet, so the UI offers no login. It needs the SPA
+application created in the tenant, through auth0-pulumi, and its id set in `kustomize/config/compose-api-rke/api.env`.)
 
 ## Development
 

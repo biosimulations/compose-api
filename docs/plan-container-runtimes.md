@@ -61,7 +61,8 @@ Read from the production sbatch templates in `simulation_service.py` on 2026-09-
 
 No `--gres` and no GPU request anywhere in the service. No `--nodes` or `--ntasks` either, so every job is a single
 task on a single node by default. No MPI. Every job reads and writes a shared filesystem tree under
-`_namespace_path()`: `htclogs/`, `slurm_sbatch/`, `images/`, `sims/`.
+`_namespace_path()`: `htclogs/`, `slurm_sbatch/`, `images/`, `sims/`. (2026-10-13: a simulation job's SLURM log now
+goes to its experiment directory as `job.out` (#225); container builds still log to `htclogs/`.)
 
 **These are ordinary containerised batch jobs that happen to be scheduled by SLURM.** They are not the workloads that
 motivated Apptainer, Enroot or Sarus, all of which earn their keep on GPU passthrough, multi-node MPI and parallel
@@ -85,7 +86,9 @@ contributes a GPU simulator, the constraint set changes and §4.2 in particular 
 
 **The pipeline.** `pbest` generates an Apptainer definition file from a dependency set; its md5 is the simulator
 identity. An unseen hash triggers a SLURM job running `singularity build --fakeroot` on a named build node before any
-science can run. `download_container` instead runs `singularity pull` from the configured simulator image repository,
+science can run. (2026-10-13: the deployment now builds as a Kubernetes Job instead, `BUILD_BACKEND=k8s`, because
+the service user has no `/etc/subuid` entry on the build node; see [plan-environment-builds.md](plan-environment-builds.md).)
+`download_container` instead runs `singularity pull` from the configured simulator image repository,
 tagged with that hash. Results are `.sif` files under `images/`.
 
 **What the artifact actually is.** Read from the generated definition on 2026-09-12. `registry_env` is a *single*
@@ -101,6 +104,7 @@ the simulator registry; "env" is the one conda environment they all share.
 
 Its run script is `micromamba run … python3 /runtime/pbest/main.py "$@"`, so the container is invoked as the pbest
 command line. Four simulators, a conda stack and a full Python environment in one artifact is why it is 1.3 GB.
+(2026-10-13: five libraries since #284 added `biosim-toolkit`.)
 
 Worth naming: this is the opposite of what Aim 3 promised in `A3.4.docker`, which is each simulator in its own
 container exposing the Process Interface. The tracker already records the same whole-composite-in-one-image pattern
@@ -221,13 +225,16 @@ says should still apply: listing an image vouches for its contents, not for ever
   the old location had no image for the current pbest pin either. Publishing images under the organisation account
   is an operational task this document cannot do.
   *Update 2026-10-06:* the tag is now stable. The library list used to be fetched on every request from a branch of
-  another repository, so any upstream commit changed the tag; it is pinned here since #182 (identity `c7e984d3…`).
+  another repository, so any upstream commit changed the tag; it is pinned here since #182 (identity `c7e984d3…`;
+  2026-10-13: now `f10645d9…`, after #284 added `biosim-toolkit`).
   Still unpublished: the package is private and the cluster pulls with no credentials, so publishing also needs a
   visibility or credential decision.
   *Update 2026-10-12:* still unpublished (the package holds one May image under an older identity). The
   `registry-manifests` workflow, which reads the interfaces each environment provides, tries the service's tag and
   otherwise builds the image from the same generated definition in CI; it does not push, so the cluster still builds
   its own.
+  *Update 2026-10-13:* still unpublished: no `f10645d9…` tag in the package. Publishing (environment builds phase 5) is
+  deferred to the epoch-2 environment research.
 - **Owner-published images (since 0.6.0, #190).** `prebuilt_simulators` maps a simulator name to an image reference;
   `POST /simulation/run?simulator=<name>` runs the job in it, pulled as `docker://<image>`, and an unlisted name is a
   400. The definition is just `Bootstrap: docker` / `From: <image>`, so its md5 identity is a function of the image
@@ -284,6 +291,8 @@ The first three are for the cluster administrators and most things depend on the
    plugin; rootless Podman needs `newuidmap` and user namespaces. KVM is now only needed if the untrusted tier goes
    to Kata rather than gVisor.
 2. Are user namespaces enabled at all? `--fakeroot` works today, which is evidence they are, but policy can change.
+   (2026-10-13: it does not work for the service user: no `/etc/subuid` mapping for `svc_compose` (simulator 283).
+   Builds moved to Kubernetes Jobs.)
 3. Is there a shared image cache, and what is our quota?
 4. ~~Do we need untrusted execution now, or is it a Y4–Y5 concern?~~ Answered 2026-09-13 by strategy decision 3:
    registered simulators only this funding year; the untrusted tier is parked with a trigger.

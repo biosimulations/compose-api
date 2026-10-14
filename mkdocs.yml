@@ -26,7 +26,7 @@ nav:
   - Home: index.md
   - Authentication: authentication.md
   - Web UI: webapp.md
-  - Dataset viewers (plan): plan-viewers.md
+  - Command line: cli.md
   - Modules: modules.md
 plugins:
   - search
