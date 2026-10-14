@@ -191,7 +191,12 @@ def _unreadable(answer: httpx.Response) -> Response[Any]:
     """`answer` as a generated `Response` whose body could not be read: its status is still classified, its body is
     never trusted (`_parsed`)."""
     return Response(
-        status_code=HTTPStatus(answer.status_code), content=answer.content, headers=answer.headers, parsed=_UNREADABLE
+        # Generated Response annotates HTTPStatus, but HTTP also permits extension codes (e.g. 599).
+        # Preserve the integer so classification does not fail a second time during parse recovery.
+        status_code=cast(HTTPStatus, answer.status_code),
+        content=answer.content,
+        headers=answer.headers,
+        parsed=_UNREADABLE,
     )
 
 
@@ -393,6 +398,9 @@ class ComposeSession:
         download: bool = False,
     ) -> tuple[Credential, Response[Any]]:
         is_env = isinstance(self.tokens, EnvironmentToken)
+        if is_env:
+            suffix = "" if op.replayable else "; the submission was not sent"
+            raise AuthError(rejected_message(renewable=False, env_var=TOKEN_ENV_VAR) + suffix)
         if not op.replayable:
             renewed: Credential | None = None
             if self.tokens is not None:
@@ -443,7 +451,7 @@ class ComposeSession:
         except (httpx.ConnectError, httpx.ConnectTimeout):
             raise NetworkError(
                 f"cannot reach {self.base_url}: could not connect to the API at {self.base_url}; check the connection"
-                " and api_base_url"
+                " and api_base_url; the request is known not sent"
             ) from None
         except (TimeoutError, httpx.TimeoutException):
             if not op.replayable:
@@ -1091,6 +1099,9 @@ class AsyncComposeSession:
         *,
         download: bool = False,
     ) -> tuple[Credential, Response[Any]]:
+        if getattr(self.tokens, "environment", False):
+            suffix = "" if op.replayable else "; the submission was not sent"
+            raise AuthError(rejected_message(renewable=False, env_var=TOKEN_ENV_VAR) + suffix)
         if not op.replayable:
             renewed: Credential | None = None
             if self.tokens is not None:
@@ -1141,7 +1152,7 @@ class AsyncComposeSession:
         except (httpx.ConnectError, httpx.ConnectTimeout):
             raise NetworkError(
                 f"cannot reach {self.base_url}: could not connect to the API at {self.base_url}; check the connection"
-                " and api_base_url"
+                " and api_base_url; the request is known not sent"
             ) from None
         except (TimeoutError, httpx.TimeoutException):
             if not op.replayable:

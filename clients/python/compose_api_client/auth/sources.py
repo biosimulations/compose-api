@@ -29,7 +29,7 @@ def _to_credential(record: SessionRecord) -> Credential:
 
 
 class AsyncStoredSession:
-    """Asynchronous persistent session adapter for `AsyncComposeSession` and `ComposeApi`."""
+    """Asynchronous persistent session adapter for `AsyncComposeSession`."""
 
     def __init__(
         self,
@@ -47,13 +47,6 @@ class AsyncStoredSession:
 
     async def current_record(self) -> SessionRecord:
         record = await self.session.get_access_token(self.oauth)
-        self._records[record.generation] = record
-        return record
-
-    async def renew_record(self, rejected: SessionRecord) -> SessionRecord | None:
-        if rejected.refresh_token is None:
-            return None
-        record = await self.session.get_access_token(self.oauth, rejected_generation=rejected.generation)
         self._records[record.generation] = record
         return record
 
@@ -80,37 +73,12 @@ class AsyncStoredSession:
         self._records[record.generation] = record
         return _to_credential(record)
 
-    async def confirmed(self, credential: Credential | SessionRecord, at: datetime) -> None:
-        if isinstance(credential, SessionRecord):
-            await self.session.mark_verified(credential, at)
-            return
+    async def confirmed(self, credential: Credential, at: datetime) -> None:
         if credential.generation is None:
             return
         record = self._records.get(credential.generation)
         if record is not None:
             await self.session.mark_verified(record, at)
-
-
-class StoredSession:
-    """Persistent session adapter for both sync `ComposeSession` and async `ComposeApi`."""
-
-    def __init__(self, session: AuthSession, oauth: OAuthSessionClient, *, required: bool = True) -> None:
-        self.session = session
-        self.oauth = oauth
-        self.required = required
-        self._async = AsyncStoredSession(session, oauth, required=required)
-
-    async def current(self) -> SessionRecord:
-        return await self._async.current_record()
-
-    async def renew(self, rejected: SessionRecord) -> SessionRecord | None:
-        return await self._async.renew_record(rejected)
-
-    async def confirmed(self, record: SessionRecord, at: datetime) -> None:
-        await self.session.mark_verified(record, at)
-
-    def as_async_source(self) -> AsyncStoredSession:
-        return self._async
 
 
 class SyncStoredSession:
@@ -152,15 +120,6 @@ class OneCommandSession:
     def __init__(self, record: SessionRecord) -> None:
         self.record = record
         self._credential = _to_credential(record)
-
-    async def current(self) -> SessionRecord:
-        return self.record
-
-    async def renew(self, rejected: SessionRecord) -> SessionRecord | None:
-        return None
-
-    async def confirmed(self, record: SessionRecord, at: datetime) -> None:
-        return None
 
     def as_sync_source(self) -> _SyncOneCommandSource:
         return _SyncOneCommandSource(self._credential)

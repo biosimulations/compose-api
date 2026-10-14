@@ -70,12 +70,13 @@ class EnvironmentToken:
         return None
 
     def as_async(self) -> _AsyncEnvironmentToken:
-        return _AsyncEnvironmentToken(self._credential)
+        return _AsyncEnvironmentToken(self._credential, environment=True)
 
 
 class _AsyncEnvironmentToken:
-    def __init__(self, credential: Credential) -> None:
+    def __init__(self, credential: Credential, *, environment: bool = False) -> None:
         self._credential = credential
+        self.environment = environment
 
     async def current(self) -> Credential | None:
         return self._credential

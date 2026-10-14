@@ -149,7 +149,9 @@ def tls_verification(ca_bundle: Path | None) -> ssl.SSLContext | bool:
     if ca_bundle is None:
         return True
     try:
-        return ssl.create_default_context(cafile=str(ca_bundle))
+        context = ssl.create_default_context()
+        context.load_verify_locations(cafile=str(ca_bundle))
+        return context
     except (OSError, ssl.SSLError):
         raise ConfigError(f"ca_bundle ({ca_bundle}) is not a readable PEM file of CA certificates") from None
 

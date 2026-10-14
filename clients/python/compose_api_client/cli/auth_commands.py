@@ -113,7 +113,7 @@ def _env_token_status(
         emit_json({
             "profile": settings.profile,
             "api_base_url": settings.api_base_url,
-            "state": "valid",
+            "state": "valid" if args.verify else "unverified",
             "source": f"environment ({TOKEN_ENV_VAR})",
             "identity": None if identity is None else identity.model_dump(mode="json"),
             "expires_at": None,
@@ -124,6 +124,7 @@ def _env_token_status(
         return int(ExitCode.OK)
     emit_text(f"Profile {settings.profile} ({settings.api_base_url})")
     emit_text(f"Source: environment ({TOKEN_ENV_VAR}); not renewable")
+    emit_text(f"State: {'valid' if args.verify else 'unverified'}")
     if identity is not None:
         emit_text(f"Identity: {printable(identity.subject)} ({printable(identity.issuer)})")
         emit_text("API: confirmed this identity just now")
