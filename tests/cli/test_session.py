@@ -79,9 +79,16 @@ async def test_two_workers_refresh_once(tmp_path: Path) -> None:
     assert first == second
     assert first.generation == 2
     assert first.refresh_token == SecretStr("successor-canary")
+    import os
+
     for path in session.state.root.iterdir():
         assert b"canary" not in path.read_bytes()
-        assert path.stat().st_mode & 0o777 == 0o600
+        if os.name == "posix":
+            assert path.stat().st_mode & 0o777 == 0o600
+        else:
+            from compose_api_client.auth import windows_state
+
+            windows_state.validate(path)
 
 
 @pytest.mark.asyncio
