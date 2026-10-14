@@ -27,6 +27,11 @@ their own experience. The deliverable is therefore a **design review**, not yet 
   The tracker's "grant clock" line (`docs/grant/trd3/tracking/TRACKER.md:8-9`) currently says mid-2024 with
   Jul–Jun windows and must be corrected; the due/overdue analysis is unchanged (still Y3).
 
+*Note (2026-10-13), not part of the verbatim record:* the grant clock above was itself corrected on 2026-10-07. Budget
+years run April to March (Y3 = Apr 2026–Mar 2027; the award ends 03/31/2029), as `TRACKER.md` now says. The citation
+check also no longer resolves every anchor: `compose_api/api/routers/compute.py:75` has drifted (the `bspil` route is
+now further down and commented out), and the upstream anchors move with process-bigraph's line numbers.
+
 ## Facts the document is built on (from three explorations + reviewer critique)
 
 **Cite, don't restate:** `process-bigraph/docs/architecture.md` §7 (the laws); `bigraph-schema/docs/superpowers/specs/

@@ -87,7 +87,8 @@ goes into the shared image) and `manifest.yaml` (what is admitted) from one list
    and outputs: report CSVs (kind `table`) and figures (kind `figure`, `application/vnd.plotly.v1+json`).
 4. **The comparison** (phase 3). When the last member is terminal, a background task reads the members' report CSVs
    and any references (the original results, converted to CSV), scores each variable pairwise across solvers and
-   against each reference (interpolating onto the reference's time grid when grids differ, and saying so), and
+   against each reference (interpolating onto the reference's time grid when grids differ, and saying so; 2026-10-13:
+   interpolation is deferred, see phase 4, so different-length columns are reported, not scored), and
    stores the result. A failed member is shown failed, not dropped.
 
 ## Phase 0: what exists after it
@@ -223,11 +224,14 @@ goes into the shared image) and `manifest.yaml` (what is admitted) from one list
 
 ## API (phases 0, 3, 4)
 
-- `POST /sedml/run`: an `omex` upload **or** `source=biomodels:<id>|biosimulations:<project>`, `solvers[]`,
+- `POST /sedml/run` (as built, an upload only; a source runs through `POST /sources/…/run`): an `omex` upload **or**
+  `source=biomodels:<id>|biosimulations:<project>`, `solvers[]`,
   optional `task`, tolerances, `tags[]`, `description`. Returns `{comparison_id, simulations[], refused[]}`.
 - `POST /sedml/preview`: the translation's tasks, reports, plots and findings per solver, without running.
-- `GET /comparisons?label=…`, `GET /comparisons/{id}`, `GET /comparisons/{id}/result.{json,csv}`.
-- Sources, read-only, archives cached in the object store by id and upstream version:
+- `GET /comparisons?label=…`, `GET /comparisons/{id}`, `GET /comparisons/{id}/result.{json,csv}`. (2026-10-13: as
+  built, `GET /comparisons/{id}/series?report=…` serves a report's series; there is no `result.{json,csv}`.)
+- Sources, read-only, archives cached in the object store by id and upstream version (as built, a disk cache,
+  `settings.sources_cache_dir`):
   `GET /sources/biomodels/search?q=`, `GET /sources/biomodels/{id}`, `GET /sources/biomodels/{id}/omex`;
   `GET /sources/biosimulations/projects?q=`, `GET /sources/biosimulations/{project}`, `…/{project}/omex`,
   `…/{project}/reference`; and `POST /sources/{biomodels|biosimulations}/{id}/run`.
@@ -246,13 +250,14 @@ labelled `collection` and `suite_run`, and checks two things:
   solver version or translator version that changes a result shows even when the solvers still agree.
 
 A workflow reruns suites monthly and when `environments.yaml`, `solvers.yaml` or the process-bigraph-lang pin
-changes. A new baseline is accepted by a pull request to `suite.yaml`. Seeds: `biomodels-ode-sample` (about twenty
+changes. (2026-10-13: as built, monthly and by hand only; `.github/workflows/` has no path trigger.) A new baseline is accepted by a pull request to `suite.yaml`. Seeds: `biomodels-ode-sample` (about twenty
 curated ODE models with a uniform time course) and `biosimulations-reference` (projects whose original run has
 results).
 
 ## Web app (phase 5, phase 6)
 
-`/ui/sedml/new` (upload or source, preview, choose solvers, run), `/ui/sources` (search, a model page, "Run on…"), a
+`/ui/sedml/new` (upload or source, preview, choose solvers, run), `/ui/sources` (search, a model page, "Run on…")
+(2026-10-13: as built, one page, `/ui/sedml`, holds both), a
 Plotly viewer for figure datasets, `/ui/comparisons/{id}` (a matrix per report with the worst variable; each SED-ML
 plot drawn once with every member's traces and the reference; per-variable overlays and differences; links to the
 member runs), `/ui/suites` and `/ui/suites/{name}` (models by solvers per run, agreement and drift, history), label

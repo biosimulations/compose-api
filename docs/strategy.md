@@ -14,7 +14,7 @@ Four layers. Each owns something, and each must not know about the layer above i
 | Layer | What lives here | Owns | Must not know about |
 |---|---|---|---|
 | **Foundation** | `bigraph-schema`, `process-bigraph` | the type system, the composite document, the scheduler | any toolkit, service or client |
-| **Toolkit** | `viva-toolkit` (formerly `pbest`) — local-or-remote execution, container definitions | running one composite anywhere; producing a recipe from a dependency set | how the service is deployed |
+| **Toolkit** | `viva-toolkit` (formerly `pbest`; the rename is planned, decision 1, and has not happened: 2026-10-13 it is still `pbest==0.6.3`) — local-or-remote execution, container definitions | running one composite anywhere; producing a recipe from a dependency set | how the service is deployed |
 | **Service** | `compose-api` | HPC submission, job state, the simulator registry, results | which client is calling |
 | **Clients** | the generated client, the workbench, the web front end | presenting the service to a user | each other |
 
@@ -119,6 +119,10 @@ the authorship.
 | 4 | Upgrade the engine, alone, in its own pull request. | Phase 2a tests green; phase 3 decided; one composite end to end on the containerised SLURM backend. |
 | 2c | Rename to `viva-toolkit` (distribution, import package, console script) inside the workspace; update the service's imports. | Tests green under the new name; `import pbest` works through the shim with a deprecation warning. |
 | 5 | Publish `viva-toolkit`, the final `pbest` shim release, `compose-api-client` and the service from the new home, then archive the old repositories. | One release of each from here before any archive. |
+
+**Status 2026-10-13:** only phase 2b is done. Phases 1, 2, 2a, 2c, 3, 4 and 5 have not started: there is no
+`pbest/` in this workspace, the service pins `pbest==0.6.3` (process-bigraph 1.0.5 in `registry_env`), and
+`bsander`/`bsew` are not archived. `compose-api-client` 0.7.6 is published from here (2026-10-10).
 
 **Phase 2b, done 2026-10-07** (#206, then #207 and #208; see [plan-cli.md](plan-cli.md)):
 - `clients/python` is compose-api-client at tag 0.2.0, brought in by `git subtree` with its history.
@@ -297,7 +301,7 @@ Namespacing process addresses by entry removes the flat-name collision as a side
 
 **Today's `registry_env` is the first bundle, and a stopgap.** The service currently runs every composite in one
 image, `registry_env`, holding every library in its pinned list (COPASI, Tellurium, ReaDDy, multiscale actin) plus
-the toolkit. That is an all-in-one environment, the shape this section rejects at scale. It stays, for now, because
+the toolkit. (2026-10-13: five since #284 added `biosim-toolkit` for SED-ML runs.) That is an all-in-one environment, the shape this section rejects at scale. It stays, for now, because
 those four coexist and cover the composites people actually submit today, the likely first G1 composite included. In
 the terms above it is simply the first pre-built bundle (rule 2) arrived at before rule 1 exists. Three rules keep it
 from becoming the registry by default:
@@ -357,21 +361,27 @@ happens in the wrapper repositories and can run in parallel from the start.
    secrets, #199 submission through the service-account submit node). *2026-10-07:* 0.7.0 and 0.7.1 added run events
    and traces, datasets, simulation listing, and an authorization seam ready for #192
    ([plan-observability.md](plan-observability.md)), and the `compose-api` CLI ([plan-cli.md](plan-cli.md)); both are
-   deployed. `main` is still not branch-protected ([plan-testing.md](plan-testing.md) F3).
+   deployed. `main` is still not branch-protected ([plan-testing.md](plan-testing.md) F3). *2026-10-13:* 0.7.2–0.7.26
+   added a web UI at `/ui` ([webapp.md](webapp.md)) with dataset viewers ([plan-viewers.md](plan-viewers.md)) and
+   composite authoring ([plan-authoring.md](plan-authoring.md)), SED-ML runs compared across solvers with regression
+   suites ([plan-sedml.md](plan-sedml.md)), container builds as Kubernetes Jobs with recorded images
+   ([plan-environment-builds.md](plan-environment-builds.md)), optional Auth0 sign-in (#192), and failing instead of
+   stranding submissions lost to a restart (#256). `main` is still not protected.
 2. **Installability** (G1). Blocked by the engine lag, which decision 1 removes, and until this month by a personal
    registry account in the production path, now a setting.
 3. **Reproducibility** (G3). Decision 2. Must precede breadth.
 4. **Breadth** (G4, G5). Year 2's promise. Last *on the service*, because each registration inherits whatever
    identity and registry model exists when it lands.
 
-**A parallel breadth track.** Year 3 ends on 2027-02-28, and the report must show progress on Year 2's breadth
+**A parallel breadth track.** Year 3 ends on ~~2027-02-28~~ 2027-03-31 (budget years run April to March; the tracker
+was corrected on 2026-10-07), and the report must show progress on Year 2's breadth
 commitments. So new simulators and adapters are developed and validated in their wrapper repositories now, and
 decision 5's phases A and B run now; only *registering them to run on HPC* waits for reproducibility. If digest
 identity slips past the end of Year 3, the registration step becomes a dated deviation, not a silent miss.
 
 **Reliability work this implies.** Goal G6's test, rejecting what is not registered, needs code that does not run
 today: the allow-list reaches the handler and is ignored. It belongs with the reliability work, as decision 5
-phase A.
+phase A. (Done 2026-09-23: phase A enforces it at submission, #184.)
 
 **Risks, named.**
 

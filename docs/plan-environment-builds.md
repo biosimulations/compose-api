@@ -1,6 +1,7 @@
 # Environment builds: jobs and artifacts of their own
 
-**Status (2026-10-13): phases 1–3 merged (release 0.7.20); phase 4 in review.** One PR per phase, merged with a merge commit; each PR updates the
+~~**Status (2026-10-13): phases 1–3 merged (release 0.7.20); phase 4 in review.**~~ **Status (2026-10-13, later):
+phases 1–4 merged and released (0.7.20, 0.7.21); phase 5 deferred.** One PR per phase, merged with a merge commit; each PR updates the
 table below. A merge deploys nothing by itself: the next release's image ships it (CLAUDE.md, "Deploys are GitOps").
 
 | Phase | What | State |
@@ -8,8 +9,8 @@ table below. A merge deploys nothing by itself: the next release's image ships i
 | 1 | Runs carry their backend and external job id (`hpcrun.backend`, `hpcrun.external_id`); the monitor asks each backend about its own runs | merged |
 | 2 | `environment_image`: an artifact record per built or pulled image (kind, location, digest, size, the run that produced it, available); "built" means an available artifact | merged |
 | 3 | The `k8s` build backend: a Kubernetes Job builds the image (privileged, scratch only) and copies it onto the shared filesystem as the service user | merged |
-| 4 | Builds invoked on their own: `POST /environments/{name}/build`, `GET /environments/{name}/images`; a run waits for an in-flight build of its definition instead of starting another | in review |
-| 5 | Publish: an image pushed to a registry, recorded as another artifact; a cluster pulls it instead of building | planned |
+| 4 | Builds invoked on their own: `POST /environments/{name}/build`, `GET /environments/{name}/images` (as built, under `/registry`); a run waits for an in-flight build of its definition instead of starting another | merged (#297, 0.7.21) |
+| 5 | Publish: an image pushed to a registry, recorded as another artifact; a cluster pulls it instead of building | **deferred (2026-10-13)**: waits on the epoch-2 environment research (`docs/environments/` and `docs/plan-environments-epoch2.md`, to come) |
 
 ## Why
 
@@ -36,7 +37,8 @@ every way the service decides about images showed its limits:
   its engine. Created when a run first needs that definition.
 - **`hpcrun`**: one row per job. Polymorphic by `job_type` (`simulation`, `build_container`) and its reference
   (`simulation_id` or `simulator_id`), but SLURM-shaped: `slurmjobid`, SLURM states, polled only by the SLURM
-  monitor. A row without `slurmjobid` is never polled.
+  monitor. A row without `slurmjobid` is never polled. (2026-10-13: no longer so since phase 1: a run carries
+  `backend` and `external_id`, and the monitor polls each backend.)
 - **`downloaded_containers`**: a pull of a prebuilt image into a `.sif`.
 - **Files**: `<store>/<namespace>/images/<hash>.def` and `<hash>.sif`, the paths the job script runs from.
 - **Since #290**: one build at a time per definition hash in one API process, a failed build is tried again, the
@@ -107,7 +109,9 @@ registry environment (environments.yaml: registry_env) ──► its current sim
    API process, or before a restart, is waited on. The build routes are as open as a run's submission, which would
    start the same build. CLI: `environments images|build`, `simulators images|build`. The web app's environment page
    shows the image's state and offers Build.
-5. **Publish.** `POST /environments/{name}/publish`: a Kubernetes Job (or CI, for the shared image) pushes the image
+5. **Publish.** **Deferred (2026-10-13)** until the epoch-2 environment research (`docs/environments/` and `docs/plan-environments-epoch2.md`, to
+   come) settles what an environment and its identity are. As planned: `POST /environments/{name}/publish`: a
+   Kubernetes Job (or CI, for the shared image) pushes the image
    to `settings.simulator_image_repository` under its hash and records an `oci` artifact with the registry's digest;
    the run path pulls an available `oci` artifact before building. The repository must be readable by the cluster
    (a public package, or credentials on the pull).
@@ -117,9 +121,10 @@ registry environment (environments.yaml: registry_env) ──► its current sim
 - Unit tests per phase: the monitor's per-backend polling; artifact recording, adoption, verification; the Job's
   shape; a build run end to end against a fake Kubernetes (completed, failed, refused pod); a run joining an
   in-flight build; the build route.
-- Live, after phase 3's release: rerun the Ciliberto comparison (comparison 1 failed on 2026-10-13). The first run's
+- Live, after phase 3's release: rerun the Ciliberto comparison (comparison 1 failed on 2026-10-13). (Done
+  2026-10-13 on 0.7.21: comparison 3 scored; `docs/plan-sedml.md`, "On the cluster".) The first run's
   build is a Kubernetes Job; `environment_image` records the `.sif`; both runs complete; the comparison scores.
-- After phase 4: `POST /environments/registry_env/build` on an already built environment answers its available
+- After phase 4: `POST /registry/environments/registry_env/build` on an already built environment answers its available
   image without starting a Job.
 
 ## Out of scope

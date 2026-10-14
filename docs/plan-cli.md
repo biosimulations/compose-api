@@ -1,6 +1,9 @@
 # CLI: a `compose-api` command line on a generated httpx client
 
-**Status (2026-10-07): A, B1, B2 and C merged (#205–#208), with D's docs; what remains is the 0.7.0 release (and publishing `compose-api-client` to PyPI), each on Jim's go, and the open questions below.** Three PRs, each merged on green with a merge
+**Status (2026-10-07): A, B1, B2 and C merged (#205–#208), with D's docs; what remains is the 0.7.0 release (and publishing `compose-api-client` to PyPI), each on Jim's go, and the open questions below.**
+**(2026-10-13: D is done. The workflow merged in #210, and `compose-api-client` 0.7.6 is on PyPI, published by a
+`workflow_dispatch` run on 2026-10-10. No GitHub release has been made since 0.5.0, so the on-release trigger has never
+fired. The spec now has 49 operations, each with a command; `--json` on every command came in #221.)** Three PRs, each merged on green with a merge
 commit. Publishing to PyPI and deploying are separate goes from Jim.
 
 | Step | What | State |
@@ -9,7 +12,7 @@ commit. Publishing to PyPI and deploying are separate goes from Jim.
 | B1 | `compose-api-client` as a workspace package at `clients/python`, brought in with its history (C6) | **done** #206 |
 | B2 | The hand-written application layer, `compose_api_client.ext` | **done** #207 |
 | C | The `compose-api` CLI on `ext` and the generated client; a spec-coverage test | **done** #208 |
-| D | Docs (`docs/cli.md`, `CLAUDE.md`) done in #208; PyPI trusted-publisher workflow; release with 0.7.0 | workflow **in review**; PyPI publisher to add; release pending |
+| D | Docs (`docs/cli.md`, `CLAUDE.md`) done in #208; PyPI trusted-publisher workflow; release with 0.7.0 | **done**: workflow #210; trusted publisher added; 0.7.6 published 2026-10-10 |
 
 ## Context
 
@@ -311,7 +314,9 @@ Other details:
   `pypi`.
 - **The first publishable release is 0.7.0.** Tag 0.6.0 predates `clients/python`.
 - **PyPI goes from 0.2.0 straight to 0.7.0**, because the client now versions with the service. pbest keeps its
-  `==0.2.0` pin until it is bumped (the four-step release in CLAUDE.md).
+  `==0.2.0` pin until it is bumped (the four-step release in CLAUDE.md). (2026-10-13: pbest#55 bumped it to
+  `==0.7.6` on 2026-10-10, but pbest has not released since 0.6.3, so compose-api's `pbest==0.6.3` pin and its
+  `override-dependencies` entry for the client stay.)
 
 ## Verification
 
@@ -338,7 +343,8 @@ Other details:
 
 ## Non-goals
 
-- Auth: `--token` is reserved; #192 decides the flow.
+- Auth: `--token` is reserved; #192 decides the flow. (2026-10-13: `--token` is the only way today; interactive
+  login with Auth0 PKCE is open in #310.)
 - A TUI or GUI (atlantis has both; not needed here).
 - Folding atlantis's `compose` group into this CLI. viva-api could later delegate to `compose-api-client`, which is
   viva-api's decision.
@@ -348,12 +354,14 @@ Other details:
 
 1. **The batch-status endpoint:** keep the GET-with-body, or add a query-string form (`?ids=1&ids=2`) beside it? The
    addition would be non-breaking, the replacement would break pbest. Proposed: add the query form in 0.7.0 and keep
-   the body form until pbest moves.
-2. **The command name:** `compose-api` (proposed: names the service), or `compose`, which is shorter but generic and
+   the body form until pbest moves. (2026-10-13: still open; only the body form exists, `routers/results.py`.)
+2. ~~**The command name:**~~ *Settled: `compose-api`, as shipped in #208.* `compose-api` (proposed: names the service), or `compose`, which is shorter but generic and
    collides with `docker compose` muscle memory?
-3. **When the 0.2.x external repository stops being written:** at strategy phase 5 (proposed), or as soon as pbest pins
+3. **When the 0.2.x external repository stops being written:** (2026-10-13: still open; it waits on a pbest release
+   that carries the 0.7.6 pin.) at strategy phase 5 (proposed), or as soon as pbest pins
    a release from this repository (0.7.0 or later; the client now versions with the service)?
-4. **Prebuilt simulators can't be discovered through the API.** *(Found building C.)* `simulators list` returns
+4. ~~**Prebuilt simulators can't be discovered through the API.**~~ *Answered (2026-10-13): `GET /registry/environments`
+   (`compose-api environments list`) names them, and `simulations list --simulator NAME` filters by one.* *(Found building C.)* `simulators list` returns
    container definitions, with no names. The names `run --simulator` accepts (`PREBUILT_SIMULATORS`, for example
    `viva-pde-particle`) exist only in the deployment config. Proposed: a `GET /core/simulator/prebuilt`
    (name → image digest), and a `compose-api simulators prebuilt` command for it.
