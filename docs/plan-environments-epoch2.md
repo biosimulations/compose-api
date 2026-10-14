@@ -385,11 +385,11 @@ The asks:
    to a package named `viva-superpowers`.
 3. Replace git `main` sources with versioned releases. 38 of 50 pyprojects use them; only viva-pde-particle pins SHAs.
 4. Stop listing vivarium-workbench as a runtime dependency of wrappers (21 do).
-6. viva-pde-particle: replace the process-bigraph commit pin (`e5325c1`) with the release `process-bigraph>=1.9.1`, which
-   contains it (EV3, releases only). This is our own work there, but it is a vivarium-collective repository.
 5. process-bigraph: schema-aware serialisation in the `git:` and `rest:` transports (EV8). (A suspected result bug in
    `parallel.py` was checked and is not one: `send_command` sets `_pending_command` through the inherited
    `pre_send_command`; see [01](environments/01-current-state.md).)
+6. viva-pde-particle: replace the process-bigraph commit pin (`e5325c1`) with the release `process-bigraph>=1.9.1`, which
+   contains it (EV3, releases only). This is our own work there, but it is a vivarium-collective repository.
 
 - **Status:** proposed. Each ask is raised only with the user's go-ahead.
 
