@@ -283,6 +283,12 @@ def _extract(content: bytes, dest: str | Path) -> list[Path]:
     return [root / n for n in names]
 
 
+def _read_timeout(timeout: float, *, download: bool = False) -> float:
+    """The longest silence allowed between bytes of an answer. A download gets the session's whole timeout (a server
+    building a large archive may say nothing for minutes); anything else at most 60 s."""
+    return timeout if download else min(timeout, 60.0)
+
+
 def _refused(op: Operation, credential: Credential | None, base_url: str) -> str:
     """The destination guard stopped a request before it was sent. Credentials are named only when it carried some."""
     what = "credentials for" if credential is not None else "a request for"
@@ -317,8 +323,7 @@ def _make_client(
         args["transport"] = transport
     if hooks:
         args["event_hooks"] = hooks
-    read_timeout = min(timeout, 60.0) if timeout > 0 else timeout
-    t = httpx.Timeout(read_timeout, connect=5.0, write=60.0, pool=5.0)
+    t = httpx.Timeout(timeout, connect=5.0, write=60.0, pool=5.0)
     if token:
         return AuthenticatedClient(
             base_url=base_url,
@@ -364,7 +369,7 @@ class ComposeSession:
         self.client = client or _make_client(
             base_url,
             token,
-            timeout,
+            _read_timeout(timeout),
             transport,
             verify_ssl=self._verify,
             guard=self._guard,
@@ -433,12 +438,11 @@ class ComposeSession:
         *,
         download: bool = False,
     ) -> Response[Any]:
-        eff_timeout = self.timeout if download else min(self.timeout, 60.0)
         answered: list[httpx.Response] = []
         client = _make_client(
             self.base_url,
             credential.access_token if credential is not None else None,
-            eff_timeout,
+            _read_timeout(self.timeout, download=download),
             self._transport,
             verify_ssl=self._verify,
             guard=self._guard,
@@ -1050,7 +1054,7 @@ class AsyncComposeSession:
         self.client = client or _make_client(
             base_url,
             token,
-            timeout,
+            _read_timeout(timeout),
             transport,
             verify_ssl=self._verify,
             guard=self._guard,
@@ -1134,12 +1138,11 @@ class AsyncComposeSession:
         *,
         download: bool = False,
     ) -> Response[Any]:
-        eff_timeout = self.timeout if download else min(self.timeout, 60.0)
         answered: list[httpx.Response] = []
         client = _make_client(
             self.base_url,
             credential.access_token if credential is not None else None,
-            eff_timeout,
+            _read_timeout(self.timeout, download=download),
             self._transport,
             verify_ssl=self._verify,
             guard=self._guard,
@@ -1147,7 +1150,9 @@ class AsyncComposeSession:
             on_response=answered.append,
         )
         try:
-            async with client, asyncio.timeout(COMMAND_DEADLINE_SECONDS):
+            # A download has no overall deadline: a large one can rightly take longer, and the read timeout already
+            # ends one that stalls.
+            async with client, asyncio.timeout(None if download else COMMAND_DEADLINE_SECONDS):
                 return await call(client)
         except _READ_FAILURES:
             if not answered:
