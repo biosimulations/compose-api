@@ -849,7 +849,6 @@ requires-dist = [
     { name = "authlib", marker = "extra == 'auth'", specifier = ">=1.8.0,<2" },
     { name = "authlib", marker = "extra == 'cli'", specifier = ">=1.8.0,<2" },
     { name = "click", marker = "extra == 'cli'", specifier = ">=8.1" },
-    { name = "compose-api-client", extras = ["auth"], marker = "extra == 'cli'", editable = "clients/python" },
     { name = "httpx", specifier = ">=0.28.1,<0.29" },
     { name = "joserfc", marker = "extra == 'auth'", specifier = ">=1.7.5,<2" },
     { name = "joserfc", marker = "extra == 'cli'", specifier = ">=1.7.5,<2" },

@@ -23,8 +23,9 @@ auth = [
     "pyjwt[crypto]>=2.15.0,<3",
     "pywin32>=311 ; sys_platform == 'win32'",
 ]
+# [cli] lists [auth]'s dependencies itself rather than naming compose-api-client[auth]: the build flattens such a
+# self-reference anyway. tests/cli/test_packaging.py keeps the two lists in step.
 cli = [
-    "compose-api-client[auth]",
     "authlib>=1.8.0,<2",
     "joserfc>=1.7.5,<2",
     "keyring>=25.7,<26",

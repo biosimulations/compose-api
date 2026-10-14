@@ -50,9 +50,15 @@ jobs:
           cd "$RUNNER_TEMP"
           uv venv --python 3.11 smoke
           wheel="$(ls "$GITHUB_WORKSPACE"/dist/*.whl)"
-          VIRTUAL_ENV="$RUNNER_TEMP/smoke" uv pip install "compose-api-client[cli] @ file://${wheel}"
-          smoke/bin/python -c "import compose_api_client.ext, compose_api_client.cli; import importlib.util as u; assert u.find_spec('fastapi') is None"
+          # Check that the installed version is the one built: an install that resolved the package anywhere else
+          # (for example inside the repository, where the root's uv overrides apply) must fail here, not pass.
+          VIRTUAL_ENV="$RUNNER_TEMP/smoke" uv pip install "${wheel}[cli]"
+          built="$(basename "${wheel}" | cut -d- -f2)"
+          installed="$(smoke/bin/python -c 'import importlib.metadata as m; print(m.version("compose-api-client"))')"
+          test "${installed}" = "${built}" || { echo "::error::installed compose-api-client ${installed}, not the built ${built}"; exit 1; }
+          smoke/bin/python -c "import compose_api_client.ext, compose_api_client.cli, compose_api_client.auth, compose_api_client.profiles; import importlib.util as u; assert u.find_spec('fastapi') is None"
           smoke/bin/compose-api --help
+          smoke/bin/compose-api run --help
 
       - uses: actions/upload-artifact@v7
         with:

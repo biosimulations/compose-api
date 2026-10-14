@@ -83,6 +83,25 @@ def test_the_wheel_declares_the_floor_and_the_cli_dependencies(client_wheel: zip
         assert re.search(rf"^Requires-Dist: {dependency}\b", metadata, re.MULTILINE | re.IGNORECASE), dependency
 
 
+def _extra_requirements(metadata: str, extra: str) -> set[str]:
+    """The requirements the wheel declares for `extra`, without their markers."""
+    found: set[str] = set()
+    for line in metadata.splitlines():
+        if line.startswith("Requires-Dist: ") and f"extra == '{extra}'" in line.replace('"', "'"):
+            found.add(line.removeprefix("Requires-Dist: ").split(";")[0].strip())
+    return found
+
+
+def test_the_cli_extra_lists_every_auth_dependency_and_never_the_package_itself(client_wheel: zipfile.ZipFile) -> None:
+    """`[cli]` repeats `[auth]`'s requirements rather than naming `compose-api-client[auth]`, so the two lists must
+    stay in step; and no extra names the package itself."""
+    metadata = _metadata(client_wheel, "METADATA")
+    auth, cli = _extra_requirements(metadata, "auth"), _extra_requirements(metadata, "cli")
+    assert auth, "the [auth] extra is declared"
+    assert auth <= cli, sorted(auth - cli)
+    assert not [r for r in auth | cli if re.match(r"compose[-_.]api[-_.]client\b", r, re.IGNORECASE)]
+
+
 def test_the_wheel_contains_nothing_secret_shaped(client_wheel: zipfile.ZipFile, root_wheel: zipfile.ZipFile) -> None:
     assert [name for name in client_wheel.namelist() if SECRET_SHAPED.search(name)] == []
     assert [name for name in root_wheel.namelist() if SECRET_SHAPED.search(name)] == []

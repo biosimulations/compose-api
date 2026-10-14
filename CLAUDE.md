@@ -44,11 +44,11 @@ Web UI (`webapp/`, Nuxt 4 + Nuxt UI static SPA served by the API at `/ui`; [`doc
 `webapp/app/api/schema.d.ts` is generated from the spec (`make clients` regenerates it; CI fails when stale) — never
 hand-edit. Use standard libraries there (VueUse, openapi-fetch, PapaParse, Nuxt UI components) over ad hoc code.
 
-Command line: `uv run compose-api --help` (the `compose-api-client[cli]` extra, which pulls `[auth]`; guide and reference in
-[`docs/cli.md`](docs/cli.md), `make cli-docs` regenerates the reference). Every API operation must be claimed by a
-command (`@claims` in `compose_api_client/cli/commands.py`); `tests/client/test_cli.py` fails otherwise, so a new
-endpoint needs a command in the same PR. Hand-written client code lives in `compose_api_client/ext/`, `cli/`, `auth/`,
-and `profiles.py`, which `make clients` preserves.
+Command line: `uv run compose-api --help` (the `compose-api-client[cli]` extra, which includes the `[auth]`
+dependencies; guide and reference in [`docs/cli.md`](docs/cli.md), `make cli-docs` regenerates the reference). Every API
+operation must be claimed by a command (`@claims` in `compose_api_client/cli/commands.py`); `tests/client/test_cli.py`
+fails otherwise, so a new endpoint needs a command in the same PR. Hand-written client code lives in
+`compose_api_client/ext/`, `cli/`, `auth/`, and `profiles.py`, which `make clients` preserves.
 
 Generation is deterministic (`scripts/generate-api-client.sh`): the generator's post-hooks are off and the script
 formats with the locked ruff and this repo's settings, so the committed client is byte-for-byte what `make clients`
