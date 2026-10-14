@@ -209,9 +209,9 @@ untrusted workload by this definition, whatever image it runs in.
 **Where the line sits today (2026-10-06).** Strategy decision 3 keeps this funding year on the trusted tier, and the
 service now enforces it at submission: process addresses must name a registry entry at level *tested* or higher, and
 the arbitrary-import `local:!` form and non-`local` protocols are always refused (#184). A prebuilt image (#190) is
-admitted by being listed in the deployment, which is a trust decision about the image. Documents sent to such an
-image currently skip the address check altogether, *including* the unsafe forms, which this section's definition
-says should still apply: listing an image vouches for its contents, not for every document that runs in it.
+admitted by being listed in the deployment, which is a trust decision about the image. *2026-10-13:* documents sent
+to such an image skip only the registry lookup; the unsafe forms are refused for them too, since listing an image
+vouches for its contents, not for every document that runs in it.
 
 ### 4.4 Image management, the half that is easy to forget
 

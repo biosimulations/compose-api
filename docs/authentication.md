@@ -36,9 +36,7 @@ Every route that reads something a simulation owns asks the server's read policy
 - `GET /results/simulation/events`, `GET /results/simulation/trace` and `GET /results/simulation/trace/chrome`
 - `GET /simulations` and `GET /simulations/<id>`
 - `GET /datasets`, `GET /datasets/<id>`, `GET /datasets/<id>/content` and `GET /datasets/<id>/files/<subpath>`
-
-(2026-10-13: the `/comparisons` routes read their member simulations' series without asking the read policy. That is
-harmless while every simulation is public, and is being fixed separately.)
+- `GET /comparisons`, `GET /comparisons/<id>` and `GET /comparisons/<id>/series`, readable only when every run in the comparison is readable by the caller
 
 The policy lets anyone read a public simulation, and only its owner, or a caller with the `admin` role, read a private one. Submitting a simulation does not record an owner yet, so every simulation is public. Anyone who has the id can read its status, events and datasets and, when the results file exists, download it. Anonymous and authenticated callers see the same record. A missing simulation, or results that are not ready yet, is 404.
 

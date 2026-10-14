@@ -332,10 +332,9 @@ et al. 2016). Two gaps remain:
   *Update 2026-10-12:* it is now an entry in `manifest.yaml` at *tested*, in its own bundle `viva-pde-particle` (its
   image's own CI runs this service's job contract before every push), so its components are registered and its
   interfaces are read like the shared image's.
-- Documents submitted to a prebuilt image skip the address check entirely, *including* the unsafe forms (`local:!`,
-  non-`local` protocols). The deployment vouches for the image, not for every document sent to it, so the unsafe-form
-  check should still apply. *Still open 2026-10-13* (`routers/simulation.py`: the check runs only without
-  `simulator`).
+- ~~Documents submitted to a prebuilt image skip the address check entirely, *including* the unsafe forms (`local:!`,
+  non-`local` protocols).~~ *2026-10-13:* fixed; the unsafe-form check now applies to them too, and only the registry
+  lookup is skipped (`validate_submission(..., registry=False)`).
 
 ### The phases
 

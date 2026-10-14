@@ -10,7 +10,7 @@ table below. A merge deploys nothing by itself: the next release's image ships i
 | 2 | `environment_image`: an artifact record per built or pulled image (kind, location, digest, size, the run that produced it, available); "built" means an available artifact | merged |
 | 3 | The `k8s` build backend: a Kubernetes Job builds the image (privileged, scratch only) and copies it onto the shared filesystem as the service user | merged |
 | 4 | Builds invoked on their own: `POST /environments/{name}/build`, `GET /environments/{name}/images` (as built, under `/registry`); a run waits for an in-flight build of its definition instead of starting another | merged (#297, 0.7.21) |
-| 5 | Publish: an image pushed to a registry, recorded as another artifact; a cluster pulls it instead of building | **deferred (2026-10-13)**: waits on the epoch-2 environment research (`docs/research-environments.md`, to come) |
+| 5 | Publish: an image pushed to a registry, recorded as another artifact; a cluster pulls it instead of building | **deferred (2026-10-13)**: waits on the epoch-2 environment research (`docs/environments/` and `docs/plan-environments-epoch2.md`, to come) |
 
 ## Why
 
@@ -109,7 +109,7 @@ registry environment (environments.yaml: registry_env) ──► its current sim
    API process, or before a restart, is waited on. The build routes are as open as a run's submission, which would
    start the same build. CLI: `environments images|build`, `simulators images|build`. The web app's environment page
    shows the image's state and offers Build.
-5. **Publish.** **Deferred (2026-10-13)** until the epoch-2 environment research (`docs/research-environments.md`, to
+5. **Publish.** **Deferred (2026-10-13)** until the epoch-2 environment research (`docs/environments/` and `docs/plan-environments-epoch2.md`, to
    come) settles what an environment and its identity are. As planned: `POST /environments/{name}/publish`: a
    Kubernetes Job (or CI, for the shared image) pushes the image
    to `settings.simulator_image_repository` under its hash and records an `oci` artifact with the registry's digest;
