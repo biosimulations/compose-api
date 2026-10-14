@@ -5,15 +5,30 @@ name: CLI platforms
 # Linux in Main's Python matrix; this adds the other operating systems and the real stores, which mocks cannot stand
 # in for. It writes only synthetic records under random names and deletes them, and it needs no secrets.
 #
-# Manual for now: run it before a release and after changing compose_api/cli. Once it has passed on all three
-# systems, add `pull_request:` with a `paths:` filter on compose_api/cli/**, tests/cli/** and the lock file.
+# Run before merging changes to the client, its tests, or the environment used by this matrix.
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "clients/python/**"
+      - "tests/cli/**"
+      - "tests/client/**"
+      - "tests/fixtures/**"
+      - "tests/conftest.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".python-version"
+      - ".github/actions/setup-python-env/**"
+      - ".github/workflows/cli-platforms.yml"
+
+permissions:
+  contents: read
 
 jobs:
   cli:
     name: CLI on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -32,7 +47,9 @@ jobs:
 
       # No Docker here, which the CLI tests never need; the conftest imports the server's fixtures but starts none.
       - name: Run the CLI tests
-        run: uv run python -m pytest tests/cli -o addopts= -p no:cacheprovider
+        run: >-
+          uv run python -m pytest tests/cli tests/client/test_ext_security.py
+          tests/client/test_credential_contract.py -o addopts= -p no:cacheprovider
 
       - name: Install a Secret Service
         if: runner.os == 'Linux'
@@ -53,6 +70,8 @@ jobs:
 
       - name: Build the wheel and run the installed command
         run: |
-          uv build --wheel --out-dir dist
-          uvx --python 3.14 --from "$(ls dist/compose_api-*.whl)" compose-api --version
-          uvx --python 3.14 --from "$(ls dist/compose_api-*.whl)" compose-api auth --help
+          uv build --package compose-api-client --wheel --out-dir dist
+          wheel="$(ls dist/compose_api_client-*.whl)"
+          uvx --python 3.14 --from "${wheel}[cli]" compose-api --version
+          uvx --python 3.14 --from "${wheel}[cli]" compose-api auth --help
+          uvx --python 3.14 --from "${wheel}[cli]" compose-api run --help
