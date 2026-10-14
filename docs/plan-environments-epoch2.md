@@ -1,7 +1,7 @@
 # Environments, epoch 2: a forest of islands, and running across them
 
 **Status (2026-10-13): proposed. No decision is taken yet.**
-- This plan turns the research in [environments/](environments/README.md) into fifteen decisions (EV0–EV14); EV0 fixes the vocabulary. Each
+- This plan turns the research in [environments/](environments/README.md) into sixteen decisions (EV0–EV15); EV0 fixes the vocabulary, EV15 separates authoring. Each
   decision is gated by experiments (X1–X6) and staged in phases (E2.0–E2.4).
 - Accepting a decision means editing its **Status** line, with a date and the PR.
 - Epoch 1 is [plan-environment-builds.md](plan-environment-builds.md): phases 1–4 are shipped, and its phase 5
@@ -210,6 +210,16 @@ Stored runs keep their old labels. Readers map old to new.
     viva-pde-particle `compose` lesson.
   - EV14's upstream asks become prerequisites for a clean core.
 - **Evidence:** [03 §common core, §shared middleware](environments/03-forest-algorithms.md).
+- **Releases only for the core (2026-10-13, the user's direction).**
+  - process-bigraph and bigraph-schema are pinned to **published releases**, never to git commits or branches, on
+    every environment and in every manifest we own.
+  - The one commit pin was a stopgap: viva-pde-particle pins process-bigraph `e5325c1` (`pixi.toml:67`,
+    `pyproject.toml:13`). We pinned a commit rather than cut a release without the maintainer.
+  - That pin is now covered: process-bigraph **1.9.1** (PyPI 2026-10-13, tag `v1.9.1` = `8ce2e1d`) contains `e5325c1`
+    (GitHub compare: 7 ahead, 0 behind). 1.9.1 requires bigraph-schema ≥ 1.8.1.
+  - The core target for X5 and EV3 is therefore **process-bigraph ≥ 1.9.1 / bigraph-schema ≥ 1.8.1**.
+  - When we need an unreleased core change, we ask for a release rather than pin a commit.
+  - Moving viva-pde-particle to 1.9.1 is a vivarium-collective change, so it is made with the user's go-ahead (EV14).
 - **Status:** proposed. Gated by X5.
 
 ### EV4 — The forest is computed: a cover driven by demand, with the solver as oracle
@@ -375,11 +385,72 @@ The asks:
    to a package named `viva-superpowers`.
 3. Replace git `main` sources with versioned releases. 38 of 50 pyprojects use them; only viva-pde-particle pins SHAs.
 4. Stop listing vivarium-workbench as a runtime dependency of wrappers (21 do).
+6. viva-pde-particle: replace the process-bigraph commit pin (`e5325c1`) with the release `process-bigraph>=1.9.1`, which
+   contains it (EV3, releases only). This is our own work there, but it is a vivarium-collective repository.
 5. process-bigraph: schema-aware serialisation in the `git:` and `rest:` transports (EV8). (A suspected result bug in
    `parallel.py` was checked and is not one: `send_command` sets `_pending_command` through the inherited
    `pre_send_command`; see [01](environments/01-current-state.md).)
 
 - **Status:** proposed. Each ask is raised only with the user's go-ahead.
+
+### EV15 — The authoring environment is decoupled from the run environments, with bounded core skew
+
+**Question.** Must the environment that *authors and checks* composites run the same process-bigraph as the
+environments that *run* them?
+
+**What is true today:**
+- **Authoring already runs in its own environment.** The DSL and SED-ML translation (process-bigraph-lang, the
+  checker; the SED2 work builds on the same) run as a CLI in a separate venv (`.pblang`, `settings.pblang_python`,
+  `sedml/pblang-requirements.txt`: `process-bigraph-lang==0.3.1`).
+- process-bigraph-lang 0.3.1 depends on **bigraph-schema ≥ 1.6, < 2** and numpy only, **not on process-bigraph**.
+- **It never imports the run environments' packages.** It reads their **interface manifests** (`pbg-interfaces/1`
+  JSON, produced *inside* each image by the standard-library describe script).
+- **The skew is already being tolerated.** The API's own environment runs process-bigraph 1.0.5 / bigraph-schema
+  1.0.14, and the two run environments run 1.0.5 and 1.8.5. The checker serves both through manifests.
+
+**Recommendation.** Make that a rule, with a bound:
+1. **The authoring environment is its own environment** in the forest (an `authoring` island), versioned and locked
+   like the others. It is never merged into a run environment and never imports run-environment packages.
+2. **The contract between them is the manifest, not the package.** Authoring depends on the manifest format version
+   (`pbg-interfaces/N`) and the bigraph-schema *type language* used in port and config schemas, not on matching
+   process-bigraph versions.
+3. **Tolerated skew:**
+   - any process-bigraph version on a run environment;
+   - a bigraph-schema **major** version shared by authoring and the manifests it reads;
+   - a manifest format version authoring declares it supports.
+
+   Outside that bound the checker refuses with a clear message ("environment X's manifest uses pbg-interfaces/2;
+   this checker reads /1"), rather than checking wrongly.
+4. **What the checker cannot see is checked later, where it can be seen.**
+   - Behaviour that depends on the run-side process-bigraph (scheduling, update semantics: e.g. the open
+     process-bigraph#240 chunking issue) is not a manifest property.
+   - It is covered by the target environment's own suites (EV5 curation) and by EV8's schema-hash handshake at run
+     time.
+5. Every manifest records the producing environment's process-bigraph and bigraph-schema versions (they already
+   record Python), so a skew is visible at authoring time.
+
+**Alternatives.**
+- **One core everywhere, authoring included.** Rejected. It would force the checker to move in lockstep with the
+  oldest run environment, which is exactly the 1.0.5 trap. It would also make authoring import heavy simulator
+  stacks.
+- **Authoring imports the target environment** (run the checker inside each image). Rejected as the default:
+  - it needs every image locally;
+  - it is slow;
+  - it breaks laptop authoring on Windows and macOS.
+
+  Keep it as the describe step, which is what produces the manifest.
+
+**Consequences.**
+- EV3's common core binds the *run* environments only. Authoring follows bigraph-schema majors.
+- The manifest format becomes a versioned, published contract with a compatibility policy, like EV8's wire schemas.
+- The web UI and the CLI check against the selected environment's manifest version.
+
+**Evidence:**
+- `compose_api/config.py` (`pblang_python`), `sedml/pblang-requirements.txt`;
+- [plan-authoring.md](plan-authoring.md), `registry/environments.yaml`, `registry/manifests/*.json`;
+- [01 §current state](environments/01-current-state.md).
+
+**Status:** proposed.
 
 ## Experiments (each gates a decision)
 
@@ -389,14 +460,14 @@ The asks:
 | X2 | On Mantis: a base SIF plus two stacked read-only overlays; a pixi environment on the shared store bind-mounted into a thin SIF; compare start time and disk | EV10 | a measured choice |
 | X3 | A `pbg-worker` prototype: one process in another island, driven over stdio via `python`, `docker run -i` and `apptainer exec`, on macOS, Linux and Windows | EV7, EV8 | the same composite result on all three launchers |
 | X4 | MUSCLE3: the X3 worker as a MUSCLE3 component in two SIFs across two nodes under SLURM | EV9 | a run, plus the measured overhead per exchange |
-| X5 | `registry_env` on process-bigraph ≥ 1.8: its manifest suites and the SED-ML suites still pass | EV3 | suites green, or a list of breaks |
+| X5 | `registry_env` on process-bigraph ≥ 1.9.1 / bigraph-schema ≥ 1.8.1 (releases only): its manifest suites and the SED-ML suites still pass | EV3 | suites green, or a list of breaks |
 | X6 | Lock hash → build → digest → pull by digest on the cluster; identical digest on rebuild where the inputs are pinned | EV1, EV12 | round trip demonstrated |
 
 ## Phases
 
 | Phase | Content | Depends on |
 |---|---|---|
-| E2.0 | These documents; EV0 migration steps 1–3 (`environment` alongside `simulator`, derived membership, catalog folded into the registry); X1, X5; EV14 asks raised (with permission) | — |
+| E2.0 | These documents; EV0 migration steps 1–3 (`environment` alongside `simulator`, derived membership, catalog folded into the registry); X1, X5; EV14 asks raised (with permission); EV15 rule 5 (manifests record the core versions) | — |
 | E2.1 | EV0 steps 4–5 (rename `registry_env`, retire the library list and legacy tables); islands in one pixi workspace (EV2, EV3); identity by lock hash and digest (EV1); registry per island (EV5) | X1, X5, X6 |
 | E2.2 | Worker protocol and wire format (EV7, EV8); placement (EV6); sidecar islands (EV13) | X3 |
 | E2.3 | HPC sharing (EV10); multi-node backend (EV9) | X2, X4 |
