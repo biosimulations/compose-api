@@ -131,12 +131,31 @@ def test_silent_write_or_delete_failure(monkeypatch: pytest.MonkeyPatch) -> None
 def test_private_state_rejects_symlinks_permissions_and_corruption(tmp_path: Path) -> None:
     key = record().binding_key
     state = FileState(key, tmp_path / "state")
+    import os
+
     state.write(SessionState(generation=8))
-    state.path.chmod(0o644)
+    state.path.write_text('{"generation": "secret-corruption"}')
     with pytest.raises(StorageError):
         state.read()
-    state.path.chmod(0o600)
-    state.path.write_text('{"generation": "secret-corruption"}')
+    state.write(SessionState(generation=8))
+    if os.name == "posix":
+        state.path.chmod(0o644)
+    else:
+        import win32con
+        import win32security
+
+        everyone = win32security.ConvertStringSidToSid("S-1-1-0")
+        acl = win32security.ACL()
+        acl.AddAccessAllowedAceEx(win32security.ACL_REVISION, 0, win32con.FILE_ALL_ACCESS, everyone)
+        win32security.SetNamedSecurityInfo(
+            str(state.path),
+            win32security.SE_FILE_OBJECT,
+            win32security.DACL_SECURITY_INFORMATION | win32security.PROTECTED_DACL_SECURITY_INFORMATION,
+            None,
+            None,
+            acl,
+            None,
+        )
     with pytest.raises(StorageError):
         state.read()
     link = tmp_path / "link"

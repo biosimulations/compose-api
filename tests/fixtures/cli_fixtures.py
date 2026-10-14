@@ -98,8 +98,8 @@ def cli_config_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 @pytest.fixture
 def cli_subprocess_env(cli_config_path: Path) -> dict[str, str]:
     """The whole environment for a CLI child process: the private home and nothing else, so no server settings."""
-    env = {name: os.environ[name] for name in ("PATH", "SYSTEMROOT") if name in os.environ}
-    env.update(HOME=os.environ["HOME"], XDG_CONFIG_HOME=os.environ["XDG_CONFIG_HOME"])
+    env = {name: os.environ[name] for name in ("PATH", "PATHEXT", "SYSTEMROOT") if name in os.environ}
+    env.update(HOME=os.environ["HOME"], XDG_CONFIG_HOME=os.environ["XDG_CONFIG_HOME"], PYTHONUTF8="1")
     return env
 
 

@@ -8,14 +8,16 @@ from typing import Any
 from compose_api_client.ext.errors import StorageError
 
 
-def _identity() -> Any:
+def _principals() -> tuple[Any, tuple[Any, ...]]:
     import win32api
     import win32con
     import win32security
 
     token = win32security.OpenProcessToken(win32api.GetCurrentProcess(), win32con.TOKEN_QUERY)
     try:
-        return win32security.GetTokenInformation(token, win32security.TokenUser)[0]
+        user = win32security.GetTokenInformation(token, win32security.TokenUser)[0]
+        owner = win32security.GetTokenInformation(token, win32security.TokenOwner)
+        return user, (user, owner)
     finally:
         token.Close()
 
@@ -26,7 +28,7 @@ def protect(path: Path) -> None:
     import win32security
 
     try:
-        sid = _identity()
+        sid, _ = _principals()
         acl = win32security.ACL()
         acl.AddAccessAllowedAceEx(
             win32security.ACL_REVISION,
@@ -57,9 +59,9 @@ def validate(path: Path) -> None:
             win32security.SE_FILE_OBJECT,
             win32security.OWNER_SECURITY_INFORMATION | win32security.DACL_SECURITY_INFORMATION,
         )
-        sid = _identity()
+        sid, owners = _principals()
         acl = descriptor.GetSecurityDescriptorDacl()
-        valid = descriptor.GetSecurityDescriptorOwner() == sid and acl is not None and acl.GetAceCount() > 0
+        valid = descriptor.GetSecurityDescriptorOwner() in owners and acl is not None and acl.GetAceCount() > 0
         if valid:
             for index in range(acl.GetAceCount()):
                 ace = acl.GetAce(index)

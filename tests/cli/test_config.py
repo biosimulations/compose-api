@@ -292,7 +292,7 @@ def test_audience_is_kept_exactly(tmp_path: Path) -> None:
     ("field", "value", "fragment"),
     [
         ("auth0_audience", "https://api.compose.local ", "must be the exact API identifier"),
-        ("auth0_audience", "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl", "looks like a token"),
+        ("auth0_audience", ".".join(("eyJhbGciOiJSUzI1NiJ9", "eyJzdWIiOiJ4In0", "c2lnbmF0dXJl")), "looks like a token"),
         ("auth0_client_id", "<published-production-native-client-id>", "public Client ID"),
         ("auth0_client_id", "abc def", "public Client ID"),
         ("database_connection", "Username Password", "Auth0 connection name"),

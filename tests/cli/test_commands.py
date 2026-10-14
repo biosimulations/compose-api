@@ -123,7 +123,7 @@ def test_every_documented_command_is_registered(capsys: pytest.CaptureFixture[st
         command = command.commands[word]
     assert path and not isinstance(command, click.Group), argv
     assert main([*path, "--help"]) == ExitCode.OK
-    assert f"Usage: compose-api {' '.join(path)}" in capsys.readouterr().out
+    assert f"Usage: compose-api {' '.join(path)}" in click.unstyle(capsys.readouterr().out)
 
 
 def test_provider_defaults() -> None:
@@ -195,7 +195,7 @@ def test_device_and_no_browser_need_ephemeral_auth(
 @pytest.mark.parametrize("argv", [[], ["auth"]])
 def test_a_group_without_a_command_shows_its_help(capsys: pytest.CaptureFixture[str], argv: list[str]) -> None:
     assert main(argv) == ExitCode.USAGE
-    assert f"Usage: compose-api {' '.join(argv)}".rstrip() in capsys.readouterr().out
+    assert f"Usage: compose-api {' '.join(argv)}".rstrip() in click.unstyle(capsys.readouterr().out)
 
 
 @pytest.mark.parametrize("interval", ["nan", "inf", "0", "-1"])
@@ -394,7 +394,9 @@ def test_entry_point_is_declared() -> None:
 
 
 def _run(command: list[str], env: dict[str, str], cwd: Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(command, env=env, cwd=cwd, capture_output=True, text=True, timeout=60, check=False)  # noqa: S603
+    return subprocess.run(  # noqa: S603
+        command, env=env, cwd=cwd, capture_output=True, text=True, encoding="utf-8", timeout=60, check=False
+    )
 
 
 @pytest.mark.parametrize("argv", [["--help"], ["auth", "--help"], ["auth", "login", "--help"], ["--version"]])
