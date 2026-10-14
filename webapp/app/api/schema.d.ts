@@ -824,6 +824,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the authenticated caller's identity */
+        get: operations["get-current-principal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1087,6 +1104,21 @@ export interface components {
          * @enum {string}
          */
         CurationLevel: "listed" | "installable" | "tested" | "validated" | "curated";
+        /** CurrentPrincipalResponse */
+        CurrentPrincipalResponse: {
+            /** Issuer */
+            issuer: string;
+            /** Subject */
+            subject: string;
+            /** Audience */
+            audience: string[];
+            /** Roles */
+            roles: string[];
+            /** Scopes */
+            scopes: string[];
+            /** Permissions */
+            permissions: string[];
+        };
         /**
          * Dataset
          * @description A file a run produced, readable by anyone who may read its simulation (O7).
@@ -3689,6 +3721,33 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    "get-current-principal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentPrincipalResponse"];
+                };
+            };
+            /** @description Missing or invalid bearer credentials */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
