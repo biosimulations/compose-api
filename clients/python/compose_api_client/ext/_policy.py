@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Final
-from urllib.parse import urlsplit
 
 import httpx
 
@@ -118,18 +117,26 @@ ALLOWED_PATHS: Final = frozenset(
 )
 
 
+_DEFAULT_PORTS: Final = {"http": 80, "https": 443}
+
+
+def _origin(url: httpx.URL) -> tuple[str, str, int | None]:
+    """Scheme, host and port, with the port always explicit. httpx drops a default port from the URL it sends
+    (`https://host:443` goes out as `https://host`), but not always from one it parses (`HTTPS://host:443`)."""
+    return url.scheme, url.host, url.port if url.port is not None else _DEFAULT_PORTS.get(url.scheme)
+
+
 class _DestinationGuard:
     """Request event hook verifying scheme, host, port, absence of userinfo, and allowed API path."""
 
     def __init__(self, base_url: str, *, allowed_paths: frozenset[str] | None = None) -> None:
-        origin = urlsplit(base_url)
-        self.origin = (origin.scheme, origin.hostname, origin.port)
+        self.origin = _origin(httpx.URL(base_url))
         self.allowed_paths = allowed_paths
         self._patterns = None if allowed_paths is not None else spec_path_patterns()
 
     def check(self, request: httpx.Request) -> None:
         url = request.url
-        if (url.scheme, url.host, url.port) != self.origin or url.userinfo:
+        if _origin(url) != self.origin or url.userinfo:
             raise UnsafeRequestError
         if self.allowed_paths is not None:
             if url.path not in self.allowed_paths:

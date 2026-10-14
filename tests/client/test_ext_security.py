@@ -490,6 +490,70 @@ async def test_credentials_go_only_to_this_profiles_api_operations(
     assert transport.requests == [], "the request never left"
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("token", ["static-token", None])
+async def test_an_api_url_with_its_default_port_still_reaches_the_api(session_kind: str, token: str | None) -> None:
+    # httpx sends `https://api.compose.test:443` as `https://api.compose.test`; the guard must not take that for
+    # another server and refuse every request, signed in or not.
+    sent: list[httpx.Request] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, json={"status": "ok"})
+
+    transport = httpx.MockTransport(answer)
+    if session_kind == "sync":
+        api = ComposeSession(f"{API}:443", token=token, transport=transport)
+        try:
+            response, _ = await asyncio.to_thread(
+                api._send, CURRENT_PRINCIPAL, lambda client: client.get_httpx_client().get("/auth/me")
+            )
+        finally:
+            api.close()
+    else:
+        async with AsyncComposeSession(f"{API}:443", token=token, transport=transport) as api_async:
+
+            async def get(client: Any) -> Any:
+                return await client.get_async_httpx_client().get("/auth/me")
+
+            response, _ = await api_async._send(CURRENT_PRINCIPAL, get)
+    assert response.status_code == 200
+    [request] = sent
+    assert str(request.url) == f"{API}/auth/me"
+    assert ("authorization" in request.headers) is (token is not None)
+
+
+@pytest.mark.asyncio
+async def test_an_anonymous_request_elsewhere_is_refused_without_mentioning_credentials(session_kind: str) -> None:
+    sent: list[httpx.Request] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200)
+
+    transport = httpx.MockTransport(answer)
+    elsewhere = "https://evil.example/auth/me"
+    if session_kind == "sync":
+        api = ComposeSession(API, transport=transport)
+        try:
+            with pytest.raises(ProtocolError) as caught:
+                await asyncio.to_thread(
+                    api._send, CURRENT_PRINCIPAL, lambda client: client.get_httpx_client().get(elsewhere)
+                )
+        finally:
+            api.close()
+    else:
+        async with AsyncComposeSession(API, transport=transport) as api_async:
+
+            async def wander(client: Any) -> Any:
+                return await client.get_async_httpx_client().get(elsewhere)
+
+            with pytest.raises(ProtocolError) as caught:
+                await api_async._send(CURRENT_PRINCIPAL, wander)
+    assert str(caught.value) == f"refused to send a request for GET /auth/me anywhere but {API}"
+    assert sent == [], "the request never left"
+
+
 def _self_signed_certificate(path: Path) -> None:
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "compose-api-local test CA")])

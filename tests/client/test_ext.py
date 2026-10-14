@@ -17,6 +17,7 @@ from compose_api_client.ext import (
     NotFound,
     ServerError,
 )
+from compose_api_client.ext._policy import UnsafeRequestError, _DestinationGuard
 
 Handler = Callable[[httpx.Request], httpx.Response]
 
@@ -223,3 +224,43 @@ async def test_async_session_waits_and_downloads(tmp_path: Path) -> None:
         state = await s.wait(7, poll=0)
         files = await s.extract(7, tmp_path)
     assert state.ok and files == [tmp_path / "results.pber"]
+
+
+@pytest.mark.parametrize(
+    ("base_url", "api", "elsewhere"),
+    [
+        *[
+            (
+                spelling,
+                "https://api.compose.test/auth/me",
+                [
+                    "https://api.compose.test:8443/auth/me",
+                    "http://api.compose.test/auth/me",
+                    "http://api.compose.test:443/auth/me",
+                    "https://api.compose.test.evil.example/auth/me",
+                    "https://user@api.compose.test/auth/me",
+                ],
+            )
+            # httpx sends each of these as https://api.compose.test, with no port.
+            for spelling in (
+                "https://api.compose.test",
+                "https://api.compose.test:443",
+                "https://API.Compose.Test/",
+                "HTTPS://api.compose.test:443/",
+            )
+        ],
+        (
+            "http://localhost:8000",
+            "http://localhost:8000/auth/me",
+            ["http://localhost/auth/me", "http://localhost:80/auth/me", "https://localhost:8000/auth/me"],
+        ),
+    ],
+)
+def test_the_destination_guard_compares_the_origin_httpx_sends_to(
+    base_url: str, api: str, elsewhere: list[str]
+) -> None:
+    guard = _DestinationGuard(base_url)
+    guard.check(httpx.Request("GET", api))  # the profile's API, however its URL was spelled
+    for url in elsewhere:
+        with pytest.raises(UnsafeRequestError):
+            guard.check(httpx.Request("GET", url))

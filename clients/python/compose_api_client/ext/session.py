@@ -283,6 +283,12 @@ def _extract(content: bytes, dest: str | Path) -> list[Path]:
     return [root / n for n in names]
 
 
+def _refused(op: Operation, credential: Credential | None, base_url: str) -> str:
+    """The destination guard stopped a request before it was sent. Credentials are named only when it carried some."""
+    what = "credentials for" if credential is not None else "a request for"
+    return f"refused to send {what} {op} anywhere but {base_url}"
+
+
 def _make_client(
     base_url: str,
     token: str | None,
@@ -447,7 +453,7 @@ class ComposeSession:
                 raise  # nothing came back: a bug, not an answer
             return _unreadable(answered[-1])
         except UnsafeRequestError:
-            raise ProtocolError(f"refused to send credentials for {op} anywhere but {self.base_url}") from None
+            raise ProtocolError(_refused(op, credential, self.base_url)) from None
         except (httpx.ConnectError, httpx.ConnectTimeout):
             raise NetworkError(
                 f"cannot reach {self.base_url}: could not connect to the API at {self.base_url}; check the connection"
@@ -1148,7 +1154,7 @@ class AsyncComposeSession:
                 raise  # nothing came back: a bug, not an answer
             return _unreadable(answered[-1])
         except UnsafeRequestError:
-            raise ProtocolError(f"refused to send credentials for {op} anywhere but {self.base_url}") from None
+            raise ProtocolError(_refused(op, credential, self.base_url)) from None
         except (httpx.ConnectError, httpx.ConnectTimeout):
             raise NetworkError(
                 f"cannot reach {self.base_url}: could not connect to the API at {self.base_url}; check the connection"
