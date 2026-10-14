@@ -21,7 +21,7 @@ from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, NoReturn
+from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
 import httpx
@@ -107,18 +107,31 @@ def cli_subprocess_env(cli_config_path: Path) -> dict[str, str]:
 def no_network_or_browser(monkeypatch: pytest.MonkeyPatch) -> Generator[list[str]]:
     """Fail the test if the CLI opens a browser, connects a socket or binds a listener."""
     attempts: list[str] = []
+    in_socketpair = False
+    real_socketpair = socket.socketpair
 
-    def refuse(name: str) -> object:
-        def refused(*_args: object, **_kwargs: object) -> NoReturn:
+    def allow_self_pipe(*args: Any, **kwargs: Any) -> tuple[socket.socket, socket.socket]:
+        nonlocal in_socketpair
+        in_socketpair = True
+        try:
+            return real_socketpair(*args, **kwargs)
+        finally:
+            in_socketpair = False
+
+    def refuse(name: str, original: Any = None) -> object:
+        def refused(*args: object, **kwargs: object) -> Any:
+            if in_socketpair and original is not None:
+                return original(*args, **kwargs)
             attempts.append(name)
             raise AssertionError(f"the CLI called {name}")
 
         return refused
 
+    monkeypatch.setattr(socket, "socketpair", allow_self_pipe)
     for name in ("open", "open_new", "open_new_tab"):
         monkeypatch.setattr(webbrowser, name, refuse(f"webbrowser.{name}"))
     for name in ("connect", "connect_ex", "bind"):
-        monkeypatch.setattr(socket.socket, name, refuse(f"socket.{name}"))
+        monkeypatch.setattr(socket.socket, name, refuse(f"socket.{name}", getattr(socket.socket, name)))
     yield attempts
     assert attempts == [], f"the CLI reached for the network or a browser: {attempts}"
 

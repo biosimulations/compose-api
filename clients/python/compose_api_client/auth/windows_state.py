@@ -7,13 +7,17 @@ from typing import Any
 
 from compose_api_client.ext.errors import StorageError
 
+TOKEN_QUERY = 0x0008
+OBJECT_INHERIT_ACE = 0x1
+CONTAINER_INHERIT_ACE = 0x2
+FILE_ALL_ACCESS = 0x001F01FF
+
 
 def _principals() -> tuple[Any, tuple[Any, ...]]:
     import win32api
-    import win32con
     import win32security
 
-    token = win32security.OpenProcessToken(win32api.GetCurrentProcess(), win32con.TOKEN_QUERY)
+    token = win32security.OpenProcessToken(win32api.GetCurrentProcess(), TOKEN_QUERY)
     try:
         user = win32security.GetTokenInformation(token, win32security.TokenUser)[0]
         owner = win32security.GetTokenInformation(token, win32security.TokenOwner)
@@ -24,7 +28,6 @@ def _principals() -> tuple[Any, tuple[Any, ...]]:
 
 def protect(path: Path) -> None:
     """Install a protected DACL containing only the current user, inherited by new children."""
-    import win32con
     import win32security
 
     try:
@@ -32,8 +35,8 @@ def protect(path: Path) -> None:
         acl = win32security.ACL()
         acl.AddAccessAllowedAceEx(
             win32security.ACL_REVISION,
-            win32con.CONTAINER_INHERIT_ACE | win32con.OBJECT_INHERIT_ACE,
-            win32con.FILE_ALL_ACCESS,
+            CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE,
+            FILE_ALL_ACCESS,
             sid,
         )
         win32security.SetNamedSecurityInfo(

@@ -301,7 +301,7 @@ def test_audience_is_kept_exactly(tmp_path: Path) -> None:
         ("callback_port", "65536", "unprivileged port"),
         ("callback_port", "eighty", "valid integer"),
         ("ca_bundle", "certs/ca.pem", "absolute path"),
-        ("ca_bundle", "/nonexistent/ca.pem", "existing CA certificate file"),
+        ("ca_bundle", str(Path("/nonexistent/ca.pem").resolve()), "existing CA certificate file"),
     ],
 )
 def test_invalid_values_name_the_field_and_source(tmp_path: Path, field: str, value: str, fragment: str) -> None:
@@ -343,7 +343,7 @@ def test_ca_bundle_accepts_an_absolute_or_home_relative_file(tmp_path: Path, mon
         (b"profiles = 3\n", "must be a table of [profiles.<name>] tables"),
         (b'[profiles]\nproduction = "x"\n', "profiles.production in"),
         (b'[profiles."bad name"]\n', "table name"),
-        (b"# padding\n" * 7000, "is larger than"),
+        pytest.param(b"# padding\n" * 7000, "is larger than", id="oversized"),
     ],
 )
 def test_malformed_config_file(tmp_path: Path, contents: bytes, fragment: str) -> None:

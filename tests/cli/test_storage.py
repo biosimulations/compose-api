@@ -81,7 +81,10 @@ def test_locked_backend_redacts(monkeypatch: pytest.MonkeyPatch, method: str) ->
     assert caught.value.__suppress_context__
 
 
-@pytest.mark.parametrize("raw", ["not json secret", "x" * (MAX_RECORD_BYTES + 1), "{}", '{"schema_version":99}'])
+@pytest.mark.parametrize(
+    "raw",
+    ["not json secret", pytest.param("x" * (MAX_RECORD_BYTES + 1), id="oversized"), "{}", '{"schema_version":99}'],
+)
 def test_corrupt_oversize_schema(monkeypatch: pytest.MonkeyPatch, raw: str) -> None:
     store, entries = backend(monkeypatch)
     key = record().binding_key
@@ -141,12 +144,11 @@ def test_private_state_rejects_symlinks_permissions_and_corruption(tmp_path: Pat
     if os.name == "posix":
         state.path.chmod(0o644)
     else:
-        import win32con
         import win32security
 
         everyone = win32security.ConvertStringSidToSid("S-1-1-0")
         acl = win32security.ACL()
-        acl.AddAccessAllowedAceEx(win32security.ACL_REVISION, 0, win32con.FILE_ALL_ACCESS, everyone)
+        acl.AddAccessAllowedAceEx(win32security.ACL_REVISION, 0, 0x001F01FF, everyone)
         win32security.SetNamedSecurityInfo(
             str(state.path),
             win32security.SE_FILE_OBJECT,
