@@ -162,9 +162,17 @@ def find_violations(path: Path, file_type: SimulationFileType, manifest: Manifes
     ]
 
 
-def validate_submission(path: Path, file_type: SimulationFileType, policy: AddressPolicy) -> list[AddressViolation]:
-    """Raise SubmissionRejectedError if the submission may not run; return any violations tolerated under `warn`."""
+def validate_submission(
+    path: Path, file_type: SimulationFileType, policy: AddressPolicy, *, registry: bool = True
+) -> list[AddressViolation]:
+    """Raise SubmissionRejectedError if the submission may not run; return any violations tolerated under `warn`.
+
+    `registry=False` is for a prebuilt simulator's image, which brings processes this registry does not describe:
+    only the addresses the container would do something unsafe with (`local:!`, any other protocol) are refused.
+    """
     violations = find_violations(path, file_type, load_manifest())
+    if not registry:
+        violations = [v for v in violations if v.always_rejected]
     if not violations:
         return []
     blocking = violations if policy == AddressPolicy.ENFORCE else [v for v in violations if v.always_rejected]

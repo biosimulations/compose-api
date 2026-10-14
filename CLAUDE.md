@@ -168,7 +168,8 @@ decision 5): pinned entries, each with `module_roots`, a curation `level` and `e
 `registry.validation.validate_submission` before anything is recorded: it opens every composite document in the
 upload (nested bundle archives included) and refuses any process address that is not `local:<module>.<Class>` under
 a registered entry at level `tested` or higher in the `registry_env` bundle, with a 400 listing each address.
-Non-`local` protocols and the arbitrary-import `local:!` form are refused even under `address_policy=warn`. The
+Non-`local` protocols and the arbitrary-import `local:!` form are refused even under `address_policy=warn`, and
+for a prebuilt simulator (`?simulator=`), whose classes are not looked up (`validate_submission(..., registry=False)`). The
 container would otherwise run whatever it is sent, so this is the only check. Adding a simulator to what the service
 runs means a manifest entry *and* the library in `simulation/simulator_registry.json`. `registry/catalog.yaml` is
 generated (`uv run python -m compose_api.registry.catalog`, read-only against GitHub) and lists every vivarium-collective
@@ -238,8 +239,9 @@ is Postgres.
 
 **Authorization.** Every route that reads something a simulation owns resolves it through
 `compose_api.authorization.readable_simulation` (or `readable_simulation_ids`), which applies `can_read`. Ownership
-(`simulation.owner_sub`, `visibility`) lives on the simulation only; runs, events and datasets inherit it. A simulation
-the caller may not read is a 404. The caller is `get_caller`, which returns the verified principal from
+(`simulation.owner_sub`, `visibility`) lives on the simulation only; runs, events and datasets inherit it, and a
+comparison is readable only when every member simulation is (`/comparisons`). A simulation the caller may not read is a
+404. The caller is `get_caller`, which returns the verified principal from
 `compose_api.authentication` (None when anonymous); tests override `get_caller` to pick one. Nothing stamps an owner
 at submit yet (plan-observability step 5), so every simulation is public. See `docs/plan-observability.md` (O7, O8).
 

@@ -138,3 +138,49 @@ async def test_a_new_run_has_its_trace_identity(
     finally:
         await database_service.get_hpc_db().delete_hpcrun(run.database_id)
         await database_service.get_simulator_db().delete_simulation(sim.database_id)
+
+
+@pytest.mark.asyncio
+async def test_a_comparison_of_a_private_simulation_is_not_found_except_by_its_owner(
+    http: AsyncClient,
+    database_service: DatabaseServiceSQL,
+    simulation_request: SimulationRequest,
+    simulator: SimulatorVersion,
+) -> None:
+    """A comparison shows its runs' results, so it is readable only by someone who may read every run in it."""
+    sim_db, cmp_db = database_service.get_simulator_db(), database_service.get_comparisons_db()
+    private = await sim_db.insert_simulation(
+        sim_request=simulation_request,
+        experiment_id="experiment-authz-cmp-private",
+        simulator_version=simulator,
+        owner_sub=ALICE.subject,
+        visibility=Visibility.PRIVATE,
+    )
+    public = await sim_db.insert_simulation(
+        sim_request=simulation_request, experiment_id="experiment-authz-cmp-public", simulator_version=simulator
+    )
+    source = "upload:authz-comparison.omex"
+    settings = {"reports": {"r": {"labels": ["t"]}}}
+    mixed = await cmp_db.insert("mixed", source, "<sedml/>", "task", settings)
+    await cmp_db.add_member(mixed, private.database_id, "copasi")
+    await cmp_db.add_member(mixed, public.database_id, "tellurium")
+    open_one = await cmp_db.insert("public", source, "<sedml/>", "task", settings)
+    await cmp_db.add_member(open_one, public.database_id, "copasi")
+    try:
+        for caller in (None, BOB):
+            _as(caller)
+            assert (await http.get(f"/comparisons/{mixed}")).status_code == 404
+            assert (await http.get(f"/comparisons/{mixed}/series", params={"report": "r"})).status_code == 404
+            listed = (await http.get("/comparisons", params={"source": source})).json()
+            assert [c["comparison_id"] for c in listed["comparisons"]] == [open_one]
+            assert listed["total"] == 1
+            assert (await http.get(f"/comparisons/{open_one}")).status_code == 200
+
+        for caller in (ALICE, ADMIN):
+            _as(caller)
+            assert (await http.get(f"/comparisons/{mixed}")).status_code == 200
+            listed = (await http.get("/comparisons", params={"source": source})).json()
+            assert sorted(c["comparison_id"] for c in listed["comparisons"]) == sorted([mixed, open_one])
+    finally:
+        for sim in (private, public):  # members cascade; the comparisons stay, with no members
+            await sim_db.delete_simulation(sim.database_id)

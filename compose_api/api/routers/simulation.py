@@ -104,21 +104,22 @@ async def submit_simulation(
     simulation_request.description = run_description
     # Checked before anything is recorded or submitted: the container resolves addresses itself, and will import
     # whatever module it is told to, so this is the only point a submission is checked. A prebuilt simulator's
-    # image brings its own processes, which this registry does not describe, so its documents are not checked here:
-    # the deployment vouches for the image by listing it (settings.prebuilt_simulators).
-    if simulator is None:
-        try:
-            validate_submission(
-                simulation_request.request_file_path,
-                simulation_request.simulation_file_type,
-                AddressPolicy(get_settings().address_policy),
-            )
-        except SubmissionRejectedError as e:
-            simulation_request.request_file_path.unlink(missing_ok=True)
-            raise HTTPException(
-                status_code=400,
-                detail={"message": e.message, "violations": [v.model_dump() for v in e.violations]},
-            ) from e
+    # image brings its own processes, which this registry does not describe, so its classes are not looked up (the
+    # deployment vouches for the image by listing it in settings.prebuilt_simulators); the unsafe forms, `local:!`
+    # and any other protocol, are refused for it all the same.
+    try:
+        validate_submission(
+            simulation_request.request_file_path,
+            simulation_request.simulation_file_type,
+            AddressPolicy(get_settings().address_policy),
+            registry=simulator is None,
+        )
+    except SubmissionRejectedError as e:
+        simulation_request.request_file_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=400,
+            detail={"message": e.message, "violations": [v.model_dump() for v in e.violations]},
+        ) from e
 
     simulation_request = wrap_document_in_omex(simulation_request)
 

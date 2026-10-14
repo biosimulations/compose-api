@@ -70,6 +70,27 @@ async def test_a_listed_prebuilt_simulator_is_not_checked_against_the_registry(
 
 
 @pytest.mark.asyncio
+async def test_a_listed_prebuilt_simulator_still_refuses_unsafe_forms(http_api_client: httpx.AsyncClient) -> None:
+    """Listing the image vouches for its classes, not for an arbitrary import or another protocol."""
+    with override_settings(prebuilt_simulators={"sim-a": "ghcr.io/example/simulator@sha256:" + "0" * 64}):
+        response = await http_api_client.post(
+            "/simulation/run",
+            params={"simulator": "sim-a"},
+            files={
+                "uploaded_file": (
+                    "doc.pbg",
+                    pbg("local:sim_a.processes.Solver", "local:!os.system", "rest:http://example.org/p"),
+                    "application/json",
+                )
+            },
+        )
+    assert response.status_code == 400
+    violations = response.json()["detail"]["violations"]
+    assert {v["address"] for v in violations} == {"local:!os.system", "rest:http://example.org/p"}
+    assert all(v["always_rejected"] for v in violations)
+
+
+@pytest.mark.asyncio
 async def test_an_unlisted_simulator_is_refused_before_the_registry(http_api_client: httpx.AsyncClient) -> None:
     with override_settings(prebuilt_simulators={}):
         response = await http_api_client.post(
