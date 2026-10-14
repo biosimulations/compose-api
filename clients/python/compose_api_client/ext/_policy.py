@@ -24,11 +24,11 @@ from compose_api_client.ext.errors import (
     ConfigError,
     ForbiddenError,
     InvalidRequestError,
-    NetworkError,
     NotFoundError,
     ProtocolError,
     RateLimitedError,
     ServerError,
+    ServiceUnavailableError,
     UncertainOutcomeError,
 )
 from compose_api_client.models import HTTPValidationError
@@ -206,7 +206,9 @@ def classify_failure(
         hint = f"retry after {wait} s" if wait is not None else "wait a little and try again"
         return RateLimitedError(f"the API is rate limiting requests (HTTP 429 from {operation}); {hint}")
     if status in (502, 503, 504):
-        return NetworkError(f"the API is unavailable (HTTP {status} from {operation}); try again later.{unknown}")
+        return ServiceUnavailableError(
+            f"the API is unavailable (HTTP {status} from {operation}); try again later.{unknown}", status_code=status
+        )
     if status >= 500:
         return ServerError(f"the API failed while handling {operation} (HTTP {status}).{unknown}", status_code=status)
     return ApiError(f"the API answered {operation} with HTTP {status}", status_code=status)

@@ -1,13 +1,14 @@
 """docs/cli.md describes the CLI that actually ships: every command, variable, exit code and built-in value."""
 
-import argparse
 import inspect
 import re
 from pathlib import Path
 
+import click
 import pytest
+import typer
 import yaml
-from compose_api_client.cli.commands import build_parser
+from compose_api_client.cli.commands import app
 from compose_api_client.ext import errors
 from compose_api_client.ext.errors import CliError, ExitCode
 from compose_api_client.profiles import _ENV_FIELDS, BUILTIN_PROFILES
@@ -18,17 +19,18 @@ ROOT = Path(REPO_ROOT)
 CLI_DOC = (ROOT / "docs" / "cli.md").read_text()
 
 
-def _commands(parser: argparse.ArgumentParser, prefix: tuple[str, ...] = ()) -> list[tuple[str, ...]]:
-    """Every leaf command of the parser, such as ("auth", "login")."""
+def _commands(group: click.Group, prefix: tuple[str, ...] = ()) -> list[tuple[str, ...]]:
+    """Every leaf command of the CLI, such as ("auth", "login")."""
     found: list[tuple[str, ...]] = []
-    for action in parser._actions:
-        if isinstance(action, argparse._SubParsersAction):
-            for name, child in action.choices.items():
-                found.extend(_commands(child, (*prefix, name)) or [(*prefix, name)])
+    for name, command in sorted(group.commands.items()):
+        if isinstance(command, click.Group):
+            found.extend(_commands(command, (*prefix, name)))
+        elif not command.hidden:
+            found.append((*prefix, name))
     return found
 
 
-@pytest.mark.parametrize("command", _commands(build_parser()), ids=" ".join)
+@pytest.mark.parametrize("command", _commands(typer.main.get_group(app)), ids=" ".join)
 def test_every_command_is_documented(command: tuple[str, ...]) -> None:
     assert f"compose-api {' '.join(command)}" in CLI_DOC
 

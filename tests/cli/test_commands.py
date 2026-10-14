@@ -8,9 +8,11 @@ import tomllib
 import zipfile
 from pathlib import Path
 
+import click
 import compose_api_client.profiles
 import pytest
-from compose_api_client.cli.commands import __version__, build_parser, main
+import typer
+from compose_api_client.cli.commands import __version__, app, main
 from compose_api_client.ext.errors import ExitCode
 from compose_api_client.profiles import BUILTIN_PROFILES, PROFILE_FIELDS
 
@@ -27,22 +29,50 @@ auth0_audience = "https://api.compose.example.org"
 """
 LEAK_CANARY = "server-secret-4c1d"
 
-# Every command in the documented surface, with the options each one takes. The first three sign in; the rest use
-# a session.
+# Commands that sign in, use a session, or read the profile, with the options each one takes. Root options
+# (--profile, --ephemeral-auth, --device, --no-browser, -o) come before the command. "experiment.omex" stands for a
+# real archive (`_with_archive`).
 SIGN_IN_FLOW_COMMANDS = [
     ["auth", "signup"],
     ["auth", "signup", "--provider", "google", "--no-browser"],
     ["auth", "login", "--device"],
 ]
-SESSION_COMMANDS = [
-    ["auth", "status", "--verify"],
-    ["simulators", "list"],
-    ["simulators", "list", "--ephemeral-auth", "--device"],
-    ["simulations", "status", "123"],
-    ["simulations", "submit", "experiment.omex", "--interval-time", "2.5", "--batch", "--ephemeral-auth"],
+EPHEMERAL_COMMANDS = [
+    ["--ephemeral-auth", "--device", "simulators", "list"],
+    ["--ephemeral-auth", "run", "experiment.omex", "--interval", "2.5", "--batch"],
 ]
+# API commands use the profile's stored session when there is one, and call anonymously when there is none.
+API_COMMANDS = [["simulators", "list"], ["status", "123"]]
+SESSION_COMMANDS = [["auth", "status", "--verify"], *API_COMMANDS, *EPHEMERAL_COMMANDS]
 SIGN_IN_COMMANDS = [*SIGN_IN_FLOW_COMMANDS, *SESSION_COMMANDS]
 ALL_COMMANDS = [["config", "show"], *SIGN_IN_COMMANDS]
+# What cannot work without a client ID: signing in, and checking a session with the API.
+NEEDS_CLIENT_ID = [*SIGN_IN_FLOW_COMMANDS, ["auth", "status", "--verify"], *EPHEMERAL_COMMANDS]
+
+
+def _with_archive(argv: list[str], directory: Path) -> list[str]:
+    """`argv` with "experiment.omex" replaced by a real (minimal) OMEX archive in `directory`."""
+    if "experiment.omex" not in argv:
+        return argv
+    archive = directory / "experiment.omex"
+    archive.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(archive, "w") as contents:
+        contents.writestr("manifest.xml", "<omexManifest/>")
+    return [str(archive) if part == "experiment.omex" else part for part in argv]
+
+
+def _command_path(argv: list[str]) -> list[str]:
+    """The command words of `argv`, without the root options in front and the arguments after."""
+    words = [part for part in argv if not part.startswith("-")]
+    group: click.Command = typer.main.get_group(app)
+    path: list[str] = []
+    for word in words:
+        if not isinstance(group, click.Group) or word not in group.commands:
+            break
+        group = group.commands[word]
+        path.append(word)
+    return path
+
 
 # Run inside a child process: reports which heavyweight or server modules a command imported, and whether the
 # server's dotenv files were loaded into the environment.
@@ -85,40 +115,47 @@ def test_version(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 @pytest.mark.parametrize("argv", ALL_COMMANDS)
-def test_every_documented_command_is_registered(argv: list[str]) -> None:
-    args = build_parser().parse_args(argv)
-    assert callable(args.handler)
+def test_every_documented_command_is_registered(capsys: pytest.CaptureFixture[str], argv: list[str]) -> None:
+    path = _command_path(argv)
+    command: click.Command = typer.main.get_group(app)
+    for word in path:
+        assert isinstance(command, click.Group)
+        command = command.commands[word]
+    assert path and not isinstance(command, click.Group), argv
+    assert main([*path, "--help"]) == ExitCode.OK
+    assert f"Usage: compose-api {' '.join(path)}" in capsys.readouterr().out
 
 
 def test_provider_defaults() -> None:
-    parser = build_parser()
-    assert parser.parse_args(["auth", "signup"]).provider == "email", "signup defaults to hosted email sign-up"
-    assert parser.parse_args(["auth", "login"]).provider is None, "login leaves the choice to the hosted page"
+    auth = typer.main.get_group(app).commands["auth"]
+    assert isinstance(auth, click.Group)
+
+    def provider_default(name: str) -> object:
+        return next(param.default for param in auth.commands[name].params if param.name == "provider")
+
+    assert provider_default("signup") == "email", "signup defaults to hosted email sign-up"
+    assert provider_default("login") is None, "login leaves the choice to the hosted page"
 
 
 @pytest.mark.parametrize(
     "argv",
     [
-        [],
-        ["auth"],
         ["frobnicate"],
         ["auth", "login", "--provider", "github"],
         ["auth", "login", "--device", "--no-browser"],
         ["auth", "login", "--token", "abc"],
         ["auth", "signup", "--password", "abc"],
         ["auth", "status", "--header", "Authorization: x"],
-        ["simulations", "status"],
-        ["simulations", "status", "abc"],
-        ["simulations", "status", "0"],
-        ["simulations", "status", "-3"],
-        ["simulations", "submit"],
-        ["simulations", "submit", "x.omex", "--interval-time", "nan"],
-        ["simulations", "submit", "x.omex", "--interval-time", "inf"],
-        ["simulations", "submit", "x.omex", "--interval-time", "0"],
-        ["simulations", "submit", "x.omex", "--interval-time", "-1"],
+        ["status"],
+        ["status", "abc"],
+        ["status", "0"],
+        ["status", "-3"],
+        ["run"],
+        ["run", "no-such-archive.omex"],
         ["simulators", "list", "--device"],  # interactive sign-in is never implied
-        ["simulators", "list", "--no-browser"],
-        ["simulators", "list", "--ephemeral-auth", "--device", "--no-browser"],
+        ["--device", "simulators", "list"],
+        ["--no-browser", "simulators", "list"],
+        ["--ephemeral-auth", "--device", "--no-browser", "simulators", "list"],
     ],
 )
 def test_usage_errors_exit_2_without_output(
@@ -127,19 +164,60 @@ def test_usage_errors_exit_2_without_output(
     assert main(argv) == ExitCode.USAGE
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert "usage: compose-api" in captured.err
+    assert "Usage: compose-api" in captured.err
 
 
 @pytest.mark.parametrize(
     "argv",
     [
-        ["--json", "--profile", "local", "config", "show"],
-        ["config", "--json", "show", "--profile", "local"],
-        ["--profile", "local", "config", "show", "--json"],
-        ["config", "show", "--json", "--profile", "local"],
+        ["auth", "login", "--token", "SECRET-SENTINEL"],
+        ["auth", "signup", "--password", "SECRET-SENTINEL"],
+        ["auth", "status", "--header", "Authorization: SECRET-SENTINEL"],
+        ["--token", "SECRET-SENTINEL", "health"],
     ],
 )
-def test_global_options_work_before_or_after_the_command(
+def test_a_refused_secret_option_never_echoes_its_value(
+    capsys: pytest.CaptureFixture[str], no_network_or_browser: list[str], argv: list[str]
+) -> None:
+    assert main(argv) == ExitCode.USAGE
+    captured = capsys.readouterr()
+    assert "SECRET-SENTINEL" not in captured.out + captured.err
+
+
+def test_device_and_no_browser_need_ephemeral_auth(
+    capsys: pytest.CaptureFixture[str], no_network_or_browser: list[str]
+) -> None:
+    assert main(["--device", "simulators", "list"]) == ExitCode.USAGE
+    message = "--device and --no-browser choose how --ephemeral-auth signs in, so they need --ephemeral-auth"
+    assert message in " ".join(capsys.readouterr().err.split())
+
+
+@pytest.mark.parametrize("argv", [[], ["auth"]])
+def test_a_group_without_a_command_shows_its_help(capsys: pytest.CaptureFixture[str], argv: list[str]) -> None:
+    assert main(argv) == ExitCode.USAGE
+    assert f"Usage: compose-api {' '.join(argv)}".rstrip() in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("interval", ["nan", "inf", "0", "-1"])
+def test_run_refuses_a_nonsense_interval(
+    capsys: pytest.CaptureFixture[str], no_network_or_browser: list[str], tmp_path: Path, interval: str
+) -> None:
+    argv = _with_archive(["run", "experiment.omex", "--interval", interval], tmp_path)
+    assert main(argv) == ExitCode.USAGE
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "must be a positive, finite number" in captured.err
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--profile", "local", "config", "show", "--json"],
+        ["--profile", "local", "-o", "json", "config", "show"],
+        ["-o", "json", "--profile", "local", "config", "show"],
+    ],
+)
+def test_global_options_go_before_the_command(
     capsys: pytest.CaptureFixture[str], cli_config_path: Path, argv: list[str]
 ) -> None:
     assert main(argv) == ExitCode.OK
@@ -147,8 +225,16 @@ def test_global_options_work_before_or_after_the_command(
     assert view["profile"] == {"value": "local", "source": "--profile"}
 
 
+def test_a_global_option_after_the_command_is_a_usage_error(
+    capsys: pytest.CaptureFixture[str], cli_config_path: Path
+) -> None:
+    assert main(["config", "show", "--profile", "local"]) == ExitCode.USAGE
+    assert "No such option: --profile" in capsys.readouterr().err
+
+
 def test_config_show_text(capsys: pytest.CaptureFixture[str], cli_config_path: Path) -> None:
-    assert main(["config", "show"]) == ExitCode.OK
+    # Output is "auto" (a table on a terminal, JSON when piped, as for every command); ask for the human form.
+    assert main(["-o", "table", "config", "show"]) == ExitCode.OK
     captured = capsys.readouterr()
     lines = captured.out.splitlines()
     assert lines[0].split() == ["profile", "production", "(default)"]
@@ -162,7 +248,7 @@ def test_config_show_notes_a_profile_that_cannot_sign_in(
     capsys: pytest.CaptureFixture[str], cli_config_path: Path
 ) -> None:
     write_cli_config(cli_config_path, BARE_PROFILE)
-    assert main(["config", "show", "--profile", "dev"]) == ExitCode.OK
+    assert main(["--profile", "dev", "config", "show"]) == ExitCode.OK
     assert "auth0_client_id is not set, so profile 'dev' cannot sign in yet" in capsys.readouterr().err
 
 
@@ -203,18 +289,20 @@ def test_invalid_configuration_fails_before_network_or_browser(
 ) -> None:
     monkeypatch.setenv("COMPOSE_API_CLI_AUTH0_CLIENT_ID", CLIENT_ID)
     monkeypatch.setenv("COMPOSE_API_CLI_API_BASE_URL", "http://compose.example.org")
-    assert main(argv) == ExitCode.CONFIG
+    assert main(_with_archive(argv, cli_config_path.parent)) == ExitCode.CONFIG
     captured = capsys.readouterr()
     assert captured.out == ""
     assert "api_base_url (env COMPOSE_API_CLI_API_BASE_URL) must use https" in captured.err
 
 
-@pytest.mark.parametrize("argv", SIGN_IN_COMMANDS)
+@pytest.mark.parametrize("argv", NEEDS_CLIENT_ID)
 def test_missing_public_client_id_fails_before_network_or_browser(
     capsys: pytest.CaptureFixture[str], cli_config_path: Path, no_network_or_browser: list[str], argv: list[str]
 ) -> None:
+    """Signing in needs the profile's public client ID. API commands without --ephemeral-auth do not: a profile
+    that cannot sign in calls anonymously (tests/cli/test_api.py)."""
     write_cli_config(cli_config_path, BARE_PROFILE)
-    assert main([*argv, "--profile", "dev"]) == ExitCode.CONFIG
+    assert main(["--profile", "dev", *_with_archive(argv, cli_config_path.parent)]) == ExitCode.CONFIG
     assert "set COMPOSE_API_CLI_AUTH0_CLIENT_ID" in capsys.readouterr().err
 
 
@@ -247,15 +335,15 @@ def test_google_sign_in_needs_its_connection_named(
 ) -> None:
     write_cli_config(cli_config_path, BARE_PROFILE)
     monkeypatch.setenv("COMPOSE_API_CLI_AUTH0_CLIENT_ID", CLIENT_ID)
-    assert main(["auth", "login", "--provider", "google", "--profile", "dev"]) == ExitCode.CONFIG
+    assert main(["--profile", "dev", "auth", "login", "--provider", "google"]) == ExitCode.CONFIG
     assert "needs google_connection set for profile 'dev'" in capsys.readouterr().err
     # With --device the provider is chosen on the hosted page, so no connection is needed; the tests' refusing
     # credential store is what stops this one, still before any network request.
-    assert main(["auth", "login", "--provider", "google", "--device", "--profile", "dev"]) == ExitCode.CONFIG
+    assert main(["--profile", "dev", "auth", "login", "--provider", "google", "--device"]) == ExitCode.CONFIG
     assert "Unsupported OS credential backend" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("argv", [argv for argv in SESSION_COMMANDS if "--ephemeral-auth" not in argv])
+@pytest.mark.parametrize("argv", [["auth", "status", "--verify"]])
 def test_session_commands_need_a_usable_store_and_never_fall_back(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
@@ -263,17 +351,14 @@ def test_session_commands_need_a_usable_store_and_never_fall_back(
     no_network_or_browser: list[str],
     argv: list[str],
 ) -> None:
-    """With no supported OS store (the tests' default) and no --ephemeral-auth, nothing is sent and nothing opens.
+    """A command about a stored session needs a supported OS store (the tests' default has none): nothing is sent and
+    nothing opens.
 
-    The --ephemeral-auth variants need no store; tests/cli/test_api.py runs them end to end.
+    API commands need none: with no supported store there is no session, so they call anonymously; a store that
+    exists but cannot be read is an error, never an anonymous call. tests/cli/test_api.py runs both end to end, and
+    the --ephemeral-auth variants, which need no store.
     """
     monkeypatch.setenv("COMPOSE_API_CLI_AUTH0_CLIENT_ID", CLIENT_ID)
-    if argv[:2] == ["simulations", "submit"]:
-        archive = cli_config_path.parent / "experiment.omex"
-        archive.parent.mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(archive, "w") as contents:
-            contents.writestr("manifest.xml", "<omexManifest/>")
-        argv = [*argv[:2], str(archive), *argv[3:]]
     assert main([*argv, "--json"]) == ExitCode.CONFIG
     error = json.loads(capsys.readouterr().out)["error"]
     assert error["category"] == "storage"
@@ -282,7 +367,7 @@ def test_session_commands_need_a_usable_store_and_never_fall_back(
 
 def test_json_errors_are_objects_on_stdout(capsys: pytest.CaptureFixture[str], cli_config_path: Path) -> None:
     write_cli_config(cli_config_path, BARE_PROFILE)
-    assert main(["auth", "login", "--json", "--profile", "dev"]) == ExitCode.CONFIG
+    assert main(["--profile", "dev", "auth", "login", "--json"]) == ExitCode.CONFIG
     captured = capsys.readouterr()
     error = json.loads(captured.out)["error"]
     assert error["category"] == "configuration"
@@ -323,7 +408,44 @@ def test_installed_entry_point_and_module_are_the_same_program(
     module = _run([sys.executable, "-m", "compose_api_client.cli", *argv], cli_subprocess_env, tmp_path)
     assert installed.returncode == module.returncode == 0, installed.stderr + module.stderr
     assert installed.stdout == module.stdout
-    assert installed.stdout.startswith(f"compose-api {__version__}" if argv == ["--version"] else "usage: compose-api")
+    if argv == ["--version"]:
+        assert installed.stdout == f"compose-api {__version__}\n"
+    else:
+        assert "Usage: compose-api" in installed.stdout
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--help"],
+        ["health", "--help"],
+        ["run", "--help"],
+        ["datasets", "list", "--help"],
+        ["sedml", "--help"],
+        ["auth", "login", "--help"],
+        ["config", "show"],
+    ],
+)
+def test_the_installed_command_is_the_full_cli(
+    cli_subprocess_env: dict[str, str], tmp_path: Path, argv: list[str]
+) -> None:
+    """The real entry point runs the whole command tree: the API commands and `auth` / `config` alike."""
+    result = _run([sys.executable, "-m", "compose_api_client.cli", *argv], cli_subprocess_env, tmp_path)
+    assert result.returncode == 0, result.stderr
+    if argv == ["--help"]:
+        for command in ("run", "status", "datasets", "sedml", "auth", "config"):
+            assert f" {command} " in result.stdout, command
+
+
+def test_the_real_entry_point_never_echoes_a_token(cli_subprocess_env: dict[str, str], tmp_path: Path) -> None:
+    result = _run(
+        [sys.executable, "-m", "compose_api_client.cli", "--token", "SECRET-SENTINEL", "health"],
+        cli_subprocess_env,
+        tmp_path,
+    )
+    assert result.returncode == ExitCode.USAGE
+    assert "SECRET-SENTINEL" not in result.stdout + result.stderr
+    assert "COMPOSE_API_TOKEN" in result.stderr, "the refusal names what to use instead"
 
 
 @pytest.mark.parametrize(

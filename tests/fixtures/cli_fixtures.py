@@ -8,7 +8,9 @@ RS256 tokens with `FakeAuth0`'s keys -- the same test vectors the API's own veri
 plays the person at Auth0's hosted page and follows the redirect to the CLI's real loopback listener.
 """
 
+import asyncio
 import base64
+import dataclasses
 import hashlib
 import os
 import socket
@@ -335,7 +337,13 @@ def use_profile(monkeypatch: pytest.MonkeyPatch, settings: CliSettings) -> None:
 
 
 def wire(monkeypatch: pytest.MonkeyPatch, wiring: Wiring) -> None:
-    """Make every command reached through `main()` use `wiring` instead of the real store, browser and network."""
+    """Make every command reached through `main()` use `wiring` instead of the real store, browser and network.
+
+    The API commands' `ComposeSession` is synchronous: unless the test gives one, its transport is `api_transport`
+    behind `SyncOverAsyncTransport`, so both kinds of caller reach the same fake (and the same request record).
+    """
+    if wiring.api_transport is not None and wiring.sync_api_transport is None:
+        wiring = dataclasses.replace(wiring, sync_api_transport=SyncOverAsyncTransport(wiring.api_transport))
     monkeypatch.setattr(auth_commands, "Wiring", lambda: wiring)
 
 
@@ -382,6 +390,33 @@ class RecordingTransport(httpx.AsyncBaseTransport):
         return [request.url.path for request in self.requests]
 
 
+class SyncOverAsyncTransport(httpx.BaseTransport):
+    """Hands each request of a synchronous client to an async transport, on an event loop of its own.
+
+    The CLI's commands use the synchronous `ComposeSession`; the fakes (`FakeComposeApi`, `RecordingTransport`) are
+    async. Closing this closes the inner transport, so close counts mean the same through either kind of client.
+    """
+
+    def __init__(self, inner: httpx.AsyncBaseTransport) -> None:
+        self.inner = inner
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        body = request.read()
+
+        async def send() -> httpx.Response:
+            forwarded = httpx.Request(
+                request.method, request.url, headers=request.headers, content=body, extensions=request.extensions
+            )
+            response = await self.inner.handle_async_request(forwarded)
+            content = await response.aread()
+            return httpx.Response(response.status_code, headers=response.headers, content=content)
+
+        return asyncio.run(send())
+
+    def close(self) -> None:
+        asyncio.run(self.inner.aclose())
+
+
 class FakeComposeApi:
     """The real FastAPI app over ASGI, verifying real JWTs against `FakeAuth0`'s keys.
 
@@ -423,6 +458,7 @@ class FakeComposeApi:
         self.uploads: list[dict[str, Any]] = []
         self.created = 0
         self.transport = RecordingTransport(httpx.ASGITransport(app=app))
+        self.sync_transport = SyncOverAsyncTransport(self.transport)
 
     async def simulator_versions(self) -> RegisteredSimulators:
         return self.simulators

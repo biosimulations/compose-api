@@ -1,33 +1,23 @@
-"""`auth signup`, `auth login`, `auth status`, `auth logout`, `config show`, and authenticated CLI operations."""
+"""`auth signup`, `auth login`, `auth status` and `auth logout`; `config show` and API commands are in `commands`."""
 
 from __future__ import annotations
 
 import argparse
-import json
 import os
-import stat
-import sys
-import zipfile
-from collections.abc import Awaitable, Callable
-from datetime import datetime
-from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any
 
 from compose_api_client import profiles
-from compose_api_client.auth.identity import ComposeApi, OneCommandSession, StoredSession, confirm_identity
+from compose_api_client.auth.identity import confirm_identity
 from compose_api_client.auth.models import Provider, SignInRequest
 from compose_api_client.auth.oauth import Auth0OAuthClient
 from compose_api_client.auth.session import AuthSession, AuthStatus, LogoutResult
-from compose_api_client.auth.signin import connection_for, ephemeral_session, persistent_sign_in
+from compose_api_client.auth.signin import connection_for, persistent_sign_in
 from compose_api_client.cli.render import emit_json, emit_text, notify, printable
-from compose_api_client.cli.wiring import Wiring, run
+from compose_api_client.cli.wiring import Wiring as Wiring  # re-exported: tests replace it here
+from compose_api_client.cli.wiring import run
 from compose_api_client.ext.credentials import TOKEN_ENV_VAR, EnvironmentToken
-from compose_api_client.ext.errors import ExitCode, UsageError
-from compose_api_client.models import HpcRun, RegisteredSimulators, SimulationExperiment
+from compose_api_client.ext.errors import ExitCode
 from compose_api_client.profiles import CliSettings
-from compose_api_client.types import Unset
-
-T = TypeVar("T")
 
 
 def signup(args: argparse.Namespace, wiring: Wiring | None = None) -> int:
@@ -167,30 +157,6 @@ def logout(args: argparse.Namespace, wiring: Wiring | None = None) -> int:
     return int(ExitCode.NETWORK) if result.revocation == "unavailable" else int(ExitCode.OK)
 
 
-def show_config(args: argparse.Namespace) -> int:
-    loaded = profiles.load_cli_settings(args.profile)
-    view = loaded.public_view()
-    if args.json:
-        print(json.dumps(view, indent=2))
-    else:
-        profile, config_file = view["profile"], view["config_file"]
-        rows = [
-            ("profile", profile["value"], profile["source"]),
-            ("config file", config_file["path"], "found" if config_file["found"] else "not found"),
-            *((name, entry["value"], entry["source"]) for name, entry in view["settings"].items()),
-            *((name, value, "derived") for name, value in view["derived"].items()),
-        ]
-        width = max(len(name) for name, _, _ in rows)
-        for name, value, source in rows:
-            print(f"{name:<{width}}  {'-' if value is None else value}  ({source})")
-    if loaded.settings.auth0_client_id is None:
-        print(
-            f"compose-api: note: auth0_client_id is not set, so profile {loaded.settings.profile!r} cannot sign in yet",
-            file=sys.stderr,
-        )
-    return int(ExitCode.OK)
-
-
 def _show_status(settings: CliSettings, status_obj: AuthStatus, as_json: bool, *, checked_with_api: bool) -> None:
     if as_json:
         document: dict[str, Any] = status_obj.model_dump(mode="json")
@@ -214,137 +180,3 @@ def _show_status(settings: CliSettings, status_obj: AuthStatus, as_json: bool, *
         )
     else:
         emit_text("API: never confirmed (run `compose-api auth status --verify`)")
-
-
-# -- Authenticated API commands (`simulators list`, `simulations status`, `simulations submit`) --
-
-
-def list_simulators(args: argparse.Namespace, wiring: Wiring | None = None) -> int:
-    simulators = _call(args, wiring, lambda api: api.list_simulators())
-    if args.json:
-        emit_json(simulators.to_dict())
-    else:
-        _show_simulators(simulators)
-    return int(ExitCode.OK)
-
-
-def simulation_status(args: argparse.Namespace, wiring: Wiring | None = None) -> int:
-    run_record = _call(args, wiring, lambda api: api.simulation_status(args.simulation_id))
-    if args.json:
-        emit_json(run_record.to_dict())
-    else:
-        _show_run(args.simulation_id, run_record)
-    return int(ExitCode.OK)
-
-
-def submit_simulation(args: argparse.Namespace, wiring: Wiring | None = None) -> int:
-    settings = _settings(args)
-    path = _omex_archive(args.file)
-    with path.open("rb") as archive:
-        experiment = _call(
-            args,
-            wiring,
-            lambda api: api.submit_simulation(
-                archive, file_name=path.name, interval_time=args.interval_time, batch=args.batch
-            ),
-            settings=settings,
-        )
-    if args.json:
-        emit_json(experiment.to_dict())
-    else:
-        _show_submission(experiment)
-    return int(ExitCode.OK)
-
-
-def _settings(args: argparse.Namespace) -> CliSettings:
-    settings = profiles.load_cli_settings(args.profile).settings
-    settings.require_client_id()
-    return settings
-
-
-def _call(
-    args: argparse.Namespace,
-    wiring: Wiring | None,
-    operation: Callable[[ComposeApi], Awaitable[T]],
-    *,
-    settings: CliSettings | None = None,
-) -> T:
-    settings = settings or _settings(args)
-    wiring = wiring or Wiring()
-    if getattr(args, "ephemeral_auth", False):
-        request = SignInRequest(
-            signup=False, provider=None, device=args.device, open_browser=not args.no_browser, persistent=False
-        )
-
-        async def once() -> T:
-            async with ephemeral_session(
-                settings, request, notify=notify, launcher=wiring.browser(), transport=wiring.auth0_transport
-            ) as record:
-                return await operation(ComposeApi(settings, OneCommandSession(record), transport=wiring.api_transport))
-
-        return run(once())
-
-    store = wiring.store(settings, writable=False)
-
-    async def stored() -> T:
-        async with Auth0OAuthClient(settings, transport=wiring.auth0_transport) as oauth:
-            tokens = StoredSession(AuthSession(settings, store), oauth)
-            return await operation(ComposeApi(settings, tokens, transport=wiring.api_transport))
-
-    return run(stored())
-
-
-def _omex_archive(name: str) -> Path:
-    path = Path(name).expanduser()
-    shown = printable(name)
-    try:
-        info = path.stat()
-    except OSError:
-        raise UsageError(f"cannot read {shown}") from None
-    if not stat.S_ISREG(info.st_mode):
-        raise UsageError(f"{shown} is not a regular file")
-    try:
-        if info.st_size == 0 or not zipfile.is_zipfile(path):
-            raise UsageError(f"{shown} is not an OMEX archive (a ZIP file); nothing was uploaded")
-    except OSError:
-        raise UsageError(f"cannot read {shown}") from None
-    return path
-
-
-def _when(value: Any) -> str:
-    if isinstance(value, datetime):
-        return f"{value:%Y-%m-%d %H:%M}"
-    return "-" if value is None or isinstance(value, Unset) else printable(str(value))
-
-
-def _show_simulators(simulators: RegisteredSimulators) -> None:
-    if not simulators.versions:
-        emit_text("No simulators are registered on this server.")
-        return
-    rows = [("ID", "DEFINITION", "PACKAGES", "REGISTERED")]
-    for version in simulators.versions:
-        packages = version.packages if isinstance(version.packages, list) else []
-        rows.append((
-            str(version.database_id),
-            printable(version.container_def_hash)[:12],
-            str(len(packages)),
-            _when(version.created_at),
-        ))
-    widths = [max(len(row[column]) for row in rows) for column in range(len(rows[0]))]
-    for row in rows:
-        emit_text("  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True)).rstrip())
-
-
-def _show_run(simulation_id: int, record: HpcRun) -> None:
-    status_val = record.status if record.status is not None and not isinstance(record.status, Unset) else "unknown"
-    emit_text(f"Simulation {simulation_id}: {status_val}")
-    emit_text(f"  {record.job_type} job, SLURM ID {record.slurmjobid}")
-    emit_text(f"  started {_when(record.start_time)}, ended {_when(record.end_time)}")
-    if isinstance(record.error_message, str) and record.error_message:
-        emit_text(f"  error: {printable(record.error_message)}")
-
-
-def _show_submission(experiment: SimulationExperiment) -> None:
-    simulation_id = experiment.simulation_database_id
-    emit_text(f"Submitted simulation {simulation_id} (simulator {experiment.simulator_database_id}).")
-    emit_text(f"It runs on the server; check on it with: compose-api simulations status {simulation_id}")

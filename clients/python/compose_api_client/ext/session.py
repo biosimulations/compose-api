@@ -15,6 +15,7 @@ import uuid
 import zipfile
 from collections.abc import Awaitable, Callable, Iterator, Sequence
 from contextlib import suppress
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any, cast
 
@@ -71,11 +72,14 @@ from compose_api_client.api.sources import (
 from compose_api_client.api.suites import get_suite_run, list_suite_runs, list_suites, run_suite
 from compose_api_client.ext._policy import (
     _UNKNOWN_OUTCOME,
+    _UNREADABLE,
     COMMAND_DEADLINE_SECONDS,
     CURRENT_PRINCIPAL,
     Operation,
     UnsafeRequestError,
+    _Answer,
     _DestinationGuard,
+    classify_failure,
     rejected_message,
     tls_verification,
     unanswered,
@@ -89,6 +93,7 @@ from compose_api_client.ext.credentials import (
     TokenSource,
 )
 from compose_api_client.ext.errors import (
+    ApiError,
     ApiTimeout,
     AuthError,
     CliError,
@@ -96,6 +101,7 @@ from compose_api_client.ext.errors import (
     NetworkError,
     ProtocolError,
     UncertainOutcomeError,
+    detail_of,
     raise_for,
 )
 from compose_api_client.models import (
@@ -177,6 +183,35 @@ def _file(source: FileSource, name: str | None = None) -> File:
     return File(payload=io.BytesIO(path.read_bytes()), file_name=name or path.name)
 
 
+#: What the generated client raises when a body does not match its model (or is not JSON at all).
+_READ_FAILURES = (ValueError, KeyError, TypeError, AttributeError)
+
+
+def _unreadable(answer: httpx.Response) -> Response[Any]:
+    """`answer` as a generated `Response` whose body could not be read: its status is still classified, its body is
+    never trusted (`_parsed`)."""
+    return Response(
+        status_code=HTTPStatus(answer.status_code), content=answer.content, headers=answer.headers, parsed=_UNREADABLE
+    )
+
+
+def _raise_for(response: Response[Any], op: Operation) -> None:
+    """Raise `op`'s error for a non-2xx answer (`_policy.classify_failure`): its message names the operation and the
+    status, never text from the response. The decoded body stays on `.detail`, for callers that read it (such as
+    `BadRequest.violations`)."""
+    code = int(response.status_code)
+    if 200 <= code < 300:
+        return
+    error = classify_failure(
+        op,
+        _Answer(code, response.parsed, httpx.Headers(response.headers)),
+        not_found=f"nothing was found at {op} (HTTP 404)",
+    )
+    if isinstance(error, ApiError):
+        error.detail = detail_of(response.content)
+    raise error
+
+
 def _parsed(response: Response[Any], *, op: Operation | None = None) -> Any:
     code = int(response.status_code)
     if 300 <= code < 400:
@@ -190,7 +225,16 @@ def _parsed(response: Response[Any], *, op: Operation | None = None) -> Any:
             f"the API failed while handling {op} (HTTP {code}). {_UNKNOWN_OUTCOME}.",
             exit_code=ExitCode.FAILURE,
         )
-    raise_for(response)
+    if op is not None:
+        _raise_for(response, op)
+    else:
+        raise_for(response)
+    if response.parsed is _UNREADABLE:
+        if op is not None and not op.replayable:
+            raise UncertainOutcomeError(
+                f"the API's answer to {op} could not be read. {_UNKNOWN_OUTCOME}.", exit_code=ExitCode.FAILURE
+            )
+        raise ProtocolError(f"the API's answer to {op or 'the request'} could not be read")
     if response.parsed is None and op is not None and not op.replayable:
         raise UncertainOutcomeError(
             f"the API's answer to {op} could not be read. {_UNKNOWN_OUTCOME}.",
@@ -243,10 +287,20 @@ def _make_client(
     verify_ssl: Any = True,
     guard: _DestinationGuard | None = None,
     is_async: bool = False,
+    on_response: Callable[[httpx.Response], None] | None = None,
 ) -> Client | AuthenticatedClient:
     hooks: dict[str, Any] = {}
     if guard is not None:
         hooks["request"] = [guard.async_hook if is_async else guard]
+    if on_response is not None:
+        if is_async:
+
+            async def record(response: httpx.Response) -> None:
+                on_response(response)
+
+            hooks["response"] = [record]
+        else:
+            hooks["response"] = [on_response]
     args: dict[str, Any] = {"trust_env": False}
     if transport is not None:
         args["transport"] = transport
@@ -366,6 +420,7 @@ class ComposeSession:
         download: bool = False,
     ) -> Response[Any]:
         eff_timeout = self.timeout if download else min(self.timeout, 60.0)
+        answered: list[httpx.Response] = []
         client = _make_client(
             self.base_url,
             credential.access_token if credential is not None else None,
@@ -374,10 +429,15 @@ class ComposeSession:
             verify_ssl=self._verify,
             guard=self._guard,
             is_async=False,
+            on_response=answered.append,
         )
         try:
             with client:
                 return call(client)
+        except _READ_FAILURES:
+            if not answered:
+                raise  # nothing came back: a bug, not an answer
+            return _unreadable(answered[-1])
         except UnsafeRequestError:
             raise ProtocolError(f"refused to send credentials for {op} anywhere but {self.base_url}") from None
         except (httpx.ConnectError, httpx.ConnectTimeout):
@@ -574,7 +634,7 @@ class ComposeSession:
         """The SLURM log of the simulator's newest container build (its last 200 KB)."""
         op = Operation("GET", "/results/simulator/build/log", replayable=True)
         r, _ = self._send(op, lambda c: get_simulator_build_log.sync_detailed(client=c, simulator_id=simulator_id))
-        raise_for(r)
+        _raise_for(r, op)
         return r.content.decode(errors="replace")
 
     def build_status(self, simulator_id: int) -> JobState:
@@ -681,7 +741,7 @@ class ComposeSession:
     def biomodel_omex(self, model_id: str) -> bytes:
         op = Operation("GET", f"/sources/biomodels/{model_id}/omex", replayable=True)
         r, _ = self._send(op, lambda c: get_biomodel_omex.sync_detailed(model_id, client=c), download=True)
-        raise_for(r)
+        _raise_for(r, op)
         return r.content
 
     def run_biomodel(self, model_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()) -> SedmlRunResult:
@@ -710,14 +770,14 @@ class ComposeSession:
     def biosimulations_omex(self, project_id: str) -> bytes:
         op = Operation("GET", f"/sources/biosimulations/{project_id}/omex", replayable=True)
         r, _ = self._send(op, lambda c: get_biosimulations_omex.sync_detailed(project_id, client=c), download=True)
-        raise_for(r)
+        _raise_for(r, op)
         return r.content
 
     def biosimulations_reference(self, project_id: str) -> dict[str, dict[str, list[float]]]:
         """The project's original results: `{"<sedml>/<report>": {label: values}}`."""
         op = Operation("GET", f"/sources/biosimulations/{project_id}/reference", replayable=True)
         r, _ = self._send(op, lambda c: get_biosimulations_reference.sync_detailed(project_id, client=c))
-        raise_for(r)
+        _raise_for(r, op)
         data: dict[str, dict[str, list[float]]] = r.parsed.to_dict()  # type: ignore[union-attr]
         return data
 
@@ -880,7 +940,7 @@ class ComposeSession:
         r, _ = self._send(
             op, lambda c: get_dataset_content.sync_detailed(uuid.UUID(str(dataset_id)), client=c), download=True
         )
-        raise_for(r)
+        _raise_for(r, op)
         return r.content
 
     def dataset_file(self, dataset_id: str | uuid.UUID, subpath: str) -> bytes:
@@ -892,7 +952,7 @@ class ComposeSession:
             lambda c: get_dataset_file.sync_detailed(uuid.UUID(str(dataset_id)), subpath, client=c),
             download=True,
         )
-        raise_for(r)
+        _raise_for(r, op)
         return r.content
 
     def download_dataset_file(self, dataset_id: str | uuid.UUID, subpath: str, dest: str | Path) -> Path:
@@ -915,7 +975,7 @@ class ComposeSession:
             lambda c: get_simulation_results_file.sync_detailed(client=c, simulation_id=simulation_id),
             download=True,
         )
-        raise_for(r)
+        _raise_for(r, op)
         return r.content
 
     def download(self, simulation_id: int, dest: str | Path) -> Path:
@@ -1058,6 +1118,7 @@ class AsyncComposeSession:
         download: bool = False,
     ) -> Response[Any]:
         eff_timeout = self.timeout if download else min(self.timeout, 60.0)
+        answered: list[httpx.Response] = []
         client = _make_client(
             self.base_url,
             credential.access_token if credential is not None else None,
@@ -1066,10 +1127,15 @@ class AsyncComposeSession:
             verify_ssl=self._verify,
             guard=self._guard,
             is_async=True,
+            on_response=answered.append,
         )
         try:
             async with client, asyncio.timeout(COMMAND_DEADLINE_SECONDS):
                 return await call(client)
+        except _READ_FAILURES:
+            if not answered:
+                raise  # nothing came back: a bug, not an answer
+            return _unreadable(answered[-1])
         except UnsafeRequestError:
             raise ProtocolError(f"refused to send credentials for {op} anywhere but {self.base_url}") from None
         except (httpx.ConnectError, httpx.ConnectTimeout):
@@ -1267,7 +1333,7 @@ class AsyncComposeSession:
         r, _ = await self._send(
             op, lambda c: get_simulator_build_log.asyncio_detailed(client=c, simulator_id=simulator_id)
         )
-        raise_for(r)
+        _raise_for(r, op)
         return r.content.decode(errors="replace")
 
     async def build_status(self, simulator_id: int) -> JobState:
@@ -1373,7 +1439,7 @@ class AsyncComposeSession:
     async def biomodel_omex(self, model_id: str) -> bytes:
         op = Operation("GET", f"/sources/biomodels/{model_id}/omex", replayable=True)
         r, _ = await self._send(op, lambda c: get_biomodel_omex.asyncio_detailed(model_id, client=c), download=True)
-        raise_for(r)
+        _raise_for(r, op)
         return r.content
 
     async def run_biomodel(
@@ -1408,14 +1474,14 @@ class AsyncComposeSession:
         r, _ = await self._send(
             op, lambda c: get_biosimulations_omex.asyncio_detailed(project_id, client=c), download=True
         )
-        raise_for(r)
+        _raise_for(r, op)
         return r.content
 
     async def biosimulations_reference(self, project_id: str) -> dict[str, dict[str, list[float]]]:
         """The project's original results: `{"<sedml>/<report>": {label: values}}`."""
         op = Operation("GET", f"/sources/biosimulations/{project_id}/reference", replayable=True)
         r, _ = await self._send(op, lambda c: get_biosimulations_reference.asyncio_detailed(project_id, client=c))
-        raise_for(r)
+        _raise_for(r, op)
         data: dict[str, dict[str, list[float]]] = r.parsed.to_dict()  # type: ignore[union-attr]
         return data
 
@@ -1549,7 +1615,7 @@ class AsyncComposeSession:
         r, _ = await self._send(
             op, lambda c: get_dataset_content.asyncio_detailed(uuid.UUID(str(dataset_id)), client=c), download=True
         )
-        raise_for(r)
+        _raise_for(r, op)
         return r.content
 
     async def results(self, simulation_id: int) -> bytes:
@@ -1559,7 +1625,7 @@ class AsyncComposeSession:
             lambda c: get_simulation_results_file.asyncio_detailed(client=c, simulation_id=simulation_id),
             download=True,
         )
-        raise_for(r)
+        _raise_for(r, op)
         return r.content
 
     async def download(self, simulation_id: int, dest: str | Path) -> Path:

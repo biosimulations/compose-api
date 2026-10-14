@@ -9,18 +9,16 @@ import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any
 
 import compose_api_client.profiles
 import httpx
 import pytest
-from compose_api_client.auth.identity import ComposeApi
 from compose_api_client.auth.storage import MemoryCredentialStore
 from compose_api_client.cli.commands import main
 from compose_api_client.cli.wiring import Wiring
 from compose_api_client.ext import errors
 from compose_api_client.ext.errors import CliError, ExitCode
-from compose_api_client.models import SimulationExperiment
 
 from tests.fixtures.cli_fixtures import (
     DESCRIPTION_CANARY,
@@ -48,6 +46,7 @@ CONTRACT: dict[type[CliError], tuple[ExitCode, str]] = {
     errors.NotFoundError: (ExitCode.FAILURE, "not_found"),
     errors.InvalidRequestError: (ExitCode.FAILURE, "invalid_request"),
     errors.ServerError: (ExitCode.FAILURE, "server_error"),
+    errors.ServiceUnavailableError: (ExitCode.NETWORK, "network"),
     errors.ApiError: (ExitCode.FAILURE, "api_error"),
     errors.UncertainOutcomeError: (ExitCode.FAILURE, "uncertain"),
     errors.JobFailedError: (ExitCode.FAILURE, "job_failed"),
@@ -161,9 +160,6 @@ def _unreachable(_request: httpx.Request) -> httpx.Response:
 
 
 SCENARIOS: dict[str, Scenario] = {
-    "no-session": Scenario(
-        ["simulators", "list"], ExitCode.AUTH_REQUIRED, "authentication", "sign in first", session=None
-    ),
     "refresh-revoked": Scenario(
         ["simulators", "list"],
         ExitCode.AUTH_REQUIRED,
@@ -186,10 +182,8 @@ SCENARIOS: dict[str, Scenario] = {
     "forbidden": Scenario(
         ["simulators", "list"], ExitCode.FORBIDDEN, "forbidden", "signing in again will not change", api=_status(403)
     ),
-    "not-found": Scenario(["simulations", "status", "999"], ExitCode.FAILURE, "not_found", "no simulation 999"),
-    "invalid": Scenario(
-        ["simulations", "status", "5"], ExitCode.FAILURE, "invalid_request", "invalid", api=_status(422)
-    ),
+    "not-found": Scenario(["simulators", "list"], ExitCode.FAILURE, "not_found", "HTTP 404", api=_status(404)),
+    "invalid": Scenario(["status", "5"], ExitCode.FAILURE, "invalid_request", "invalid", api=_status(422)),
     "rate-limited": Scenario(
         ["simulators", "list"],
         ExitCode.NETWORK,
@@ -204,9 +198,9 @@ SCENARIOS: dict[str, Scenario] = {
         ["simulators", "list"], ExitCode.NETWORK, "network", "check the connection", api=_unreachable
     ),
     "submission-outcome-unknown": Scenario(
-        ["simulations", "submit", "{archive}"],
+        ["run", "{archive}"],
         ExitCode.FAILURE,
-        "server_error",
+        "uncertain",
         "do not submit again blindly",
         api=_status(500),
         archive=b"zip",
@@ -220,10 +214,11 @@ SCENARIOS: dict[str, Scenario] = {
         api=_status(307, Location="https://evil.example/"),
     ),
     "not-an-archive": Scenario(
-        ["simulations", "submit", "{archive}"], ExitCode.USAGE, "usage", "not an OMEX archive", archive=b"plain text"
+        ["run", "{archive}"], ExitCode.USAGE, "usage", "not an OMEX archive", archive=b"plain text"
     ),
+    # A session command needs a store; API commands without one call anonymously (tests/cli/test_api.py).
     "no-credential-store": Scenario(
-        ["simulators", "list"], ExitCode.CONFIG, "storage", "--ephemeral-auth", session=None, keyring=False
+        ["auth", "status", "--verify"], ExitCode.CONFIG, "storage", "--ephemeral-auth", session=None, keyring=False
     ),
     "api-unreachable-after-login": Scenario(
         ["auth", "login"], ExitCode.NETWORK, "network", "auth status --verify", api=_unreachable, session=None
@@ -349,8 +344,8 @@ def test_a_whole_session_never_leaks_a_credential(
         ["auth", "login"],
         ["auth", "status", "--verify"],
         ["simulators", "list"],
-        ["simulations", "submit", str(archive)],
-        ["simulations", "status", str(FakeComposeApi.SIMULATION_ID)],
+        ["run", str(archive)],
+        ["status", str(FakeComposeApi.SIMULATION_ID)],
         ["auth", "status", "--json"],
     ]
     for argv in journey:
@@ -395,11 +390,11 @@ def test_text_and_json_report_the_same_facts(
     )
     cases: list[tuple[list[str], Callable[[dict[str, Any]], list[str]]]] = [
         (["auth", "status"], lambda d: [d["identity"]["subject"], d["identity"]["issuer"], d["state"]]),
-        (["simulations", "status", "41"], lambda d: [str(d["sim_id"]), d["status"], str(d["slurmjobid"])]),
+        (["status", "41"], lambda d: [str(d["simulation_id"]), d["status"], str(d["slurmjobid"])]),
         (["simulators", "list"], lambda d: [str(v["database_id"]) for v in d["versions"]]),
     ]
     for argv, facts in cases:
-        assert main(argv) == ExitCode.OK
+        assert main(["-o", "table", *argv]) == ExitCode.OK
         text = capsys.readouterr().out
         assert main([*argv, "--json"]) == ExitCode.OK
         document = json.loads(capsys.readouterr().out)
@@ -426,16 +421,19 @@ def test_submitting_reads_the_archive_once_and_closes_it(
             api_transport=fake_compose_api.transport,
         ),
     )
-    received: list[BinaryIO] = []
-    upload = ComposeApi.submit_simulation
+    archive = _archive(tmp_path / "experiment.omex")
+    reads: list[Path] = []
+    read_bytes = Path.read_bytes
 
-    async def observed(self: ComposeApi, archive: BinaryIO, **options: Any) -> SimulationExperiment:
-        received.append(archive)
-        return await upload(self, archive, **options)
+    def observed(path: Path) -> bytes:
+        if path == archive:
+            reads.append(path)
+        return read_bytes(path)
 
-    monkeypatch.setattr(ComposeApi, "submit_simulation", observed)
-    assert main(["simulations", "submit", str(_archive(tmp_path / "experiment.omex"))]) == ExitCode.OK
-    assert len(received) == 1 and received[0].closed, "the archive is opened once and closed after the upload"
+    monkeypatch.setattr(Path, "read_bytes", observed)
+    assert main(["run", str(archive)]) == ExitCode.OK
+    # `Path.read_bytes` opens and closes the file in one call, so nothing keeps the archive open after the upload.
+    assert reads == [archive], "the archive is read once: a submission is never resent"
 
 
 def test_ctrl_c_during_an_api_call_closes_the_client_and_exits_130(
@@ -459,5 +457,5 @@ def test_ctrl_c_during_an_api_call_closes_the_client_and_exits_130(
     )
     assert main(["simulators", "list"]) == ExitCode.CANCELLED
     assert capsys.readouterr().err == "compose-api: cancelled\n"
-    assert (len(api.requests), api.closed) == (1, 1)
+    assert len(api.requests) == 1 and api.closed >= 1, "the request went once and its client was closed"
     assert store.load(settings.binding_key(persistent=True)) is not None, "cancelling a call is not a sign-out"

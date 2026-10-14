@@ -26,7 +26,8 @@ class Wiring:
     store_factory: StoreFactory | None = None  # unset: the OS credential store
     launcher: BrowserLauncher | None = None  # unset: the system browser
     auth0_transport: httpx.AsyncBaseTransport | None = None
-    api_transport: httpx.AsyncBaseTransport | None = None
+    api_transport: httpx.AsyncBaseTransport | None = None  # identity confirmation (async)
+    sync_api_transport: httpx.BaseTransport | None = None  # the API commands' `ComposeSession` (sync)
 
     def store(self, settings: CliSettings, *, writable: bool, check: bool = True) -> CredentialStore:
         """The persistent store. `writable` probes it with a throwaway write, for commands about to sign in;

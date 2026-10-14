@@ -170,6 +170,14 @@ class ServerError(ApiError):
     category = "server_error"
 
 
+class ServiceUnavailableError(ServerError, NetworkError):
+    """502, 503 or 504: the server is there but cannot answer now. A `ServerError` by its status, and a network
+    failure by what to do about it (try again later), so its exit code and category are the network ones."""
+
+    exit_code = ExitCode.NETWORK
+    category = "network"
+
+
 class UncertainOutcomeError(CliError):
     """A non-replayable submission failed after it may have reached the server."""
 

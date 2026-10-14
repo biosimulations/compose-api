@@ -79,7 +79,8 @@ compose-api auth logout --local-only
 The session is one record in your operating system's credential store (`macOS Keychain` or Linux `Secret Service`),
 under `compose-api.cli.v1.<digest>`. Plaintext and unknown keyring backends are refused; there is no file fallback.
 On Windows (where Credential Manager's 2,560-byte UTF-16 limit is smaller than a realistic ~3.4 KB session) or on
-hosts without a credential store, use `--ephemeral-auth` (for example `compose-api simulators list --ephemeral-auth --device`),
+hosts without a credential store, use `--ephemeral-auth` before the command (for example
+`compose-api --ephemeral-auth --device simulators list`),
 which signs in for a single command in memory without requesting a refresh token.
 
 For CI and non-interactive automation, set `COMPOSE_API_TOKEN` in the environment. When set, it takes precedence over a
@@ -108,12 +109,12 @@ $ compose-api wait 4195
 $ compose-api results 4195 --extract out/
 ```
 
-Authenticated profile commands are also available directly:
+Once signed in (`compose-api auth login`), every command sends the profile's session; without one, commands call the
+API anonymously, as it allows. Neither ever starts a sign-in on its own:
 
 ```bash
-compose-api simulators list
-compose-api simulations status 123
-compose-api simulations submit experiment.omex --interval-time 2.5 --batch
+compose-api simulations list                               # with the stored session, or anonymously
+compose-api --ephemeral-auth run experiment.omex           # sign in for this one command; keep nothing
 ```
 
 - **Simulation ids.** A simulation id is what `run` prints (`simulation_database_id`), and what `status`, `wait`,
@@ -229,6 +230,10 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 * `-o, --output [auto|table|json]`: auto: table on a terminal, else json.  [env var: COMPOSE_API_OUTPUT; default: auto]
 * `-v, --verbose`: Log HTTP requests; tracebacks on errors.
 * `-q, --quiet`: No progress lines.
+* `--ephemeral-auth`: Sign in for this command only, keeping credentials in memory (for hosts without a credential store).
+* `--device`: With --ephemeral-auth: sign in on another device (RFC 8628).
+* `--no-browser`: With --ephemeral-auth: print the sign-in URL instead of opening it.
+* `--version`: Print this program's version and exit.
 * `--install-completion`: Install completion for the current shell.
 * `--show-completion`: Show completion for the current shell, to copy it or customize the installation.
 * `--help`: Show this message and exit.
@@ -1500,7 +1505,7 @@ $ compose-api auth signup [OPTIONS]
 
 **Options**:
 
-* `--provider TEXT`: Identity provider: email or google.  [default: email]
+* `--provider [email|google]`: Identity provider: email or google.  [default: email]
 * `--device`: Sign in on another device (RFC 8628).
 * `--no-browser`: Print the sign-in URL instead of opening it.
 * `--json`: Print JSON (the same as --output json).
@@ -1518,7 +1523,7 @@ $ compose-api auth login [OPTIONS]
 
 **Options**:
 
-* `--provider TEXT`: Identity provider: email or google.
+* `--provider [email|google]`: Identity provider: email or google.
 * `--device`: Sign in on another device (RFC 8628).
 * `--no-browser`: Print the sign-in URL instead of opening it.
 * `--json`: Print JSON (the same as --output json).
@@ -1576,7 +1581,7 @@ $ compose-api config [OPTIONS] COMMAND [ARGS]...
 
 ### `compose-api config show`
 
-Print the effective profile and where each value came from.
+Print the effective profile and where each value came from. Profiles hold no secrets.
 
 **Usage**:
 

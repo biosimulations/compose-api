@@ -20,6 +20,7 @@ from compose_api_client.auth.identity import (
     TokenSource,
     UnsafeRequestError,
 )
+from compose_api_client.auth.models import SessionRecord
 from compose_api_client.auth.oauth import Auth0OAuthClient
 from compose_api_client.auth.session import AuthSession
 from compose_api_client.auth.storage import MemoryCredentialStore
@@ -37,6 +38,7 @@ from compose_api_client.ext.errors import (
     ProtocolError,
     RateLimitedError,
     ServerError,
+    StorageError,
 )
 from compose_api_client.models import JobStatus
 from compose_api_client.profiles import CliSettings
@@ -59,6 +61,7 @@ from tests.fixtures.cli_fixtures import (
     seed_session,
     use_profile,
     wire,
+    write_cli_config,
 )
 
 API = "https://api.compose.test"
@@ -483,29 +486,37 @@ def stored(
     return store
 
 
-def test_simulators_list_text_and_json(stored: MemoryCredentialStore, capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["simulators", "list"]) == ExitCode.OK
-    lines = capsys.readouterr().out.splitlines()
-    assert lines[0].split() == ["ID", "DEFINITION", "PACKAGES", "REGISTERED"]
-    assert lines[1].split()[:3] == ["7", "0123456789ab", "0"]
+def _bearers(transport: RecordingTransport) -> list[str | None]:
+    return [request.headers.get("authorization") for request in transport.requests]
+
+
+def test_simulators_list_uses_the_stored_session(
+    stored: MemoryCredentialStore, fake_compose_api: FakeComposeApi, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["-o", "table", "simulators", "list"]) == ExitCode.OK
+    table = capsys.readouterr().out
+    assert str(FakeComposeApi.SIMULATOR_ID) in table and "0123456789" in table
     assert main(["simulators", "list", "--json"]) == ExitCode.OK
     document = json.loads(capsys.readouterr().out)
-    assert [version["database_id"] for version in document["versions"]] == [7]
+    assert [version["database_id"] for version in document["versions"]] == [FakeComposeApi.SIMULATOR_ID]
+    bearers = _bearers(fake_compose_api.transport)
+    assert len(bearers) == 2 and all(b is not None and b.startswith("Bearer ey") for b in bearers)
 
 
-def test_simulation_status_and_not_found(stored: MemoryCredentialStore, capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["simulations", "status", str(FakeComposeApi.SIMULATION_ID)]) == ExitCode.OK
-    assert capsys.readouterr().out.startswith(f"Simulation {FakeComposeApi.SIMULATION_ID}: running")
-    assert main(["simulations", "status", "999", "--json"]) == ExitCode.FAILURE
-    error = json.loads(capsys.readouterr().out)["error"]
-    assert error == {
-        "category": "not_found",
-        "message": "there is no simulation 999 on this server",
-        "exit_code": 1,
-    }
+def test_status_of_a_run_and_of_one_without_a_job_yet(
+    stored: MemoryCredentialStore, fake_compose_api: FakeComposeApi, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["status", str(FakeComposeApi.SIMULATION_ID), "--json"]) == ExitCode.OK
+    record = json.loads(capsys.readouterr().out)
+    assert (record["simulation_id"], record["status"]) == (FakeComposeApi.SIMULATION_ID, "running")
+    # A 404 from the status route means no SLURM job exists yet: `status` reports "submitting" (docs/cli.md).
+    assert main(["status", "999", "--json"]) == ExitCode.OK
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)["status"] == "submitting"
+    assert DESCRIPTION_CANARY not in captured.out + captured.err
 
 
-def test_submit_uploads_the_archive_once_and_reports_a_reference(
+def test_run_uploads_the_archive_once_and_reports_its_ids(
     stored: MemoryCredentialStore,
     fake_compose_api: FakeComposeApi,
     tmp_path: Path,
@@ -513,57 +524,131 @@ def test_submit_uploads_the_archive_once_and_reports_a_reference(
 ) -> None:
     archive = tmp_path / "experiment.omex"
     archive.write_bytes(_archive())
-    argv = ["simulations", "submit", str(archive), "--interval-time", "2.5", "--batch"]
-    assert main(argv) == ExitCode.OK
-    out = capsys.readouterr().out
-    assert f"Submitted simulation {FakeComposeApi.SIMULATION_ID}" in out
-    assert f"compose-api simulations status {FakeComposeApi.SIMULATION_ID}" in out
-    assert "complete" not in out.lower(), "a submission is a reference, not a result"
-    assert main([*argv, "--json"]) == ExitCode.OK
-    assert json.loads(capsys.readouterr().out)["simulation_database_id"] == FakeComposeApi.SIMULATION_ID
-    assert [upload["content"] for upload in fake_compose_api.uploads] == [archive.read_bytes()] * 2
+    assert main(["run", str(archive), "--interval", "2.5", "--batch", "--json"]) == ExitCode.OK
+    document = json.loads(capsys.readouterr().out)
+    assert document["simulation_database_id"] == FakeComposeApi.SIMULATION_ID
+    assert "complete" not in json.dumps(document).lower(), "a submission is a reference, not a result"
+    [upload] = fake_compose_api.uploads
+    assert (upload["content"], upload["batch"]) == (archive.read_bytes(), True)
+    [request] = fake_compose_api.transport.requests
+    assert request.url.path == "/simulation/run"
+    assert request.headers["authorization"].startswith("Bearer ey")
 
 
-@pytest.mark.parametrize("contents", [None, b"", b"not a zip archive"], ids=["missing", "empty", "not-zip"])
-def test_submit_checks_the_archive_before_anything_else(
+@pytest.mark.parametrize("contents", [b"", b"not a zip archive"], ids=["empty", "not-zip"])
+def test_run_checks_the_archive_before_anything_else(
     stored: MemoryCredentialStore,
     fake_compose_api: FakeComposeApi,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-    contents: bytes | None,
+    contents: bytes,
 ) -> None:
     archive = tmp_path / "experiment.omex"
-    if contents is not None:
-        archive.write_bytes(contents)
-    assert main(["simulations", "submit", str(archive), "--json"]) == ExitCode.USAGE
-    assert json.loads(capsys.readouterr().out)["error"]["category"] == "usage"
+    archive.write_bytes(contents)
+    assert main(["run", str(archive), "--json"]) == ExitCode.USAGE
+    error = json.loads(capsys.readouterr().out)["error"]
+    assert (error["category"], error["exit_code"]) == ("usage", int(ExitCode.USAGE))
+    assert "nothing was uploaded" in error["message"]
     assert fake_compose_api.transport.requests == []
 
 
-@pytest.mark.parametrize(
-    "argv",
-    [["simulators", "list"], ["simulations", "status", "41"], ["simulations", "submit", "{archive}"]],
-)
-def test_without_a_session_api_commands_never_sign_in_on_their_own(
+def test_run_of_a_missing_archive_is_a_usage_error(
+    stored: MemoryCredentialStore,
+    fake_compose_api: FakeComposeApi,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main(["run", str(tmp_path / "missing.omex")]) == ExitCode.USAGE
+    assert "does not exist" in capsys.readouterr().err
+    assert fake_compose_api.transport.requests == []
+
+
+ANONYMOUS_COMMANDS = [["simulators", "list"], ["status", "41"], ["run", "{archive}"]]
+
+
+@pytest.mark.parametrize("argv", ANONYMOUS_COMMANDS)
+def test_without_a_session_api_commands_call_anonymously_and_never_sign_in(
     monkeypatch: pytest.MonkeyPatch,
     cli_config_path: Path,
     tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-    no_network_or_browser: list[str],
+    fake_tenant: FakeTenant,
+    fake_compose_api: FakeComposeApi,
     argv: list[str],
 ) -> None:
+    """The API allows anonymous calls, so no session means an anonymous call; it never means a sign-in."""
     archive = tmp_path / "experiment.omex"
     archive.write_bytes(_archive())
     use_profile(monkeypatch, _settings())
-    api = _mock(lambda _request: httpx.Response(200))
-    browser = FakeBrowser(FakeTenant(FakeAuth0()))
+    browser = FakeBrowser(fake_tenant)
     wire(
         monkeypatch,
-        Wiring(store_factory=lambda _settings: MemoryCredentialStore(), launcher=browser, api_transport=api),
+        Wiring(
+            store_factory=lambda _settings: MemoryCredentialStore(),
+            launcher=browser,
+            auth0_transport=fake_tenant.transport,
+            api_transport=fake_compose_api.transport,
+        ),
     )
-    assert main([part.format(archive=archive) for part in argv]) == ExitCode.AUTH_REQUIRED
-    assert "No session for this profile; sign in first" in capsys.readouterr().err
-    assert browser.urls == [] and api.requests == []
+    assert main([part.format(archive=archive) for part in argv]) == ExitCode.OK
+    assert browser.urls == [] and fake_tenant.forms(FakeTenant.TOKEN) == []
+    assert fake_compose_api.transport.requests and set(_bearers(fake_compose_api.transport)) == {None}
+
+
+def test_api_commands_call_anonymously_when_the_host_has_no_credential_store(
+    monkeypatch: pytest.MonkeyPatch,
+    cli_config_path: Path,
+    fake_compose_api: FakeComposeApi,
+) -> None:
+    """No supported OS store means no stored session can exist: there is nothing to fall back from."""
+    use_profile(monkeypatch, _settings())
+
+    def unsupported(_settings: CliSettings) -> MemoryCredentialStore:
+        raise StorageError("Unsupported OS credential backend; use --ephemeral-auth")
+
+    wire(monkeypatch, Wiring(store_factory=unsupported, api_transport=fake_compose_api.transport))
+    assert main(["simulators", "list", "--json"]) == ExitCode.OK
+    assert set(_bearers(fake_compose_api.transport)) == {None}
+
+
+class _LockedStore(MemoryCredentialStore):
+    def load(self, binding_key: str) -> SessionRecord | None:
+        raise StorageError("the OS credential store is locked; unlock it, or use --ephemeral-auth")
+
+
+def test_an_unreadable_store_is_an_error_never_an_anonymous_call(
+    monkeypatch: pytest.MonkeyPatch,
+    cli_config_path: Path,
+    fake_compose_api: FakeComposeApi,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A store that exists but cannot be read may hold a session: calling anonymously instead could, for example,
+    submit an unowned run in place of the person's own. Nothing is sent."""
+    use_profile(monkeypatch, _settings())
+    wire(monkeypatch, Wiring(store_factory=lambda _settings: _LockedStore(), api_transport=fake_compose_api.transport))
+    assert main(["simulators", "list", "--json"]) == ExitCode.CONFIG
+    error = json.loads(capsys.readouterr().out)["error"]
+    assert (error["category"], error["exit_code"]) == ("storage", int(ExitCode.CONFIG))
+    assert "--ephemeral-auth" in error["message"]
+    assert fake_compose_api.transport.requests == []
+
+
+def test_a_profile_that_cannot_sign_in_calls_anonymously(
+    monkeypatch: pytest.MonkeyPatch,
+    cli_config_path: Path,
+    fake_compose_api: FakeComposeApi,
+) -> None:
+    write_cli_config(
+        cli_config_path,
+        f'[profiles.dev]\napi_base_url = "{API}"\nauth0_domain = "{AUTH0_TEST_DOMAIN}"\n'
+        'auth0_audience = "https://api.compose.test"\n',
+    )
+
+    def never(_settings: CliSettings) -> MemoryCredentialStore:
+        raise AssertionError("a profile without a client ID has no session to look for")
+
+    wire(monkeypatch, Wiring(store_factory=never, api_transport=fake_compose_api.transport))
+    assert main(["--profile", "dev", "simulators", "list", "--json"]) == ExitCode.OK
+    assert set(_bearers(fake_compose_api.transport)) == {None}
 
 
 @pytest.mark.parametrize("device", [False, True], ids=["browser", "device"])
@@ -592,13 +677,28 @@ def test_ephemeral_auth_signs_in_for_one_command_and_keeps_nothing(
             api_transport=fake_compose_api.transport,
         ),
     )
-    argv = ["simulators", "list", "--ephemeral-auth", "--json", *(["--device"] if device else [])]
+    argv = ["--ephemeral-auth", *(["--device"] if device else []), "simulators", "list", "--json"]
     assert main(argv) == ExitCode.OK
     assert json.loads(capsys.readouterr().out)["versions"][0]["database_id"] == FakeComposeApi.SIMULATOR_ID
     [request] = fake_compose_api.transport.requests
     assert request.headers["authorization"].startswith("Bearer ey")
     scope = (fake_tenant.forms(FakeTenant.DEVICE)[0] if device else fake_tenant.authorize_requests[0])["scope"]
     assert "offline_access" not in scope
+
+
+def test_ephemeral_auth_refuses_another_api_or_a_second_credential(
+    monkeypatch: pytest.MonkeyPatch,
+    cli_config_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    no_network_or_browser: list[str],
+) -> None:
+    use_profile(monkeypatch, _settings())  # a fixed port: finding a free one would bind a socket
+    assert main(["--url", "https://elsewhere.example", "--ephemeral-auth", "simulators", "list"]) == ExitCode.USAGE
+    assert "--url names another API" in capsys.readouterr().err
+    monkeypatch.setenv("COMPOSE_API_TOKEN", "env-token-value")
+    assert main(["--ephemeral-auth", "simulators", "list"]) == ExitCode.USAGE
+    captured = capsys.readouterr()
+    assert "both supply credentials" in captured.err and "env-token-value" not in captured.out + captured.err
 
 
 def test_login_is_confirmed_by_the_api(
@@ -620,7 +720,7 @@ def test_login_is_confirmed_by_the_api(
             api_transport=fake_compose_api.transport,
         ),
     )
-    assert main(["auth", "login"]) == ExitCode.OK
+    assert main(["-o", "table", "auth", "login"]) == ExitCode.OK
     out = capsys.readouterr().out
     assert f"Identity: {fake_tenant.subject} ({AUTH0_TEST_ISSUER})" in out
     assert "API: confirmed this identity just now" in out
@@ -664,13 +764,13 @@ def test_an_unreachable_api_after_login_keeps_the_session_unconfirmed(
 def test_status_is_local_until_asked_to_verify(
     stored: MemoryCredentialStore, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    assert main(["auth", "status"]) == ExitCode.OK
+    assert main(["-o", "table", "auth", "status"]) == ExitCode.OK
     out = capsys.readouterr().out
     assert "API: never confirmed" in out
     assert main(["auth", "status", "--verify", "--json"]) == ExitCode.OK
     document = json.loads(capsys.readouterr().out)
     assert document["checked_with_api"] is True and document["api_verified_at"] is not None
-    assert main(["auth", "status"]) == ExitCode.OK
+    assert main(["-o", "table", "auth", "status"]) == ExitCode.OK
     assert "API: last confirmed" in capsys.readouterr().out
     assert main(["auth", "status", "--json"]) == ExitCode.OK
     assert json.loads(capsys.readouterr().out)["checked_with_api"] is False
@@ -712,6 +812,6 @@ def test_verify_without_a_session_contacts_nothing(
     use_profile(monkeypatch, _settings())
     api = _mock(lambda _request: httpx.Response(200))
     wire(monkeypatch, Wiring(store_factory=lambda _settings: MemoryCredentialStore(), api_transport=api))
-    assert main(["auth", "status", "--verify"]) == ExitCode.AUTH_REQUIRED
+    assert main(["-o", "table", "auth", "status", "--verify"]) == ExitCode.AUTH_REQUIRED
     assert "No session" in capsys.readouterr().out
     assert api.requests == []

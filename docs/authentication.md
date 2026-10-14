@@ -136,11 +136,13 @@ failure there is reported as such, not as a sign-out. Sign-in ends with the same
 has confirmed the identity, and if the API cannot be reached it keeps the saved session, says it is unconfirmed and
 exits non-zero.
 
-`compose-api simulators list`, `simulations status ID` and `simulations submit FILE` call the existing operations
-through the generated client with the stored session. With no session they fail (exit 3); they never fall back to
-anonymous access or start a sign-in on their own. A read the API rejects with 401 is renewed and retried once; a
-403 is final. A submission is never sent twice: after a timeout or server error its outcome is reported as unknown.
-The bearer is sent only to the profile's API origin and these operations, never to Auth0 or a redirect.
+Every API command (`compose-api run`, `status`, `simulations list`, ...) sends the profile's stored session when there
+is one, and calls anonymously when there is none, as the API allows; none starts a sign-in on its own. A credential
+store that exists but cannot be read (locked, corrupt) is an error, never an anonymous call: a signed-in person's
+submission is never silently sent unowned. A read the API rejects with 401 is renewed and retried once; a 403 is
+final. A submission is never sent twice: after a timeout or server error its outcome is reported as unknown. The
+bearer is sent only to the profile's API origin, never to Auth0 or a redirect, and not at all when `--url` names
+another API. Error messages name the operation and the HTTP status, not text from the server.
 
 `compose-api auth logout` attempts bounded refresh-token revocation, then deletes local credentials even when the
 provider is unavailable. `--local-only` performs only local deletion. Revocation failure is reported with exit 5;
@@ -170,8 +172,9 @@ and the session stays. Once the refresh request may have left the machine, a cra
 durably stored successor requires a fresh sign-in; the old refresh credential is never replayed. An already stored
 complete successor can recover an interrupted metadata cleanup. Login uses a separate transaction lock and commits only if its starting generation still matches.
 A failed/locked backend stops persistent sign-in before the browser when detectable; there is no insecure fallback.
-On a host without a usable credential store, add `--ephemeral-auth` to an API command: it signs in for that one
-command, requests no refresh token, keeps the session in memory and forgets it when the command ends.
+On a host without a usable credential store, put `--ephemeral-auth` before an API command
+(`compose-api --ephemeral-auth run x.omex`): it signs in for that one command, requests no refresh token, keeps the
+session in memory and forgets it when the command ends.
 
 Real stores are exercised by `tests/cli/test_os_keyring.py` (opt-in: `COMPOSE_API_TEST_OS_KEYRING=1`, synthetic
 records under random names, always deleted). On 2026-10-07 it passed against the macOS Keychain (macOS 27.0.1) and

@@ -18,7 +18,6 @@ from compose_api_client.auth.oauth import Auth0OAuthClient
 from compose_api_client.auth.signin import persistent_sign_in, sign_in
 from compose_api_client.auth.storage import MemoryCredentialStore
 from compose_api_client.cli.auth_commands import sign_in_command
-from compose_api_client.cli.commands import build_parser
 from compose_api_client.cli.wiring import Wiring
 from compose_api_client.ext.errors import AuthError, ConfigError, ExitCode, InteractionError
 from compose_api_client.profiles import CliSettings
@@ -390,7 +389,7 @@ def test_the_login_command_keeps_secrets_out_of_every_output(
     for field in ("api_base_url", "auth0_domain", "auth0_audience", "auth0_client_id", "callback_port"):
         monkeypatch.setenv(f"COMPOSE_API_CLI_{field.upper()}", str(getattr(settings, field)))
     store = MemoryCredentialStore()
-    args = _namespace(["auth", "login"])
+    args = _login_args()
 
     wiring = Wiring(
         store_factory=lambda _settings: store,
@@ -425,7 +424,7 @@ auth0_audience = "{AUTH0_TEST_AUDIENCE}"
 auth0_client_id = "{CLI_CLIENT_ID}"
 """,
     )
-    args = _namespace(["auth", "login", "--provider", "google"])
+    args = _login_args(provider="google")
     args.profile = "dev"
     opened: list[CliSettings] = []
 
@@ -439,7 +438,6 @@ auth0_client_id = "{CLI_CLIENT_ID}"
     assert opened == [] and fake_tenant.requests == []
 
 
-def _namespace(argv: list[str]) -> argparse.Namespace:
-    args = build_parser().parse_args(argv)
-    args.profile, args.json = None, False
-    return args
+def _login_args(*, provider: str | None = None) -> argparse.Namespace:
+    """What `compose-api auth login [--provider P]` hands `sign_in_command` (see `commands.auth_login`)."""
+    return argparse.Namespace(profile=None, provider=provider, device=False, no_browser=False, json=False)

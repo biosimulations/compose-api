@@ -259,7 +259,7 @@ def test_simulators_table_shows_the_base_image(service: Callable[..., FakeServic
 def test_run_prints_the_ids_and_sends_the_simulator(service: Callable[..., FakeService], tmp_path: Path) -> None:
     fake = service()
     doc = tmp_path / "experiment.omex"
-    doc.write_bytes(b"PK")
+    doc.write_bytes(_zip({"manifest.xml": b"<omexManifest/>"}))  # an .omex must be a ZIP
     r = invoke("run", str(doc), "--simulator", "viva-pde-particle")
     assert r.exit_code == 0 and json.loads(r.stdout)["simulation_database_id"] == 7
     assert fake.requests[0].url.params["simulator"] == "viva-pde-particle"
@@ -268,7 +268,7 @@ def test_run_prints_the_ids_and_sends_the_simulator(service: Callable[..., FakeS
 def test_run_wait_download_extract(service: Callable[..., FakeService], tmp_path: Path) -> None:
     service([404, "pending", "running", "completed"])
     doc = tmp_path / "experiment.omex"
-    doc.write_bytes(b"PK")
+    doc.write_bytes(_zip({"manifest.xml": b"<omexManifest/>"}))  # an .omex must be a ZIP
     out = tmp_path / "out"
     r = invoke("run", str(doc), "--wait", "--poll", "0", "--download", str(out), "--extract")
     assert r.exit_code == 0, r.output
@@ -280,7 +280,7 @@ def test_run_wait_download_extract(service: Callable[..., FakeService], tmp_path
 def test_a_failed_job_exits_1(service: Callable[..., FakeService], tmp_path: Path) -> None:
     service(["running", "failed"])
     doc = tmp_path / "x.omex"
-    doc.write_bytes(b"PK")
+    doc.write_bytes(_zip({"manifest.xml": b"<omexManifest/>"}))  # an .omex must be a ZIP
     r = invoke("run", str(doc), "--wait", "--poll", "0", "--download", str(tmp_path / "out"))
     assert r.exit_code == 1 and json.loads(r.stdout)["status"] == "failed"
     assert not (tmp_path / "out").exists()
@@ -331,13 +331,14 @@ def test_errors_have_messages_and_exit_codes(monkeypatch: pytest.MonkeyPatch, tm
         monkeypatch.setattr(cli_module, "make_session", make)
 
     doc = tmp_path / "x.omex"
-    doc.write_bytes(b"PK")
+    doc.write_bytes(_zip({"manifest.xml": b"<omexManifest/>"}))  # an .omex must be a ZIP
     respond(400, {"detail": {"message": "invalid document", "violations": ["state.x: unknown address"]}})
     r = invoke("run", str(doc))
     assert r.exit_code == 1 and "invalid document" in r.stderr and "state.x: unknown address" in r.stderr
     respond(404, {"detail": "Simulation 7 not found"})
     r = invoke("results", "7")
-    assert r.exit_code == 1 and "Simulation 7 not found" in r.stderr
+    # The message names the operation and status; the server's own text is not echoed (docs/cli.md).
+    assert r.exit_code == 1 and "HTTP 404" in r.stderr and "Simulation 7 not found" not in r.stderr
     respond(500, {"detail": "boom"})
     assert invoke("version").exit_code == 1
     assert invoke("run", str(tmp_path / "missing.omex")).exit_code == 2  # typer validates the path
