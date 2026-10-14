@@ -27,6 +27,8 @@ Several documents answer different questions. Start with the one that matches yo
 | interface manifests per environment, and writing composites in the web app | [plan-authoring.md](plan-authoring.md) | plan, implemented (0.7.14) | 2026-10-13 |
 | SED-ML models (BioModels, biosimulations.org, uploads) run on several solvers and compared; catalog, environments and solvers defined | [plan-sedml.md](plan-sedml.md) | plan, implemented (curated routes and interpolation deferred) | 2026-10-13 |
 | environment builds as jobs of their own, image artifacts recorded, builds on Kubernetes, publishing | [plan-environment-builds.md](plan-environment-builds.md) | plan, phases 1–4 implemented; publishing deferred | 2026-10-13 |
+| epoch 2: a forest of compatible environments (islands) for the items we run, isolation across processes, containers and machines, on HPC and laptops; research survey | [environments/](environments/README.md) (7 chapters + references) | research | 2026-10-13 |
+| the decisions epoch 2 needs (EV0 concepts reconciled, EV1–EV14), the experiments that gate them, phases | [plan-environments-epoch2.md](plan-environments-epoch2.md) | plan, proposed | 2026-10-13 |
 | viewers for datasets, registered per type and loaded lazily; the results bundle in 3D | [plan-viewers.md](plan-viewers.md) | plan, implemented (A1–A3 later) | 2026-10-13 |
 | the web UI at `/ui`: pages, viewers, composite authoring, how it is built | [webapp.md](webapp.md) | user documentation | 2026-10-13 |
 | the `compose-api` command line, with its generated reference | [cli.md](cli.md) | user documentation | 2026-10-13 |
