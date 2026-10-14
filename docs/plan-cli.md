@@ -305,7 +305,10 @@ Other details:
   - It runs when a GitHub **release** is published (the same go that deploys the docs and archives to Zenodo), or by
     hand with a tag.
   - It checks that the client's version is the tag, builds, and smoke-tests the wheel on Python 3.11 (it must import,
-    run `compose-api --help`, and pull in no FastAPI).
+    run `compose-api --help`, pull in no FastAPI, and pass `scripts/client-smoke.py`, which prepares private session
+    state and closes the sign-in listener: the code `--help` never reaches whose behaviour depends on the Python
+    version). `cli-platforms.yml` runs the same script on 3.11 on Linux, macOS and Windows for every client change,
+    and `make check` types the hand-written client a second time as Python 3.11.
   - It then uploads from the `pypi` environment, which accepts deployments only from tags and `main`. Add required
     reviewers there for a manual gate.
 - **The PyPI side**, once, by an owner of the existing project (0.1.0–0.2.0 were uploaded with a personal token from

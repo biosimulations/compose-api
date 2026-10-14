@@ -59,6 +59,7 @@ jobs:
           smoke/bin/python -c "import compose_api_client.ext, compose_api_client.cli, compose_api_client.auth, compose_api_client.profiles; import importlib.util as u; assert u.find_spec('fastapi') is None"
           smoke/bin/compose-api --help
           smoke/bin/compose-api run --help
+          smoke/bin/python -I "$GITHUB_WORKSPACE/scripts/client-smoke.py"
 
       - uses: actions/upload-artifact@v7
         with:

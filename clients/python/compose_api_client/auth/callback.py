@@ -66,6 +66,7 @@ class CallbackListener:
         self._host = f"127.0.0.1:{port}"
         self._server: asyncio.Server | None = None
         self._result: asyncio.Future[CallbackResult] | None = None
+        self._connections: set[asyncio.StreamWriter] = set()
 
     async def __aenter__(self) -> Self:
         self._result = asyncio.get_running_loop().create_future()
@@ -88,7 +89,10 @@ class CallbackListener:
         server, self._server = self._server, None
         if server is not None:
             server.close()
-            server.close_clients()
+            # Drop connections still open, such as one that never sends a request, so the listener is gone now and
+            # not when each one times out. Tracked here because `Server.close_clients()` is 3.13+ and this is 3.11+.
+            for writer in tuple(self._connections):
+                writer.close()
             await server.wait_closed()
         if self._result is not None and not self._result.done():
             self._result.cancel()
@@ -106,6 +110,7 @@ class CallbackListener:
             )
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        self._connections.add(writer)
         try:
             try:
                 async with asyncio.timeout(CONNECTION_TIMEOUT_SECONDS):
@@ -124,6 +129,7 @@ class CallbackListener:
         except ConnectionError:
             pass
         finally:
+            self._connections.discard(writer)
             writer.close()
 
     def _evaluate(self, head: bytes) -> tuple[HTTPStatus, CallbackResult | None]:

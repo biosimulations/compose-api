@@ -12,13 +12,28 @@ import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Literal
+from typing import Final, Literal
 
 import portalocker
 from platformdirs import user_state_path
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from compose_api_client.ext.errors import StorageError
+
+# Defined on Windows only (Python 3.8+); the value is fixed by Windows (winnt.h).
+_IO_REPARSE_TAG_MOUNT_POINT: Final = getattr(stat, "IO_REPARSE_TAG_MOUNT_POINT", 0xA0000003)
+
+
+def _is_junction(path: Path) -> bool:
+    """`Path.is_junction()`, which is 3.12+, for the client's 3.11 floor: a Windows directory junction.
+
+    The same test as CPython's `ntpath.isjunction`. POSIX has no `st_reparse_tag`, so it is always False there.
+    """
+    try:
+        info = path.lstat()
+    except (OSError, ValueError):
+        return False
+    return getattr(info, "st_reparse_tag", 0) == _IO_REPARSE_TAG_MOUNT_POINT
 
 
 class SessionState(BaseModel):
@@ -50,7 +65,7 @@ class FileState:
         try:
             # Check ancestors before mkdir, including paths that resolve into an attacker-controlled directory.
             for path in reversed((self.root, *self.root.parents)):
-                if (path.is_symlink() or path.is_junction()) and not self._trusted_system_link(path):
+                if (path.is_symlink() or _is_junction(path)) and not self._trusted_system_link(path):
                     raise StorageError("Symlinked session state paths are refused")
             existed = self.root.exists()
             self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -81,7 +96,7 @@ class FileState:
         )
 
     def _open(self, path: Path, *, create: bool = False) -> int:
-        if path.is_symlink() or path.is_junction():
+        if path.is_symlink() or _is_junction(path):
             raise StorageError("Symlinked session state files are refused")
         flags = os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
         if create:

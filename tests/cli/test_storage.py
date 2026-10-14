@@ -1,11 +1,16 @@
 """OS backend contract without touching the developer's keychain."""
 
 import json
+import os
+import subprocess
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
+from compose_api_client.auth import state as state_module
 from compose_api_client.auth.models import SessionRecord
-from compose_api_client.auth.state import FileState, SessionState
+from compose_api_client.auth.state import FileState, SessionState, _is_junction
 from compose_api_client.auth.storage import MAX_RECORD_BYTES, SERVICE, KeyringCredentialStore
 from compose_api_client.ext.errors import StorageError
 from keyring.backends import macOS
@@ -229,3 +234,68 @@ def test_system_managed_ancestor_symlink_is_accepted(tmp_path: Path) -> None:
     link.symlink_to(real, target_is_directory=True)
     with pytest.raises(StorageError):
         FileState(record().binding_key, link / "state")
+
+
+class _Lstat:
+    """Stands in for a `Path` whose `lstat()` gives this result (or raises it)."""
+
+    def __init__(self, result: object) -> None:
+        self.result = result
+
+    def lstat(self) -> object:
+        if isinstance(self.result, BaseException):
+            raise self.result
+        return self.result
+
+
+@pytest.mark.parametrize(
+    ("result", "expected"),
+    [
+        (SimpleNamespace(st_reparse_tag=0xA0000003), True),  # IO_REPARSE_TAG_MOUNT_POINT: a directory junction
+        (SimpleNamespace(st_reparse_tag=0xA000000C), False),  # IO_REPARSE_TAG_SYMLINK: is_symlink() covers it
+        (SimpleNamespace(st_reparse_tag=0), False),  # an ordinary Windows file or directory
+        (SimpleNamespace(), False),  # a POSIX stat result has no reparse tag
+        (FileNotFoundError(), False),
+    ],
+)
+def test_junctions_are_detected_without_path_is_junction(result: object, expected: bool) -> None:
+    # `Path.is_junction()` is 3.12+ and the client supports 3.11, so the reparse tag is read directly.
+    assert _is_junction(cast(Path, _Lstat(result))) is expected
+
+
+def test_real_paths_are_not_junctions(tmp_path: Path) -> None:
+    (tmp_path / "file").write_text("")
+    assert not _is_junction(tmp_path)
+    assert not _is_junction(tmp_path / "file")
+    assert not _is_junction(tmp_path / "missing")
+
+
+@pytest.mark.parametrize("where", ["ancestor", "file"])
+def test_a_junction_anywhere_in_the_state_path_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, where: str
+) -> None:
+    key = record().binding_key
+    state = FileState(key, tmp_path / "state")
+    state.write(SessionState(generation=1))
+    junction = tmp_path if where == "ancestor" else state.path
+    monkeypatch.setattr(state_module, "_is_junction", lambda path: path == junction)
+    with pytest.raises(StorageError, match="Symlinked session state"):
+        if where == "ancestor":
+            FileState(key, tmp_path / "state")
+        else:
+            state.read()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="directory junctions exist only on Windows")
+def test_a_real_windows_junction_is_refused(tmp_path: Path) -> None:
+    real = tmp_path / "real"
+    real.mkdir()
+    junction = tmp_path / "junction"
+    subprocess.run(  # noqa: S603 -- fixed arguments; mklink is a cmd built-in, so there is no executable to resolve
+        ["cmd", "/c", "mklink", "/J", str(junction), str(real)],  # noqa: S607
+        check=True,
+        capture_output=True,
+    )
+    assert _is_junction(junction) and not junction.is_symlink() and not _is_junction(real)
+    with pytest.raises(StorageError, match="Symlinked session state paths"):
+        FileState(record().binding_key, junction / "state")

@@ -9,6 +9,10 @@ run: ##
 	@echo "🚀 Run local server."
 	@uv run uvicorn compose_api.api.main:app --host 0.0.0.0 --port 8000 --reload
 
+# The client's hand-written code. `check` types it a second time as Python 3.11, the client's floor: the plain run
+# types everything as the interpreter running mypy, so a 3.12+ standard-library call (Path.is_junction) passes it.
+CLIENT_TYPED := $(addprefix clients/python/compose_api_client/,auth ext cli profiles.py)
+
 .PHONY: check
 check: ## Run code quality tools.
 	@echo "🚀 Checking lock file consistency with 'pyproject.toml'"
@@ -17,6 +21,8 @@ check: ## Run code quality tools.
 	@uv run pre-commit run -a
 	@echo "🚀 Static type checking: Running mypy"
 	@uv run mypy
+	@echo "🚀 Static type checking: the hand-written client against its oldest Python (requires-python >=3.11)"
+	@uv run mypy --python-version 3.11 $(CLIENT_TYPED)
 	@echo "🚀 Checking for obsolete dependencies: Running deptry"
 	@uv run deptry .
 	@$(MAKE) --no-print-directory check-clients

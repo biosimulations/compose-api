@@ -20,6 +20,7 @@ on:
       - ".python-version"
       - ".github/actions/setup-python-env/**"
       - ".github/workflows/cli-platforms.yml"
+      - "scripts/client-smoke.py"
 
 permissions:
   contents: read
@@ -75,3 +76,13 @@ jobs:
           uvx --python 3.14 --from "${wheel}[cli]" compose-api --version
           uvx --python 3.14 --from "${wheel}[cli]" compose-api auth --help
           uvx --python 3.14 --from "${wheel}[cli]" compose-api run --help
+
+      # The tests above run on 3.14 inside the workspace (the service needs 3.13+), but the client supports 3.11, and
+      # `--help` never reaches the code whose behaviour depends on the Python version. Install the wheel alone on 3.11
+      # (`--no-config`: the root's uv overrides would otherwise apply) and run that code.
+      - name: Run the installed client on its oldest Python
+        run: |
+          wheel="$(ls dist/compose_api_client-*.whl)"
+          floor() { uv run --no-project --no-config --python 3.11 --with "${wheel}[cli]" "$@"; }
+          floor python -I scripts/client-smoke.py
+          floor compose-api --help >/dev/null

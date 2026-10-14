@@ -12,7 +12,7 @@ from urllib.parse import parse_qsl, urlsplit
 import httpx
 import pytest
 from compose_api_client.auth.browser import browser_sign_in
-from compose_api_client.auth.callback import CallbackListener, CallbackResult
+from compose_api_client.auth.callback import CONNECTION_TIMEOUT_SECONDS, CallbackListener, CallbackResult
 from compose_api_client.auth.models import Provider, SessionRecord, SignInRequest
 from compose_api_client.auth.oauth import Auth0OAuthClient
 from compose_api_client.auth.signin import persistent_sign_in, sign_in
@@ -159,6 +159,25 @@ async def test_the_wait_is_bounded() -> None:
     async with CallbackListener(free_port(), state=STATE, issuer=AUTH0_TEST_ISSUER) as listener:
         with pytest.raises(AuthError, match="did not finish"):
             await listener.wait(0.05)
+
+
+@pytest.mark.asyncio
+async def test_closing_drops_a_connection_that_never_sends_a_request() -> None:
+    # Without this, the listener would outlive the sign-in until that connection timed out: 3.12+'s `wait_closed`
+    # waits for open connections, and `Server.close_clients()`, which drops them, is 3.13+ (the client is 3.11+).
+    port = free_port()
+    async with CallbackListener(port, state=STATE, issuer=AUTH0_TEST_ISSUER) as listener:
+        reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        async with asyncio.timeout(2):
+            while not listener._connections:
+                await asyncio.sleep(0.01)
+        started = asyncio.get_running_loop().time()
+        await listener.close()
+        assert asyncio.get_running_loop().time() - started < CONNECTION_TIMEOUT_SECONDS / 4
+        async with asyncio.timeout(2):
+            assert await reader.read() == b"", "dropped without an answer"
+        writer.close()
+    assert _port_is_free(port)
 
 
 @pytest.mark.asyncio
