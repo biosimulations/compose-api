@@ -43,5 +43,6 @@ question must settle). A claim we could not check against a source is marked *(u
 | **cut wire** | A wire between nodes placed on different islands; its state crosses a process boundary |
 | **worker** | A long-lived process in one island that hosts the composite's nodes placed there and talks to the coordinator |
 | **launcher** | The command that starts a worker on a platform: `python`, `pixi run`, `docker run -i`, `apptainer exec`, `srun` |
+| **user-supplied environment** | A developer's own repository environment (its `.venv`, pixi or conda env), authoritative in local mode and identified by a fingerprint rather than a lock we own ([EV16](../plan-environments-epoch2.md)) |
 | **sidecar island** | An island whose items are not Python (Node, Java, C++ binaries), wrapped by a worker that speaks the same protocol |
 | **lock hash / digest** | An island's identity before and after an image exists (EV1) |

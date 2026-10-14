@@ -1,7 +1,7 @@
 # Environments, epoch 2: a forest of islands, and running across them
 
 **Status (2026-10-13): proposed. No decision is taken yet.**
-- This plan turns the research in [environments/](environments/README.md) into sixteen decisions (EV0–EV15); EV0 fixes the vocabulary, EV15 separates authoring. Each
+- This plan turns the research in [environments/](environments/README.md) into seventeen decisions (EV0–EV16); EV0 fixes the vocabulary, EV15 separates authoring, EV16 keeps local, user-supplied environments authoritative. Each
   decision is gated by experiments (X1–X6) and staged in phases (E2.0–E2.4).
 - Accepting a decision means editing its **Status** line, with a date and the PR.
 - Epoch 1 is [plan-environment-builds.md](plan-environment-builds.md): phases 1–4 are shipped, and its phase 5
@@ -103,7 +103,7 @@ EV0 refines it in three ways:
 |---|---|---|
 | **Catalog** (external, plural) | Discovery feeds we *read* and never edit: viva-catalog today, others later (BioSimulators, the multicellular ecosystems). Unvetted and unpinned | catalog (1), (4); the `/core` lists |
 | **Registry** (ours) | The single record of **items**: package or source at a pinned version, module roots, the classes they provide, and OS/runtime requirements. Each item records its **curation per environment** (EV5). An ingest from the catalogs adds items at `listed`; promotion needs evidence | registry (1) + catalog (2) merged; `bundles:` → derived from environments; registry (5) retired |
-| **Environment** (the island) | A named, versioned, locked runtime. **Composed** environments are computed from registry items by the forest (EV4) and defined in the workspace manifest (EV2). **Prebuilt** environments are an owner's image, registered by digest with the items it declares. **Sidecar** environments (EV13) are a special case. Its identity is the lock hash, then the digest (EV1) | environment (1), (3); `registry_env` (1); simulator (1), (2); bundle (1), (2); registry (2) retired into the workspace manifest |
+| **Environment** (the island) | A named, versioned, locked runtime. **Composed** environments are computed from registry items by the forest (EV4) and defined in the workspace manifest (EV2). **Prebuilt** environments are an owner's image, registered by digest with the items it declares. **Sidecar** environments (EV13) are a special case. **User-supplied** environments (EV16) are a developer's own repository environment, authoritative locally and identified by fingerprint. Its identity is the lock hash, then the digest (EV1) | environment (1), (3); `registry_env` (1); simulator (1), (2); bundle (1), (2); registry (2) retired into the workspace manifest |
 | **Environment version / image** | One locked state of an environment (lock hash) and its built artifacts per platform (digests) | `SimulatorVersion`, `container_def_hash`; `environment_image` stays as the artifact table |
 | **Interface** | What an environment version actually provides, read inside it (`pbg-interfaces/1`) | manifests per environment (already) |
 | **Solver** (and future roles) | A role binding: a class in an environment that fills a role (TimeCourseSolver, …) | `solvers.yaml` (kept; keyed to the environment) |
@@ -452,6 +452,85 @@ environments that *run* them?
 
 **Status:** proposed.
 
+### EV16 — Local authoritative mode: the user supplies the environment
+
+**Question.** How does a developer work locally, the way vivarium-workbench's local mode works today: a repository's
+own Python environment paired with its scientific artifacts (composites, studies, investigations)? And how does that
+coexist with the registered, locked environments of EV1–EV12 without conflict?
+
+**What is true today** (vivarium-workbench `main`, read 2026-10-13; [01 §4](environments/01-current-state.md)):
+- **A workspace is a git checkout** with a `workspace.yaml`.
+- **Its environment is whatever the repository provides.** `EnvironmentResolver` (`lib/env_resolver.py`) uses the
+  checkout's own `<ws>/.venv`, the `uv sync` layout, and falls back to the workbench's interpreter. The module
+  docstring calls this "the seam that decides *which Python* a workspace's env worker runs on", with a managed
+  (materialised) adapter to plug in later.
+- **Workspace code runs in an env worker per (workspace, interpreter):** a local subprocess, or a Kubernetes Job on a
+  prebuilt image when hosted.
+- **Runs record an environment fingerprint** (`lib/env_fingerprint.py`): the workspace git HEAD, the `uv.lock`
+  sha256, the versions of core packages, Python and platform, folded into a stable `env_id()`.
+- **This is how most viva-* repositories in the catalogue are developed:** the repo's pyproject and `uv.lock` *is* the
+  environment.
+
+**Recommendation.** Keep local mode as a first-class, **authoritative** environment kind. Fit the rest of the plan
+around it so that the two never conflict.
+1. **A fourth environment kind: user-supplied** (EV0 adds it beside composed, prebuilt and sidecar).
+   - The user names an interpreter or a project directory (`.venv`, `pixi run -e`, `uv run`, a conda prefix).
+   - That environment is **authoritative for that session**. The forest (EV4), the registry levels (EV5), the core
+     solve-group (EV3) and placement (EV6) **do not override it**. They are advice, shown as warnings: "this composite
+     uses viva-x below *tested*", "your process-bigraph is 1.8.5, the registered environments use 1.9.1".
+   - Nothing is installed into it without the user's command.
+2. **Identity is a fingerprint, not a lock we own.**
+   - A user-supplied environment's identity is its fingerprint: the workbench's `env_id()` inputs, i.e. repo HEAD and
+     dirty flag, the lock-file hash, core versions, Python, platform.
+   - Runs record it the way registered runs record a digest (EV1).
+   - If the repo's lock section equals a registered environment's lock, the two identities coincide and the run is
+     comparable as-is.
+3. **Manifests come through an interface.** Discovery and generation of interface manifests (`pbg-interfaces/1`) sit
+   behind a provider interface, with interchangeable implementations:
+   - **in-image describe:** today's CI path. It runs the standard-library describe script inside an image
+     (`registry/generate.py`, `registry-manifests.yml`);
+   - **local describe:** the same script run with the user's interpreter. It needs no image and imports only what that
+     environment has;
+   - **published:** a manifest committed to a repository or attached to a release, read without executing anything
+     (the hosted, untrusted case).
+
+   The authoring side (EV15) only ever consumes manifests, so it works identically for registered and user-supplied
+   environments. This is the seam the user's note points at; the workbench's `EnvironmentResolver` is the analogous
+   seam for interpreters. The two together make "which Python" and "what does it provide" pluggable.
+4. **One worker protocol, degenerate locally.**
+   - Locally the EV7 launcher is just the user's interpreter. When everything fits in one user-supplied environment,
+     the whole composite runs in-process, exactly as today.
+   - Placement and cut wires appear only if the user asks to mix in a registered environment, for example a sidecar or
+     a FEniCS island the laptop can't build.
+5. **Artifacts are portable because they don't name an environment.**
+   - Composites, studies and investigations reference addresses, interface (schema-hash) expectations and optionally a
+     placement. They never reference a lock.
+   - The same study runs locally against the user's environment and remotely against a registered one, with the
+     difference recorded as provenance (fingerprint vs digest), not as a conflict.
+6. **There is a promotion path, not a fork.**
+   - A user-supplied environment becomes registered by locking it: its `uv.lock` or `pixi.lock` imported into the
+     workspace manifest (EV2) as an environment, then built and published (EV12).
+   - Until then its results are labelled *user-supplied, unlocked*. They can be compared and shared, but they don't
+     count as evidence for raising a registry level (EV5), because the environment can't be reproduced by others.
+
+**Alternatives.**
+- **Local mode must use a registered environment.** Rejected. It breaks how the catalogue's repos are developed, and
+  it puts the forest on the critical path of every edit-run loop.
+- **Local mode skips manifests and imports directly.** Rejected. Authoring would then behave differently locally and
+  remotely. The local-describe provider costs one subprocess call and keeps one code path.
+
+**Consequences.**
+- compose-api's API and UI gain "environment: user-supplied (fingerprint …)" on runs that arrive from local mode,
+  for example uploads of locally produced results, if that is ever supported.
+- Validation (EV5/EV6) has a *local* policy (warn) beside the *service* policy (enforce). That generalises
+  `address_policy` (`enforce`/`warn`) instead of adding a second mechanism.
+- The manifest provider interface is the first shared contract between compose-api, process-bigraph-lang and the
+  workbench. It is a candidate for the consolidated toolkit (decision 1).
+- **Implementation is not prescribed here.** The workbench's resolver and fingerprint are evidence of what works, not
+  the design.
+
+**Status:** proposed.
+
 ## Experiments (each gates a decision)
 
 | | Experiment | Gates | Done when |
@@ -469,7 +548,7 @@ environments that *run* them?
 |---|---|---|
 | E2.0 | These documents; EV0 migration steps 1–3 (`environment` alongside `simulator`, derived membership, catalog folded into the registry); X1, X5; EV14 asks raised (with permission); EV15 rule 5 (manifests record the core versions) | — |
 | E2.1 | EV0 steps 4–5 (rename `registry_env`, retire the library list and legacy tables); islands in one pixi workspace (EV2, EV3); identity by lock hash and digest (EV1); registry per island (EV5) | X1, X5, X6 |
-| E2.2 | Worker protocol and wire format (EV7, EV8); placement (EV6); sidecar islands (EV13) | X3 |
+| E2.2 | Manifest provider interface with in-image, local and published providers, plus the user-supplied environment kind (EV16); worker protocol and wire format (EV7, EV8); placement (EV6); sidecar islands (EV13) | X3 |
 | E2.3 | HPC sharing (EV10); multi-node backend (EV9) | X2, X4 |
 | E2.4 | Publish and retain (EV12); platform tiers in CI (EV11) | E2.1 |
 
