@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, override
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, exists, func, not_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from compose_api.db.tables.comparison_tables import (
@@ -13,6 +13,7 @@ from compose_api.db.tables.comparison_tables import (
     ORMComparisonReference,
     ORMSuiteRun,
 )
+from compose_api.db.tables.simulator_tables import ORMSimulation
 
 
 @dataclass
@@ -61,8 +62,11 @@ class ComparisonsDatabaseService(ABC):
     async def get(self, comparison_id: int) -> ComparisonRow | None: ...
 
     @abstractmethod
-    async def page(self, limit: int, offset: int, source: str | None = None) -> tuple[list[ComparisonRow], int]:
-        """Comparisons, newest first, with their members; and the total."""
+    async def page(
+        self, limit: int, offset: int, source: str | None = None, readable: ColumnElement[bool] | None = None
+    ) -> tuple[list[ComparisonRow], int]:
+        """Comparisons, newest first, with their members; and the total. With ``readable``, only comparisons every
+        member simulation of which satisfies it."""
 
     @abstractmethod
     async def set_result(self, comparison_id: int, status: str, result: dict[str, Any] | None) -> None: ...
@@ -154,10 +158,19 @@ class ComparisonsORMExecutor(ComparisonsDatabaseService):
             return ComparisonRow(comparison, await _members(session, comparison_id), list(references.scalars()))
 
     @override
-    async def page(self, limit: int, offset: int, source: str | None = None) -> tuple[list[ComparisonRow], int]:
+    async def page(
+        self, limit: int, offset: int, source: str | None = None, readable: ColumnElement[bool] | None = None
+    ) -> tuple[list[ComparisonRow], int]:
         stmt = select(ORMComparison)
         if source is not None:
             stmt = stmt.where(ORMComparison.source == source)
+        if readable is not None:
+            hidden_member = (
+                select(ORMComparisonMember.id)
+                .join(ORMSimulation, ORMSimulation.id == ORMComparisonMember.simulation_id)
+                .where(ORMComparisonMember.comparison_id == ORMComparison.id, not_(readable))
+            )
+            stmt = stmt.where(~exists(hidden_member))
         async with self.session_maker() as session:
             total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
             found = list(
