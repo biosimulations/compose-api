@@ -21,7 +21,7 @@ exclude_docs: |
   trd3-*.md
   cip/
   grant/
-  compose_api_cli_authentication_comparison.md
+  cli-auth-vs-vcell.md
 
 nav:
   - Home: index.md

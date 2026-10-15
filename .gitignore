@@ -236,5 +236,4 @@ assets/dev/config/compose_known_hosts
 .kilo/
 .agents/
 .crush/
-.perch/
 .freebuff/
