@@ -6,10 +6,16 @@ from pathlib import Path
 from typing import Any, Literal
 
 from dotenv import load_dotenv
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 KV_DRIVER = Literal["file", "s3", "gcs"]
 TS_DRIVER = Literal["zarr", "n5", "zarr3"]
+
+# Every verified caller holds DEFAULT_ROLE (compose_api/authentication.py, which re-exports it); an anonymous caller
+# has no principal and so no role. It is the tenant-wide Auth0 role "user" owned by auth0-pulumi/biosim-platform
+# (roles.py: biosim_user_role) -- keep the spelling in step. Defined here so Settings can refuse it as admin_role.
+DEFAULT_ROLE = "user"
 
 # -- load dev env -- #
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
@@ -141,10 +147,23 @@ class Settings(BaseSettings):
     auth0_spa_client_id: str = ""
     # Role name granting read access to every private simulation (compose_api/authorization.py). Empty disables
     # the admin bypass so the tenant-wide `admin` role does not automatically read private compose-api simulations.
+    # DEFAULT_ROLE is refused: every signed-in caller holds it, so it would let anyone read every private simulation.
     admin_role: str = ""
 
     # The static web UI build served at /ui (webapp/, `npm run generate`). Absent: the API runs without a UI.
     webapp_dist_dir: str = f"{REPO_ROOT}/webapp/.output/public"
+
+    @field_validator("admin_role")
+    @classmethod
+    def _admin_role_is_not_everyone(cls, value: str) -> str:
+        # Fails the deployment at startup (settings load at import) rather than serving private simulations to all.
+        if value.strip() == DEFAULT_ROLE:
+            raise ValueError(
+                f"ADMIN_ROLE must not be {DEFAULT_ROLE!r}: every signed-in caller holds that role, so it would let"
+                " anyone who signs in read every private simulation. Name a role only administrators hold, or leave"
+                " it empty"
+            )
+        return value
 
 
 @lru_cache

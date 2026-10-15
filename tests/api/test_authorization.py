@@ -13,11 +13,12 @@ from typing import Any
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from pydantic import ValidationError
 
 from compose_api.api.main import app
-from compose_api.authentication import ROLES_CLAIM
+from compose_api.authentication import DEFAULT_ROLE, ROLES_CLAIM
 from compose_api.authorization import Caller, can_read, get_caller, readable_clause
-from compose_api.config import override_settings
+from compose_api.config import Settings, override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation.models import JobType, SimulationAccess, SimulationRequest, SimulatorVersion, Visibility
 from tests.fixtures.auth_fixtures import FakeAuth0
@@ -72,6 +73,22 @@ def test_private_is_readable_by_configured_admin_role() -> None:
         assert readable_clause(ADMIN) is not None
         assert can_read(COMPOSE_ADMIN, private) and can_read(COMPOSE_ADMIN, unowned)
         assert readable_clause(COMPOSE_ADMIN) is None
+
+
+@pytest.mark.parametrize("value", [DEFAULT_ROLE, f" {DEFAULT_ROLE} "])
+def test_the_role_every_caller_holds_is_refused_as_the_admin_role(value: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Every verified caller holds DEFAULT_ROLE, so as the admin role it would let anyone who signs in read every
+    # private simulation. Settings load at import, so the deployment fails to start rather than serve that.
+    with pytest.raises(ValidationError, match=f"ADMIN_ROLE must not be '{DEFAULT_ROLE}'"):
+        Settings(admin_role=value)
+    monkeypatch.setenv("ADMIN_ROLE", value)
+    with pytest.raises(ValidationError, match="every signed-in caller holds that role"):
+        Settings()
+
+
+@pytest.mark.parametrize("value", ["", "admin", "compose-admin", "User"])
+def test_other_admin_roles_are_accepted(value: str) -> None:
+    assert Settings(admin_role=value).admin_role == value
 
 
 def test_fake_caller_is_a_caller() -> None:

@@ -53,7 +53,7 @@ Every route that reads something a simulation owns asks the server's read policy
 - `GET /datasets`, `GET /datasets/<id>`, `GET /datasets/<id>/content` and `GET /datasets/<id>/files/<subpath>`
 - `GET /comparisons`, `GET /comparisons/<id>` and `GET /comparisons/<id>/series`, readable only when every run in the comparison is readable by the caller
 
-The policy lets anyone read a public simulation, and only its owner read a private one. A deployment can also let one role read every private simulation by setting `ADMIN_ROLE` (`Settings.admin_role`); it is empty by default, so no role does. Submitting a simulation does not record an owner yet, so every simulation is public. Anyone who has the id can read its status, events and datasets and, when the results file exists, download it. Anonymous and authenticated callers see the same record. A missing simulation, or results that are not ready yet, is 404.
+The policy lets anyone read a public simulation, and only its owner read a private one. A deployment can also let one role read every private simulation by setting `ADMIN_ROLE` (`Settings.admin_role`); it is empty by default, so no role does. It refuses `user`, the role every signed-in caller holds, so a deployment configured with it fails to start. Submitting a simulation does not record an owner yet, so every simulation is public. Anyone who has the id can read its status, events and datasets and, when the results file exists, download it. Anonymous and authenticated callers see the same record. A missing simulation, or results that are not ready yet, is 404.
 
 Do not treat bearer authentication as an access-control boundary for simulation status or results.
 

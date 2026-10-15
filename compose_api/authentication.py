@@ -16,6 +16,7 @@ import httpx
 import jwt
 from fastapi import Depends, HTTPException, Request, status
 
+from compose_api.config import DEFAULT_ROLE as DEFAULT_ROLE  # every verified caller's role; see config.py
 from compose_api.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -36,9 +37,6 @@ JWKS_TIMEOUT_SECONDS = 5.0
 # (TokenVerifier) defaults to the same 60 s.
 JWT_LEEWAY_SECONDS = 60
 
-# Every verified caller holds DEFAULT_ROLE; an anonymous caller has no principal and so no role. It is the tenant-wide
-# Auth0 role "user" owned by auth0-pulumi/biosim-platform (roles.py: biosim_user_role) -- keep the spelling in step.
-DEFAULT_ROLE = "user"
 # Namespaced claim in which the tenant's "BioSim Roles" post-login Action lists the caller's Auth0 role names. Only
 # tokens issued to a logged-in user carry it; client-credentials (M2M) tokens never do.
 ROLES_CLAIM = "https://api.biosimulations.org/roles"
