@@ -72,7 +72,8 @@ async def persistent_sign_in(
         grant = await sign_in(
             settings, replace(request, persistent=True), notify=notify, launcher=launcher, transport=transport
         )
-        return await session.commit(grant, snapshot)
+        async with Auth0OAuthClient(settings, transport=transport) as client:
+            return await session.commit(grant, snapshot, client=client)
 
 
 @asynccontextmanager

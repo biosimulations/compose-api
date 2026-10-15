@@ -220,6 +220,52 @@ def test_an_unreadable_store_is_an_error_never_an_anonymous_call(
     assert fake_compose_api.transport.requests == []
 
 
+def test_unusable_state_path_calls_anonymously_only_when_no_session_is_saved(
+    monkeypatch: pytest.MonkeyPatch,
+    cli_config_path: Path,
+    fake_tenant: FakeTenant,
+    fake_compose_api: FakeComposeApi,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from compose_api_client.auth import state as state_module
+
+    real_state = tmp_path / "real-state"
+    real_state.mkdir(mode=0o700)
+    link_state = tmp_path / "symlink-state"
+    link_state.symlink_to(real_state, target_is_directory=True)
+    monkeypatch.setattr(state_module, "user_state_path", lambda _app: link_state)
+
+    settings = _settings()
+    use_profile(monkeypatch, settings)
+    records: dict[str, SessionRecord] = {}
+
+    class _CustomStore:
+        def load(self, binding_key: str) -> SessionRecord | None:
+            return records.get(binding_key)
+
+        def save(self, binding_key: str, value: SessionRecord) -> None:
+            records[binding_key] = value
+
+        def delete(self, binding_key: str) -> bool:
+            return records.pop(binding_key, None) is not None
+
+    wire(monkeypatch, Wiring(store_factory=lambda _s: _CustomStore(), api_transport=fake_compose_api.transport))
+    # No saved login: a symlinked state path does not block anonymous API commands.
+    assert main(["simulators", "list", "--json"]) == ExitCode.OK
+    assert _bearers(fake_compose_api.transport) == [None]
+
+    # Saved login present: refusing the symlinked state path is an error, never a silent downgrade to anonymous.
+    seeded = MemoryCredentialStore()
+    record = asyncio.run(seed_session(settings, fake_tenant, seeded))
+    records[settings.binding_key(persistent=True)] = record
+    capsys.readouterr()
+    assert main(["simulators", "list", "--json"]) == ExitCode.CONFIG
+    error = json.loads(capsys.readouterr().out)["error"]
+    assert (error["category"], error["exit_code"]) == ("storage", int(ExitCode.CONFIG))
+    assert len(fake_compose_api.transport.requests) == 1
+
+
 def test_a_profile_that_cannot_sign_in_calls_anonymously(
     monkeypatch: pytest.MonkeyPatch,
     cli_config_path: Path,

@@ -366,6 +366,8 @@ class ComposeSession:
         self._guard = _DestinationGuard(base_url, allowed_paths=allowed_paths)
         self.tokens: TokenSource | None = tokens if tokens is not None else (StaticToken(token) if token else None)
         self._provided_client = client
+        self._answered: list[httpx.Response] = []
+        self._active_token: str | None = token
         self.client = client or _make_client(
             base_url,
             token,
@@ -374,6 +376,7 @@ class ComposeSession:
             verify_ssl=self._verify,
             guard=self._guard,
             is_async=False,
+            on_response=self._answered.append,
         )
 
     def __enter__(self) -> ComposeSession:
@@ -383,7 +386,30 @@ class ComposeSession:
         self.close()
 
     def close(self) -> None:
-        self.client.get_httpx_client().close()
+        if self.client._client is not None:
+            self.client._client.close()
+            self.client._client = None
+
+    def _prepare_client(self, token: str | None, timeout: float) -> Client | AuthenticatedClient:
+        t = httpx.Timeout(timeout, connect=5.0, write=60.0, pool=5.0)
+        if token != self._active_token:
+            self.close()
+            self.client = _make_client(
+                self.base_url,
+                token,
+                timeout,
+                self._transport,
+                verify_ssl=self._verify,
+                guard=self._guard,
+                is_async=False,
+                on_response=self._answered.append,
+            )
+            self._active_token = token
+        else:
+            self.client._timeout = t
+            if self.client._client is not None:
+                self.client._client.timeout = t
+        return self.client
 
     def _send(
         self,
@@ -438,24 +464,15 @@ class ComposeSession:
         *,
         download: bool = False,
     ) -> Response[Any]:
-        answered: list[httpx.Response] = []
-        client = _make_client(
-            self.base_url,
-            credential.access_token if credential is not None else None,
-            _read_timeout(self.timeout, download=download),
-            self._transport,
-            verify_ssl=self._verify,
-            guard=self._guard,
-            is_async=False,
-            on_response=answered.append,
-        )
+        self._answered.clear()
+        token = credential.access_token if credential is not None else None
+        client = self._prepare_client(token, _read_timeout(self.timeout, download=download))
         try:
-            with client:
-                return call(client)
+            return call(client)
         except _READ_FAILURES:
-            if not answered:
+            if not self._answered:
                 raise  # nothing came back: a bug, not an answer
-            return _unreadable(answered[-1])
+            return _unreadable(self._answered[-1])
         except UnsafeRequestError:
             raise ProtocolError(_refused(op, credential, self.base_url)) from None
         except (httpx.ConnectError, httpx.ConnectTimeout):
@@ -1051,6 +1068,8 @@ class AsyncComposeSession:
             tokens if tokens is not None else (StaticToken(token).as_async() if token else None)
         )
         self._provided_client = client
+        self._answered: list[httpx.Response] = []
+        self._active_token: str | None = token
         self.client = client or _make_client(
             base_url,
             token,
@@ -1059,6 +1078,7 @@ class AsyncComposeSession:
             verify_ssl=self._verify,
             guard=self._guard,
             is_async=True,
+            on_response=self._answered.append,
         )
 
     @classmethod
@@ -1084,7 +1104,30 @@ class AsyncComposeSession:
         await self.aclose()
 
     async def aclose(self) -> None:
-        await self.client.get_async_httpx_client().aclose()
+        if self.client._async_client is not None:
+            await self.client._async_client.aclose()
+            self.client._async_client = None
+
+    async def _prepare_client(self, token: str | None, timeout: float) -> Client | AuthenticatedClient:
+        t = httpx.Timeout(timeout, connect=5.0, write=60.0, pool=5.0)
+        if token != self._active_token:
+            await self.aclose()
+            self.client = _make_client(
+                self.base_url,
+                token,
+                timeout,
+                self._transport,
+                verify_ssl=self._verify,
+                guard=self._guard,
+                is_async=True,
+                on_response=self._answered.append,
+            )
+            self._active_token = token
+        else:
+            self.client._timeout = t
+            if self.client._async_client is not None:
+                self.client._async_client.timeout = t
+        return self.client
 
     async def _send(
         self,
@@ -1138,26 +1181,18 @@ class AsyncComposeSession:
         *,
         download: bool = False,
     ) -> Response[Any]:
-        answered: list[httpx.Response] = []
-        client = _make_client(
-            self.base_url,
-            credential.access_token if credential is not None else None,
-            _read_timeout(self.timeout, download=download),
-            self._transport,
-            verify_ssl=self._verify,
-            guard=self._guard,
-            is_async=True,
-            on_response=answered.append,
-        )
+        self._answered.clear()
+        token = credential.access_token if credential is not None else None
+        client = await self._prepare_client(token, _read_timeout(self.timeout, download=download))
         try:
             # A download has no overall deadline: a large one can rightly take longer, and the read timeout already
             # ends one that stalls.
-            async with client, asyncio.timeout(None if download else COMMAND_DEADLINE_SECONDS):
+            async with asyncio.timeout(None if download else COMMAND_DEADLINE_SECONDS):
                 return await call(client)
         except _READ_FAILURES:
-            if not answered:
+            if not self._answered:
                 raise  # nothing came back: a bug, not an answer
-            return _unreadable(answered[-1])
+            return _unreadable(self._answered[-1])
         except UnsafeRequestError:
             raise ProtocolError(_refused(op, credential, self.base_url)) from None
         except (httpx.ConnectError, httpx.ConnectTimeout):

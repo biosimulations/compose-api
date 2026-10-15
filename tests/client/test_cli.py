@@ -369,6 +369,19 @@ def test_openapi_diff_reports_skew(monkeypatch: pytest.MonkeyPatch) -> None:
     assert json.loads(invoke("openapi").stdout)["info"]["title"]
 
 
+def test_fetch_spec_uses_the_selected_profile_unless_url_is_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[str] = []
+
+    def fake_get(url: str, **_kwargs: Any) -> httpx.Response:
+        seen.append(url)
+        return httpx.Response(200, json=bundled_spec(), request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    cli_module.fetch_spec(Settings(profile="local"))
+    cli_module.fetch_spec(Settings(profile="local", url="https://custom.example/", url_explicit=True))
+    assert seen == ["https://api.compose-api-local/openapi.json", "https://custom.example/openapi.json"]
+
+
 def test_events_pages_through_and_prints_json_lines(service: Callable[..., FakeService]) -> None:
     fake = service()
     r = runner.invoke(app, ["--output", "json", "events", "7"])

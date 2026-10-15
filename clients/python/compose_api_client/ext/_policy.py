@@ -32,7 +32,6 @@ from compose_api_client.ext.errors import (
 )
 from compose_api_client.models import HTTPValidationError
 
-TIMEOUT: Final = httpx.Timeout(60.0, connect=5.0, pool=5.0)  # read and write 60 s
 COMMAND_DEADLINE_SECONDS: Final = 90.0
 MAX_RETRY_AFTER_SECONDS: Final = 86400
 MAX_VALIDATION_FIELDS: Final = 5
@@ -50,23 +49,6 @@ class Operation:
 
 
 CURRENT_PRINCIPAL: Final = Operation("GET", "/auth/me", replayable=True)
-SIMULATOR_LIST: Final = Operation("GET", "/core/simulator/list", replayable=True)
-SIMULATION_STATUS: Final = Operation("GET", "/results/simulation/status", replayable=True)
-RUN_SIMULATION: Final = Operation("POST", "/simulation/run", replayable=False)
-
-# All 9 mutating POST operations across the v0.7.25/v0.7.26 API surface.
-NON_REPLAYABLE_OPERATIONS: Final[frozenset[tuple[str, str]]] = frozenset({
-    ("POST", "/simulation/run"),
-    ("POST", "/curated/copasi"),
-    ("POST", "/curated/tellurium"),
-    ("POST", "/sedml/run"),
-    ("POST", "/sources/biomodels/{model_id}/run"),
-    ("POST", "/sources/biosimulations/{project_id}/run"),
-    ("POST", "/suites/{name}/run"),
-    ("POST", "/registry/environments/{name}/build"),
-    ("POST", "/registry/simulators/{simulator_id}/build"),
-})
-
 _UNKNOWN_OUTCOME = (
     "The simulation may or may not have been created: do not submit again blindly; check the server's simulations first"
 )
@@ -110,11 +92,6 @@ def spec_path_patterns() -> tuple[re.Pattern[str], ...]:
     if "/auth/me" not in paths:
         paths.append("/auth/me")
     return tuple(_template_to_regex(p) for p in paths)
-
-
-ALLOWED_PATHS: Final = frozenset(
-    op.path for op in (CURRENT_PRINCIPAL, SIMULATOR_LIST, SIMULATION_STATUS, RUN_SIMULATION)
-)
 
 
 _DEFAULT_PORTS: Final = {"http": 80, "https": 443}
@@ -244,16 +221,10 @@ def retry_after(value: str | None) -> int | None:
 
 
 __all__ = [
-    "ALLOWED_PATHS",
     "COMMAND_DEADLINE_SECONDS",
     "CURRENT_PRINCIPAL",
     "MAX_RETRY_AFTER_SECONDS",
     "MAX_VALIDATION_FIELDS",
-    "NON_REPLAYABLE_OPERATIONS",
-    "RUN_SIMULATION",
-    "SIMULATION_STATUS",
-    "SIMULATOR_LIST",
-    "TIMEOUT",
     "_UNKNOWN_OUTCOME",
     "_UNREADABLE",
     "Operation",

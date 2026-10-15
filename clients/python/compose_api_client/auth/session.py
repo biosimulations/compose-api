@@ -98,17 +98,27 @@ class AuthSession:
                 snapshot = state.generation
             yield snapshot
 
-    async def commit(self, grant: TokenGrant, snapshot: int) -> SessionRecord:
+    async def commit(
+        self, grant: TokenGrant, snapshot: int, *, client: OAuthSessionClient | None = None
+    ) -> SessionRecord:
         async with self.state.lock():
             state = self.state.read()
             if state.generation != snapshot or state.journal is not None:
+                if client is not None and grant.refresh_token is not None:
+                    with suppress(Exception):
+                        await client.revoke(grant.refresh_token)
                 raise AuthError("Session changed while signing in; the late sign-in was discarded")
             if grant.identity.issuer != self.settings.issuer:
                 raise ProtocolError("Sign-in issuer does not match this profile")
             try:
                 return self._replace(state, grant)
             except BaseException:
-                self._invalidate(state)
+                try:
+                    self._invalidate(state)
+                finally:
+                    if client is not None and grant.refresh_token is not None:
+                        with suppress(Exception):
+                            await client.revoke(grant.refresh_token)
                 raise
 
     def _replace(
@@ -221,7 +231,9 @@ class AuthSession:
                 self._invalidate(state)
             return LogoutResult(revocation=result)
 
-    async def authenticate(self, operation: Callable[[], Awaitable[TokenGrant]]) -> SessionRecord:
+    async def authenticate(
+        self, operation: Callable[[], Awaitable[TokenGrant]], *, client: OAuthSessionClient | None = None
+    ) -> SessionRecord:
         async with self.login_transaction() as snapshot:
             grant = await operation()
-            return await self.commit(grant, snapshot)
+            return await self.commit(grant, snapshot, client=client)

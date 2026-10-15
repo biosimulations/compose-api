@@ -142,7 +142,7 @@ async def test_the_api_verifies_the_session_with_real_signed_tokens(
     stored = store.load(settings.binding_key(persistent=True))
     assert stored is not None and stored.api_verified_at is not None
     assert fake_tenant.requests == [], "a valid session needs nothing from Auth0"
-    assert fake_compose_api.transport.closed == 2
+    assert fake_compose_api.transport.closed == 1
 
 
 @pytest.mark.asyncio
@@ -169,6 +169,7 @@ async def test_catalog_status_and_submit_through_the_real_routes(
         {"file_name": "upload", "content": archive, "batch": False, "interval_time": 1.0},
     ]
     assert fake_compose_api.created == 2
+    assert fake_compose_api.transport.closed == 1, "one session client is reused across all four requests"
 
 
 @pytest.mark.asyncio
@@ -186,7 +187,9 @@ async def test_a_rejected_read_is_renewed_once_and_replayed_once(
     assert len(fake_tenant.forms(FakeTenant.TOKEN)) == 1
     renewed = store.load(settings.binding_key(persistent=True))
     assert renewed is not None and renewed.generation == first.generation + 1
-    assert fake_compose_api.transport.closed == 3, "each attempt closes its own client"
+    assert fake_compose_api.transport.closed == 2, (
+        "the rejected token's client is closed when replaced, then the renewed one on exit"
+    )
     for request in fake_tenant.requests:
         assert "authorization" not in request.headers, "the bearer never goes to Auth0"
 

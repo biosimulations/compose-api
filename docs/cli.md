@@ -26,7 +26,7 @@ terminal UI. In this repository, `uv run compose-api ...` works with no install.
 |---|---|---|---|
 | Profile | `--profile` | `COMPOSE_API_CLI_PROFILE` | `production` |
 | Service | `--url` | `COMPOSE_API_URL` | the selected profile's `api_base_url` |
-| HTTP timeout | `--timeout` | `COMPOSE_API_TIMEOUT` | 300 s |
+| HTTP timeout | `--timeout` | `COMPOSE_API_TIMEOUT` | 300 s (downloads; other requests cap at 60 s) |
 | Output | `-o/--output auto\|table\|json` | `COMPOSE_API_OUTPUT` | `auto`: a table on a terminal, JSON when piped |
 | Automation token | — (env-only) | `COMPOSE_API_TOKEN` | none (uses stored session, else anonymous) |
 
@@ -226,7 +226,7 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 
 * `--url TEXT`: Service base URL.  [env var: COMPOSE_API_URL]
 * `--profile TEXT`: Profile to use (default: production).  [env var: COMPOSE_API_CLI_PROFILE]
-* `--timeout FLOAT`: HTTP timeout, seconds.  [env var: COMPOSE_API_TIMEOUT; default: 300.0]
+* `--timeout FLOAT`: HTTP timeout, seconds (downloads use the full value; other requests cap at 60 s).  [env var: COMPOSE_API_TIMEOUT; default: 300.0]
 * `-o, --output [auto|table|json]`: auto: table on a terminal, else json.  [env var: COMPOSE_API_OUTPUT; default: auto]
 * `-v, --verbose`: Log HTTP requests; tracebacks on errors.
 * `-q, --quiet`: No progress lines.

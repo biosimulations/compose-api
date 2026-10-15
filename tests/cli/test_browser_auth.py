@@ -176,6 +176,8 @@ async def test_closing_drops_a_connection_that_never_sends_a_request() -> None:
         assert asyncio.get_running_loop().time() - started < CONNECTION_TIMEOUT_SECONDS / 4
         async with asyncio.timeout(2):
             assert await reader.read() == b"", "dropped without an answer"
+        await listener._handle(reader, writer)
+        assert listener._connections == set()
         writer.close()
     assert _port_is_free(port)
 
@@ -455,6 +457,32 @@ auth0_client_id = "{CLI_CLIENT_ID}"
     with pytest.raises(ConfigError, match="google_connection"):
         sign_in_command(args, signup=False, wiring=wiring)
     assert opened == [] and fake_tenant.requests == []
+
+
+@pytest.mark.asyncio
+async def test_save_failure_after_sign_in_revokes_the_new_refresh_token(fake_tenant: FakeTenant) -> None:
+    from compose_api_client.ext.errors import StorageError
+
+    settings = cli_settings()
+
+    class _OversizeRefusingStore(MemoryCredentialStore):
+        def save(self, binding_key: str, record: SessionRecord) -> None:
+            raise StorageError("Windows Credential Manager atomic item limit exceeded; use --ephemeral-auth")
+
+    store = _OversizeRefusingStore()
+    with pytest.raises(StorageError, match="--ephemeral-auth"):
+        await persistent_sign_in(
+            settings,
+            _request(),
+            store,
+            notify=lambda _: None,
+            launcher=FakeBrowser(fake_tenant),
+            transport=fake_tenant.transport,
+        )
+    assert store.load(settings.binding_key(persistent=True)) is None
+    assert fake_tenant.forms(FakeTenant.REVOKE) == [
+        {"token": REFRESH_TOKEN, "client_id": str(settings.auth0_client_id), "token_type_hint": "refresh_token"}
+    ]
 
 
 def _login_args(*, provider: str | None = None) -> argparse.Namespace:

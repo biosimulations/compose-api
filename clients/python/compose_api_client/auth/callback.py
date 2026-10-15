@@ -110,6 +110,9 @@ class CallbackListener:
             )
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        if self._server is None:
+            writer.close()
+            return
         self._connections.add(writer)
         try:
             try:

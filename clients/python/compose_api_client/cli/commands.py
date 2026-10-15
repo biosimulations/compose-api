@@ -127,10 +127,7 @@ def make_session(settings: Settings) -> ComposeSession:
     stored session to fall back from.
     """
     from compose_api_client import profiles
-    from compose_api_client.auth.session import AuthSession
-    from compose_api_client.auth.sources import SyncStoredSession
     from compose_api_client.cli import auth_commands  # its `Wiring` is what tests replace
-    from compose_api_client.ext.errors import StorageError
 
     loaded = profiles.load_cli_settings(settings.profile).settings
     wiring = auth_commands.Wiring()
@@ -164,14 +161,27 @@ def make_session(settings: Settings) -> ComposeSession:
         return session(loaded.api_base_url, EnvironmentToken())
     if settings.ephemeral_auth:
         return session(loaded.api_base_url, _ephemeral_tokens(loaded, settings, wiring))
+    return session(loaded.api_base_url, _stored_tokens(loaded, wiring))
+
+
+def _stored_tokens(loaded: CliSettings, wiring: Wiring) -> TokenSource | None:
     if loaded.auth0_client_id is None:
-        return session(loaded.api_base_url)  # a profile that cannot sign in holds no session
+        return None  # a profile that cannot sign in holds no session
+    from compose_api_client.auth.session import AuthSession
+    from compose_api_client.auth.sources import SyncStoredSession
+    from compose_api_client.ext.errors import StorageError
+
     try:
         store = wiring.store(loaded, writable=False, check=False)
     except StorageError:
-        return session(loaded.api_base_url)  # no supported credential store on this host
-    stored = SyncStoredSession(loaded, AuthSession(loaded, store), auth0_transport=wiring.auth0_transport)
-    return session(loaded.api_base_url, stored)
+        return None  # no supported credential store on this host
+    try:
+        auth_session = AuthSession(loaded, store)
+    except StorageError:
+        if store.load(loaded.binding_key(persistent=True)) is None:
+            return None  # no saved login; unusable state directory is not needed
+        raise
+    return SyncStoredSession(loaded, auth_session, auth0_transport=wiring.auth0_transport)
 
 
 def _origin(url: str) -> str | None:
@@ -263,7 +273,13 @@ def root(
         str | None,
         typer.Option("--profile", envvar="COMPOSE_API_CLI_PROFILE", help="Profile to use (default: production)."),
     ] = None,
-    timeout: Annotated[float, typer.Option(envvar="COMPOSE_API_TIMEOUT", help="HTTP timeout, seconds.")] = 300.0,
+    timeout: Annotated[
+        float,
+        typer.Option(
+            envvar="COMPOSE_API_TIMEOUT",
+            help="HTTP timeout, seconds (downloads use the full value; other requests cap at 60 s).",
+        ),
+    ] = 300.0,
     output: Annotated[
         Output,
         typer.Option("--output", "-o", envvar="COMPOSE_API_OUTPUT", help="auto: table on a terminal, else json."),
@@ -1172,7 +1188,25 @@ def bundled_spec() -> dict[str, Any]:
 
 def fetch_spec(settings: Settings) -> dict[str, Any]:
     """The live service's OpenAPI document. Tests replace this."""
-    r = httpx.get(f"{settings.url.rstrip('/')}/openapi.json", timeout=settings.timeout)
+    from compose_api_client import profiles
+    from compose_api_client.ext._policy import tls_verification
+
+    if settings.url_explicit:
+        r = httpx.get(
+            f"{settings.url.rstrip('/')}/openapi.json",
+            timeout=settings.timeout,
+            follow_redirects=False,
+            trust_env=False,
+        )
+    else:
+        loaded = profiles.load_cli_settings(settings.profile).settings
+        r = httpx.get(
+            f"{loaded.api_base_url.rstrip('/')}/openapi.json",
+            timeout=settings.timeout,
+            verify=tls_verification(loaded.ca_bundle),
+            follow_redirects=False,
+            trust_env=False,
+        )
     r.raise_for_status()
     return dict(r.json())
 

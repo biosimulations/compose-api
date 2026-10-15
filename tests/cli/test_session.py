@@ -484,7 +484,7 @@ async def test_final_metadata_failure_and_deletion_failure_cannot_reuse_old_toke
 
 @pytest.mark.asyncio
 async def test_login_write_failure_cannot_resurrect(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    session, store, _ = setup(tmp_path)
+    session, store, provider = setup(tmp_path)
     save = store.save
 
     def ambiguous_write(key: str, value: SessionRecord) -> None:
@@ -493,9 +493,11 @@ async def test_login_write_failure_cannot_resurrect(tmp_path: Path, monkeypatch:
 
     monkeypatch.setattr(store, "save", ambiguous_write)
     with pytest.raises(StorageError):
-        await seed(session)
+        async with session.login_transaction() as snapshot:
+            await session.commit(grant(session.settings.issuer), snapshot, client=provider)
     assert (await session.status()).state == "missing"
     assert store.load(session.binding) is None
+    assert provider.revokes == 1, "failed save revokes the just-issued refresh token"
 
 
 @pytest.mark.asyncio
