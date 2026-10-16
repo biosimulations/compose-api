@@ -19,11 +19,10 @@ import keyring.core
 import pytest
 from compose_api_client.auth.models import Identity, SessionRecord
 from compose_api_client.auth.storage import SERVICE, KeyringCredentialStore
-from compose_api_client.ext.errors import StorageError
 from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic import SecretStr
 
-WINDOWS_CREDENTIAL_BLOB_LIMIT = 2560  # bytes; the store writes UTF-16, so about 1280 characters
+WINDOWS_CREDENTIAL_BLOB_LIMIT = 2560  # bytes in one generic credential (CRED_MAX_CREDENTIAL_BLOB_SIZE)
 ISSUER = "https://dev-bu7yo7484tyxu6a1.us.auth0.com/"
 
 opt_in = pytest.mark.skipif(
@@ -71,31 +70,42 @@ def serialized(record: SessionRecord) -> str:
     return json.dumps(payload, separators=(",", ":"))
 
 
-def test_a_realistic_session_does_not_fit_a_windows_credential() -> None:
-    """Measured, not assumed: why persistent sessions are not supported on Windows yet (docs/cli.md)."""
+def with_parity(record: SessionRecord, parity: int) -> SessionRecord:
+    """`record`, one refresh-token character longer if that makes its stored length even (0) or odd (1)."""
+    if len(serialized(record)) % 2 == parity or record.refresh_token is None:
+        return record
+    return record.model_copy(update={"refresh_token": SecretStr(record.refresh_token.get_secret_value() + "x")})
+
+
+def test_a_realistic_session_fits_a_windows_credential_only_as_utf8() -> None:
+    """Measured, not assumed: why the CLI writes Credential Manager items itself (#320). keyring writes UTF-16."""
     raw = serialized(realistic_session("0" * 64))
+    assert len(raw.encode()) < WINDOWS_CREDENTIAL_BLOB_LIMIT
     assert len(raw.encode("utf-16-le")) > WINDOWS_CREDENTIAL_BLOB_LIMIT
-    assert len(raw.encode()) < WINDOWS_CREDENTIAL_BLOB_LIMIT, "it would fit if stored as UTF-8"
 
 
 @opt_in
-def test_the_platform_store_keeps_a_realistic_session_whole() -> None:
+@pytest.mark.parametrize("parity", [0, 1], ids=["even", "odd"])
+def test_the_platform_store_keeps_a_realistic_session_whole(parity: int) -> None:
+    """Both lengths, for Windows, where two bytes of the record make one UTF-16 unit: an odd length is evened out,
+    and an even one is what keyring's own reader would misread as UTF-16."""
     backend = keyring.core.get_keyring()
     store = KeyringCredentialStore(backend)  # refuses anything but the three approved OS stores
     store.probe()
     binding = secrets.token_hex(32)
-    record = realistic_session(binding)
-    windows = type(backend).__module__ == "keyring.backends.Windows"
+    record = with_parity(realistic_session(binding), parity)
+    raw = serialized(record)
+    assert len(raw) % 2 == parity
     try:
-        if windows:
-            with pytest.raises(StorageError, match="atomic item limit"):
-                store.save(binding, record)
-            assert store.load(binding) is None, "a refused record leaves nothing behind"
-            return
         store.save(binding, record)
         assert store.load(binding) == record
-        stored = backend.get_password(f"{SERVICE}.{binding}", binding)
-        assert stored == serialized(record), "one item holds the whole record"
+        if type(backend).__module__ == "keyring.backends.Windows":
+            import win32cred
+
+            item = win32cred.CredRead(Type=win32cred.CRED_TYPE_GENERIC, TargetName=f"{SERVICE}.{binding}")
+            assert item["CredentialBlob"] == raw.encode() + b"\0" * parity, "one item holds the record as UTF-8"
+        else:
+            assert backend.get_password(f"{SERVICE}.{binding}", binding) == raw, "one item holds the whole record"
         assert binding in f"{SERVICE}.{binding}" and "@" not in f"{SERVICE}.{binding}", "no email in the item name"
     finally:
         store.delete(binding)

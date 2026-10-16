@@ -10,7 +10,7 @@ from typing import Any
 import httpx
 import pytest
 from compose_api_client.auth.models import SessionRecord
-from compose_api_client.auth.storage import MemoryCredentialStore
+from compose_api_client.auth.storage import SERVICE, MemoryCredentialStore
 from compose_api_client.cli.commands import main
 from compose_api_client.cli.wiring import Wiring
 from compose_api_client.ext.errors import (
@@ -25,6 +25,7 @@ from tests.fixtures.cli_fixtures import (
     REFRESH_TOKEN,
     FakeBrowser,
     FakeComposeApi,
+    FakeCredentialManager,
     FakeTenant,
     RecordingTransport,
     cli_settings,
@@ -362,6 +363,41 @@ def test_login_is_confirmed_by_the_api(
     record = store.load(settings.binding_key(persistent=True))
     assert record is not None and record.api_verified_at is not None and record.refresh_token is not None
     assert record.refresh_token.get_secret_value() == REFRESH_TOKEN
+
+
+def test_login_on_windows_keeps_the_session_in_one_credential_manager_item(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    cli_config_path: Path,
+    fake_tenant: FakeTenant,
+    fake_compose_api: FakeComposeApi,
+    windows_credential_manager: FakeCredentialManager,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The store the CLI selects for itself on Windows: keyring's backend probes it, the session is one item holding the
+    record as UTF-8 (#320), and `auth status` reads it back."""
+    from compose_api_client.auth import state as state_module
+
+    settings = cli_settings()
+    use_profile(monkeypatch, settings)
+    monkeypatch.setattr(state_module, "user_state_path", lambda _app: tmp_path / "state")
+    wire(
+        monkeypatch,
+        Wiring(
+            launcher=FakeBrowser(fake_tenant),
+            auth0_transport=fake_tenant.transport,
+            api_transport=fake_compose_api.transport,
+        ),
+    )
+    assert main(["auth", "login", "--json"]) == ExitCode.OK
+    items = windows_credential_manager.items
+    assert list(items) == [f"{SERVICE}.{settings.binding_key(persistent=True)}"], "the probe left nothing behind"
+    [item] = items.values()
+    assert json.loads(item["CredentialBlob"].removesuffix(b"\0").decode("ascii"))["refresh_token"] == REFRESH_TOKEN
+    capsys.readouterr()
+    assert main(["auth", "status", "--json"]) == ExitCode.OK
+    status = json.loads(capsys.readouterr().out)
+    assert status["state"] == "valid" and status["identity"]["subject"] == fake_tenant.subject
 
 
 @pytest.mark.parametrize("failure", ["unreachable", "404"])

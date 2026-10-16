@@ -327,33 +327,6 @@ def test_sign_in_stops_before_the_browser_while_there_is_nowhere_to_keep_a_sessi
     assert "Unsupported OS credential backend" in error["message"]
 
 
-@pytest.mark.parametrize("argv", SIGN_IN_FLOW_COMMANDS)
-def test_windows_sign_in_stops_before_the_browser_while_a_session_cannot_fit(
-    capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
-    cli_config_path: Path,
-    no_network_or_browser: list[str],
-    argv: list[str],
-) -> None:
-    """A realistic session overflows a Credential Manager item (#320). Refusing at the save would come after a
-    completed sign-in, so persistent sign-in stops first, without even probing the store."""
-    monkeypatch.setenv("COMPOSE_API_CLI_AUTH0_CLIENT_ID", CLIENT_ID)
-    monkeypatch.setenv("COMPOSE_API_CLI_GOOGLE_CONNECTION", "google-oauth2")
-    import keyring
-    from keyring.backends.Windows import WinVaultKeyring
-
-    touched: list[str] = []
-    for method in ("get_password", "set_password", "delete_password"):
-        monkeypatch.setattr(WinVaultKeyring, method, lambda *args, name=method: touched.append(name))
-    monkeypatch.setattr(keyring, "get_keyring", WinVaultKeyring)
-    assert main([*argv, "--json"]) == ExitCode.CONFIG
-    error = json.loads(capsys.readouterr().out)["error"]
-    assert error["category"] == "storage"
-    assert "Windows Credential Manager cannot hold a saved session yet" in error["message"]
-    assert "--ephemeral-auth" in error["message"]
-    assert touched == []
-
-
 def test_google_sign_in_needs_its_connection_named(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,

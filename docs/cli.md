@@ -76,11 +76,9 @@ compose-api auth logout                     # revokes the refresh token with Aut
 compose-api auth logout --local-only
 ```
 
-The session is one record in your operating system's credential store (`macOS Keychain` or Linux `Secret Service`),
-under `compose-api.cli.v1.<digest>`. Plaintext and unknown keyring backends are refused; there is no file fallback.
-On Windows (where Credential Manager's 2,560-byte UTF-16 limit is smaller than a realistic ~3.4 KB session, so
-`auth login` refuses before opening a browser; #320) or on hosts without a credential store, use `--ephemeral-auth`
-before the command (for example
+The session is one record in your operating system's credential store (macOS Keychain, Linux Secret Service or
+Windows Credential Manager), under `compose-api.cli.v1.<digest>`. Plaintext and unknown keyring backends are refused;
+there is no file fallback. On hosts without a credential store, use `--ephemeral-auth` before the command (for example
 `compose-api --ephemeral-auth --device simulators list`),
 which signs in for a single command in memory without requesting a refresh token.
 
