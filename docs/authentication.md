@@ -153,11 +153,12 @@ Auth0 or Google browser sessions.
 Access and refresh tokens live together in one versioned keyring record. The service identifier begins with
 `compose-api.cli.v1.` and ends in the public configuration binding digest; it contains no email. A changed issuer,
 client, audience, API origin or requested scope set selects a different session. Identical profile bindings share a
-session deliberately. macOS Keychain and Linux Secret Service are allowlisted. Windows Credential Manager is
-allowlisted with a single native credential overwrite, but a credential holds 2560 bytes of UTF-16 and a realistic
-session is about 3400, so persistent sessions do not fit there yet (#320): `auth login` refuses before opening a
-browser, and the save fails explicitly; on Windows use `--ephemeral-auth`. Unknown, chained, plaintext and null backends are refused. Keyrings protect credentials at rest, not
-against a compromised operating-system account. Python cannot promise memory zeroization.
+session deliberately. macOS Keychain, Linux Secret Service and Windows Credential Manager are allowlisted. On
+Windows the CLI writes and reads its item natively, with a single overwrite and no keyring shadow copy, and stores the
+record as UTF-8: an item holds 2560 bytes, and a realistic session is about 1700 as UTF-8 but twice that as the UTF-16
+keyring writes (#320). A record that outgrows the item is refused, never split. Unknown, chained, plaintext and null
+backends are refused. Keyrings protect credentials at rest, not against a compromised operating-system account.
+Python cannot promise memory zeroization.
 
 Non-secret lock/generation/journal files live under the platform user-state directory, in `compose-api/sessions`.
 POSIX directories/files require 0700/0600 and current-user ownership. Windows uses a protected owner-only ACL.

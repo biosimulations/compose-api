@@ -11,14 +11,17 @@ import pytest
 from compose_api_client.auth import state as state_module
 from compose_api_client.auth.models import SessionRecord
 from compose_api_client.auth.state import FileState, SessionState, _is_junction
-from compose_api_client.auth.storage import MAX_RECORD_BYTES, SERVICE, KeyringCredentialStore
+from compose_api_client.auth.storage import MAX_RECORD_BYTES, SERVICE, WINDOWS_ITEM_BYTES, KeyringCredentialStore
+from compose_api_client.auth.windows_state import read_credential, write_credential
 from compose_api_client.ext.errors import StorageError
 from keyring.backends import macOS
 from keyring.backends.fail import Keyring as FailKeyring
 from keyring.errors import KeyringLocked
+from pydantic import SecretStr
 
+from tests.cli.test_os_keyring import realistic_session, serialized, with_parity
 from tests.cli.test_session import grant
-from tests.fixtures.cli_fixtures import cli_settings
+from tests.fixtures.cli_fixtures import FakeCredentialManager, cli_settings
 
 
 def backend(monkeypatch: pytest.MonkeyPatch) -> tuple[KeyringCredentialStore, dict[str, str]]:
@@ -187,33 +190,90 @@ def test_probe_is_nonsecret_and_removed(monkeypatch: pytest.MonkeyPatch) -> None
     assert entries == {}
 
 
-def test_windows_writer_replaces_one_item_without_shadow_copy(monkeypatch: pytest.MonkeyPatch) -> None:
-    import sys
-    from types import SimpleNamespace
-
-    from compose_api_client.auth.windows_state import write_credential
-
-    writes: list[dict[str, object]] = []
-    monkeypatch.setitem(
-        sys.modules,
-        "win32cred",
-        SimpleNamespace(
-            CRED_TYPE_GENERIC=1,
-            CRED_PERSIST_LOCAL_MACHINE=2,
-            CredWrite=lambda value, flags: writes.append(value),
-        ),
+@pytest.mark.parametrize("value", ['{"a":1}', '{"ab":1}'], ids=["odd", "even"])
+def test_windows_item_holds_the_value_as_utf8(windows_credential_manager: FakeCredentialManager, value: str) -> None:
+    """Not as UTF-16, which would double a session past the item's limit (#320). An odd length gains a NUL; an even
+    one is what keyring's own reader would misread, as it decodes a blob as UTF-16 first."""
+    write_credential("service.binding", "binding", value)
+    assert windows_credential_manager.items["service.binding"]["CredentialBlob"] == value.encode() + b"\0" * (
+        len(value) % 2
     )
-    write_credential("service.binding", "binding", "synthetic")
-    assert writes == [
-        {
-            "Type": 1,
-            "TargetName": "service.binding",
-            "UserName": "binding",
-            "CredentialBlob": "synthetic",
-            "Persist": 2,
-            "Comment": "Compose API CLI session",
-        }
-    ]
+    assert read_credential("service.binding", "binding") == value
+
+
+def test_windows_writer_replaces_one_item_without_shadow_copy(
+    windows_credential_manager: FakeCredentialManager,
+) -> None:
+    write_credential("service.binding", "binding", "first")
+    write_credential("service.binding", "binding", "second")
+    assert list(windows_credential_manager.items) == ["service.binding"]
+    assert {**windows_credential_manager.items["service.binding"], "CredentialBlob": None} == {
+        "Type": 1,
+        "TargetName": "service.binding",
+        "UserName": "binding",
+        "CredentialBlob": None,
+        "Persist": 2,
+        "Comment": "Compose API CLI session",
+    }
+    assert read_credential("service.binding", "binding") == "second"
+
+
+def test_windows_reader_finds_only_this_accounts_item(windows_credential_manager: FakeCredentialManager) -> None:
+    assert read_credential("service.binding", "binding") is None
+    write_credential("service.binding", "someone-else", "value")
+    assert read_credential("service.binding", "binding") is None
+
+
+@pytest.mark.parametrize("value", ["caf\u00e9", "nul\0"], ids=["non-ascii", "nul"])
+def test_windows_writer_refuses_what_it_cannot_store_exactly(
+    windows_credential_manager: FakeCredentialManager, value: str
+) -> None:
+    with pytest.raises(ValueError, match=r"ascii|NUL"):
+        write_credential("service.binding", "binding", value)
+    assert windows_credential_manager.writes == []
+
+
+def windows_store() -> KeyringCredentialStore:
+    from keyring.backends.Windows import WinVaultKeyring
+
+    return KeyringCredentialStore(WinVaultKeyring())  # type: ignore[no-untyped-call]
+
+
+@pytest.mark.parametrize("parity", [0, 1], ids=["even", "odd"])
+def test_windows_store_keeps_a_realistic_session_in_one_item(
+    windows_credential_manager: FakeCredentialManager, parity: int
+) -> None:
+    store = windows_store()
+    binding = record().binding_key
+    session = with_parity(realistic_session(binding), parity)
+    raw = serialized(session)
+    assert len(raw) % 2 == parity
+    store.save(binding, session)
+    assert store.load(binding) == session
+    assert list(windows_credential_manager.items) == [f"{SERVICE}.{binding}"]
+    assert windows_credential_manager.items[f"{SERVICE}.{binding}"]["CredentialBlob"] == raw.encode() + b"\0" * parity
+    assert store.delete(binding)  # through keyring's own Windows backend
+    assert windows_credential_manager.items == {}
+    assert store.load(binding) is None
+
+
+def test_windows_store_refuses_a_record_too_big_for_one_item_before_writing(
+    windows_credential_manager: FakeCredentialManager,
+) -> None:
+    store = windows_store()
+    binding = record().binding_key
+    oversized = realistic_session(binding).model_copy(update={"access_token": SecretStr("a" * WINDOWS_ITEM_BYTES)})
+    with pytest.raises(StorageError, match="atomic item limit"):
+        store.save(binding, oversized)
+    assert windows_credential_manager.writes == []
+    assert store.load(binding) is None
+
+
+def test_windows_store_refuses_an_item_that_is_not_utf8(windows_credential_manager: FakeCredentialManager) -> None:
+    binding = record().binding_key
+    windows_credential_manager.items[f"{SERVICE}.{binding}"] = {"UserName": binding, "CredentialBlob": b"\xff{}"}
+    with pytest.raises(StorageError, match="Invalid credential encoding"):
+        windows_store().load(binding)
 
 
 def test_system_managed_ancestor_symlink_is_accepted(tmp_path: Path) -> None:

@@ -15,6 +15,7 @@ from tests.fixtures.cli_fixtures import (  # noqa: F401
     fake_tenant,
     no_network_or_browser,
     no_os_keyring,
+    windows_credential_manager,
 )
 from tests.fixtures.mongodb_fixtures import (  # noqa: F401
     mongo_test_client,
