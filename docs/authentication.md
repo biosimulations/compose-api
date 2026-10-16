@@ -155,8 +155,8 @@ Access and refresh tokens live together in one versioned keyring record. The ser
 client, audience, API origin or requested scope set selects a different session. Identical profile bindings share a
 session deliberately. macOS Keychain and Linux Secret Service are allowlisted. Windows Credential Manager is
 allowlisted with a single native credential overwrite, but a credential holds 2560 bytes of UTF-16 and a realistic
-session is about 3400, so persistent sessions do not fit there yet and the save fails explicitly; on Windows use
-`--ephemeral-auth`. Unknown, chained, plaintext and null backends are refused. Keyrings protect credentials at rest, not
+session is about 3400, so persistent sessions do not fit there yet (#320): `auth login` refuses before opening a
+browser, and the save fails explicitly; on Windows use `--ephemeral-auth`. Unknown, chained, plaintext and null backends are refused. Keyrings protect credentials at rest, not
 against a compromised operating-system account. Python cannot promise memory zeroization.
 
 Non-secret lock/generation/journal files live under the platform user-state directory, in `compose-api/sessions`.

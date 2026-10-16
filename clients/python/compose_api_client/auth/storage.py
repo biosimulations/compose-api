@@ -179,6 +179,13 @@ def open_persistent_store(settings: CliSettings, *, check: bool = True, writable
             "OS credential backend is unavailable; persistent sign-in requires a supported keyring" + EPHEMERAL_HINT
         ) from None
     store = KeyringCredentialStore(backend)
+    if writable and type(backend).__module__ == "keyring.backends.Windows":
+        # A realistic session overflows a Credential Manager item (#320), so `save` would refuse it only after a
+        # completed sign-in. Stop before the browser opens instead.
+        raise StorageError(
+            "Windows Credential Manager cannot hold a saved session yet, so sign-in was not started; API commands can"
+            " sign in for a single run with --ephemeral-auth"
+        )
     if writable:
         store.probe()
     if check:
