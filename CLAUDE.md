@@ -9,7 +9,8 @@ Dependencies are managed with `uv` (`requires-python` floor 3.13.2; the local ru
 ```bash
 make install                 # uv sync + install pre-commit hooks
 make run                     # uvicorn compose_api.api.main:app --reload on :8000
-make check                   # uv lock --locked, pre-commit (ruff lint+format), mypy --strict, deptry
+make check                   # uv lock --locked, pre-commit (ruff lint+format), mypy --strict (and the
+                             # hand-written client again as Python 3.11, its floor), deptry
                              # `git add` new files FIRST: pre-commit only sees tracked files,
                              # so an untracked file passes here and fails in CI
 make test                    # pytest with coverage
@@ -44,11 +45,11 @@ Web UI (`webapp/`, Nuxt 4 + Nuxt UI static SPA served by the API at `/ui`; [`doc
 `webapp/app/api/schema.d.ts` is generated from the spec (`make clients` regenerates it; CI fails when stale) — never
 hand-edit. Use standard libraries there (VueUse, openapi-fetch, PapaParse, Nuxt UI components) over ad hoc code.
 
-Command line: `uv run compose-api --help` (the `compose-api-client[cli]` extra; guide and reference in
-[`docs/cli.md`](docs/cli.md), `make cli-docs` regenerates the reference). Every API operation must be claimed by a
-command (`@claims` in `compose_api_client/cli/commands.py`); `tests/client/test_cli.py` fails otherwise, so a new
-endpoint needs a command in the same PR. Hand-written client code lives in `compose_api_client/ext/` and `cli/`,
-which `make clients` preserves.
+Command line: `uv run compose-api --help` (the `compose-api-client[cli]` extra, which includes the `[auth]`
+dependencies; guide and reference in [`docs/cli.md`](docs/cli.md), `make cli-docs` regenerates the reference). Every API
+operation must be claimed by a command (`@claims` in `compose_api_client/cli/commands.py`); `tests/client/test_cli.py`
+fails otherwise, so a new endpoint needs a command in the same PR. Hand-written client code lives in
+`compose_api_client/ext/`, `cli/`, `auth/`, and `profiles.py`, which `make clients` preserves.
 
 Generation is deterministic (`scripts/generate-api-client.sh`): the generator's post-hooks are off and the script
 formats with the locked ruff and this repo's settings, so the committed client is byte-for-byte what `make clients`
@@ -151,9 +152,10 @@ both API overlays load `config/compose-api-rke`; the local overlay overrides onl
 `behavior: merge` generator (`overlays/compose-api-local/auth0.env`); `config/compose-api-local` is used only by the
 migration job. Every principal carries `roles`: always `DEFAULT_ROLE` ("user", the tenant role owned by auth0-pulumi's
 biosim-platform stack) plus any names in the `ROLES_CLAIM` (`https://api.biosimulations.org/roles`) claim written by
-the tenant's post-login "BioSim Roles" Action. Anonymous is `principal is None`, so no role. The only role checked is
-`authorization.ADMIN_ROLE` ("admin"), which reads private simulations; none exist until submissions stamp an owner, so
-it changes nothing yet. Keep the role and claim names in step with auth0-pulumi.
+the tenant's post-login "BioSim Roles" Action. Anonymous is `principal is None`, so no role. Admin read-all bypass on
+private simulations is gated by `Settings.admin_role` (default `""`, which disables admin bypass so tenant-wide `admin`
+does not automatically read private simulations); none exist until submissions stamp an owner. Keep the role and claim
+names in step with auth0-pulumi.
 
 **HPC layer.** `SSHService` (asyncssh: `run_command`, `scp_upload`, `scp_download`) → `SlurmService`
 (`sbatch --parsable`, `squeue`, `sacct` parsing into `SlurmJob`) → `SimulationServiceHpc`, which writes sbatch scripts
@@ -273,9 +275,10 @@ This service is one side of a three-package loop. `../pbest` is checked out next
   `clients/python/compose_api_client/` and, only when `LIB_DIR` is set, the separate
   [compose-api-client](https://github.com/biosimulations/compose-api-client) repo (PyPI 0.2.x, what pbest uses). That
   package also carries a hand-written `utils/run_simulation_and_wait.py`; the script preserves it.
-- The production host is `compose.cam.uchc.edu` in all three places that must agree: the RKE ingress
-  (`kustomize/overlays/compose-api-rke/ingress.yaml`), `ServerMode.PROD` plus `APP_ORIGINS` here, and pbest's default
-  client base URL. Changing it means changing all three.
+- The production host is `compose.cam.uchc.edu` in all four places that must agree: the RKE ingress
+  (`kustomize/overlays/compose-api-rke/ingress.yaml`), `ServerMode.PROD` plus `APP_ORIGINS` here, pbest's default
+  client base URL, and the CLI's built-in `production` profile (`clients/python/compose_api_client/profiles.py`).
+  Changing it means changing all four.
 
 ## Conventions
 

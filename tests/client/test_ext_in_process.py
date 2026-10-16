@@ -6,6 +6,7 @@ status answers only the ids that have a job.
 """
 
 from collections.abc import AsyncGenerator
+from typing import Any
 
 import pytest
 import pytest_asyncio
@@ -77,3 +78,20 @@ async def test_status_and_batch_status_of_a_real_job(
     finally:
         await database_service.get_hpc_db().delete_hpcrun(hpcrun.database_id)
         await database_service.get_simulator_db().delete_simulation(simulation.database_id)
+
+
+@pytest.mark.asyncio
+async def test_whoami_returns_verified_principal_and_401_without_token(
+    authenticated_identity_client: object, fake_auth0: Any
+) -> None:
+    from compose_api_client.ext import AuthError
+
+    token = fake_auth0.token(sub="auth0|ext-in-process")
+    async with AsyncComposeSession.in_process(app, token=token) as authed:
+        principal = await authed.whoami()
+    assert principal.subject == "auth0|ext-in-process"
+    assert "user" in principal.roles
+
+    async with AsyncComposeSession.in_process(app) as anon:
+        with pytest.raises(AuthError):
+            await anon.whoami()

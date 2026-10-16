@@ -12,7 +12,7 @@ members = [
     "compose-api",
     "compose-api-client",
 ]
-overrides = [{ name = "compose-api-client", editable = "clients/python" }]
+overrides = [{ name = "compose-api-client", extras = ["auth", "cli"], editable = "clients/python" }]
 
 [[package]]
 name = "aiohappyeyeballs"
@@ -222,7 +222,7 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 dependencies = [
-    { name = "idna", marker = "python_full_version < '3.15'" },
+    { name = "idna" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/61/cc/a381afa6efea9f496eff839d4a6a1aed3bfafc7b3ab4b0d1b243a12573dd/anyio-4.14.2.tar.gz", hash = "sha256:cfa139f3ed1a23ee8f88a145ddb5ac7605b8bbfd8592baacd7ce3d8bb4313c7f", size = 260176, upload-time = "2026-07-12T20:29:07.082Z" }
 wheels = [
@@ -237,7 +237,7 @@ resolution-markers = [
     "python_full_version >= '3.15'",
 ]
 dependencies = [
-    { name = "idna", marker = "python_full_version >= '3.15'" },
+    { name = "idna" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a9/d2/f4d173e22df740bc37b1db102b386ba719b66e95b0f0d751f556b387e6d2/anyio-4.15.1.tar.gz", hash = "sha256:9f28306018cbd6d329e64a36d58256edff76dd996fe423bc957326e578b82a94", size = 276966, upload-time = "2026-09-05T10:42:39.44Z" }
 wheels = [
@@ -387,6 +387,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/6b/5c/685e6633917e101e5dcb62b9dd76946cbb57c26e133bae9e0cd36033c0a9/attrs-25.4.0.tar.gz", hash = "sha256:16d5969b87f0859ef33a48b35d55ac1be6e42ae49d5e853b597db70c35c57e11", size = 934251, upload-time = "2025-10-06T13:54:44.725Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3a/2a/7cc015f5b9f5db42b7d48157e23356022889fc354a2813c15934b7cb5c0e/attrs-25.4.0-py3-none-any.whl", hash = "sha256:adcf7e2a1fb3b36ac48d97835bb6d8ade15b8dcce26aba8bf1d14847b57a3373", size = 67615, upload-time = "2025-10-06T13:54:43.17Z" },
+]
+
+[[package]]
+name = "authlib"
+version = "1.8.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+    { name = "joserfc" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f1/51/bc1729d3cfdc214b4935f4e886e4dd443c3065fd8e1e66423fe84b490f81/authlib-1.8.0.tar.gz", hash = "sha256:f3ecd5f1da737262fb53bf1a4d95c4ea1ad9dd509316587a255c99ab1838a4f0", size = 177759, upload-time = "2026-08-30T12:12:34.833Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b8/c6/6f124bcfbbfb20fba22c939b4e43a06dccfc0e1ca20e5634ca573cb1e271/authlib-1.8.0-py2.py3-none-any.whl", hash = "sha256:88aebbd9af6757e14e912d5dc007ae1dc1f3e27e3b2152ce7c552ee2c3b3c121", size = 260804, upload-time = "2026-08-30T12:12:33.162Z" },
 ]
 
 [[package]]
@@ -716,7 +729,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "compose-api-client" },
+    { name = "compose-api-client", extra = ["auth", "cli"] },
     { name = "deptry" },
     { name = "mypy" },
     { name = "openapi-python-client" },
@@ -774,7 +787,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "compose-api-client", extras = ["cli"], editable = "clients/python" },
+    { name = "compose-api-client", extras = ["auth", "cli"], editable = "clients/python" },
     { name = "deptry", specifier = ">=0.25.1,<0.26" },
     { name = "mypy", specifier = ">=2.3.1,<3" },
     { name = "openapi-python-client", specifier = ">=0.29.1,<0.30" },
@@ -805,16 +818,57 @@ dependencies = [
     { name = "python-dateutil" },
 ]
 
+[package.optional-dependencies]
+auth = [
+    { name = "authlib" },
+    { name = "joserfc" },
+    { name = "keyring" },
+    { name = "platformdirs" },
+    { name = "portalocker" },
+    { name = "pydantic" },
+    { name = "pyjwt", extra = ["crypto"] },
+    { name = "pywin32", marker = "sys_platform == 'win32'" },
+]
+cli = [
+    { name = "authlib" },
+    { name = "click" },
+    { name = "joserfc" },
+    { name = "keyring" },
+    { name = "platformdirs" },
+    { name = "portalocker" },
+    { name = "pydantic" },
+    { name = "pyjwt", extra = ["crypto"] },
+    { name = "pywin32", marker = "sys_platform == 'win32'" },
+    { name = "rich" },
+    { name = "typer" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "attrs", specifier = ">=25.4.0" },
+    { name = "authlib", marker = "extra == 'auth'", specifier = ">=1.8.0,<2" },
+    { name = "authlib", marker = "extra == 'cli'", specifier = ">=1.8.0,<2" },
     { name = "click", marker = "extra == 'cli'", specifier = ">=8.1" },
     { name = "httpx", specifier = ">=0.28.1,<0.29" },
+    { name = "joserfc", marker = "extra == 'auth'", specifier = ">=1.7.5,<2" },
+    { name = "joserfc", marker = "extra == 'cli'", specifier = ">=1.7.5,<2" },
+    { name = "keyring", marker = "extra == 'auth'", specifier = ">=25.7,<26" },
+    { name = "keyring", marker = "extra == 'cli'", specifier = ">=25.7,<26" },
+    { name = "platformdirs", marker = "extra == 'auth'", specifier = ">=4.5.1,<5" },
+    { name = "platformdirs", marker = "extra == 'cli'", specifier = ">=4.5.1,<5" },
+    { name = "portalocker", marker = "extra == 'auth'", specifier = ">=3.2,<5" },
+    { name = "portalocker", marker = "extra == 'cli'", specifier = ">=3.2,<5" },
+    { name = "pydantic", marker = "extra == 'auth'", specifier = ">=2.11.5,<3" },
+    { name = "pydantic", marker = "extra == 'cli'", specifier = ">=2.11.5,<3" },
+    { name = "pyjwt", extras = ["crypto"], marker = "extra == 'auth'", specifier = ">=2.15.0,<3" },
+    { name = "pyjwt", extras = ["crypto"], marker = "extra == 'cli'", specifier = ">=2.15.0,<3" },
     { name = "python-dateutil", specifier = ">=2.9.0.post0" },
+    { name = "pywin32", marker = "sys_platform == 'win32' and extra == 'auth'", specifier = ">=311" },
+    { name = "pywin32", marker = "sys_platform == 'win32' and extra == 'cli'", specifier = ">=311" },
     { name = "rich", marker = "extra == 'cli'", specifier = ">=13.7" },
-    { name = "typer", marker = "extra == 'cli'", specifier = ">=0.16.1" },
+    { name = "typer", marker = "extra == 'cli'", specifier = ">=0.18,<0.26" },
 ]
-provides-extras = ["cli"]
+provides-extras = ["auth", "cli"]
 
 [[package]]
 name = "contourpy"
@@ -1644,6 +1698,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/df/bf/f7da0350254c0ed7c72f3e33cef02e048281fec7ecec5f032d4aac52226b/jinja2-3.1.6.tar.gz", hash = "sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d", size = 245115, upload-time = "2025-03-05T20:05:02.478Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl", hash = "sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67", size = 134899, upload-time = "2025-03-05T20:05:00.369Z" },
+]
+
+[[package]]
+name = "joserfc"
+version = "1.7.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/19/94/80fea1514b7c6d7d37804d3fe9ca81455f633347fc98731bd71ffe1faa17/joserfc-1.7.5.tar.gz", hash = "sha256:d5ff536e658e17664f8c1b1ab60dc4aa62aa973fcef1edd33cc44bda45d6f5ea", size = 234990, upload-time = "2026-08-29T13:05:42.057Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/67/c5/82addfd375e5ee6520644e0553e4aadde92d668c4fc99cc716d337fe7bb3/joserfc-1.7.5-py3-none-any.whl", hash = "sha256:add2c2c84e8373b084d526a8b53daba5d7a513a118cd2dcd9fc9f979d0922159", size = 71269, upload-time = "2026-08-29T13:05:40.718Z" },
 ]
 
 [[package]]
@@ -2770,7 +2836,7 @@ version = "0.6.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bigraph-schema" },
-    { name = "compose-api-client" },
+    { name = "compose-api-client", extra = ["auth", "cli"] },
     { name = "httpx" },
     { name = "jinja2" },
     { name = "pbsim-common" },
@@ -2965,6 +3031,15 @@ wheels = [
 [package.optional-dependencies]
 pyarrow = [
     { name = "pyarrow" },
+]
+
+[[package]]
+name = "portalocker"
+version = "4.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/81/cd/d2a23fc80c26f539ac77e7d61bd5e4af5d0b3a09a78ac4c716eead345129/portalocker-4.4.0.tar.gz", hash = "sha256:90c0df939d4ffba121f8e925bbf98ecea8b9381718666ab871a226938d2b63b2", size = 304906, upload-time = "2026-09-19T16:11:09.114Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/52/6c/07fa2775e87b6e241c2aca5cef79f65e450bc115de55f03cda6251f81690/portalocker-4.4.0-py3-none-any.whl", hash = "sha256:a8e99ea29bfb61766ee0b4008cbaf0651e8e050f7a2485ebf54316480e99226e", size = 129647, upload-time = "2026-09-19T16:11:07.377Z" },
 ]
 
 [[package]]
@@ -4446,17 +4521,17 @@ wheels = [
 
 [[package]]
 name = "typer"
-version = "0.16.1"
+version = "0.25.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "annotated-doc" },
     { name = "click" },
     { name = "rich" },
     { name = "shellingham" },
-    { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/43/78/d90f616bf5f88f8710ad067c1f8705bf7618059836ca084e5bb2a0855d75/typer-0.16.1.tar.gz", hash = "sha256:d358c65a464a7a90f338e3bb7ff0c74ac081449e53884b12ba658cbd72990614", size = 102836, upload-time = "2025-08-18T19:18:22.898Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e4/51/9aed62104cea109b820bbd6c14245af756112017d309da813ef107d42e7e/typer-0.25.1.tar.gz", hash = "sha256:9616eb8853a09ffeabab1698952f33c6f29ffdbceb4eaeecf571880e8d7664cc", size = 122276, upload-time = "2026-04-30T19:32:16.964Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2d/76/06dbe78f39b2203d2a47d5facc5df5102d0561e2807396471b5f7c5a30a1/typer-0.16.1-py3-none-any.whl", hash = "sha256:90ee01cb02d9b8395ae21ee3368421faf21fa138cb2a541ed369c08cec5237c9", size = 46397, upload-time = "2025-08-18T19:18:21.663Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/f9/2b3ff4e56e5fa7debfaf9eb135d0da96f3e9a1d5b27222223c7296336e5f/typer-0.25.1-py3-none-any.whl", hash = "sha256:75caa44ed46a03fb2dab8808753ffacdbfea88495e74c85a28c5eefcf5f39c89", size = 58409, upload-time = "2026-04-30T19:32:18.271Z" },
 ]
 
 [[package]]

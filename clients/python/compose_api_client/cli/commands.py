@@ -3,44 +3,85 @@
 Every API operation is claimed by exactly one command (``@claims``); ``tests/client/test_cli.py`` fails when the
 spec has an operation no command claims, or a command claims one the spec lacks.
 
-Exit codes: 0 success; 1 the job ended other than completed; 2 usage; 3 API error; 4 not found; 5 a wait timed out;
-130 interrupted.
+Exit codes (`ext.errors.ExitCode`, documented in docs/cli.md): 0 success; 1 the API or a job reported a failure;
+2 usage; 3 sign-in required or the session expired; 4 forbidden; 5 network failure or rate limit; 6 configuration,
+credential storage or protocol error; 7 a wait timed out; 130 cancelled.
 """
 
 from __future__ import annotations
 
+import argparse
 import dataclasses
 import datetime
 import functools
+import importlib.metadata
 import importlib.resources
 import inspect
 import json
+import math
+import os
+import stat
 import sys
 import time
-from collections.abc import Callable
+import zipfile
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any, TypeVar
+from typing import TYPE_CHECKING, Annotated, Any, TypeVar
 
 import click
 import httpx
 import typer
 
-from compose_api_client.cli.render import Output, emit, err, event_line, lines, resolve, span_tree
+from compose_api_client.cli.render import (
+    Output,
+    emit,
+    err,
+    event_line,
+    lines,
+    printable,
+    printable_lines,
+    resolve,
+    span_tree,
+)
 from compose_api_client.ext import (
     DEFAULT_URL,
-    ApiTimeout,
     BadRequest,
-    ComposeApiError,
+    CliError,
     ComposeSession,
+    EnvironmentToken,
+    ExitCode,
     JobState,
-    NotFound,
 )
+from compose_api_client.ext.credentials import TOKEN_ENV_VAR
+from compose_api_client.ext.errors import UsageError
 from compose_api_client.types import Unset
 
-EXIT_JOB, EXIT_USAGE, EXIT_API, EXIT_NOT_FOUND, EXIT_TIMEOUT, EXIT_INTERRUPT = 1, 2, 3, 4, 5, 130
+if TYPE_CHECKING:  # annotations only: importing these at run time would load the [auth] extra for every command
+    from compose_api_client.auth.models import SessionRecord
+    from compose_api_client.cli.wiring import Wiring
+    from compose_api_client.ext.credentials import TokenSource
+    from compose_api_client.profiles import CliSettings
+
+try:
+    __version__ = importlib.metadata.version("compose-api-client")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "0.0.0"
+
+PROG = "compose-api"
+EXIT_JOB = int(ExitCode.FAILURE)
+EXIT_USAGE = int(ExitCode.USAGE)
+EXIT_AUTH = int(ExitCode.AUTH_REQUIRED)
+EXIT_FORBIDDEN = int(ExitCode.FORBIDDEN)
+EXIT_NETWORK = int(ExitCode.NETWORK)
+EXIT_CONFIG = int(ExitCode.CONFIG)
+EXIT_TIMEOUT = int(ExitCode.WAIT_TIMEOUT)
+EXIT_API = int(ExitCode.FAILURE)
+EXIT_NOT_FOUND = int(ExitCode.FAILURE)
+EXIT_INTERRUPT = int(ExitCode.CANCELLED)
 
 CLAIMS: dict[str, str] = {}  # operationId -> command
+MAX_VALIDATION_LINES = 5  # an invalid document's violations shown, at most
 F = TypeVar("F", bound=Callable[..., Any])
 
 
@@ -60,16 +101,119 @@ def claims(command: str, *operation_ids: str) -> Callable[[F], F]:
 @dataclass
 class Settings:
     url: str = DEFAULT_URL
+    profile: str | None = None
     timeout: float = 300.0
     output: Output = Output.AUTO
     token: str | None = None
     verbose: bool = False
     quiet: bool = False
+    url_explicit: bool = False
+    ephemeral_auth: bool = False  # sign in for this command only (--ephemeral-auth)
+    device: bool = False  # ... with a device code
+    no_browser: bool = False  # ... printing the sign-in URL instead of opening it
+
+
+def _note(message: str) -> None:
+    err.print(f"compose-api: note: {message}", markup=False, highlight=False, soft_wrap=True)
 
 
 def make_session(settings: Settings) -> ComposeSession:
-    """The session every command uses. Tests replace this to inject a transport."""
-    return ComposeSession(settings.url, token=settings.token, timeout=settings.timeout)
+    """The session every API command uses. Tests replace this to inject a transport.
+
+    The API is the profile's (`--profile`), unless `--url` names it. Credentials, the first that applies:
+    `COMPOSE_API_TOKEN`; `--ephemeral-auth` (sign in now, keep nothing); the profile's stored session; none, which the
+    API allows. None is attached when `--url` names another API than the profile's. A stored session that exists but
+    cannot be read is an error, never a silent anonymous call; a host with no supported credential store has no
+    stored session to fall back from.
+    """
+    from compose_api_client import profiles
+    from compose_api_client.cli import auth_commands  # its `Wiring` is what tests replace
+
+    loaded = profiles.load_cli_settings(settings.profile).settings
+    wiring = auth_commands.Wiring()
+    env_token = TOKEN_ENV_VAR in os.environ
+    if settings.ephemeral_auth and env_token:
+        raise UsageError(f"--ephemeral-auth and {TOKEN_ENV_VAR} both supply credentials; use one of them")
+
+    def session(base_url: str, tokens: TokenSource | None = None) -> ComposeSession:
+        return ComposeSession(
+            base_url,
+            tokens=tokens,
+            timeout=settings.timeout,
+            ca_bundle=loaded.ca_bundle,
+            transport=wiring.sync_api_transport,
+        )
+
+    if settings.url_explicit and _origin(settings.url) != loaded.api_base_url:
+        if settings.ephemeral_auth:
+            raise UsageError(
+                f"--ephemeral-auth signs in to profile {loaded.profile!r} ({loaded.api_base_url}), and --url names"
+                " another API; drop --url, or choose the matching --profile"
+            )
+        if env_token:
+            _note(
+                f"--url does not match profile {loaded.profile!r} ({loaded.api_base_url}); calling anonymously"
+                f" without {TOKEN_ENV_VAR}"
+            )
+        return session(settings.url)
+    if env_token:
+        _note(f"using {TOKEN_ENV_VAR} from the environment instead of a stored session")
+        return session(loaded.api_base_url, EnvironmentToken())
+    if settings.ephemeral_auth:
+        return session(loaded.api_base_url, _ephemeral_tokens(loaded, settings, wiring))
+    return session(loaded.api_base_url, _stored_tokens(loaded, wiring))
+
+
+def _stored_tokens(loaded: CliSettings, wiring: Wiring) -> TokenSource | None:
+    if loaded.auth0_client_id is None:
+        return None  # a profile that cannot sign in holds no session
+    from compose_api_client.auth.session import AuthSession
+    from compose_api_client.auth.sources import SyncStoredSession
+    from compose_api_client.ext.errors import StorageError
+
+    try:
+        store = wiring.store(loaded, writable=False, check=False)
+    except StorageError:
+        return None  # no supported credential store on this host
+    try:
+        auth_session = AuthSession(loaded, store)
+    except StorageError:
+        if store.load(loaded.binding_key(persistent=True)) is None:
+            return None  # no saved login; unusable state directory is not needed
+        raise
+    return SyncStoredSession(loaded, auth_session, auth0_transport=wiring.auth0_transport)
+
+
+def _origin(url: str) -> str | None:
+    """`url`'s canonical origin when a profile could name it; None otherwise (it still works, anonymously)."""
+    from compose_api_client.profiles import canonical_api_base_url
+
+    try:
+        return canonical_api_base_url(url)
+    except ValueError:
+        return None
+
+
+def _ephemeral_tokens(profile: CliSettings, settings: Settings, wiring: Wiring) -> TokenSource:
+    """Sign in for this one command and hold the session in memory only; nothing is stored or renewed."""
+    from compose_api_client.auth.models import SignInRequest
+    from compose_api_client.auth.signin import ephemeral_session
+    from compose_api_client.auth.sources import OneCommandSession
+    from compose_api_client.cli.render import notify
+    from compose_api_client.cli.wiring import run as run_network
+
+    profile.require_client_id()
+    request = SignInRequest(
+        signup=False, provider=None, device=settings.device, open_browser=not settings.no_browser, persistent=False
+    )
+
+    async def sign_in() -> SessionRecord:
+        async with ephemeral_session(
+            profile, request, notify=notify, launcher=wiring.browser(), transport=wiring.auth0_transport
+        ) as record:
+            return record
+
+    return OneCommandSession(run_network(sign_in())).as_sync_source()
 
 
 app = typer.Typer(
@@ -108,24 +252,91 @@ app.add_typer(biomodels_app, name="biomodels")
 app.add_typer(biosimulations_app, name="biosimulations")
 suites_app = typer.Typer(help="Regression and reproducibility suites of SED-ML models.", no_args_is_help=True)
 app.add_typer(suites_app, name="suites")
+auth_app = typer.Typer(help="Sign up, sign in, check or end a session.", no_args_is_help=True)
+app.add_typer(auth_app, name="auth")
+config_app = typer.Typer(help="Inspect the CLI configuration.", no_args_is_help=True)
+app.add_typer(config_app, name="config")
+
+
+def _print_version(value: bool) -> None:
+    """`--version`: this client's version. The `version` command asks the server for its own."""
+    if value:
+        print(f"{PROG} {__version__}")
+        raise typer.Exit
 
 
 @app.callback()
 def root(
     ctx: typer.Context,
-    url: Annotated[str, typer.Option(envvar="COMPOSE_API_URL", help="Service base URL.")] = DEFAULT_URL,
-    timeout: Annotated[float, typer.Option(envvar="COMPOSE_API_TIMEOUT", help="HTTP timeout, seconds.")] = 300.0,
+    url: Annotated[str | None, typer.Option(envvar="COMPOSE_API_URL", help="Service base URL.")] = None,
+    profile: Annotated[
+        str | None,
+        typer.Option("--profile", envvar="COMPOSE_API_CLI_PROFILE", help="Profile to use (default: production)."),
+    ] = None,
+    timeout: Annotated[
+        float,
+        typer.Option(
+            envvar="COMPOSE_API_TIMEOUT",
+            help="HTTP timeout, seconds (downloads use the full value; other requests cap at 60 s).",
+        ),
+    ] = 300.0,
     output: Annotated[
         Output,
         typer.Option("--output", "-o", envvar="COMPOSE_API_OUTPUT", help="auto: table on a terminal, else json."),
     ] = Output.AUTO,
-    token: Annotated[
-        str | None, typer.Option(envvar="COMPOSE_API_TOKEN", help="Bearer token (when auth is on).")
+    token_removed: Annotated[
+        str | None,
+        typer.Option("--token", hidden=True, help="Removed: use auth login or COMPOSE_API_TOKEN."),
     ] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Log HTTP requests; tracebacks on errors.")] = False,
     quiet: Annotated[bool, typer.Option("--quiet", "-q", help="No progress lines.")] = False,
+    ephemeral_auth: Annotated[
+        bool,
+        typer.Option(
+            "--ephemeral-auth",
+            help="Sign in for this command only, keeping credentials in memory (for hosts without a credential store).",
+        ),
+    ] = False,
+    device: Annotated[
+        bool, typer.Option("--device", help="With --ephemeral-auth: sign in on another device (RFC 8628).")
+    ] = False,
+    no_browser: Annotated[
+        bool, typer.Option("--no-browser", help="With --ephemeral-auth: print the sign-in URL instead of opening it.")
+    ] = False,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version", is_eager=True, callback=_print_version, help="Print this program's version and exit."
+        ),
+    ] = False,
 ) -> None:
-    ctx.obj = Settings(url=url, timeout=timeout, output=output, token=token, verbose=verbose, quiet=quiet)
+    if token_removed is not None:  # never echo the value: it is a bearer typed onto a command line
+        err.print(
+            "compose-api: error: --token is no longer supported; use `compose-api auth login`, or set"
+            f" {TOKEN_ENV_VAR} for automation",
+            markup=False,
+            highlight=False,
+            soft_wrap=True,
+        )
+        raise typer.Exit(EXIT_USAGE)
+    if (device or no_browser) and not ephemeral_auth:
+        raise click.UsageError(
+            "--device and --no-browser choose how --ephemeral-auth signs in, so they need --ephemeral-auth"
+        )
+    if device and no_browser:
+        raise click.UsageError("--device and --no-browser are mutually exclusive")
+    ctx.obj = Settings(
+        url=url if url is not None else DEFAULT_URL,
+        profile=profile,
+        timeout=timeout,
+        output=output,
+        verbose=verbose,
+        quiet=quiet,
+        url_explicit=url is not None,
+        ephemeral_auth=ephemeral_auth,
+        device=device,
+        no_browser=no_browser,
+    )
     if verbose:
         import logging
 
@@ -138,31 +349,41 @@ def _settings(ctx: click.Context) -> Settings:
     return obj if isinstance(obj, Settings) else Settings()
 
 
-def _report(e: BaseException, settings: Settings) -> int | None:
+def _emit_envelope(enabled: bool, category: str, message: str, code: int) -> int:
+    if enabled:
+        print(json.dumps({"error": {"category": category, "message": message, "exit_code": int(code)}}))
+    return int(code)
+
+
+def _validation_lines(e: BadRequest) -> list[str]:
+    """What an invalid document got wrong, when the API says so in its own validation shape (`{"message",
+    "violations"}`, as the registry check answers): escaped and capped. Free-form server text is never shown."""
+    if not isinstance(e.detail, dict):
+        return []
+    lines = [str(e.detail["message"])] if isinstance(e.detail.get("message"), str) else []
+    for violation in e.violations[:MAX_VALIDATION_LINES]:
+        lines.append(violation if isinstance(violation, str) else json.dumps(violation, default=str))
+    return [printable(line) for line in lines]
+
+
+def _report(e: BaseException, settings: Settings, *, emit_envelope: bool = False) -> int | None:
     """Print ``e`` to stderr and return its exit code; ``None`` for an exception the CLI does not own."""
     if isinstance(e, KeyboardInterrupt):
-        err.print("[yellow]interrupted[/]")
-        return EXIT_INTERRUPT
-    if isinstance(e, NotFound):
-        err.print(f"[red]not found[/]: {_detail(e.detail)}")
-        return EXIT_NOT_FOUND
-    if isinstance(e, BadRequest):
-        err.print(f"[red]rejected ({e.status_code})[/]: {_detail(e.detail)}")
-        for v in e.violations:
-            err.print(f"  - {v if isinstance(v, str) else json.dumps(v, default=str)}")
-        return EXIT_API
-    if isinstance(e, ComposeApiError):
-        err.print(f"[red]compose-api error ({e.status_code})[/]: {_detail(e.detail)}")
-        return EXIT_API
-    if isinstance(e, ApiTimeout):
-        err.print(f"[red]timed out[/]: {e}")
-        return EXIT_TIMEOUT
+        err.print(f"{PROG}: cancelled", markup=False, highlight=False, soft_wrap=True)
+        return _emit_envelope(emit_envelope, "cancelled", "cancelled", EXIT_INTERRUPT)
+    if isinstance(e, CliError):  # every error this program owns, API failures and wait timeouts included
+        err.print(f"{PROG}: error: {printable_lines(e.message)}", markup=False, highlight=False, soft_wrap=True)
+        if isinstance(e, BadRequest):
+            for line in _validation_lines(e):
+                err.print(f"  - {line}", markup=False, highlight=False, soft_wrap=True)
+        return _emit_envelope(emit_envelope, e.category, e.message, int(e.exit_code))
     if isinstance(e, httpx.HTTPError):
-        err.print(f"[red]cannot reach {settings.url}[/]: {e}")
-        return EXIT_API
+        msg = f"cannot reach {settings.url}: {e}"
+        err.print(f"[red]cannot reach {printable(settings.url)}[/]: {printable_lines(str(e))}", highlight=False)
+        return _emit_envelope(emit_envelope, "network", msg, EXIT_NETWORK)
     if isinstance(e, (FileNotFoundError, IsADirectoryError)):
-        err.print(f"[red]{e}[/]")
-        return EXIT_USAGE
+        err.print(f"[red]{printable_lines(str(e))}[/]", highlight=False)
+        return _emit_envelope(emit_envelope, "usage", str(e), EXIT_USAGE)
     return None
 
 
@@ -188,14 +409,19 @@ def handled(fn: F) -> F:
             root = ctx.find_root()
             root.obj = dataclasses.replace(_settings(ctx), output=Output.JSON)
         settings = _settings(ctx) if isinstance(ctx, click.Context) else Settings()
+        envelope = bool(json_output) or settings.output is Output.JSON
         try:
             return fn(*args, **kwargs)
-        except typer.Exit:
-            raise
+        except (typer.Exit, click.ClickException):
+            raise  # an exit status, or a usage error Click reports itself
         except (Exception, KeyboardInterrupt) as e:
-            code = _report(e, settings)
-            if code is None or settings.verbose:
+            if settings.verbose:
                 raise
+            code = _report(e, settings, emit_envelope=envelope)
+            if code is None:  # a bug: name its type only, since its message or traceback may hold a credential
+                message = f"internal error ({type(e).__name__}); this is a bug in {PROG}"
+                err.print(f"{PROG}: error: {message}", markup=False, highlight=False, soft_wrap=True)
+                code = _emit_envelope(envelope, "internal", message, EXIT_JOB)
             raise typer.Exit(code) from None
 
     signature = inspect.signature(fn, eval_str=True)
@@ -204,12 +430,6 @@ def handled(fn: F) -> F:
     )
     wrapper.__annotations__ = {**fn.__annotations__, "json_output": JSON_OPTION.annotation}
     return wrapper  # type: ignore[return-value]
-
-
-def _detail(detail: Any) -> str:
-    if isinstance(detail, dict) and "message" in detail:
-        return str(detail["message"])
-    return detail if isinstance(detail, str) else json.dumps(detail, default=str)
 
 
 def _progress(settings: Settings, label: str) -> Callable[[JobState], None]:
@@ -544,6 +764,31 @@ Download = Annotated[
 Extract = Annotated[bool, typer.Option(help="With --download: unpack the archive instead of saving the zip.")]
 
 
+def _positive_finite(value: float) -> float:
+    if not math.isfinite(value) or value <= 0:
+        raise typer.BadParameter("must be a positive, finite number")
+    return value
+
+
+def _omex_archive(path: Path) -> None:
+    """An .omex is a ZIP: refuse anything else before signing in or uploading. Other documents (.pbg) pass."""
+    if path.suffix.lower() != ".omex":
+        return
+    shown = printable(str(path))
+    try:
+        info = path.stat()
+    except OSError:
+        raise UsageError(f"cannot read {shown}") from None
+    if not stat.S_ISREG(info.st_mode):
+        raise UsageError(f"{shown} is not a regular file")
+    try:
+        is_zip = info.st_size > 0 and zipfile.is_zipfile(path)
+    except OSError:
+        raise UsageError(f"cannot read {shown}") from None
+    if not is_zip:
+        raise UsageError(f"{shown} is not an OMEX archive (a ZIP file); nothing was uploaded")
+
+
 @app.command()
 @claims("run", "run-simulation")
 @handled
@@ -551,7 +796,9 @@ def run(
     ctx: typer.Context,
     document: Annotated[Path, typer.Argument(help="The .omex (or .pbg) to run.", exists=True, dir_okay=False)],
     simulator: Annotated[str | None, typer.Option(help="A prebuilt simulator image by name.")] = None,
-    interval: Annotated[float, typer.Option(help="Simulation interval passed to the runner.")] = 1.0,
+    interval: Annotated[
+        float, typer.Option(callback=_positive_finite, help="Simulation interval passed to the runner.")
+    ] = 1.0,
     batch: Annotated[bool, typer.Option(help="Submit as a batch job (smaller partition, 1 CPU).")] = False,
     tag: Annotated[
         list[str] | None, typer.Option("--tag", "-t", help="A tag to find the run by later (repeatable).")
@@ -565,6 +812,7 @@ def run(
 ) -> None:
     """Submit a simulation. Prints its ids; with --wait, its final state (and the files, with --download)."""
     settings = _settings(ctx)
+    _omex_archive(document)  # before any sign-in or upload
     with make_session(settings) as s:
         sim = s.submit(
             document, simulator=simulator, interval=interval, batch=batch, tags=tag or (), description=description
@@ -641,7 +889,7 @@ def curated_tellurium(
 @handled
 def status(
     ctx: typer.Context,
-    simulation_ids: Annotated[list[int], typer.Argument(help="One or more simulation ids.")],
+    simulation_ids: Annotated[list[int], typer.Argument(min=1, help="One or more simulation ids.")],
 ) -> None:
     """Job state of one simulation, or of several in one call. "submitting" means no SLURM job yet."""
     settings = _settings(ctx)
@@ -662,7 +910,7 @@ def status(
 @handled
 def wait(
     ctx: typer.Context,
-    simulation_ids: Annotated[list[int], typer.Argument(help="One or more simulation ids.")],
+    simulation_ids: Annotated[list[int], typer.Argument(min=1, help="One or more simulation ids.")],
     poll: Poll = 5.0,
     wait_timeout: WaitTimeout = None,
 ) -> None:
@@ -940,7 +1188,25 @@ def bundled_spec() -> dict[str, Any]:
 
 def fetch_spec(settings: Settings) -> dict[str, Any]:
     """The live service's OpenAPI document. Tests replace this."""
-    r = httpx.get(f"{settings.url.rstrip('/')}/openapi.json", timeout=settings.timeout)
+    from compose_api_client import profiles
+    from compose_api_client.ext._policy import tls_verification
+
+    if settings.url_explicit:
+        r = httpx.get(
+            f"{settings.url.rstrip('/')}/openapi.json",
+            timeout=settings.timeout,
+            follow_redirects=False,
+            trust_env=False,
+        )
+    else:
+        loaded = profiles.load_cli_settings(settings.profile).settings
+        r = httpx.get(
+            f"{loaded.api_base_url.rstrip('/')}/openapi.json",
+            timeout=settings.timeout,
+            verify=tls_verification(loaded.ca_bundle),
+            follow_redirects=False,
+            trust_env=False,
+        )
     r.raise_for_status()
     return dict(r.json())
 
@@ -987,8 +1253,160 @@ def openapi(
         raise typer.Exit(EXIT_JOB)
 
 
-def main() -> None:
-    app()
+#: The identity providers `auth signup` / `auth login` can start with (`compose_api_client.auth.models.Provider`).
+PROVIDERS = click.Choice(["email", "google"])
+
+
+@config_app.command("show")
+@handled
+def config_show(ctx: typer.Context) -> None:
+    """Print the effective profile and where each value came from. Profiles hold no secrets."""
+    from compose_api_client import profiles  # pydantic and platformdirs; none of the sign-in machinery
+
+    settings = _settings(ctx)
+    loaded = profiles.load_cli_settings(settings.profile)
+    view = loaded.public_view()
+    if resolve(settings.output) is Output.JSON:
+        print(json.dumps(view, indent=2))
+    else:
+        profile, config_file = view["profile"], view["config_file"]
+        rows = [
+            ("profile", profile["value"], profile["source"]),
+            ("config file", config_file["path"], "found" if config_file["found"] else "not found"),
+            *((name, entry["value"], entry["source"]) for name, entry in view["settings"].items()),
+            *((name, value, "derived") for name, value in view["derived"].items()),
+        ]
+        width = max(len(name) for name, _, _ in rows)
+        for name, value, source in rows:
+            print(f"{name:<{width}}  {'-' if value is None else value}  ({source})")
+    if loaded.settings.auth0_client_id is None:
+        print(
+            f"{PROG}: note: auth0_client_id is not set, so profile {loaded.settings.profile!r} cannot sign in yet",
+            file=sys.stderr,
+        )
+
+
+@auth_app.command("signup")
+@handled
+def auth_signup(
+    ctx: typer.Context,
+    provider: Annotated[str, typer.Option(click_type=PROVIDERS, help="Identity provider: email or google.")] = "email",
+    device: Annotated[bool, typer.Option("--device", help="Sign in on another device (RFC 8628).")] = False,
+    no_browser: Annotated[
+        bool, typer.Option("--no-browser", help="Print the sign-in URL instead of opening it.")
+    ] = False,
+) -> None:
+    """Create an account in the browser, then sign in."""
+    from compose_api_client.cli import auth_commands
+
+    if device and no_browser:
+        raise typer.BadParameter("--device and --no-browser are mutually exclusive")
+    settings = _settings(ctx)
+    ns = argparse.Namespace(
+        profile=settings.profile,
+        provider=provider,
+        device=device,
+        no_browser=no_browser,
+        json=resolve(settings.output) is Output.JSON,
+    )
+    code = auth_commands.signup(ns)
+    if code != 0:
+        raise typer.Exit(code)
+
+
+@auth_app.command("login")
+@handled
+def auth_login(
+    ctx: typer.Context,
+    provider: Annotated[
+        str | None, typer.Option(click_type=PROVIDERS, help="Identity provider: email or google.")
+    ] = None,
+    device: Annotated[bool, typer.Option("--device", help="Sign in on another device (RFC 8628).")] = False,
+    no_browser: Annotated[
+        bool, typer.Option("--no-browser", help="Print the sign-in URL instead of opening it.")
+    ] = False,
+) -> None:
+    """Sign in in the browser or with a device code."""
+    from compose_api_client.cli import auth_commands
+
+    if device and no_browser:
+        raise typer.BadParameter("--device and --no-browser are mutually exclusive")
+    settings = _settings(ctx)
+    ns = argparse.Namespace(
+        profile=settings.profile,
+        provider=provider,
+        device=device,
+        no_browser=no_browser,
+        json=resolve(settings.output) is Output.JSON,
+    )
+    code = auth_commands.login(ns)
+    if code != 0:
+        raise typer.Exit(code)
+
+
+@auth_app.command("status")
+@claims("auth status", "get-current-principal")
+@handled
+def auth_status(
+    ctx: typer.Context,
+    verify: Annotated[
+        bool, typer.Option("--verify", help="Refresh if needed and confirm the identity with the API.")
+    ] = False,
+) -> None:
+    """Show the stored session without contacting any server, unless --verify is given."""
+    from compose_api_client.cli import auth_commands
+
+    settings = _settings(ctx)
+    ns = argparse.Namespace(
+        profile=settings.profile,
+        verify=verify,
+        json=resolve(settings.output) is Output.JSON,
+    )
+    code = auth_commands.status(ns)
+    if code != 0:
+        raise typer.Exit(code)
+
+
+@auth_app.command("logout")
+@handled
+def auth_logout(
+    ctx: typer.Context,
+    local_only: Annotated[
+        bool, typer.Option("--local-only", help="Erase the local session without contacting Auth0.")
+    ] = False,
+) -> None:
+    """Revoke the refresh token with Auth0 and erase the stored session."""
+    from compose_api_client.cli import auth_commands
+
+    settings = _settings(ctx)
+    ns = argparse.Namespace(
+        profile=settings.profile,
+        local_only=local_only,
+        json=resolve(settings.output) is Output.JSON,
+    )
+    code = auth_commands.logout(ns)
+    if code != 0:
+        raise typer.Exit(code)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the command line on `argv` (default: `sys.argv[1:]`) and return its exit status.
+
+    The console script and `python -m compose_api_client.cli` both exit with this, so the program and its tests share
+    one entry point. Commands report their own errors (`handled`); what reaches here is Click's: an exit status, a
+    usage error, or an abort.
+    """
+    try:
+        result = app(args=None if argv is None else list(argv), prog_name=PROG, standalone_mode=False)
+    except click.exceptions.Exit as exc:  # --help, --version, and typer.Exit inside a callback
+        return exc.exit_code
+    except click.ClickException as exc:  # usage errors: unknown command or option, bad value, missing argument
+        exc.show()
+        return exc.exit_code
+    except (click.exceptions.Abort, KeyboardInterrupt):
+        print(f"{PROG}: cancelled", file=sys.stderr)
+        return EXIT_INTERRUPT
+    return result if isinstance(result, int) else int(ExitCode.OK)
 
 
 # -- SED-ML runs and comparisons ----------------------------------------------------------------------------------

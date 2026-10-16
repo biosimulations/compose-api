@@ -28,7 +28,7 @@ on a Dockerfile no test exercised. F3 is still open.
 **And since (2026-10-13).** **345 tests** collected, 22 of them marked `slurm` and 9 `cluster_only`. The
 NATS path is retired (#216), so `tests/common/test_nats.py`, and with it F7's race, is gone. F14's client-side
 preflight exists: `publish-client.yml` installs the built wheel into a Python 3.11 venv, checks that FastAPI is
-absent and runs `compose-api --help` before uploading. F8's locator is replaced by an injected `SSHProvider`
+absent and runs `compose-api --help` and `scripts/client-smoke.py` before uploading. F8's locator is replaced by an injected `SSHProvider`
 (`simulation_service.py:59`, `data_service.py:23`), and F9's `@lru_cache` is now at `config.py:147`, with
 `override_settings` at `:176`. Still open: F3 (`main` is unprotected; ruleset 8163803 is `disabled`), the 90% target
 in `codecov.yaml`, and F12's leftovers (`tests/simulation/dont_test_sedml.py`, `tox.ini`).

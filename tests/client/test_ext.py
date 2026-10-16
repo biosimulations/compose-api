@@ -1,5 +1,6 @@
 """The client's application layer (compose_api_client.ext) over httpx.MockTransport: no service, no network."""
 
+import asyncio
 import io
 import json
 import zipfile
@@ -17,6 +18,9 @@ from compose_api_client.ext import (
     NotFound,
     ServerError,
 )
+from compose_api_client.ext import session as session_module
+from compose_api_client.ext._policy import UnsafeRequestError, _DestinationGuard
+from compose_api_client.ext.errors import NetworkError
 
 Handler = Callable[[httpx.Request], httpx.Response]
 
@@ -223,3 +227,96 @@ async def test_async_session_waits_and_downloads(tmp_path: Path) -> None:
         state = await s.wait(7, poll=0)
         files = await s.extract(7, tmp_path)
     assert state.ok and files == [tmp_path / "results.pber"]
+
+
+@pytest.mark.parametrize(
+    ("base_url", "api", "elsewhere"),
+    [
+        *[
+            (
+                spelling,
+                "https://api.compose.test/auth/me",
+                [
+                    "https://api.compose.test:8443/auth/me",
+                    "http://api.compose.test/auth/me",
+                    "http://api.compose.test:443/auth/me",
+                    "https://api.compose.test.evil.example/auth/me",
+                    "https://user@api.compose.test/auth/me",
+                ],
+            )
+            # httpx sends each of these as https://api.compose.test, with no port.
+            for spelling in (
+                "https://api.compose.test",
+                "https://api.compose.test:443",
+                "https://API.Compose.Test/",
+                "HTTPS://api.compose.test:443/",
+            )
+        ],
+        (
+            "http://localhost:8000",
+            "http://localhost:8000/auth/me",
+            ["http://localhost/auth/me", "http://localhost:80/auth/me", "https://localhost:8000/auth/me"],
+        ),
+    ],
+)
+def test_the_destination_guard_compares_the_origin_httpx_sends_to(
+    base_url: str, api: str, elsewhere: list[str]
+) -> None:
+    guard = _DestinationGuard(base_url)
+    guard.check(httpx.Request("GET", api))  # the profile's API, however its URL was spelled
+    for url in elsewhere:
+        with pytest.raises(UnsafeRequestError):
+            guard.check(httpx.Request("GET", url))
+
+
+def _reads(seen: list[float | None]) -> Handler:
+    """Records each request's read timeout (what the transport enforces) and answers it."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.extensions["timeout"]["read"])
+        if request.url.path.endswith("/results/file"):
+            return httpx.Response(200, content=b"PK-archive")
+        return httpx.Response(200, json="0.6.0")
+
+    return handler
+
+
+@pytest.mark.parametrize(
+    ("timeout", "expected"), [(600.0, [60.0, 600.0]), (300.0, [60.0, 300.0]), (10.0, [10.0, 10.0])]
+)
+def test_a_download_may_be_silent_for_the_whole_timeout(timeout: float, expected: list[float]) -> None:
+    # A server building a large archive can say nothing for minutes; any other answer is due within 60 s.
+    seen: list[float | None] = []
+    with ComposeSession("http://compose.test", timeout=timeout, transport=httpx.MockTransport(_reads(seen))) as s:
+        assert s.version() == "0.6.0"
+        assert s.results(7) == b"PK-archive"
+    assert seen == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("timeout", "expected"), [(600.0, [60.0, 600.0]), (10.0, [10.0, 10.0])])
+async def test_an_async_download_may_be_silent_for_the_whole_timeout(timeout: float, expected: list[float]) -> None:
+    seen: list[float | None] = []
+    transport = httpx.MockTransport(_reads(seen))
+    async with AsyncComposeSession("http://compose.test", timeout=timeout, transport=transport) as s:
+        assert await s.version() == "0.6.0"
+        assert await s.results(7) == b"PK-archive"
+    assert seen == expected
+
+
+@pytest.mark.asyncio
+async def test_an_async_download_has_no_overall_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The command deadline (90 s) bounds an ordinary request from start to finish; a download that keeps making
+    # progress may take longer, so only the read timeout applies to it.
+    monkeypatch.setattr(session_module, "COMMAND_DEADLINE_SECONDS", 0.2)
+
+    async def slow(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(0.5)
+        if request.url.path.endswith("/results/file"):
+            return httpx.Response(200, content=b"PK-archive")
+        return httpx.Response(200, json="0.6.0")
+
+    async with AsyncComposeSession("http://compose.test", transport=httpx.MockTransport(slow)) as s:
+        assert await s.results(7) == b"PK-archive"
+        with pytest.raises(NetworkError, match="did not answer in time"):
+            await s.version()

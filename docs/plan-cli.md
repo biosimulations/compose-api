@@ -177,7 +177,7 @@ verbs: `run`, `status` with several IDs, `results`, `simulators`, `processes`, `
 
 | Piece | What |
 |---|---|
-| `ComposeSession(base_url=… \| client=…, timeout, retries)` / `AsyncComposeSession` | Context managers that own a `Client`. `ComposeSession.in_process(app)` builds the `ASGITransport` client tests use; `AuthenticatedClient` when a token is given (reserved for #192's Auth0). |
+| `ComposeSession(base_url=… \| client=…, tokens=, timeout)` / `AsyncComposeSession` | Context managers that own per-attempt guarded clients (`TokenSource` / `AsyncTokenSource`, `_DestinationGuard`, `trust_env=False`, `follow_redirects=False`, 1-renewal read replay on 401). |
 | `submit(file, simulator=, interval=, batch=)`, `submit_curated(engine, sbml, …)` | The `SimulationExperiment` |
 | `status(id)` → `JobState` | `.status`, `.terminal`, `.ok`, `.slurm_job`. A 404 means `SUBMITTING`, not an error, until a deadline. |
 | `wait(id, poll=, timeout=, on_update=)`, `build_status(id)`, `wait_build(id)` | The final `HpcRun` |
@@ -218,7 +218,7 @@ generalise viva-pde-particle's `compose_client.EnsembleRun` once this ships on P
 | `--url` | `COMPOSE_API_URL` | `https://compose.cam.uchc.edu` |
 | `--timeout` | `COMPOSE_API_TIMEOUT` | 300 s |
 | `--output {table,json,yaml}` | `COMPOSE_API_OUTPUT` | `table` on a TTY, `json` when piped |
-| `--token` | `COMPOSE_API_TOKEN` | none (reserved for #192) |
+| `--profile` | `COMPOSE_API_CLI_PROFILE` | `production` (`--token` CLI flag removed in 0.8.0; `COMPOSE_API_TOKEN` is env-only for automation) |
 | `--verbose` / `--quiet` | | `--verbose` logs the HTTP exchanges |
 
 **Commands.** Each operationId belongs to exactly one command:
@@ -305,7 +305,10 @@ Other details:
   - It runs when a GitHub **release** is published (the same go that deploys the docs and archives to Zenodo), or by
     hand with a tag.
   - It checks that the client's version is the tag, builds, and smoke-tests the wheel on Python 3.11 (it must import,
-    run `compose-api --help`, and pull in no FastAPI).
+    run `compose-api --help`, pull in no FastAPI, and pass `scripts/client-smoke.py`, which prepares private session
+    state and closes the sign-in listener: the code `--help` never reaches whose behaviour depends on the Python
+    version). `cli-platforms.yml` runs the same script on 3.11 on Linux, macOS and Windows for every client change,
+    and `make check` types the hand-written client a second time as Python 3.11.
   - It then uploads from the `pypi` environment, which accepts deployments only from tags and `main`. Add required
     reviewers there for a manual gate.
 - **The PyPI side**, once, by an owner of the existing project (0.1.0–0.2.0 were uploaded with a personal token from
@@ -343,8 +346,9 @@ Other details:
 
 ## Non-goals
 
-- Auth: `--token` is reserved; #192 decides the flow. (2026-10-13: `--token` is the only way today; interactive
-  login with Auth0 PKCE is open in #310.)
+- Auth: decided in 0.8.0 (`compose-api auth login|signup|status|logout` with OS keyring storage and PKCE/device
+  flows; `--token` flag removed, `COMPOSE_API_TOKEN` env-only for automation). This supersedes the alternative
+  design in #310 (a stored token file, `--token` kept).
 - A TUI or GUI (atlantis has both; not needed here).
 - Folding atlantis's `compose` group into this CLI. viva-api could later delegate to `compose-api-client`, which is
   viva-api's decision.

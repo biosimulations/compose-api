@@ -1,8 +1,13 @@
 # The `compose-api` command line
 
-`compose-api` drives the compose-api service from a terminal or a script: submit simulations, wait for them, fetch
-their results, and inspect what the service has registered. It covers every operation in the API (a test fails if
-an operation is added without a command). How it is built and why: [plan-cli.md](plan-cli.md).
+`compose-api` drives the compose-api service from a terminal or a script: sign up or in through Auth0 in your browser,
+keep the session in your operating system's credential store, submit simulations, wait for them, fetch their results,
+and inspect what the service has registered. It covers every operation in the API (a test fails if an operation is
+added without a command). How it is built and why: [plan-cli.md](plan-cli.md).
+
+Signing in identifies you to the API. It does not make your simulations private: anyone with a simulation's numeric ID
+can read its status and results (see [Authentication](authentication.md#authentication-does-not-make-a-simulation-private)).
+Roles are labels on your identity, not access controls on simulations.
 
 ## Install
 
@@ -11,20 +16,79 @@ $ pip install 'compose-api-client[cli]'      # or: uv tool install 'compose-api-
 $ compose-api --help
 ```
 
-The base package (`pip install compose-api-client`) is the Python client alone: httpx and attrs, no server
-dependencies. In this repository, `uv run compose-api ...` works with no install.
+The base package (`pip install compose-api-client`) is the Python client alone: httpx, attrs and python-dateutil, no
+server dependencies. The `[auth]` extra adds the Auth0 / keyring session layer, and `[cli]` includes `[auth]` plus the
+terminal UI. In this repository, `uv run compose-api ...` works with no install.
 
-## Connect
+## Connect and Profiles
 
 | Setting | Option | Environment | Default |
 |---|---|---|---|
-| Service | `--url` | `COMPOSE_API_URL` | `https://compose.cam.uchc.edu` |
-| HTTP timeout | `--timeout` | `COMPOSE_API_TIMEOUT` | 300 s |
+| Profile | `--profile` | `COMPOSE_API_CLI_PROFILE` | `production` |
+| Service | `--url` | `COMPOSE_API_URL` | the selected profile's `api_base_url` |
+| HTTP timeout | `--timeout` | `COMPOSE_API_TIMEOUT` | 300 s (downloads; other requests cap at 60 s) |
 | Output | `-o/--output auto\|table\|json` | `COMPOSE_API_OUTPUT` | `auto`: a table on a terminal, JSON when piped |
-| Token | `--token` | `COMPOSE_API_TOKEN` | none: anonymous. An Auth0 access token for this API identifies you ([authentication](authentication.md)) |
+| Automation token | — (env-only) | `COMPOSE_API_TOKEN` | none (uses stored session, else anonymous) |
 
 Global options go before the command: `compose-api -o json status 4192`. Results go to stdout; progress lines and
 errors go to stderr, so `compose-api -o json ... | jq` always sees clean JSON.
+
+A profile says which API to call and how to sign in to it. Two are built in:
+
+| Profile | API | Auth0 audience | Client ID |
+|---|---|---|---|
+| `production` (default) | `https://compose.cam.uchc.edu` | `https://api.compose.cam.uchc.edu` | `1FV43fysEjhTrYYRNaMEGvCteu4g2ay4` |
+| `local` | `https://api.compose-api-local` | `https://api.compose.local` | `Fp3QmULWNIhdutlBRVFm2HjPGapqdnKV` |
+
+Both use the tenant `dev-bu7yo7484tyxu6a1.us.auth0.com`, the database connection `Username-Password-Authentication`,
+the Google connection `google-oauth2` and callback port 8400. The client IDs belong to public native applications:
+they are identifiers, not secrets, and there is no client secret anywhere in the CLI.
+
+Choose a profile with `--profile NAME` or `COMPOSE_API_CLI_PROFILE`. Each setting is then taken from its environment
+variable, else from `[profiles.<name>]` in `config.toml` (under your user configuration directory), else from the
+built-in value. `compose-api config show` prints every effective value and where it came from.
+
+| Setting | Environment variable | Meaning |
+|---|---|---|
+| `api_base_url` | `COMPOSE_API_CLI_API_BASE_URL` | The API origin. `https` only, except a loopback host (`http://localhost:8000`). No path, query or credentials. |
+| `auth0_domain` | `COMPOSE_API_CLI_AUTH0_DOMAIN` | The tenant's bare host. The issuer is derived from it. |
+| `auth0_audience` | `COMPOSE_API_CLI_AUTH0_AUDIENCE` | The API identifier, exactly as the server's `AUTH0_AUDIENCE`. It is not the URL you call. |
+| `auth0_client_id` | `COMPOSE_API_CLI_AUTH0_CLIENT_ID` | The native application's public client ID. |
+| `database_connection` | `COMPOSE_API_CLI_DATABASE_CONNECTION` | Optional: steers `--provider email` to this connection. |
+| `google_connection` | `COMPOSE_API_CLI_GOOGLE_CONNECTION` | Needed for `--provider google` in the browser. |
+| `callback_port` | `COMPOSE_API_CLI_CALLBACK_PORT` | The registered loopback callback port, `http://127.0.0.1:<port>/callback`. Default 8400. |
+| `ca_bundle` | `COMPOSE_API_CLI_CA_BUNDLE` | Absolute path to extra CA certificates (PEM) for an API with a private CA. |
+
+## Sign up and sign in
+
+Passwords, MFA, email verification and Google consent all happen on Auth0's pages in your own browser. The CLI never
+asks for a password, and never accepts a password or `--token` flag on the command line.
+
+```bash
+compose-api auth signup                     # create an email-and-password account
+compose-api auth signup --provider google   # first sign-in with Google creates the account
+compose-api auth login                      # returning user: choose email or Google on the page
+compose-api auth login --provider google
+compose-api auth login --device             # sign in on another device (SSH, containers)
+compose-api auth status                     # what is stored locally; contacts nothing
+compose-api auth status --verify            # renews if needed and asks GET /auth/me to confirm the identity
+compose-api auth logout                     # revokes the refresh token with Auth0, then erases the session
+compose-api auth logout --local-only
+```
+
+The session is one record in your operating system's credential store (`macOS Keychain` or Linux `Secret Service`),
+under `compose-api.cli.v1.<digest>`. Plaintext and unknown keyring backends are refused; there is no file fallback.
+On Windows (where Credential Manager's 2,560-byte UTF-16 limit is smaller than a realistic ~3.4 KB session, so
+`auth login` refuses before opening a browser; #320) or on hosts without a credential store, use `--ephemeral-auth`
+before the command (for example
+`compose-api --ephemeral-auth --device simulators list`),
+which signs in for a single command in memory without requesting a refresh token.
+
+For CI and non-interactive automation, set `COMPOSE_API_TOKEN` in the environment. When set, it takes precedence over a
+stored session for the active profile (printing a one-line notice to stderr), is never renewed or printed, and is still
+bound by the destination guard (`_DestinationGuard`), redirect refusal (`follow_redirects=False`) and environment
+isolation (`trust_env=False`). If `--url` is overridden to an origin different from the profile's `api_base_url`,
+neither a stored session nor `COMPOSE_API_TOKEN` is sent to it.
 
 ## A run, start to finish
 
@@ -46,6 +110,14 @@ $ compose-api wait 4195
 $ compose-api results 4195 --extract out/
 ```
 
+Once signed in (`compose-api auth login`), every command sends the profile's session; without one, commands call the
+API anonymously, as it allows. Neither ever starts a sign-in on its own:
+
+```bash
+compose-api simulations list                               # with the stored session, or anonymously
+compose-api --ephemeral-auth run experiment.omex           # sign in for this one command; keep nothing
+```
+
 - **Simulation ids.** A simulation id is what `run` prints (`simulation_database_id`), and what `status`, `wait`,
   `results`, `events`, `trace` and `datasets list --sim` take. To find one later:
 
@@ -60,8 +132,6 @@ $ compose-api results 4195 --extract out/
   Runs carry **labels**, written by the service (`source`, `environment`, `solver`, `model`, ...), and **tags** and a
   **description** given at submission: `compose-api run x.omex --tag demo --tag repressilator --description "..."`.
   `--label key:value` and `--tag` filter the list; each is repeatable, and all must match.
-
-  The list shows only simulations you can read; once auth is in place, that's yours and the public ones.
 - `--simulator` names a prebuilt simulator image the service is configured with. Without it, the service builds one
   from the document's dependencies, and `build-status <simulator_database_id>` follows that build.
 - `status` takes several ids and asks for them in one call.
@@ -108,17 +178,22 @@ $ compose-api datasets get <id> -O out/            # just that file, not the who
 A run's SLURM log is a dataset too (`job.out`, kind `log`): `compose-api datasets list --sim 4195 --kind log`, then
 `datasets get` on its id. A dataset is readable by whoever can read its simulation.
 
-## Exit codes
+## Output and exit status
 
-| Code | Meaning |
-|---|---|
-| 0 | Success; with `--wait`, the job completed |
-| 1 | The job ended failed, timed out, out of memory or cancelled (or `openapi --diff` found skew) |
-| 2 | Usage error (a bad option, a missing file) |
-| 3 | The service rejected the request or failed (the reason and any document violations are printed) |
-| 4 | Not found (an unknown id, or results that do not exist yet) |
-| 5 | `--wait-timeout` passed before the job finished |
-| 130 | Interrupted |
+Results go to stdout; progress, prompts and human error lines go to stderr. With `--json`, an error is also printed to
+stdout as `{"error": {"category": ..., "message": ..., "exit_code": ...}}`.
+
+| Exit | Category | Meaning |
+|---|---|---|
+| 0 | | Success; with `--wait`, the job completed |
+| 1 | `not_found`, `invalid_request`, `server_error`, `api_error`, `job_failed`, `uncertain`, `internal` | The API answered unsuccessfully (404, 400/422, 500, other), the job ended other than completed, a submission outcome was ambiguous, or the CLI hit an internal bug |
+| 2 | `usage` | A malformed command line, a removed option (`--token`), or a file argument that cannot be used |
+| 3 | `authentication` | No session, an expired one that cannot be renewed, a refused or cancelled sign-in, or credentials the API rejected |
+| 4 | `forbidden` | The API refused the request for this account (403) |
+| 5 | `network`, `rate_limited`, `uncertain` | Auth0 or the API could not be reached, timed out, is unavailable (502/503/504), or is rate limiting (429) |
+| 6 | `configuration`, `storage`, `protocol`, `interaction` | A profile, credential-store, protocol or local-browser problem |
+| 7 | `wait_timeout` | `--wait-timeout` passed before the job finished |
+| 130 | | Cancelled (Ctrl-C) |
 
 So `compose-api run x.omex --wait && next-step` runs `next-step` only if the simulation completed.
 
@@ -150,12 +225,16 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 
 **Options**:
 
-* `--url TEXT`: Service base URL.  [env var: COMPOSE_API_URL; default: https://compose.cam.uchc.edu]
-* `--timeout FLOAT`: HTTP timeout, seconds.  [env var: COMPOSE_API_TIMEOUT; default: 300.0]
+* `--url TEXT`: Service base URL.  [env var: COMPOSE_API_URL]
+* `--profile TEXT`: Profile to use (default: production).  [env var: COMPOSE_API_CLI_PROFILE]
+* `--timeout FLOAT`: HTTP timeout, seconds (downloads use the full value; other requests cap at 60 s).  [env var: COMPOSE_API_TIMEOUT; default: 300.0]
 * `-o, --output [auto|table|json]`: auto: table on a terminal, else json.  [env var: COMPOSE_API_OUTPUT; default: auto]
-* `--token TEXT`: Bearer token (when auth is on).  [env var: COMPOSE_API_TOKEN]
 * `-v, --verbose`: Log HTTP requests; tracebacks on errors.
 * `-q, --quiet`: No progress lines.
+* `--ephemeral-auth`: Sign in for this command only, keeping credentials in memory (for hosts without a credential store).
+* `--device`: With --ephemeral-auth: sign in on another device (RFC 8628).
+* `--no-browser`: With --ephemeral-auth: print the sign-in URL instead of opening it.
+* `--version`: Print this program's version and exit.
 * `--install-completion`: Install completion for the current shell.
 * `--show-completion`: Show completion for the current shell, to copy it or customize the installation.
 * `--help`: Show this message and exit.
@@ -187,6 +266,8 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 * `biomodels`: EBI BioModels: search, describe, download,...
 * `biosimulations`: biosimulations.org projects: search,...
 * `suites`: Regression and reproducibility suites of...
+* `auth`: Sign up, sign in, check or end a session.
+* `config`: Inspect the CLI configuration.
 
 ## `compose-api health`
 
@@ -1386,6 +1467,128 @@ $ compose-api suites run [OPTIONS] NAME
 **Arguments**:
 
 * `NAME`: The suite, e.g. biomodels-ode-sample.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+## `compose-api auth`
+
+Sign up, sign in, check or end a session.
+
+**Usage**:
+
+```console
+$ compose-api auth [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `signup`: Create an account in the browser, then...
+* `login`: Sign in in the browser or with a device code.
+* `status`: Show the stored session without contacting...
+* `logout`: Revoke the refresh token with Auth0 and...
+
+### `compose-api auth signup`
+
+Create an account in the browser, then sign in.
+
+**Usage**:
+
+```console
+$ compose-api auth signup [OPTIONS]
+```
+
+**Options**:
+
+* `--provider [email|google]`: Identity provider: email or google.  [default: email]
+* `--device`: Sign in on another device (RFC 8628).
+* `--no-browser`: Print the sign-in URL instead of opening it.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api auth login`
+
+Sign in in the browser or with a device code.
+
+**Usage**:
+
+```console
+$ compose-api auth login [OPTIONS]
+```
+
+**Options**:
+
+* `--provider [email|google]`: Identity provider: email or google.
+* `--device`: Sign in on another device (RFC 8628).
+* `--no-browser`: Print the sign-in URL instead of opening it.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api auth status`
+
+Show the stored session without contacting any server, unless --verify is given.
+
+**Usage**:
+
+```console
+$ compose-api auth status [OPTIONS]
+```
+
+**Options**:
+
+* `--verify`: Refresh if needed and confirm the identity with the API.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api auth logout`
+
+Revoke the refresh token with Auth0 and erase the stored session.
+
+**Usage**:
+
+```console
+$ compose-api auth logout [OPTIONS]
+```
+
+**Options**:
+
+* `--local-only`: Erase the local session without contacting Auth0.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+## `compose-api config`
+
+Inspect the CLI configuration.
+
+**Usage**:
+
+```console
+$ compose-api config [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `show`: Print the effective profile and where each...
+
+### `compose-api config show`
+
+Print the effective profile and where each value came from. Profiles hold no secrets.
+
+**Usage**:
+
+```console
+$ compose-api config show [OPTIONS]
+```
 
 **Options**:
 

@@ -10,6 +10,8 @@ An API server for reproducible biological workflows and cosimulations.
 
 - **Github repository**: <https://github.com/biosimulations/compose-api/>
 - **Documentation** <https://biosimulations.github.io/compose-api/>
+- **Command-line client**: `compose-api`, for signing in and calling the API from a terminal. See
+  [docs/cli.md](docs/cli.md).
 
 ## Getting started with your project
 

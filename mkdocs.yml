@@ -21,6 +21,7 @@ exclude_docs: |
   trd3-*.md
   cip/
   grant/
+  cli-auth-vs-vcell.md
 
 nav:
   - Home: index.md
