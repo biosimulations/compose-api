@@ -177,9 +177,11 @@ On a host without a usable credential store, put `--ephemeral-auth` before an AP
 (`compose-api --ephemeral-auth run x.omex`): it signs in for that one command, requests no refresh token, keeps the
 session in memory and forgets it when the command ends.
 
-Real stores are exercised by `tests/cli/test_os_keyring.py` (opt-in: `COMPOSE_API_TEST_OS_KEYRING=1`, synthetic
-records under random names, always deleted). On 2026-10-07 it passed against the macOS Keychain (macOS 27.0.1) and
-GNOME Keyring's Secret Service (Debian 13, in a container), where a locked keyring was also refused before sign-in.
-Crash paths use deterministic fakes. Windows Credential Manager and its ACLs, and live refresh and revocation driven by
-the CLI, remain release gates; the `CLI platforms` workflow runs the same tests on Windows, and passing mocks do not
-close them.
+Real stores are exercised by `tests/cli/test_os_keyring.py` (opt-in: `COMPOSE_API_TEST_OS_KEYRING=1`, synthetic records
+under random names, always deleted). On 2026-10-07 it passed against the macOS Keychain (macOS 27.0.1) and GNOME
+Keyring's Secret Service (Debian 13, in a container), where a locked keyring was also refused before sign-in. On
+2026-10-16 it passed against Windows Credential Manager (Windows Server 2025, GitHub's `windows-latest` runner, in the
+`CLI platforms` workflow, which runs it on every client change): a realistic session of each length parity was saved,
+reloaded and found as UTF-8 in one item, and a renewal was read back as the successor. Crash paths use deterministic
+fakes. Credential Manager and its ACLs on a real Windows desktop, and live refresh and revocation driven by the CLI,
+remain release gates; a CI runner and passing mocks do not close them.

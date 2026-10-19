@@ -5,23 +5,28 @@ import os
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from compose_api_client.auth import state as state_module
 from compose_api_client.auth.models import SessionRecord
 from compose_api_client.auth.state import FileState, SessionState, _is_junction
-from compose_api_client.auth.storage import MAX_RECORD_BYTES, SERVICE, WINDOWS_ITEM_BYTES, KeyringCredentialStore
+from compose_api_client.auth.storage import (
+    MAX_RECORD_BYTES,
+    PROBE_VALUE,
+    SERVICE,
+    WINDOWS_ITEM_BYTES,
+    KeyringCredentialStore,
+)
 from compose_api_client.auth.windows_state import read_credential, write_credential
 from compose_api_client.ext.errors import StorageError
 from keyring.backends import macOS
 from keyring.backends.fail import Keyring as FailKeyring
 from keyring.errors import KeyringLocked
-from pydantic import SecretStr
 
-from tests.cli.test_os_keyring import realistic_session, serialized, with_parity
+from tests.cli.test_os_keyring import realistic_session, serialized, with_parity, with_size
 from tests.cli.test_session import grant
-from tests.fixtures.cli_fixtures import FakeCredentialManager, cli_settings
+from tests.fixtures.cli_fixtures import FakeCredentialManager, WinError, cli_settings
 
 
 def backend(monkeypatch: pytest.MonkeyPatch) -> tuple[KeyringCredentialStore, dict[str, str]]:
@@ -257,16 +262,68 @@ def test_windows_store_keeps_a_realistic_session_in_one_item(
     assert store.load(binding) is None
 
 
+@pytest.mark.parametrize("size", [WINDOWS_ITEM_BYTES - 1, WINDOWS_ITEM_BYTES])
+def test_windows_store_takes_a_record_up_to_the_item_limit(
+    windows_credential_manager: FakeCredentialManager, size: int
+) -> None:
+    """2559 bytes is the tightest case: its pad byte brings the blob to exactly the item's 2560."""
+    store = windows_store()
+    binding = record().binding_key
+    session = with_size(realistic_session(binding), size)
+    assert len(serialized(session)) == size
+    store.save(binding, session)
+    assert store.load(binding) == session
+    assert len(windows_credential_manager.items[f"{SERVICE}.{binding}"]["CredentialBlob"]) == WINDOWS_ITEM_BYTES
+
+
 def test_windows_store_refuses_a_record_too_big_for_one_item_before_writing(
     windows_credential_manager: FakeCredentialManager,
 ) -> None:
     store = windows_store()
     binding = record().binding_key
-    oversized = realistic_session(binding).model_copy(update={"access_token": SecretStr("a" * WINDOWS_ITEM_BYTES)})
-    with pytest.raises(StorageError, match="atomic item limit"):
+    oversized = with_size(realistic_session(binding), WINDOWS_ITEM_BYTES + 1)
+    # The refusal comes after a completed sign-in, so it says what still works.
+    with pytest.raises(StorageError, match=r"atomic item limit.*--ephemeral-auth"):
         store.save(binding, oversized)
     assert windows_credential_manager.writes == []
     assert store.load(binding) is None
+
+
+def test_windows_probe_writes_as_a_session_is_saved(
+    windows_credential_manager: FakeCredentialManager, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Natively, as UTF-8 with CRED_PERSIST_LOCAL_MACHINE, not as keyring writes (UTF-16, CRED_PERSIST_ENTERPRISE).
+    The probe value's odd length takes the padded path."""
+    written: list[dict[str, Any]] = []
+    write = windows_credential_manager.CredWrite
+
+    def recording(credential: dict[str, Any], flags: int) -> None:
+        write(credential, flags)
+        written.append(windows_credential_manager.items[credential["TargetName"]])
+
+    monkeypatch.setattr(windows_credential_manager, "CredWrite", recording)
+    windows_store().probe()
+    [probe] = written
+    assert probe["Persist"] == FakeCredentialManager.CRED_PERSIST_LOCAL_MACHINE
+    assert probe["CredentialBlob"] == PROBE_VALUE.encode() + b"\0" and len(PROBE_VALUE) % 2 == 1
+    assert windows_credential_manager.items == {}, "deleted through keyring, as logout deletes"
+
+
+def test_a_windows_store_refusing_native_writes_fails_the_probe(
+    windows_credential_manager: FakeCredentialManager, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Caught before the browser opens, even while keyring's own write path still works."""
+    write = windows_credential_manager.CredWrite
+
+    def refuse_native(credential: dict[str, Any], flags: int) -> None:
+        if credential["Persist"] == FakeCredentialManager.CRED_PERSIST_LOCAL_MACHINE:
+            raise WinError(5, "CredWrite", "Access is denied.")
+        write(credential, flags)
+
+    monkeypatch.setattr(windows_credential_manager, "CredWrite", refuse_native)
+    with pytest.raises(StorageError, match="locked or not writable"):
+        windows_store().probe()
+    assert windows_credential_manager.items == {}
 
 
 def test_windows_store_refuses_an_item_that_is_not_utf8(windows_credential_manager: FakeCredentialManager) -> None:

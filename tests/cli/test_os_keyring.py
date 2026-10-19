@@ -67,7 +67,7 @@ def serialized(record: SessionRecord) -> str:
     payload = record.model_dump(mode="json")
     payload["access_token"] = record.access_token.get_secret_value()
     payload["refresh_token"] = None if record.refresh_token is None else record.refresh_token.get_secret_value()
-    return json.dumps(payload, separators=(",", ":"))
+    return json.dumps(payload, separators=(",", ":"), ensure_ascii=True)
 
 
 def with_parity(record: SessionRecord, parity: int) -> SessionRecord:
@@ -75,6 +75,14 @@ def with_parity(record: SessionRecord, parity: int) -> SessionRecord:
     if len(serialized(record)) % 2 == parity or record.refresh_token is None:
         return record
     return record.model_copy(update={"refresh_token": SecretStr(record.refresh_token.get_secret_value() + "x")})
+
+
+def with_size(record: SessionRecord, size: int) -> SessionRecord:
+    """`record`, its refresh token lengthened so that the stored record is exactly `size` bytes."""
+    assert record.refresh_token is not None
+    grow = size - len(serialized(record))
+    assert grow >= 0, "a realistic session is smaller than the sizes these tests pin"
+    return record.model_copy(update={"refresh_token": SecretStr(record.refresh_token.get_secret_value() + "x" * grow)})
 
 
 def test_a_realistic_session_fits_a_windows_credential_only_as_utf8() -> None:
@@ -128,6 +136,39 @@ def test_the_platform_store_replaces_a_session_in_place() -> None:
         store.save(binding, successor)
         loaded = store.load(binding)
         assert loaded is not None and loaded.refresh_token == SecretStr("second") and loaded.generation == 1
+        if type(backend).__module__ == "keyring.backends.Windows":
+            import pywintypes
+            import win32cred
+
+            # keyring's own set_password would have moved the first item to `<account>@<service>`.
+            with pytest.raises(pywintypes.error) as missing:
+                win32cred.CredRead(Type=win32cred.CRED_TYPE_GENERIC, TargetName=f"{binding}@{SERVICE}.{binding}")
+            assert missing.value.winerror == 1168, "no shadow copy of the spent credential"
+            item = win32cred.CredRead(Type=win32cred.CRED_TYPE_GENERIC, TargetName=f"{SERVICE}.{binding}")
+            raw = serialized(successor)
+            assert item["CredentialBlob"] == raw.encode() + b"\0" * (len(raw) % 2), "the one item holds the successor"
+    finally:
+        store.delete(binding)
+    assert store.load(binding) is None
+
+
+@opt_in
+@pytest.mark.parametrize("size", [WINDOWS_CREDENTIAL_BLOB_LIMIT - 1, WINDOWS_CREDENTIAL_BLOB_LIMIT])
+def test_the_platform_store_keeps_a_session_at_the_windows_item_limit(size: int) -> None:
+    """A record of 2559 bytes is the tightest case on Windows: its pad byte makes the blob exactly 2560."""
+    backend = keyring.core.get_keyring()
+    store = KeyringCredentialStore(backend)
+    binding = secrets.token_hex(32)
+    record = with_size(realistic_session(binding), size)
+    assert len(serialized(record)) == size
+    try:
+        store.save(binding, record)
+        assert store.load(binding) == record
+        if type(backend).__module__ == "keyring.backends.Windows":
+            import win32cred
+
+            item = win32cred.CredRead(Type=win32cred.CRED_TYPE_GENERIC, TargetName=f"{SERVICE}.{binding}")
+            assert len(item["CredentialBlob"]) == WINDOWS_CREDENTIAL_BLOB_LIMIT
     finally:
         store.delete(binding)
     assert store.load(binding) is None
