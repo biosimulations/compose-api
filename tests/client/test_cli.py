@@ -13,6 +13,7 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
+import click
 import httpx
 import pytest
 import yaml
@@ -464,19 +465,21 @@ def test_every_command_takes_json(service: Callable[..., FakeService]) -> None:
     from typer.main import get_command
 
     group = get_command(cli_app)
+    # (top-level name, command): a group's subcommands are listed under the group's name.
     commands = [
-        (parent, name, sub)
-        for parent, cmd in group.commands.items()  # type: ignore[attr-defined]
-        for name, sub in (
-            [(parent, cmd)] if not hasattr(cmd, "commands") else [(parent, s) for s in cmd.commands.values()]
-        )
+        (top, sub)
+        for top, cmd in group.commands.items()  # type: ignore[attr-defined]
+        for sub in (cmd.commands.values() if hasattr(cmd, "commands") else [cmd])
     ]
-    assert commands and all(
-        any(p.name == "json_output" for p in sub.params) for parent, _name, sub in commands if parent != "auth"
-    )
-    assert all(
-        not any(p.name == "json_output" for p in sub.params) for parent, _name, sub in commands if parent == "auth"
-    )
+
+    def takes_json(command: click.Command) -> bool:
+        return any(p.name == "json_output" for p in command.params)
+
+    auth = [sub for top, sub in commands if top == "auth"]
+    others = [sub for top, sub in commands if top != "auth"]
+    assert {sub.name for sub in auth} == {"signup", "login", "status", "logout"}, "the auth group is where it was"
+    assert others and all(takes_json(sub) for sub in others)
+    assert not any(takes_json(sub) for sub in auth)
 
     service()
     r = runner.invoke(app, ["--output", "table", "simulations", "show", "4334", "--json"])

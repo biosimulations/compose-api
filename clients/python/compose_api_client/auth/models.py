@@ -29,7 +29,7 @@ class Provider(StrEnum):
 
 
 class SignInMethod(StrEnum):
-    """How to reach the person signing in. `AUTO` decides from the environment (`auto_sign_in_method`)."""
+    """How to reach the person signing in. `AUTO` decides from the environment (`auth.browser.resolve_method`)."""
 
     AUTO = "auto"
     BROWSER = "browser"  # the system browser, with the loopback callback

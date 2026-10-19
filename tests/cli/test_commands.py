@@ -12,7 +12,8 @@ import click
 import compose_api_client.profiles
 import pytest
 import typer
-from compose_api_client.cli.commands import __version__, app, main
+from compose_api_client.auth.models import Provider, SignInMethod
+from compose_api_client.cli.commands import METHODS, PROVIDERS, __version__, app, main
 from compose_api_client.ext.errors import ExitCode
 from compose_api_client.profiles import BUILTIN_PROFILES, PROFILE_FIELDS
 
@@ -148,6 +149,12 @@ def test_every_documented_command_is_registered(capsys: pytest.CaptureFixture[st
     assert f"Usage: compose-api {' '.join(path)}" in click.unstyle(capsys.readouterr().out)
 
 
+def test_the_option_choices_are_the_enums() -> None:
+    # Literal in commands.py, so building the CLI does not import the auth package.
+    assert list(METHODS.choices) == [method.value for method in SignInMethod]
+    assert list(PROVIDERS.choices) == [provider.value for provider in Provider]
+
+
 def test_provider_defaults() -> None:
     auth = typer.main.get_group(app).commands["auth"]
     assert isinstance(auth, click.Group)
@@ -177,6 +184,7 @@ def test_provider_defaults() -> None:
         ["simulators", "list", "--method", "device"],  # interactive sign-in is never implied
         ["--method", "device", "simulators", "list"],
         ["--method", "url", "simulators", "list"],
+        ["--method", "auto", "simulators", "list"],  # given at all, it needs --ephemeral-auth
     ],
 )
 def test_usage_errors_exit_2_without_output(
@@ -205,8 +213,11 @@ def test_a_refused_secret_option_never_echoes_its_value(
     assert "SECRET-SENTINEL" not in captured.out + captured.err
 
 
-def test_method_needs_ephemeral_auth(capsys: pytest.CaptureFixture[str], no_network_or_browser: list[str]) -> None:
-    assert main(["--method", "device", "simulators", "list"]) == ExitCode.USAGE
+@pytest.mark.parametrize("method", ["device", "auto"])
+def test_method_needs_ephemeral_auth(
+    capsys: pytest.CaptureFixture[str], no_network_or_browser: list[str], method: str
+) -> None:
+    assert main(["--method", method, "simulators", "list"]) == ExitCode.USAGE
     message = "--method chooses how --ephemeral-auth signs in, so it needs --ephemeral-auth"
     assert message in " ".join(capsys.readouterr().err.split())
 

@@ -254,6 +254,12 @@ app.add_typer(auth_app, name="auth")
 config_app = typer.Typer(help="Inspect the CLI configuration.", no_args_is_help=True)
 app.add_typer(config_app, name="config")
 
+# Literal lists, so building the CLI does not import the auth package; tests/cli/test_commands.py keeps them in step.
+#: The identity providers `auth signup` / `auth login` can start with (`compose_api_client.auth.models.Provider`).
+PROVIDERS = click.Choice(["email", "google"])
+#: How a sign-in reaches the person (`compose_api_client.auth.models.SignInMethod`).
+METHODS = click.Choice(["auto", "browser", "url", "device"])
+
 
 def _print_version(value: bool) -> None:
     """`--version`: this client's version. The `version` command asks the server for its own."""
@@ -318,7 +324,8 @@ def root(
             soft_wrap=True,
         )
         raise typer.Exit(EXIT_USAGE)
-    if method != "auto" and not ephemeral_auth:
+    # Given at all, even as `--method auto`: only --ephemeral-auth reads it.
+    if ctx.get_parameter_source("method") not in (None, click.core.ParameterSource.DEFAULT) and not ephemeral_auth:
         raise click.UsageError("--method chooses how --ephemeral-auth signs in, so it needs --ephemeral-auth")
     ctx.obj = Settings(
         url=url if url is not None else DEFAULT_URL,
@@ -1255,12 +1262,6 @@ def openapi(
     emit(settings.output, report)
     if report["only_in_client"] or report["only_in_service"] or report["moved"]:
         raise typer.Exit(EXIT_JOB)
-
-
-#: The identity providers `auth signup` / `auth login` can start with (`compose_api_client.auth.models.Provider`).
-PROVIDERS = click.Choice(["email", "google"])
-#: How a sign-in reaches the person (`compose_api_client.auth.models.SignInMethod`).
-METHODS = click.Choice(["auto", "browser", "url", "device"])
 
 
 @config_app.command("show")
