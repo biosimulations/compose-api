@@ -31,33 +31,55 @@ from compose_api_client.profiles import requested_scopes
 BrowserLauncher: TypeAlias = Callable[[str], bool]
 
 
+def _has_display() -> bool:
+    """Whether a graphical browser can open: macOS and Windows always have a desktop; Linux needs X11 or Wayland."""
+    return sys.platform in ("darwin", "win32") or bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
+def _auto() -> tuple[SignInMethod, str]:
+    """What `SignInMethod.AUTO` resolves to here, and why (the reason is printed when it picks the device code)."""
+    if os.environ.get("CODESPACES"):
+        # A codespace opened in a web browser cannot receive a callback on 127.0.0.1; one opened in desktop VS Code
+        # could, but nothing tells the two apart, and the device code works in both.
+        return SignInMethod.DEVICE, "this is a GitHub Codespace"
+    if os.environ.get("BROWSER"):
+        return SignInMethod.BROWSER, "$BROWSER is set"
+    if os.environ.get("SSH_CONNECTION"):
+        return SignInMethod.DEVICE, "this is an SSH session"
+    if not _has_display():
+        return SignInMethod.DEVICE, "this host has no display"
+    return SignInMethod.BROWSER, "a browser can open here"
+
+
 def resolve_method(requested: SignInMethod) -> SignInMethod:
     """What `SignInMethod.AUTO` means here: device over SSH, browser when a browser can plausibly open.
 
-    `$BROWSER` wins over everything: VS Code Remote-SSH and Codespaces set it and forward the callback port, so the
-    browser flow works there despite `SSH_CONNECTION`. `SSH_CONNECTION` is the only remote signal on macOS and
+    `$BROWSER` wins over SSH and a missing display: VS Code Remote-SSH and WSL set it and forward the callback port,
+    so the browser flow works there despite `SSH_CONNECTION` (`open_system_browser` hands the link to it). A GitHub
+    Codespace is the exception and gets the device code. `SSH_CONNECTION` is the only remote signal on macOS and
     Windows, where there is no display variable. A host with no display cannot open a browser, so it gets the device
-    code.
+    code. An explicit choice is returned as it is.
     """
-    if requested is not SignInMethod.AUTO:
-        return requested
-    if os.environ.get("BROWSER"):
-        return SignInMethod.BROWSER
-    if os.environ.get("SSH_CONNECTION"):
-        return SignInMethod.DEVICE
-    if sys.platform not in ("darwin", "win32") and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
-        return SignInMethod.DEVICE
-    return SignInMethod.BROWSER
+    return _auto()[0] if requested is SignInMethod.AUTO else requested
+
+
+def auto_reason() -> str:
+    """Why `SignInMethod.AUTO` resolves as it does here."""
+    return _auto()[1]
 
 
 def open_system_browser(url: str) -> bool:
-    """Hand the URL to the desktop's browser; False when there is none to hand it to."""
-    if sys.platform not in ("darwin", "win32") and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
-        return False  # with no display, webbrowser would start a text browser inside this terminal
+    """Hand the URL to the desktop's browser, or to `$BROWSER` on a host without one; False when there is neither."""
     try:
-        return webbrowser.open(url, new=1)
+        if _has_display():
+            return webbrowser.open(url, new=1)
+        if os.environ.get("BROWSER"):
+            # A handler such as VS Code Remote-SSH's or wslview, and only that: webbrowser's other choices without a
+            # display are text browsers, which would take over this terminal.
+            return webbrowser.get().open(url, new=1)
     except webbrowser.Error:
         return False
+    return False
 
 
 async def browser_sign_in(

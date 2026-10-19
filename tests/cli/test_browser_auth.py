@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import logging
 import socket
+import webbrowser
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -11,7 +12,7 @@ from urllib.parse import parse_qsl, urlsplit
 
 import httpx
 import pytest
-from compose_api_client.auth.browser import browser_sign_in, resolve_method
+from compose_api_client.auth.browser import auto_reason, browser_sign_in, open_system_browser, resolve_method
 from compose_api_client.auth.callback import CONNECTION_TIMEOUT_SECONDS, CallbackListener, CallbackResult
 from compose_api_client.auth.models import Provider, SessionRecord, SignInMethod, SignInRequest
 from compose_api_client.auth.oauth import Auth0OAuthClient
@@ -263,7 +264,7 @@ async def test_google_without_a_configured_connection_fails_before_anything(
     [
         (None, None, ":0", "linux", SignInMethod.BROWSER),
         ("1", None, None, "darwin", SignInMethod.DEVICE),  # SSH into a Mac: no display variable to check
-        ("1", "wslview", None, "linux", SignInMethod.BROWSER),  # Remote-SSH/Codespaces forward the port
+        ("1", "wslview", None, "linux", SignInMethod.BROWSER),  # Remote-SSH and WSL forward the port
         (None, None, None, "linux", SignInMethod.DEVICE),  # headless: nothing could open a browser
         (None, None, None, "darwin", SignInMethod.BROWSER),  # a desktop Mac always has one
     ],
@@ -276,21 +277,88 @@ def test_auto_picks_device_over_ssh_and_browser_elsewhere(
     platform: str,
     expected: SignInMethod,
 ) -> None:
-    for name, value in (
-        ("SSH_CONNECTION", ssh),
-        ("BROWSER", browser_env),
-        ("DISPLAY", display),
-        ("WAYLAND_DISPLAY", None),
-    ):
-        if value is None:
-            monkeypatch.delenv(name, raising=False)
-        else:
-            monkeypatch.setenv(name, value)
+    _environment(monkeypatch, SSH_CONNECTION=ssh, BROWSER=browser_env, DISPLAY=display)
     monkeypatch.setattr("sys.platform", platform)
     assert resolve_method(SignInMethod.AUTO) is expected
     # An explicit choice is never second-guessed.
     assert resolve_method(SignInMethod.URL) is SignInMethod.URL
     assert resolve_method(SignInMethod.DEVICE) is SignInMethod.DEVICE
+
+
+def test_auto_picks_device_in_a_codespace_even_with_browser_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A codespace opened in a web browser cannot receive the callback on 127.0.0.1, whatever $BROWSER does with a link.
+    _environment(monkeypatch, CODESPACES="true", BROWSER="/vscode/bin/helpers/browser.sh")
+    monkeypatch.setattr("sys.platform", "linux")
+    assert resolve_method(SignInMethod.AUTO) is SignInMethod.DEVICE
+    assert auto_reason() == "this is a GitHub Codespace"
+    assert resolve_method(SignInMethod.BROWSER) is SignInMethod.BROWSER
+
+
+@pytest.mark.parametrize(
+    ("display", "browser_env", "platform", "handed_to"),
+    [
+        (":0", None, "linux", "default"),  # a Linux desktop
+        (None, None, "darwin", "default"),  # macOS has no display variable and always a desktop
+        (None, "/vscode/bin/helpers/browser.sh", "linux", "$BROWSER"),  # Remote-SSH: the helper opens it locally
+        (None, None, "linux", None),  # headless with no handler: nothing to hand it to
+    ],
+)
+def test_the_system_browser_is_the_desktop_or_browser_env(
+    monkeypatch: pytest.MonkeyPatch,
+    display: str | None,
+    browser_env: str | None,
+    platform: str,
+    handed_to: str | None,
+) -> None:
+    _environment(monkeypatch, DISPLAY=display, BROWSER=browser_env)
+    monkeypatch.setattr("sys.platform", platform)
+    handed: list[tuple[str, str]] = []
+
+    def default_open(url: str, new: int = 0, autoraise: bool = True) -> bool:
+        handed.append(("default", url))  # webbrowser's whole list, text browsers included
+        return True
+
+    class FirstChoice:
+        def open(self, url: str, new: int = 0, autoraise: bool = True) -> bool:
+            handed.append(("$BROWSER", url))
+            return True
+
+    monkeypatch.setattr(webbrowser, "open", default_open)
+    monkeypatch.setattr(webbrowser, "get", lambda using=None: FirstChoice())
+    assert open_system_browser("https://tenant.example/authorize") is (handed_to is not None)
+    assert handed == ([] if handed_to is None else [(handed_to, "https://tenant.example/authorize")])
+
+
+@pytest.mark.parametrize("failure", ["no handler", "handler failed"])
+def test_a_browser_env_that_does_not_open_is_not_a_browser(monkeypatch: pytest.MonkeyPatch, failure: str) -> None:
+    _environment(monkeypatch, BROWSER="/no/such/browser-helper")
+    monkeypatch.setattr("sys.platform", "linux")
+
+    class Fails:
+        def open(self, url: str, new: int = 0, autoraise: bool = True) -> bool:
+            return False  # GenericBrowser: the command exited non-zero, or could not start
+
+    def get(using: str | None = None) -> Fails:
+        if failure == "no handler":
+            raise webbrowser.Error("could not locate runnable browser")
+        return Fails()
+
+    def default_open(url: str, new: int = 0, autoraise: bool = True) -> bool:
+        raise AssertionError("without a display, webbrowser's other choices are text browsers")
+
+    monkeypatch.setattr(webbrowser, "get", get)
+    monkeypatch.setattr(webbrowser, "open", default_open)
+    assert open_system_browser("https://tenant.example/authorize") is False
+
+
+def _environment(monkeypatch: pytest.MonkeyPatch, **values: str | None) -> None:
+    """Set the variables `auto` and the launcher read, clearing every one not given."""
+    for name in ("SSH_CONNECTION", "BROWSER", "CODESPACES", "DISPLAY", "WAYLAND_DISPLAY"):
+        value = values.get(name)
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
 
 
 @pytest.mark.asyncio

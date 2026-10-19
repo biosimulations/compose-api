@@ -89,7 +89,7 @@ async def device_sign_in(
         await client.device_authorization(scopes), tenant_host=client.settings.auth0_domain
     )
     lifetime = min(authorization.expires_in, timeout)
-    notify(_instructions(authorization, request.provider, round(lifetime / 60) or 1))
+    notify(_instructions(authorization, request.provider, round(lifetime / 60) or 1, signup=request.signup))
     deadline = monotonic() + lifetime
     interval = float(authorization.interval)
     while True:
@@ -123,7 +123,7 @@ def _next_interval(exc: OAuthErrorResponse, interval: float) -> float:
     raise ProtocolError(f"Auth0 stopped the device sign-in ({exc.error or f'HTTP {exc.status}'})")
 
 
-def _instructions(authorization: DeviceAuthorization, provider: Provider | None, minutes: int) -> str:
+def _instructions(authorization: DeviceAuthorization, provider: Provider | None, minutes: int, *, signup: bool) -> str:
     lines = [
         "To sign in, open this page in a browser on any device:",
         "",
@@ -137,6 +137,8 @@ def _instructions(authorization: DeviceAuthorization, provider: Provider | None,
     if authorization.verification_uri_complete is not None:
         lines += [f"(or open {authorization.verification_uri_complete})", ""]
     lines.append("Only enter a code that you just printed yourself; never one someone sent you.")
+    if signup:  # the device endpoint takes no screen_hint, so the page opens on sign-in
+        lines.append("To create an account, choose Sign up on that page.")
     if provider is Provider.GOOGLE:
         lines.append("Choose Google on that page: device sign-in cannot pick the provider for you.")
     elif provider is Provider.EMAIL:

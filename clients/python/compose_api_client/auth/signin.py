@@ -8,7 +8,13 @@ from dataclasses import replace
 
 import httpx
 
-from compose_api_client.auth.browser import BrowserLauncher, browser_sign_in, open_system_browser, resolve_method
+from compose_api_client.auth.browser import (
+    BrowserLauncher,
+    auto_reason,
+    browser_sign_in,
+    open_system_browser,
+    resolve_method,
+)
 from compose_api_client.auth.device import device_sign_in
 from compose_api_client.auth.models import Notify, Provider, SessionRecord, SignInMethod, SignInRequest, TokenGrant
 from compose_api_client.auth.oauth import Auth0OAuthClient
@@ -46,12 +52,21 @@ async def sign_in(
     launcher: BrowserLauncher = open_system_browser,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> TokenGrant:
-    """Run the browser or device flow the request asks for. Never switches from one to the other on failure."""
-    connection = connection_for(settings, request)
+    """Run the browser or device flow the request asks for. Never switches from one to the other on failure.
+
+    `AUTO` is resolved here, once: the flows only ever see the method it chose.
+    """
+    resolved = replace(request, method=resolve_method(request.method))
+    if request.method is SignInMethod.AUTO and resolved.method is SignInMethod.DEVICE:
+        notify(
+            f"Signing in with a device code, since {auto_reason()}. To sign in another way, use --method browser"
+            " or --method url."
+        )
+    connection = connection_for(settings, resolved)
     async with Auth0OAuthClient(settings, transport=transport) as client:
-        if resolve_method(request.method) is SignInMethod.DEVICE:
-            return await device_sign_in(client, request, notify=notify)
-        return await browser_sign_in(client, request, connection=connection, launcher=launcher, notify=notify)
+        if resolved.method is SignInMethod.DEVICE:
+            return await device_sign_in(client, resolved, notify=notify)
+        return await browser_sign_in(client, resolved, connection=connection, launcher=launcher, notify=notify)
 
 
 async def persistent_sign_in(
