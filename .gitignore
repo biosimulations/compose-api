@@ -237,3 +237,6 @@ assets/dev/config/compose_known_hosts
 .agents/
 .crush/
 .freebuff/
+
+# Node.js heap snapshots: multi-gigabyte local diagnostics, never committed.
+*.heapsnapshot

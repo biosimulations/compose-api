@@ -236,7 +236,7 @@ SCENARIOS: dict[str, Scenario] = {
         session=None,
         browser="deny",
     ),
-    "no-browser": Scenario(
+    "browser-cannot-open": Scenario(
         ["auth", "login", "--method", "browser"],
         ExitCode.CONFIG,
         "interaction",

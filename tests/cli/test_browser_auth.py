@@ -294,7 +294,7 @@ def test_auto_picks_device_over_ssh_and_browser_elsewhere(
 
 
 @pytest.mark.asyncio
-async def test_no_browser_prints_only_this_transactions_link(fake_tenant: FakeTenant) -> None:
+async def test_the_url_method_prints_only_this_transactions_link(fake_tenant: FakeTenant) -> None:
     browser = FakeBrowser(fake_tenant)
     messages: list[str] = []
 
