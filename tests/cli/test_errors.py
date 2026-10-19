@@ -221,16 +221,36 @@ SCENARIOS: dict[str, Scenario] = {
         ["auth", "status", "--verify"], ExitCode.CONFIG, "storage", "--ephemeral-auth", session=None, keyring=False
     ),
     "api-unreachable-after-login": Scenario(
-        ["auth", "login"], ExitCode.NETWORK, "network", "auth status --verify", api=_unreachable, session=None
+        ["auth", "login", "--method", "browser"],
+        ExitCode.NETWORK,
+        "network",
+        "auth status --verify",
+        api=_unreachable,
+        session=None,
     ),
     "denied-in-browser": Scenario(
-        ["auth", "login"], ExitCode.AUTH_REQUIRED, "authentication", "nothing was saved", session=None, browser="deny"
+        ["auth", "login", "--method", "browser"],
+        ExitCode.AUTH_REQUIRED,
+        "authentication",
+        "nothing was saved",
+        session=None,
+        browser="deny",
     ),
     "no-browser": Scenario(
-        ["auth", "login"], ExitCode.CONFIG, "interaction", "--no-browser", session=None, browser="cannot-open"
+        ["auth", "login", "--method", "browser"],
+        ExitCode.CONFIG,
+        "interaction",
+        "--method url",
+        session=None,
+        browser="cannot-open",
     ),
     "callback-port-taken": Scenario(
-        ["auth", "login"], ExitCode.CONFIG, "interaction", "--device", session=None, occupy_callback_port=True
+        ["auth", "login", "--method", "browser"],
+        ExitCode.CONFIG,
+        "interaction",
+        "--method device",
+        session=None,
+        occupy_callback_port=True,
     ),
 }
 
@@ -341,7 +361,7 @@ def test_a_whole_session_never_leaks_a_credential(
     )
     archive = _archive(tmp_path / "experiment.omex")
     journey = [
-        ["auth", "login"],
+        ["auth", "login", "--method", "browser"],  # pinned: `auto` resolves differently on a headless runner
         ["auth", "status", "--verify"],
         ["simulators", "list"],
         ["run", str(archive)],

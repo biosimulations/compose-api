@@ -327,7 +327,7 @@ class FakeBrowser:
             self.responses.append(client.get(url))
 
     def visit_later(self, url: str) -> None:
-        """Follow a link printed by --no-browser, from another thread as a person would."""
+        """Follow a link printed by --method url, from another thread as a person would."""
         threading.Thread(target=self.visit, args=(self.redirect_for(url),), daemon=True).start()
 
 

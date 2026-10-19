@@ -20,6 +20,7 @@ from compose_api_client.auth.models import (
     AuthTransaction,
     Notify,
     Provider,
+    SignInMethod,
     SignInRequest,
     TokenGrant,
 )
@@ -28,6 +29,25 @@ from compose_api_client.ext.errors import AuthError, CliError, InteractionError,
 from compose_api_client.profiles import requested_scopes
 
 BrowserLauncher: TypeAlias = Callable[[str], bool]
+
+
+def resolve_method(requested: SignInMethod) -> SignInMethod:
+    """What `SignInMethod.AUTO` means here: device over SSH, browser when a browser can plausibly open.
+
+    `$BROWSER` wins over everything: VS Code Remote-SSH and Codespaces set it and forward the callback port, so the
+    browser flow works there despite `SSH_CONNECTION`. `SSH_CONNECTION` is the only remote signal on macOS and
+    Windows, where there is no display variable. A host with no display cannot open a browser, so it gets the device
+    code.
+    """
+    if requested is not SignInMethod.AUTO:
+        return requested
+    if os.environ.get("BROWSER"):
+        return SignInMethod.BROWSER
+    if os.environ.get("SSH_CONNECTION"):
+        return SignInMethod.DEVICE
+    if sys.platform not in ("darwin", "win32") and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        return SignInMethod.DEVICE
+    return SignInMethod.BROWSER
 
 
 def open_system_browser(url: str) -> bool:
@@ -63,18 +83,18 @@ async def browser_sign_in(
             prompt="login" if request.signup else None,
         )
         minutes = round(timeout / 60)
-        if request.open_browser:
+        if request.method is not SignInMethod.URL:
             if not await asyncio.to_thread(launcher, url):
                 raise InteractionError(
-                    "no browser could be opened. Run the command again with --no-browser to open the sign-in link"
-                    " yourself on this computer, or with --device to sign in from another device"
+                    "no browser could be opened. Run the command again with --method url to open the sign-in link"
+                    " yourself on this computer, or with --method device to sign in from another device"
                 )
             notify(f"Continue in the browser window that just opened. Waiting up to {minutes} minutes.")
         else:
             notify(
                 "Open this link in a browser on this computer to sign in. It works only for this command, so open"
                 f" only a link you just printed yourself:\n\n  {url}\n\nWaiting up to {minutes} minutes. If your"
-                " browser is on another computer, use --device instead."
+                " browser is on another computer, use --method device instead."
             )
         result = await listener.wait(timeout)
     if result.error is not None:

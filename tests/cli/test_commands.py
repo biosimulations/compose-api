@@ -30,15 +30,15 @@ auth0_audience = "https://api.compose.example.org"
 LEAK_CANARY = "server-secret-4c1d"
 
 # Commands that sign in, use a session, or read the profile, with the options each one takes. Root options
-# (--profile, --ephemeral-auth, --device, --no-browser, -o) come before the command. "experiment.omex" stands for a
+# (--profile, --ephemeral-auth, --method, -o) come before the command. "experiment.omex" stands for a
 # real archive (`_with_archive`).
 SIGN_IN_FLOW_COMMANDS = [
     ["auth", "signup"],
-    ["auth", "signup", "--provider", "google", "--no-browser"],
-    ["auth", "login", "--device"],
+    ["auth", "signup", "--provider", "google", "--method", "url"],
+    ["auth", "login", "--method", "device"],
 ]
 EPHEMERAL_COMMANDS = [
-    ["--ephemeral-auth", "--device", "simulators", "list"],
+    ["--ephemeral-auth", "--method", "device", "simulators", "list"],
     ["--ephemeral-auth", "run", "experiment.omex", "--interval", "2.5", "--batch"],
 ]
 # API commands use the profile's stored session when there is one, and call anonymously when there is none.
@@ -61,9 +61,31 @@ def _with_archive(argv: list[str], directory: Path) -> list[str]:
     return [str(archive) if part == "experiment.omex" else part for part in argv]
 
 
+#: Options whose value is a separate word, so `_command_path` can skip it.
+_VALUE_OPTIONS = frozenset({
+    "--url",
+    "--profile",
+    "--timeout",
+    "--output",
+    "-o",
+    "--method",
+    "--provider",
+    "--interval",
+})
+
+
 def _command_path(argv: list[str]) -> list[str]:
     """The command words of `argv`, without the root options in front and the arguments after."""
-    words = [part for part in argv if not part.startswith("-")]
+    words: list[str] = []
+    skip_value = False
+    for part in argv:
+        if skip_value:
+            skip_value = False
+            continue
+        if part.startswith("-"):
+            skip_value = part in _VALUE_OPTIONS
+            continue
+        words.append(part)
     group: click.Command = typer.main.get_group(app)
     path: list[str] = []
     for word in words:
@@ -142,7 +164,7 @@ def test_provider_defaults() -> None:
     [
         ["frobnicate"],
         ["auth", "login", "--provider", "github"],
-        ["auth", "login", "--device", "--no-browser"],
+        ["auth", "login", "--method", "carrier-pigeon"],
         ["auth", "login", "--token", "abc"],
         ["auth", "signup", "--password", "abc"],
         ["auth", "status", "--header", "Authorization: x"],
@@ -152,10 +174,9 @@ def test_provider_defaults() -> None:
         ["status", "-3"],
         ["run"],
         ["run", "no-such-archive.omex"],
-        ["simulators", "list", "--device"],  # interactive sign-in is never implied
-        ["--device", "simulators", "list"],
-        ["--no-browser", "simulators", "list"],
-        ["--ephemeral-auth", "--device", "--no-browser", "simulators", "list"],
+        ["simulators", "list", "--method", "device"],  # interactive sign-in is never implied
+        ["--method", "device", "simulators", "list"],
+        ["--method", "url", "simulators", "list"],
     ],
 )
 def test_usage_errors_exit_2_without_output(
@@ -184,11 +205,9 @@ def test_a_refused_secret_option_never_echoes_its_value(
     assert "SECRET-SENTINEL" not in captured.out + captured.err
 
 
-def test_device_and_no_browser_need_ephemeral_auth(
-    capsys: pytest.CaptureFixture[str], no_network_or_browser: list[str]
-) -> None:
-    assert main(["--device", "simulators", "list"]) == ExitCode.USAGE
-    message = "--device and --no-browser choose how --ephemeral-auth signs in, so they need --ephemeral-auth"
+def test_method_needs_ephemeral_auth(capsys: pytest.CaptureFixture[str], no_network_or_browser: list[str]) -> None:
+    assert main(["--method", "device", "simulators", "list"]) == ExitCode.USAGE
+    message = "--method chooses how --ephemeral-auth signs in, so it needs --ephemeral-auth"
     assert message in " ".join(capsys.readouterr().err.split())
 
 
@@ -362,11 +381,11 @@ def test_google_sign_in_needs_its_connection_named(
 ) -> None:
     write_cli_config(cli_config_path, BARE_PROFILE)
     monkeypatch.setenv("COMPOSE_API_CLI_AUTH0_CLIENT_ID", CLIENT_ID)
-    assert main(["--profile", "dev", "auth", "login", "--provider", "google"]) == ExitCode.CONFIG
+    assert main(["--profile", "dev", "auth", "login", "--provider", "google", "--method", "browser"]) == ExitCode.CONFIG
     assert "needs google_connection set for profile 'dev'" in capsys.readouterr().err
-    # With --device the provider is chosen on the hosted page, so no connection is needed; the tests' refusing
+    # With --method device the provider is chosen on the hosted page, so no connection is needed; the tests' refusing
     # credential store is what stops this one, still before any network request.
-    assert main(["--profile", "dev", "auth", "login", "--provider", "google", "--device"]) == ExitCode.CONFIG
+    assert main(["--profile", "dev", "auth", "login", "--provider", "google", "--method", "device"]) == ExitCode.CONFIG
     assert "Unsupported OS credential backend" in capsys.readouterr().err
 
 

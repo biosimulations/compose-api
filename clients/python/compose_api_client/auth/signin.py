@@ -8,9 +8,9 @@ from dataclasses import replace
 
 import httpx
 
-from compose_api_client.auth.browser import BrowserLauncher, browser_sign_in, open_system_browser
+from compose_api_client.auth.browser import BrowserLauncher, browser_sign_in, open_system_browser, resolve_method
 from compose_api_client.auth.device import device_sign_in
-from compose_api_client.auth.models import Notify, Provider, SessionRecord, SignInRequest, TokenGrant
+from compose_api_client.auth.models import Notify, Provider, SessionRecord, SignInMethod, SignInRequest, TokenGrant
 from compose_api_client.auth.oauth import Auth0OAuthClient
 from compose_api_client.auth.session import AuthSession
 from compose_api_client.auth.storage import CredentialStore, MemoryCredentialStore
@@ -21,15 +21,16 @@ from compose_api_client.profiles import CliSettings
 def connection_for(settings: CliSettings, request: SignInRequest) -> str | None:
     """The Auth0 connection to steer the browser to. Raises before anything touches the network or a browser.
 
-    The device endpoint takes no connection, so with --device the person picks the provider on the hosted page.
+    The device endpoint takes no connection, so with the device method the person picks the provider on the hosted
+    page.
     """
-    if request.device:
+    if resolve_method(request.method) is SignInMethod.DEVICE:
         return None
     if request.provider is Provider.GOOGLE:
         if settings.google_connection is None:
             raise ConfigError(
                 f"--provider google needs google_connection set for profile {settings.profile!r}: the tenant's"
-                " Google connection name, often google-oauth2. Or sign in with --device and choose Google there"
+                " Google connection name, often google-oauth2. Or sign in with --method device and choose Google there"
             )
         return settings.google_connection
     if request.provider is Provider.EMAIL:
@@ -48,7 +49,7 @@ async def sign_in(
     """Run the browser or device flow the request asks for. Never switches from one to the other on failure."""
     connection = connection_for(settings, request)
     async with Auth0OAuthClient(settings, transport=transport) as client:
-        if request.device:
+        if resolve_method(request.method) is SignInMethod.DEVICE:
             return await device_sign_in(client, request, notify=notify)
         return await browser_sign_in(client, request, connection=connection, launcher=launcher, notify=notify)
 

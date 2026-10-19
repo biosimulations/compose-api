@@ -28,14 +28,22 @@ class Provider(StrEnum):
     GOOGLE = "google"
 
 
+class SignInMethod(StrEnum):
+    """How to reach the person signing in. `AUTO` decides from the environment (`auto_sign_in_method`)."""
+
+    AUTO = "auto"
+    BROWSER = "browser"  # the system browser, with the loopback callback
+    URL = "url"  # print the sign-in link instead of opening a browser
+    DEVICE = "device"  # RFC 8628: sign in on another device
+
+
 @dataclass(frozen=True)
 class SignInRequest:
     """How a person asked to sign in. `provider` is a hint for the hosted page, not a guarantee."""
 
     signup: bool
     provider: Provider | None
-    device: bool
-    open_browser: bool
+    method: SignInMethod
     persistent: bool
 
 

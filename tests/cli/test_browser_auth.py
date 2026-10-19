@@ -11,9 +11,9 @@ from urllib.parse import parse_qsl, urlsplit
 
 import httpx
 import pytest
-from compose_api_client.auth.browser import browser_sign_in
+from compose_api_client.auth.browser import browser_sign_in, resolve_method
 from compose_api_client.auth.callback import CONNECTION_TIMEOUT_SECONDS, CallbackListener, CallbackResult
-from compose_api_client.auth.models import Provider, SessionRecord, SignInRequest
+from compose_api_client.auth.models import Provider, SessionRecord, SignInMethod, SignInRequest
 from compose_api_client.auth.oauth import Auth0OAuthClient
 from compose_api_client.auth.signin import persistent_sign_in, sign_in
 from compose_api_client.auth.storage import MemoryCredentialStore
@@ -42,7 +42,8 @@ STATE = "expected-state-0123456789"
 
 
 def _request(*, signup: bool = False, provider: Provider | None = None, open_browser: bool = True) -> SignInRequest:
-    return SignInRequest(signup=signup, provider=provider, device=False, open_browser=open_browser, persistent=True)
+    method = SignInMethod.BROWSER if open_browser else SignInMethod.URL
+    return SignInRequest(signup=signup, provider=provider, method=method, persistent=True)
 
 
 def _previous_session(settings: CliSettings) -> tuple[MemoryCredentialStore, SessionRecord]:
@@ -257,6 +258,41 @@ async def test_google_without_a_configured_connection_fails_before_anything(
     assert browser.urls == [] and fake_tenant.requests == []
 
 
+@pytest.mark.parametrize(
+    ("ssh", "browser_env", "display", "platform", "expected"),
+    [
+        (None, None, ":0", "linux", SignInMethod.BROWSER),
+        ("1", None, None, "darwin", SignInMethod.DEVICE),  # SSH into a Mac: no display variable to check
+        ("1", "wslview", None, "linux", SignInMethod.BROWSER),  # Remote-SSH/Codespaces forward the port
+        (None, None, None, "linux", SignInMethod.DEVICE),  # headless: nothing could open a browser
+        (None, None, None, "darwin", SignInMethod.BROWSER),  # a desktop Mac always has one
+    ],
+)
+def test_auto_picks_device_over_ssh_and_browser_elsewhere(
+    monkeypatch: pytest.MonkeyPatch,
+    ssh: str | None,
+    browser_env: str | None,
+    display: str | None,
+    platform: str,
+    expected: SignInMethod,
+) -> None:
+    for name, value in (
+        ("SSH_CONNECTION", ssh),
+        ("BROWSER", browser_env),
+        ("DISPLAY", display),
+        ("WAYLAND_DISPLAY", None),
+    ):
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+    monkeypatch.setattr("sys.platform", platform)
+    assert resolve_method(SignInMethod.AUTO) is expected
+    # An explicit choice is never second-guessed.
+    assert resolve_method(SignInMethod.URL) is SignInMethod.URL
+    assert resolve_method(SignInMethod.DEVICE) is SignInMethod.DEVICE
+
+
 @pytest.mark.asyncio
 async def test_no_browser_prints_only_this_transactions_link(fake_tenant: FakeTenant) -> None:
     browser = FakeBrowser(fake_tenant)
@@ -268,7 +304,7 @@ async def test_no_browser_prints_only_this_transactions_link(fake_tenant: FakeTe
         browser.visit_later(link)
 
     def never(_url: str) -> bool:
-        raise AssertionError("--no-browser must not launch a browser")
+        raise AssertionError("--method url must not launch a browser")
 
     grant = await sign_in(
         cli_settings(),
@@ -284,13 +320,13 @@ async def test_no_browser_prints_only_this_transactions_link(fake_tenant: FakeTe
     assert dict(parse_qsl(urlsplit(link).query)) == authorize, "the printed link is this transaction's own"
     [form] = fake_tenant.forms(FakeTenant.TOKEN)
     assert form["code_verifier"] not in message and form["code"] not in message
-    assert "--device" in message
+    assert "--method device" in message
 
 
 @pytest.mark.asyncio
 async def test_a_browser_that_cannot_open_ends_cleanly(fake_tenant: FakeTenant) -> None:
     settings = cli_settings()
-    with pytest.raises(InteractionError, match=r"--no-browser .* --device"):
+    with pytest.raises(InteractionError, match=r"--method url .* --method device"):
         await sign_in(
             settings,
             _request(),
@@ -306,7 +342,7 @@ async def test_a_browser_that_cannot_open_ends_cleanly(fake_tenant: FakeTenant) 
 async def test_an_occupied_callback_port_fails_before_the_browser_or_network(fake_tenant: FakeTenant) -> None:
     settings = cli_settings()
     browser = FakeBrowser(fake_tenant)
-    with _occupied(settings.callback_port), pytest.raises(InteractionError, match="--device"):
+    with _occupied(settings.callback_port), pytest.raises(InteractionError, match="--method device"):
         await sign_in(settings, _request(), notify=lambda _m: None, launcher=browser, transport=fake_tenant.transport)
     assert browser.urls == [] and fake_tenant.requests == []
 
@@ -487,4 +523,4 @@ async def test_save_failure_after_sign_in_revokes_the_new_refresh_token(fake_ten
 
 def _login_args(*, provider: str | None = None) -> argparse.Namespace:
     """What `compose-api auth login [--provider P]` hands `sign_in_command` (see `commands.auth_login`)."""
-    return argparse.Namespace(profile=None, provider=provider, device=False, no_browser=False, json=False)
+    return argparse.Namespace(profile=None, provider=provider, method="browser", json=False)

@@ -7,7 +7,7 @@ import httpx
 import pytest
 from compose_api_client.auth import signin
 from compose_api_client.auth.device import DEFAULT_INTERVAL_SECONDS, device_sign_in
-from compose_api_client.auth.models import Provider, SignInRequest, TokenGrant
+from compose_api_client.auth.models import Provider, SignInMethod, SignInRequest, TokenGrant
 from compose_api_client.auth.oauth import DEVICE_CODE_GRANT, Auth0OAuthClient
 from compose_api_client.auth.signin import ephemeral_session, sign_in
 from compose_api_client.auth.storage import MemoryCredentialStore
@@ -46,7 +46,7 @@ class FakeTime:
 
 
 def _request(*, provider: Provider | None = None, persistent: bool = True) -> SignInRequest:
-    return SignInRequest(signup=False, provider=provider, device=True, open_browser=False, persistent=persistent)
+    return SignInRequest(signup=False, provider=provider, method=SignInMethod.DEVICE, persistent=persistent)
 
 
 async def _device_sign_in(
@@ -313,7 +313,9 @@ async def test_an_ephemeral_session_lives_for_one_block_only(
     if device:
         fake_tenant.queue(FakeTenant.DEVICE, fake_tenant.device_response(interval=1))
         fake_tenant.queue(FakeTenant.TOKEN, fake_tenant.token_response())  # offers a refresh token regardless
-    request = SignInRequest(signup=True, provider=None, device=device, open_browser=True, persistent=True)
+    request = SignInRequest(
+        signup=True, provider=None, method=SignInMethod.DEVICE if device else SignInMethod.BROWSER, persistent=True
+    )
 
     async with ephemeral_session(
         settings, request, notify=lambda _m: None, launcher=FakeBrowser(fake_tenant), transport=fake_tenant.transport

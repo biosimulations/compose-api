@@ -311,7 +311,14 @@ def test_ephemeral_auth_signs_in_for_one_command_and_keeps_nothing(
             api_transport=fake_compose_api.transport,
         ),
     )
-    argv = ["--ephemeral-auth", *(["--device"] if device else []), "simulators", "list", "--json"]
+    argv = [
+        "--ephemeral-auth",
+        "--method",
+        "device" if device else "browser",  # pinned: `auto` resolves differently on a headless CI runner
+        "simulators",
+        "list",
+        "--json",
+    ]
     assert main(argv) == ExitCode.OK
     assert json.loads(capsys.readouterr().out)["versions"][0]["database_id"] == FakeComposeApi.SIMULATOR_ID
     [request] = fake_compose_api.transport.requests
@@ -354,7 +361,7 @@ def test_login_is_confirmed_by_the_api(
             api_transport=fake_compose_api.transport,
         ),
     )
-    assert main(["-o", "table", "auth", "login"]) == ExitCode.OK
+    assert main(["-o", "table", "auth", "login", "--method", "browser"]) == ExitCode.OK
     out = capsys.readouterr().out
     assert f"Identity: {fake_tenant.subject} ({AUTH0_TEST_ISSUER})" in out
     assert "API: confirmed this identity just now" in out
@@ -390,7 +397,9 @@ def test_an_unreachable_api_after_login_keeps_the_session_unconfirmed(
             api_transport=httpx.MockTransport(unreachable),
         ),
     )
-    assert main(["-o", "json", "auth", "login"]) == (ExitCode.NETWORK if failure == "unreachable" else ExitCode.FAILURE)
+    assert main(["-o", "json", "auth", "login", "--method", "browser"]) == (
+        ExitCode.NETWORK if failure == "unreachable" else ExitCode.FAILURE
+    )
     error = json.loads(capsys.readouterr().out)["error"]
     assert error["category"] == ("network" if failure == "unreachable" else "not_found")
     assert error["message"].startswith("signed in and saved the session, but the Compose API did not confirm it")

@@ -8,7 +8,7 @@ from typing import Any
 
 from compose_api_client import profiles
 from compose_api_client.auth.identity import confirm_identity
-from compose_api_client.auth.models import Provider, SignInRequest
+from compose_api_client.auth.models import Provider, SignInMethod, SignInRequest
 from compose_api_client.auth.oauth import Auth0OAuthClient
 from compose_api_client.auth.session import AuthSession, AuthStatus, LogoutResult
 from compose_api_client.auth.signin import connection_for, persistent_sign_in
@@ -35,8 +35,7 @@ def sign_in_command(args: argparse.Namespace, *, signup: bool, wiring: Wiring | 
     request = SignInRequest(
         signup=signup,
         provider=None if args.provider is None else Provider(args.provider),
-        device=args.device,
-        open_browser=not args.no_browser,
+        method=SignInMethod(args.method),
         persistent=True,
     )
     settings.require_client_id()
