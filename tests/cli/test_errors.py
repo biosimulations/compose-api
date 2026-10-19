@@ -282,7 +282,7 @@ def test_each_failure_in_the_matrix_has_its_code_and_a_safe_next_step(
         if scenario.occupy_callback_port:
             squatter.bind(("127.0.0.1", settings.callback_port))
             squatter.listen()
-        code = main([*argv, "--json"])
+        code = main(["-o", "json", *argv])
     captured = capsys.readouterr()
     error = json.loads(captured.out.splitlines()[-1])["error"]
     assert (code, error["category"], error["exit_code"]) == (scenario.code, scenario.category, int(scenario.code))
@@ -346,7 +346,7 @@ def test_a_whole_session_never_leaks_a_credential(
         ["simulators", "list"],
         ["run", str(archive)],
         ["status", str(FakeComposeApi.SIMULATION_ID)],
-        ["auth", "status", "--json"],
+        ["-o", "json", "auth", "status"],
     ]
     for argv in journey:
         assert main(argv) == ExitCode.OK, argv
@@ -396,7 +396,7 @@ def test_text_and_json_report_the_same_facts(
     for argv, facts in cases:
         assert main(["-o", "table", *argv]) == ExitCode.OK
         text = capsys.readouterr().out
-        assert main([*argv, "--json"]) == ExitCode.OK
+        assert main(["-o", "json", *argv]) == ExitCode.OK
         document = json.loads(capsys.readouterr().out)
         for fact in facts(document):
             assert str(fact) in text, (argv, fact)

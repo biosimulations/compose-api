@@ -320,7 +320,7 @@ def test_sign_in_stops_before_the_browser_while_there_is_nowhere_to_keep_a_sessi
     from keyring.backends.fail import Keyring
 
     monkeypatch.setattr(keyring, "get_keyring", Keyring)
-    assert main([*argv, "--json"]) == ExitCode.CONFIG
+    assert main(["-o", "json", *argv]) == ExitCode.CONFIG
     captured = capsys.readouterr()
     error = json.loads(captured.out)["error"]
     assert error["category"] == "storage"
@@ -346,7 +346,7 @@ def test_windows_sign_in_stops_before_the_browser_while_a_session_cannot_fit(
     for method in ("get_password", "set_password", "delete_password"):
         monkeypatch.setattr(WinVaultKeyring, method, lambda *args, name=method: touched.append(name))
     monkeypatch.setattr(keyring, "get_keyring", WinVaultKeyring)
-    assert main([*argv, "--json"]) == ExitCode.CONFIG
+    assert main(["-o", "json", *argv]) == ExitCode.CONFIG
     error = json.loads(capsys.readouterr().out)["error"]
     assert error["category"] == "storage"
     assert "Windows Credential Manager cannot hold a saved session yet" in error["message"]
@@ -386,7 +386,7 @@ def test_session_commands_need_a_usable_store_and_never_fall_back(
     the --ephemeral-auth variants, which need no store.
     """
     monkeypatch.setenv("COMPOSE_API_CLI_AUTH0_CLIENT_ID", CLIENT_ID)
-    assert main([*argv, "--json"]) == ExitCode.CONFIG
+    assert main(["-o", "json", *argv]) == ExitCode.CONFIG
     error = json.loads(capsys.readouterr().out)["error"]
     assert error["category"] == "storage"
     assert "--ephemeral-auth" in error["message"], "a host without a store is pointed at the memory-only alternative"
@@ -394,7 +394,7 @@ def test_session_commands_need_a_usable_store_and_never_fall_back(
 
 def test_json_errors_are_objects_on_stdout(capsys: pytest.CaptureFixture[str], cli_config_path: Path) -> None:
     write_cli_config(cli_config_path, BARE_PROFILE)
-    assert main(["--profile", "dev", "auth", "login", "--json"]) == ExitCode.CONFIG
+    assert main(["-o", "json", "--profile", "dev", "auth", "login"]) == ExitCode.CONFIG
     captured = capsys.readouterr()
     error = json.loads(captured.out)["error"]
     assert error["category"] == "configuration"
@@ -521,9 +521,9 @@ def test_local_status_and_logout_json(
     store = storage.MemoryCredentialStore()
     monkeypatch.setenv("COMPOSE_API_CLI_AUTH0_CLIENT_ID", CLIENT_ID)
     monkeypatch.setattr(storage, "open_persistent_store", lambda *args, **kwargs: store)
-    assert main(["auth", "status", "--json"]) == ExitCode.AUTH_REQUIRED
+    assert main(["-o", "json", "auth", "status"]) == ExitCode.AUTH_REQUIRED
     status = json.loads(capsys.readouterr().out)
     assert (status["state"], status["checked_with_api"]) == ("missing", False)
-    assert main(["auth", "logout", "--local-only", "--json"]) == ExitCode.OK
+    assert main(["-o", "json", "auth", "logout", "--local-only"]) == ExitCode.OK
     assert json.loads(capsys.readouterr().out) == {"local_cleared": True, "revocation": "not_attempted"}
     assert next(iter(store.states.values())).read().generation == 1

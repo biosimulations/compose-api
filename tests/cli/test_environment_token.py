@@ -70,7 +70,7 @@ def test_status_and_config_never_print_environment_token(
     json_output: bool,
 ) -> None:
     token = configure(monkeypatch, fake_tenant, fake_compose_api.transport)
-    assert main(["-o", "json" if json_output else "table", *command, *(["--json"] if json_output else [])]) == 0
+    assert main(["-o", "json" if json_output else "table", *command]) == 0
     captured = capsys.readouterr()
     assert token not in captured.out + captured.err
     if command[0] == "auth":
@@ -90,7 +90,7 @@ def test_rejected_environment_token_names_variable_and_never_renews(
 ) -> None:
     transport = RecordingTransport(httpx.MockTransport(lambda _: httpx.Response(401)))
     token = configure(monkeypatch, fake_tenant, transport)
-    assert main([*command, "--json"]) == 3
+    assert main(["-o", "json", *command]) == 3
     captured = capsys.readouterr()
     assert "COMPOSE_API_TOKEN" in json.loads(captured.out)["error"]["message"]
     assert token not in captured.out + captured.err
@@ -135,7 +135,7 @@ def test_environment_status_is_valid_only_after_api_verification(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     token = configure(monkeypatch, fake_tenant, fake_compose_api.transport)
-    assert main(["auth", "status", "--verify", "--json"]) == 0
+    assert main(["-o", "json", "auth", "status", "--verify"]) == 0
     captured = capsys.readouterr()
     result = json.loads(captured.out)
     assert result["state"] == "valid" and result["checked_with_api"] is True

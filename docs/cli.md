@@ -141,8 +141,9 @@ compose-api --ephemeral-auth run experiment.omex           # sign in for this on
 
 ## JSON output
 
-Every command takes `--json`, which prints JSON instead of a table. It's the same as `--output json` before the
-command name, and it overrides that option. JSON is also the default whenever output isn't a terminal, so
+Every API and config command takes `--json`, which prints JSON instead of a table. It's the same as `--output json`
+before the command name, and it overrides that option. The `auth` commands take `-o json` only, so their help shows
+one spelling of JSON output, not two. JSON is also the default whenever output isn't a terminal, so
 `compose-api simulations list | jq` needs neither.
 
 ## What a run did: events and traces
@@ -1509,7 +1510,6 @@ $ compose-api auth signup [OPTIONS]
 * `--provider [email|google]`: Identity provider: email or google.  [default: email]
 * `--device`: Sign in on another device (RFC 8628).
 * `--no-browser`: Print the sign-in URL instead of opening it.
-* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ### `compose-api auth login`
@@ -1527,7 +1527,6 @@ $ compose-api auth login [OPTIONS]
 * `--provider [email|google]`: Identity provider: email or google.
 * `--device`: Sign in on another device (RFC 8628).
 * `--no-browser`: Print the sign-in URL instead of opening it.
-* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ### `compose-api auth status`
@@ -1543,7 +1542,6 @@ $ compose-api auth status [OPTIONS]
 **Options**:
 
 * `--verify`: Refresh if needed and confirm the identity with the API.
-* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ### `compose-api auth logout`
@@ -1559,7 +1557,6 @@ $ compose-api auth logout [OPTIONS]
 **Options**:
 
 * `--local-only`: Erase the local session without contacting Auth0.
-* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ## `compose-api config`

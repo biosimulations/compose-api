@@ -399,7 +399,16 @@ JSON_OPTION = inspect.Parameter(
 def handled(fn: F) -> F:
     """Map exceptions to a message on stderr and the documented exit code (``--verbose`` re-raises), and give the
     command a ``--json`` option. Every command goes through here, so every command's help shows it."""
+    return _handled(fn, json_flag=True)
 
+
+def handled_without_json(fn: F) -> F:
+    """``handled``, without the ``--json`` option: the auth commands already take ``-o json``, and two spellings of
+    one option in one help screen is noise (jcschaff's review). ``-o json`` still gives them the JSON envelope."""
+    return _handled(fn, json_flag=False)
+
+
+def _handled(fn: F, *, json_flag: bool) -> F:
     @functools.wraps(fn)
     def wrapper(*args: Any, json_output: bool = False, **kwargs: Any) -> Any:
         # Typer passes a plain click.Context, so test for that: a typer.Context check never matched, and the
@@ -424,11 +433,12 @@ def handled(fn: F) -> F:
                 code = _emit_envelope(envelope, "internal", message, EXIT_JOB)
             raise typer.Exit(code) from None
 
-    signature = inspect.signature(fn, eval_str=True)
-    wrapper.__signature__ = signature.replace(  # type: ignore[attr-defined]
-        parameters=[*signature.parameters.values(), JSON_OPTION]
-    )
-    wrapper.__annotations__ = {**fn.__annotations__, "json_output": JSON_OPTION.annotation}
+    if json_flag:
+        signature = inspect.signature(fn, eval_str=True)
+        wrapper.__signature__ = signature.replace(  # type: ignore[attr-defined]
+            parameters=[*signature.parameters.values(), JSON_OPTION]
+        )
+        wrapper.__annotations__ = {**fn.__annotations__, "json_output": JSON_OPTION.annotation}
     return wrapper  # type: ignore[return-value]
 
 
@@ -1287,7 +1297,7 @@ def config_show(ctx: typer.Context) -> None:
 
 
 @auth_app.command("signup")
-@handled
+@handled_without_json
 def auth_signup(
     ctx: typer.Context,
     provider: Annotated[str, typer.Option(click_type=PROVIDERS, help="Identity provider: email or google.")] = "email",
@@ -1315,7 +1325,7 @@ def auth_signup(
 
 
 @auth_app.command("login")
-@handled
+@handled_without_json
 def auth_login(
     ctx: typer.Context,
     provider: Annotated[
@@ -1346,7 +1356,7 @@ def auth_login(
 
 @auth_app.command("status")
 @claims("auth status", "get-current-principal")
-@handled
+@handled_without_json
 def auth_status(
     ctx: typer.Context,
     verify: Annotated[
@@ -1368,7 +1378,7 @@ def auth_status(
 
 
 @auth_app.command("logout")
-@handled
+@handled_without_json
 def auth_logout(
     ctx: typer.Context,
     local_only: Annotated[

@@ -390,7 +390,7 @@ def test_an_unreachable_api_after_login_keeps_the_session_unconfirmed(
             api_transport=httpx.MockTransport(unreachable),
         ),
     )
-    assert main(["auth", "login", "--json"]) == (ExitCode.NETWORK if failure == "unreachable" else ExitCode.FAILURE)
+    assert main(["-o", "json", "auth", "login"]) == (ExitCode.NETWORK if failure == "unreachable" else ExitCode.FAILURE)
     error = json.loads(capsys.readouterr().out)["error"]
     assert error["category"] == ("network" if failure == "unreachable" else "not_found")
     assert error["message"].startswith("signed in and saved the session, but the Compose API did not confirm it")
@@ -405,12 +405,12 @@ def test_status_is_local_until_asked_to_verify(
     assert main(["-o", "table", "auth", "status"]) == ExitCode.OK
     out = capsys.readouterr().out
     assert "API: never confirmed" in out
-    assert main(["auth", "status", "--verify", "--json"]) == ExitCode.OK
+    assert main(["-o", "json", "auth", "status", "--verify"]) == ExitCode.OK
     document = json.loads(capsys.readouterr().out)
     assert document["checked_with_api"] is True and document["api_verified_at"] is not None
     assert main(["-o", "table", "auth", "status"]) == ExitCode.OK
     assert "API: last confirmed" in capsys.readouterr().out
-    assert main(["auth", "status", "--json"]) == ExitCode.OK
+    assert main(["-o", "json", "auth", "status"]) == ExitCode.OK
     assert json.loads(capsys.readouterr().out)["checked_with_api"] is False
 
 

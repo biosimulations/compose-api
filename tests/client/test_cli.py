@@ -455,17 +455,28 @@ def test_parse_since() -> None:
 
 
 def test_every_command_takes_json(service: Callable[..., FakeService]) -> None:
-    """--json, given after the command, overrides --output table: added to every command by ``handled``."""
+    """--json, given after the command, overrides --output table: added to every command by ``handled``.
+
+    The four auth commands are the exception: they take ``-o json`` instead, so their help shows one spelling of
+    JSON output, not two (jcschaff's review).
+    """
     from compose_api_client.cli.commands import app as cli_app
     from typer.main import get_command
 
     group = get_command(cli_app)
     commands = [
-        (name, sub)
-        for name, cmd in group.commands.items()  # type: ignore[attr-defined]
-        for name, sub in ([(name, cmd)] if not hasattr(cmd, "commands") else cmd.commands.items())
+        (parent, name, sub)
+        for parent, cmd in group.commands.items()  # type: ignore[attr-defined]
+        for name, sub in (
+            [(parent, cmd)] if not hasattr(cmd, "commands") else [(parent, s) for s in cmd.commands.values()]
+        )
     ]
-    assert commands and all(any(p.name == "json_output" for p in sub.params) for _, sub in commands)
+    assert commands and all(
+        any(p.name == "json_output" for p in sub.params) for parent, _name, sub in commands if parent != "auth"
+    )
+    assert all(
+        not any(p.name == "json_output" for p in sub.params) for parent, _name, sub in commands if parent == "auth"
+    )
 
     service()
     r = runner.invoke(app, ["--output", "table", "simulations", "show", "4334", "--json"])
