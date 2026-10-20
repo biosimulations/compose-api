@@ -77,12 +77,13 @@ compose-api auth logout --local-only
 ```
 
 `--method` chooses how a sign-in reaches you: `auto` (the default) picks from the environment: the device code over
-SSH (`SSH_CONNECTION`), on a headless host or in a GitHub Codespace, and the browser otherwise. `$BROWSER` wins over
-SSH and a missing display, since VS Code Remote-SSH and WSL set it and forward the callback port. A Codespace still gets
-the device code, because one opened in a web browser cannot receive the callback. When `auto` picks the device code, the
-command says why. `browser` opens the system browser (or `$BROWSER`); `url` prints the sign-in link instead of opening
-anything; `device` is RFC 8628, for signing in on another device. The same option works with `--ephemeral-auth` before
-any command.
+SSH (`SSH_CONNECTION`), on a headless host or in a GitHub Codespace, and the browser otherwise. Over SSH or without a
+display, a `$BROWSER` that VS Code (Remote-SSH, Dev Containers) or WSL set still gets the browser, since they forward
+the callback port; any other `$BROWSER`, such as a text browser in a server's dotfiles, does not. A Codespace still gets
+the device code, because one opened in a web browser cannot receive the callback. Whenever `auto` picks anything but
+your desktop's browser, the command says why and how to choose another way. `browser` opens the system browser (or
+`$BROWSER`); `url` prints the sign-in link instead of opening anything; `device` is RFC 8628, for signing in on another
+device. The same option works with `--ephemeral-auth` before any command.
 
 The session is one record in your operating system's credential store (macOS Keychain, Linux Secret Service or
 Windows Credential Manager), under `compose-api.cli.v1.<digest>`. Plaintext and unknown keyring backends are refused;

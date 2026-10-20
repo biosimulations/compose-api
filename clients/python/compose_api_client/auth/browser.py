@@ -36,36 +36,58 @@ def _has_display() -> bool:
     return sys.platform in ("darwin", "win32") or bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
 
 
-def _auto() -> tuple[SignInMethod, str]:
-    """What `SignInMethod.AUTO` resolves to here, and why (the reason is printed when it picks the device code)."""
+def _callback_forwarder() -> str | None:
+    """Who carries the loopback callback back from the person's own browser when `$BROWSER` opens the link, if anyone.
+
+    VS Code (Remote-SSH, Dev Containers) sets `$BROWSER` to a helper that opens the link on the person's computer, and
+    forwards the ports this host listens on; WSL forwards localhost from Windows. Any other `$BROWSER`, often a text
+    browser set in a server's dotfiles, says nothing about where the person is.
+    """
+    if not os.environ.get("BROWSER"):
+        return None
+    if os.environ.get("VSCODE_IPC_HOOK_CLI") or os.environ.get("TERM_PROGRAM") == "vscode":
+        return "VS Code"
+    if os.environ.get("WSL_DISTRO_NAME"):
+        return "WSL"
+    return None
+
+
+def auto_method(callback_port: int) -> tuple[SignInMethod, str | None]:
+    """What `SignInMethod.AUTO` means here, and what to tell the person about that choice: why, and how to choose
+    another way. There is nothing to tell for the ordinary case, the browser on this computer's desktop.
+
+    A GitHub Codespace gets the device code. Otherwise a desktop gets the browser, unless this is an SSH session
+    (`SSH_CONNECTION`, the only remote signal on macOS and Windows, where there is no display variable). Over SSH or
+    without a display, the browser still works through a `$BROWSER` that VS Code or WSL set, since they forward the
+    callback port (`open_system_browser` hands the link to it); anything else gets the device code.
+    """
     if os.environ.get("CODESPACES"):
         # A codespace opened in a web browser cannot receive a callback on 127.0.0.1; one opened in desktop VS Code
         # could, but nothing tells the two apart, and the device code works in both.
-        return SignInMethod.DEVICE, "this is a GitHub Codespace"
-    if os.environ.get("BROWSER"):
-        return SignInMethod.BROWSER, "$BROWSER is set"
-    if os.environ.get("SSH_CONNECTION"):
-        return SignInMethod.DEVICE, "this is an SSH session"
-    if not _has_display():
-        return SignInMethod.DEVICE, "this host has no display"
-    return SignInMethod.BROWSER, "a browser can open here"
-
-
-def resolve_method(requested: SignInMethod) -> SignInMethod:
-    """What `SignInMethod.AUTO` means here: device over SSH, browser when a browser can plausibly open.
-
-    `$BROWSER` wins over SSH and a missing display: VS Code Remote-SSH and WSL set it and forward the callback port,
-    so the browser flow works there despite `SSH_CONNECTION` (`open_system_browser` hands the link to it). A GitHub
-    Codespace is the exception and gets the device code. `SSH_CONNECTION` is the only remote signal on macOS and
-    Windows, where there is no display variable. A host with no display cannot open a browser, so it gets the device
-    code. An explicit choice is returned as it is.
-    """
-    return _auto()[0] if requested is SignInMethod.AUTO else requested
-
-
-def auto_reason() -> str:
-    """Why `SignInMethod.AUTO` resolves as it does here."""
-    return _auto()[1]
+        return SignInMethod.DEVICE, (
+            "Signing in with a device code, since this is a GitHub Codespace. In a codespace opened in desktop VS"
+            " Code, --method browser works too."
+        )
+    ssh = bool(os.environ.get("SSH_CONNECTION"))
+    if not ssh and _has_display():
+        return SignInMethod.BROWSER, None
+    forwarder = _callback_forwarder()
+    if forwarder is not None:
+        return SignInMethod.BROWSER, (
+            f"Opening the sign-in page through $BROWSER, since {forwarder} forwards the callback port. If the browser"
+            " cannot return to this machine after you sign in, run again with --method device."
+        )
+    if ssh:
+        # --method browser would open a browser on this host's own screen, if it has one, not the person's.
+        return SignInMethod.DEVICE, (
+            "Signing in with a device code, since this is an SSH session. To use the browser on your own computer"
+            f" instead, forward the callback port (ssh -L {callback_port}:127.0.0.1:{callback_port}) and run again"
+            " with --method url."
+        )
+    return SignInMethod.DEVICE, (
+        "Signing in with a device code, since this host has no display. To open the sign-in link yourself in a"
+        f" browser that can reach port {callback_port} here, run again with --method url."
+    )
 
 
 def open_system_browser(url: str) -> bool:

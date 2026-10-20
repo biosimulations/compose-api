@@ -12,11 +12,11 @@ from urllib.parse import parse_qsl, urlsplit
 
 import httpx
 import pytest
-from compose_api_client.auth.browser import auto_reason, browser_sign_in, open_system_browser, resolve_method
+from compose_api_client.auth.browser import auto_method, browser_sign_in, open_system_browser
 from compose_api_client.auth.callback import CONNECTION_TIMEOUT_SECONDS, CallbackListener, CallbackResult
 from compose_api_client.auth.models import Provider, SessionRecord, SignInMethod, SignInRequest
 from compose_api_client.auth.oauth import Auth0OAuthClient
-from compose_api_client.auth.signin import persistent_sign_in, sign_in
+from compose_api_client.auth.signin import persistent_sign_in, resolve, sign_in
 from compose_api_client.auth.storage import MemoryCredentialStore
 from compose_api_client.cli.auth_commands import sign_in_command
 from compose_api_client.cli.wiring import Wiring
@@ -259,39 +259,117 @@ async def test_google_without_a_configured_connection_fails_before_anything(
     assert browser.urls == [] and fake_tenant.requests == []
 
 
+SSH = "192.0.2.10 51000 192.0.2.1 22"
+VSCODE_HELPER = "/home/someone/.vscode-server/bin/0123abcd/bin/helpers/browser.sh"
+VSCODE_IPC = "/run/user/1000/vscode-ipc-0123.sock"
+PORT = 8411  # not the default, so a note that names the callback port is seen to take it from the profile
+
+
 @pytest.mark.parametrize(
-    ("ssh", "browser_env", "display", "platform", "expected"),
+    ("platform", "env", "expected", "says"),
     [
-        (None, None, ":0", "linux", SignInMethod.BROWSER),
-        ("1", None, None, "darwin", SignInMethod.DEVICE),  # SSH into a Mac: no display variable to check
-        ("1", "wslview", None, "linux", SignInMethod.BROWSER),  # Remote-SSH and WSL forward the port
-        (None, None, None, "linux", SignInMethod.DEVICE),  # headless: nothing could open a browser
-        (None, None, None, "darwin", SignInMethod.BROWSER),  # a desktop Mac always has one
+        ("linux", {"DISPLAY": ":0"}, SignInMethod.BROWSER, ()),
+        ("linux", {"WAYLAND_DISPLAY": "wayland-0"}, SignInMethod.BROWSER, ()),
+        ("darwin", {}, SignInMethod.BROWSER, ()),  # a desktop Mac always has a display, and no variable for it
+        ("win32", {}, SignInMethod.BROWSER, ()),  # so does a Windows desktop
+        ("linux", {"DISPLAY": ":0", "BROWSER": "firefox"}, SignInMethod.BROWSER, ()),  # a desktop's own choice
+        ("linux", {}, SignInMethod.DEVICE, ("since this host has no display", f"port {PORT}", "--method url")),
+        ("linux", {"BROWSER": "lynx"}, SignInMethod.DEVICE, ("since this host has no display",)),
+        (
+            "darwin",
+            {"SSH_CONNECTION": SSH},
+            SignInMethod.DEVICE,
+            ("since this is an SSH session", f"ssh -L {PORT}:127.0.0.1:{PORT}", "--method url"),
+        ),
+        ("win32", {"SSH_CONNECTION": SSH}, SignInMethod.DEVICE, ("since this is an SSH session",)),
+        # X11 forwarding: a browser would open, but on this host, and the callback could not reach it from there.
+        ("linux", {"SSH_CONNECTION": SSH, "DISPLAY": "localhost:10.0"}, SignInMethod.DEVICE, ("an SSH session",)),
+        # A text browser from a server's dotfiles would take over the terminal, and forwards nothing.
+        ("linux", {"SSH_CONNECTION": SSH, "BROWSER": "w3m"}, SignInMethod.DEVICE, ("an SSH session",)),
+        # VS Code without a $BROWSER helper has nothing to hand the link to.
+        ("linux", {"SSH_CONNECTION": SSH, "VSCODE_IPC_HOOK_CLI": VSCODE_IPC}, SignInMethod.DEVICE, ("an SSH session",)),
+        (
+            "linux",
+            {"SSH_CONNECTION": SSH, "BROWSER": VSCODE_HELPER, "VSCODE_IPC_HOOK_CLI": VSCODE_IPC},
+            SignInMethod.BROWSER,
+            ("through $BROWSER, since VS Code forwards the callback port", "--method device"),
+        ),
+        (
+            "linux",
+            {"SSH_CONNECTION": SSH, "BROWSER": VSCODE_HELPER, "TERM_PROGRAM": "vscode"},
+            SignInMethod.BROWSER,
+            ("since VS Code forwards the callback port",),
+        ),
+        (  # a Dev Container: no SSH and no display, and VS Code forwards its ports too
+            "linux",
+            {"BROWSER": VSCODE_HELPER, "TERM_PROGRAM": "vscode"},
+            SignInMethod.BROWSER,
+            ("since VS Code forwards the callback port",),
+        ),
+        (  # WSL without WSLg: no display, and wslview opens the Windows browser
+            "linux",
+            {"BROWSER": "wslview", "WSL_DISTRO_NAME": "Ubuntu"},
+            SignInMethod.BROWSER,
+            ("since WSL forwards the callback port", "--method device"),
+        ),
+    ],
+    ids=[
+        "linux-x11",
+        "linux-wayland",
+        "macos-desktop",
+        "windows-desktop",
+        "desktop-browser-env",
+        "headless",
+        "headless-text-browser",
+        "ssh-macos",
+        "ssh-windows",
+        "ssh-x11-forwarding",
+        "ssh-text-browser",
+        "ssh-vscode-without-browser-env",
+        "vscode-remote-ssh",
+        "vscode-remote-ssh-term-program",
+        "vscode-dev-container",
+        "wsl",
     ],
 )
-def test_auto_picks_device_over_ssh_and_browser_elsewhere(
+def test_auto_picks_from_the_environment_and_says_why(
     monkeypatch: pytest.MonkeyPatch,
-    ssh: str | None,
-    browser_env: str | None,
-    display: str | None,
     platform: str,
+    env: dict[str, str],
     expected: SignInMethod,
+    says: tuple[str, ...],
 ) -> None:
-    _environment(monkeypatch, SSH_CONNECTION=ssh, BROWSER=browser_env, DISPLAY=display)
+    _environment(monkeypatch, **env)
     monkeypatch.setattr("sys.platform", platform)
-    assert resolve_method(SignInMethod.AUTO) is expected
-    # An explicit choice is never second-guessed.
-    assert resolve_method(SignInMethod.URL) is SignInMethod.URL
-    assert resolve_method(SignInMethod.DEVICE) is SignInMethod.DEVICE
+    method, note = auto_method(PORT)
+    assert method is expected
+    if not says:
+        assert note is None, "the browser on this computer's desktop goes without saying"
+        return
+    assert note is not None
+    flat = " ".join(note.split())
+    assert all(fragment in flat for fragment in says), flat
+    # Over SSH it would open on this host's screen, and without a display it cannot open at all.
+    assert "--method browser" not in flat
 
 
-def test_auto_picks_device_in_a_codespace_even_with_browser_set(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_auto_picks_device_in_a_codespace_even_with_vscode_and_browser_set(monkeypatch: pytest.MonkeyPatch) -> None:
     # A codespace opened in a web browser cannot receive the callback on 127.0.0.1, whatever $BROWSER does with a link.
-    _environment(monkeypatch, CODESPACES="true", BROWSER="/vscode/bin/helpers/browser.sh")
+    _environment(monkeypatch, CODESPACES="true", BROWSER="/vscode/bin/helpers/browser.sh", TERM_PROGRAM="vscode")
     monkeypatch.setattr("sys.platform", "linux")
-    assert resolve_method(SignInMethod.AUTO) is SignInMethod.DEVICE
-    assert auto_reason() == "this is a GitHub Codespace"
-    assert resolve_method(SignInMethod.BROWSER) is SignInMethod.BROWSER
+    method, note = auto_method(PORT)
+    assert method is SignInMethod.DEVICE
+    assert note is not None and "since this is a GitHub Codespace" in note
+    assert "--method browser works too" in " ".join(note.split()), "it does, from desktop VS Code"
+
+
+@pytest.mark.parametrize("method", [SignInMethod.BROWSER, SignInMethod.URL, SignInMethod.DEVICE])
+def test_an_explicit_method_is_never_second_guessed(monkeypatch: pytest.MonkeyPatch, method: SignInMethod) -> None:
+    _environment(monkeypatch, SSH_CONNECTION=SSH, CODESPACES="true")
+    notes: list[str] = []
+    request = SignInRequest(signup=False, provider=None, method=method, persistent=True)
+    assert resolve(cli_settings(), request, notify=notes.append) is request
+    assert notes == []
 
 
 @pytest.mark.parametrize(
@@ -353,7 +431,16 @@ def test_a_browser_env_that_does_not_open_is_not_a_browser(monkeypatch: pytest.M
 
 def _environment(monkeypatch: pytest.MonkeyPatch, **values: str | None) -> None:
     """Set the variables `auto` and the launcher read, clearing every one not given."""
-    for name in ("SSH_CONNECTION", "BROWSER", "CODESPACES", "DISPLAY", "WAYLAND_DISPLAY"):
+    for name in (
+        "SSH_CONNECTION",
+        "BROWSER",
+        "CODESPACES",
+        "DISPLAY",
+        "WAYLAND_DISPLAY",
+        "VSCODE_IPC_HOOK_CLI",
+        "TERM_PROGRAM",
+        "WSL_DISTRO_NAME",
+    ):
         value = values.get(name)
         if value is None:
             monkeypatch.delenv(name, raising=False)

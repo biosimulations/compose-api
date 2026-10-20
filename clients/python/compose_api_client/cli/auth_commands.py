@@ -11,7 +11,7 @@ from compose_api_client.auth.identity import confirm_identity
 from compose_api_client.auth.models import Provider, SignInMethod, SignInRequest
 from compose_api_client.auth.oauth import Auth0OAuthClient
 from compose_api_client.auth.session import AuthSession, AuthStatus, LogoutResult
-from compose_api_client.auth.signin import connection_for, persistent_sign_in
+from compose_api_client.auth.signin import connection_for, persistent_sign_in, resolve
 from compose_api_client.cli.render import emit_json, emit_text, notify, printable
 from compose_api_client.cli.wiring import Wiring as Wiring  # re-exported: tests replace it here
 from compose_api_client.cli.wiring import run
@@ -39,6 +39,7 @@ def sign_in_command(args: argparse.Namespace, *, signup: bool, wiring: Wiring | 
         persistent=True,
     )
     settings.require_client_id()
+    request = resolve(settings, request, notify=notify)  # once: the sign-in below keeps this choice
     connection_for(settings, request)
     store = wiring.store(settings, writable=True)
 

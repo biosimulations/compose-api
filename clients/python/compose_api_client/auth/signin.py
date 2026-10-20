@@ -8,13 +8,7 @@ from dataclasses import replace
 
 import httpx
 
-from compose_api_client.auth.browser import (
-    BrowserLauncher,
-    auto_reason,
-    browser_sign_in,
-    open_system_browser,
-    resolve_method,
-)
+from compose_api_client.auth.browser import BrowserLauncher, auto_method, browser_sign_in, open_system_browser
 from compose_api_client.auth.device import device_sign_in
 from compose_api_client.auth.models import Notify, Provider, SessionRecord, SignInMethod, SignInRequest, TokenGrant
 from compose_api_client.auth.oauth import Auth0OAuthClient
@@ -24,13 +18,31 @@ from compose_api_client.ext.errors import ConfigError
 from compose_api_client.profiles import CliSettings
 
 
+def resolve(settings: CliSettings, request: SignInRequest, *, notify: Notify) -> SignInRequest:
+    """`request` with `AUTO` replaced by the method it means here, telling the person why when that is anything but the
+    browser on this computer's desktop.
+
+    Whoever starts a sign-in resolves it once, first: `auth signup`/`auth login` (`sign_in_command`), to check the
+    provider before touching the credential store, and `sign_in` for everyone else. A request that names its method
+    passes through unchanged and silently, so the environment is read once and the flows only see a chosen method.
+    """
+    if request.method is not SignInMethod.AUTO:
+        return request
+    method, note = auto_method(settings.callback_port)
+    if note is not None:
+        notify(note)
+    return replace(request, method=method)
+
+
 def connection_for(settings: CliSettings, request: SignInRequest) -> str | None:
     """The Auth0 connection to steer the browser to. Raises before anything touches the network or a browser.
 
-    The device endpoint takes no connection, so with the device method the person picks the provider on the hosted
-    page.
+    The request's method must be resolved (`resolve`). The device endpoint takes no connection, so with the device
+    method the person picks the provider on the hosted page.
     """
-    if resolve_method(request.method) is SignInMethod.DEVICE:
+    if request.method is SignInMethod.AUTO:
+        raise ValueError("resolve the sign-in method before choosing a connection")
+    if request.method is SignInMethod.DEVICE:
         return None
     if request.provider is Provider.GOOGLE:
         if settings.google_connection is None:
@@ -54,14 +66,9 @@ async def sign_in(
 ) -> TokenGrant:
     """Run the browser or device flow the request asks for. Never switches from one to the other on failure.
 
-    `AUTO` is resolved here, once: the flows only ever see the method it chose.
+    An `AUTO` request is resolved here unless its caller already did (`resolve`): the flows only see a chosen method.
     """
-    resolved = replace(request, method=resolve_method(request.method))
-    if request.method is SignInMethod.AUTO and resolved.method is SignInMethod.DEVICE:
-        notify(
-            f"Signing in with a device code, since {auto_reason()}. To sign in another way, use --method browser"
-            " or --method url."
-        )
+    resolved = resolve(settings, request, notify=notify)
     connection = connection_for(settings, resolved)
     async with Auth0OAuthClient(settings, transport=transport) as client:
         if resolved.method is SignInMethod.DEVICE:

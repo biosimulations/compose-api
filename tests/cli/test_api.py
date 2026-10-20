@@ -9,7 +9,7 @@ from typing import Any
 
 import httpx
 import pytest
-from compose_api_client.auth.models import SessionRecord
+from compose_api_client.auth.models import SessionRecord, SignInMethod
 from compose_api_client.auth.storage import SERVICE, MemoryCredentialStore
 from compose_api_client.cli.commands import main
 from compose_api_client.cli.wiring import Wiring
@@ -415,7 +415,17 @@ def test_a_plain_login_over_ssh_signs_in_with_a_device_code(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """`auto` through the CLI. Over SSH it takes the device code without launching a browser, says why, and needs no
-    google_connection for `--provider google`, since the person chooses Google on the hosted page."""
+    google_connection for `--provider google`, since the person chooses Google on the hosted page. The environment
+    is read once: `auth login` resolves the method to check the provider, and the sign-in keeps that choice."""
+    from compose_api_client.auth.browser import auto_method
+
+    chosen: list[int] = []
+
+    def counted(port: int) -> tuple[SignInMethod, str | None]:
+        chosen.append(port)
+        return auto_method(port)
+
+    monkeypatch.setattr("compose_api_client.auth.signin.auto_method", counted)
     settings = cli_settings(google_connection=None)
     fields = ("api_base_url", "auth0_domain", "auth0_audience", "auth0_client_id")
     write_cli_config(
@@ -424,7 +434,7 @@ def test_a_plain_login_over_ssh_signs_in_with_a_device_code(
         + "".join(f'{field} = "{getattr(settings, field)}"\n' for field in fields)
         + f"callback_port = {settings.callback_port}\n",
     )
-    for name in ("BROWSER", "CODESPACES"):
+    for name in ("BROWSER", "CODESPACES", "DISPLAY", "WAYLAND_DISPLAY"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("SSH_CONNECTION", "192.0.2.10 51000 192.0.2.1 22")
     fake_tenant.queue(FakeTenant.DEVICE, fake_tenant.device_response(interval=1))
@@ -444,8 +454,10 @@ def test_a_plain_login_over_ssh_signs_in_with_a_device_code(
     assert browser.urls == [] and fake_tenant.authorize_requests == []
     assert len(fake_tenant.forms(FakeTenant.DEVICE)) == 1
     err = " ".join(capsys.readouterr().err.split())
-    assert "Signing in with a device code, since this is an SSH session." in err
+    assert err.count("Signing in with a device code, since this is an SSH session.") == 1
+    assert f"ssh -L {settings.callback_port}:127.0.0.1:{settings.callback_port}" in err
     assert "Choose Google on that page" in err
+    assert chosen == [settings.callback_port]
     assert store.load(settings.binding_key(persistent=True)) is not None
 
 
