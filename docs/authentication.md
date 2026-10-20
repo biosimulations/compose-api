@@ -156,9 +156,11 @@ client, audience, API origin or requested scope set selects a different session.
 session deliberately. macOS Keychain, Linux Secret Service and Windows Credential Manager are allowlisted. On
 Windows the CLI writes and reads its item natively, with a single overwrite and no keyring shadow copy, and stores the
 record as UTF-8: an item holds 2560 bytes, and a realistic session is about 1700 as UTF-8 but twice that as the UTF-16
-keyring writes (#320). A record that outgrows the item is refused, never split. Unknown, chained, plaintext and null
-backends are refused. Keyrings protect credentials at rest, not against a compromised operating-system account.
-Python cannot promise memory zeroization.
+keyring writes (#320). The rest of the item is room for the access token's claims: six roles and sixteen RBAC
+permissions bring a session to about 2250 bytes, and each further short permission adds about 25. A record that
+outgrows the item is refused, never split; the refusal comes after the sign-in, so it points to `--ephemeral-auth`.
+Unknown, chained, plaintext and null backends are refused. Keyrings protect credentials at rest, not against a
+compromised operating-system account. Python cannot promise memory zeroization.
 
 Non-secret lock/generation/journal files live under the platform user-state directory, in `compose-api/sessions`.
 POSIX directories/files require 0700/0600 and current-user ownership. Windows uses a protected owner-only ACL.

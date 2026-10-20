@@ -4,26 +4,28 @@ Opt-in, because these write to the machine's actual store: set COMPOSE_API_TEST_
 stored under a random binding key that can never collide with a real session, and deleted in a `finally` even when an
 assertion fails. The tests reach the real backend through `keyring.core`, past the suite's refusing default.
 
-This module imports nothing from the server, so it also runs alone in a minimal environment (see docs/cli.md):
-`python -m pytest --noconftest -o addopts= tests/cli/test_os_keyring.py`.
+This module and its records (tests/fixtures/session_records.py) import nothing from the server, so it also runs alone in
+a minimal environment (see docs/cli.md): `python -m pytest --noconftest -o addopts= tests/cli/test_os_keyring.py`.
 """
 
-import json
 import os
 import secrets
-import time
-from datetime import UTC, datetime, timedelta
 
-import jwt
 import keyring.core
 import pytest
-from compose_api_client.auth.models import Identity, SessionRecord
 from compose_api_client.auth.storage import SERVICE, KeyringCredentialStore
-from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic import SecretStr
 
+from tests.fixtures.session_records import (
+    HEAVY_PERMISSIONS,
+    HEAVY_ROLES,
+    realistic_session,
+    serialized,
+    with_parity,
+    with_size,
+)
+
 WINDOWS_CREDENTIAL_BLOB_LIMIT = 2560  # bytes in one generic credential (CRED_MAX_CREDENTIAL_BLOB_SIZE)
-ISSUER = "https://dev-bu7yo7484tyxu6a1.us.auth0.com/"
 
 opt_in = pytest.mark.skipif(
     os.environ.get("COMPOSE_API_TEST_OS_KEYRING") != "1",
@@ -31,65 +33,21 @@ opt_in = pytest.mark.skipif(
 )
 
 
-def realistic_session(binding_key: str) -> SessionRecord:
-    """A session the size Auth0 issues for this tenant: a 2048-bit RS256 access token carrying the BioSim Roles
-    Action's namespaced claims, and a refresh token of Auth0's usual rotating length (about 130 characters)."""
-    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    now = int(time.time())
-    claims = {
-        "https://api.biosimulations.org/roles": ["user"],
-        "https://api.biosimulations.org/email": "someone.with.a.long.name@university.example.edu",
-        "https://api.biosimulations.org/email_verified": True,
-        "iss": ISSUER,
-        "sub": "google-oauth2|113192385619293300261",
-        "aud": ["https://api.compose.cam.uchc.edu", f"{ISSUER}userinfo"],
-        "iat": now,
-        "exp": now + 86400,
-        "scope": "openid profile email offline_access",
-        "azp": "1FV43fysEjhTrYYRNaMEGvCteu4g2ay4",
-    }
-    access = jwt.encode(claims, key, algorithm="RS256", headers={"kid": "k" * 26, "typ": "JWT"})
-    now_utc = datetime.now(UTC)
-    return SessionRecord(
-        binding_key=binding_key,
-        identity=Identity(issuer=ISSUER, subject=str(claims["sub"])),
-        access_token=SecretStr(access),
-        access_token_expires_at=now_utc + timedelta(days=1),
-        refresh_token=SecretStr("v1." + secrets.token_urlsafe(98)),
-        scopes=("openid", "profile", "email", "offline_access"),
-        obtained_at=now_utc,
-        api_verified_at=now_utc,
-    )
-
-
-def serialized(record: SessionRecord) -> str:
-    """The record exactly as `KeyringCredentialStore.save` writes it."""
-    payload = record.model_dump(mode="json")
-    payload["access_token"] = record.access_token.get_secret_value()
-    payload["refresh_token"] = None if record.refresh_token is None else record.refresh_token.get_secret_value()
-    return json.dumps(payload, separators=(",", ":"), ensure_ascii=True)
-
-
-def with_parity(record: SessionRecord, parity: int) -> SessionRecord:
-    """`record`, one refresh-token character longer if that makes its stored length even (0) or odd (1)."""
-    if len(serialized(record)) % 2 == parity or record.refresh_token is None:
-        return record
-    return record.model_copy(update={"refresh_token": SecretStr(record.refresh_token.get_secret_value() + "x")})
-
-
-def with_size(record: SessionRecord, size: int) -> SessionRecord:
-    """`record`, its refresh token lengthened so that the stored record is exactly `size` bytes."""
-    assert record.refresh_token is not None
-    grow = size - len(serialized(record))
-    assert grow >= 0, "a realistic session is smaller than the sizes these tests pin"
-    return record.model_copy(update={"refresh_token": SecretStr(record.refresh_token.get_secret_value() + "x" * grow)})
-
-
 def test_a_realistic_session_fits_a_windows_credential_only_as_utf8() -> None:
     """Measured, not assumed: why the CLI writes Credential Manager items itself (#320). keyring writes UTF-16."""
     raw = serialized(realistic_session("0" * 64))
     assert len(raw.encode()) < WINDOWS_CREDENTIAL_BLOB_LIMIT
     assert len(raw.encode("utf-16-le")) > WINDOWS_CREDENTIAL_BLOB_LIMIT
+
+
+def test_a_session_with_a_heavier_access_token_still_fits_a_windows_credential() -> None:
+    """Headroom, measured. Today's token carries one role and no permissions, leaving about 850 bytes of the item, and
+    a record that outgrows it is refused only after a completed sign-in. Six roles and sixteen RBAC permissions (each
+    about 25 bytes of the token) still fit, with about 300 bytes to spare."""
+    light = serialized(realistic_session("0" * 64))
+    heavy = serialized(realistic_session("0" * 64, roles=HEAVY_ROLES, permissions=HEAVY_PERMISSIONS))
+    assert len(heavy) - len(light) > 500, "the heavier claims are in the token"
+    assert len(heavy.encode()) <= WINDOWS_CREDENTIAL_BLOB_LIMIT
 
 
 @opt_in

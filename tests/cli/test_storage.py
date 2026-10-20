@@ -24,9 +24,9 @@ from keyring.backends import macOS
 from keyring.backends.fail import Keyring as FailKeyring
 from keyring.errors import KeyringLocked
 
-from tests.cli.test_os_keyring import realistic_session, serialized, with_parity, with_size
 from tests.cli.test_session import grant
 from tests.fixtures.cli_fixtures import FakeCredentialManager, WinError, cli_settings
+from tests.fixtures.session_records import realistic_session, serialized, with_parity, with_size
 
 
 def backend(monkeypatch: pytest.MonkeyPatch) -> tuple[KeyringCredentialStore, dict[str, str]]:
