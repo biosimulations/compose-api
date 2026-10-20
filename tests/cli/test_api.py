@@ -374,8 +374,8 @@ def test_login_on_windows_keeps_the_session_in_one_credential_manager_item(
     windows_credential_manager: FakeCredentialManager,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """The store the CLI selects for itself on Windows: keyring's backend probes it, the session is one item holding the
-    record as UTF-8 (#320), and `auth status` reads it back."""
+    """The store the CLI selects for itself on Windows: the probe writes natively as a save does, the session is one
+    item holding the record as UTF-8 (#320), and `auth status` reads it back."""
     from compose_api_client.auth import state as state_module
 
     settings = cli_settings()

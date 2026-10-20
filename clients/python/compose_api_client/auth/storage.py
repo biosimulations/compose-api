@@ -108,8 +108,8 @@ class KeyringCredentialStore:
     def probe(self) -> None:
         """Detect write-locked stores before interactive sign-in using an ephemeral, non-secret marker.
 
-        It is written and read as a session is (natively on Windows), so a store that would refuse the save fails
-        here, before the browser opens, and deleted through keyring, as logout deletes.
+        It is written and read as a session is (natively on Windows), and deleted through keyring as logout deletes, so
+        a store that would refuse the save fails here, before the browser opens.
         """
         account = uuid.uuid4().hex
         service = f"{SERVICE}.probe.{account}"

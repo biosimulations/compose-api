@@ -5,7 +5,7 @@ stored under a random binding key that can never collide with a real session, an
 assertion fails. The tests reach the real backend through `keyring.core`, past the suite's refusing default.
 
 This module and its records (tests/fixtures/session_records.py) import nothing from the server, so it also runs alone in
-a minimal environment (see docs/cli.md): `python -m pytest --noconftest -o addopts= tests/cli/test_os_keyring.py`.
+a minimal environment: `python -m pytest --noconftest -o addopts= tests/cli/test_os_keyring.py`.
 """
 
 import os
