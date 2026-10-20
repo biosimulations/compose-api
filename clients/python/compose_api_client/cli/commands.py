@@ -395,21 +395,27 @@ JSON_OPTION = inspect.Parameter(
     default=False,
     annotation=Annotated[bool, typer.Option("--json", help="Print JSON (the same as --output json).")],
 )
+#: The same option, accepted but left out of the help (``handled_hidden_json``).
+HIDDEN_JSON_OPTION = JSON_OPTION.replace(
+    annotation=Annotated[bool, typer.Option("--json", hidden=True, help="Print JSON (the same as --output json).")]
+)
 
 
 def handled(fn: F) -> F:
     """Map exceptions to a message on stderr and the documented exit code (``--verbose`` re-raises), and give the
-    command a ``--json`` option. Every command goes through here, so every command's help shows it."""
-    return _handled(fn, json_flag=True)
+    command a ``--json`` option. Every command goes through here or ``handled_hidden_json``, so every command takes
+    it."""
+    return _handled(fn, JSON_OPTION)
 
 
-def handled_without_json(fn: F) -> F:
-    """``handled``, without the ``--json`` option: the auth commands already take ``-o json``, and two spellings of
-    one option in one help screen is noise (jcschaff's review). ``-o json`` still gives them the JSON envelope."""
-    return _handled(fn, json_flag=False)
+def handled_hidden_json(fn: F) -> F:
+    """``handled``, with ``--json`` accepted but left out of the help: the auth commands document ``-o json`` alone,
+    so their help doesn't offer two spellings of one option (jcschaff's review of #319), and a script that passes
+    ``--json`` to every command keeps working."""
+    return _handled(fn, HIDDEN_JSON_OPTION)
 
 
-def _handled(fn: F, *, json_flag: bool) -> F:
+def _handled(fn: F, json_option: inspect.Parameter) -> F:
     @functools.wraps(fn)
     def wrapper(*args: Any, json_output: bool = False, **kwargs: Any) -> Any:
         # Typer passes a plain click.Context, so test for that: a typer.Context check never matched, and the
@@ -434,12 +440,11 @@ def _handled(fn: F, *, json_flag: bool) -> F:
                 code = _emit_envelope(envelope, "internal", message, EXIT_JOB)
             raise typer.Exit(code) from None
 
-    if json_flag:
-        signature = inspect.signature(fn, eval_str=True)
-        wrapper.__signature__ = signature.replace(  # type: ignore[attr-defined]
-            parameters=[*signature.parameters.values(), JSON_OPTION]
-        )
-        wrapper.__annotations__ = {**fn.__annotations__, "json_output": JSON_OPTION.annotation}
+    signature = inspect.signature(fn, eval_str=True)
+    wrapper.__signature__ = signature.replace(  # type: ignore[attr-defined]
+        parameters=[*signature.parameters.values(), json_option]
+    )
+    wrapper.__annotations__ = {**fn.__annotations__, "json_output": json_option.annotation}
     return wrapper  # type: ignore[return-value]
 
 
@@ -1294,7 +1299,7 @@ def config_show(ctx: typer.Context) -> None:
 
 
 @auth_app.command("signup")
-@handled_without_json
+@handled_hidden_json
 def auth_signup(
     ctx: typer.Context,
     provider: Annotated[
@@ -1329,7 +1334,7 @@ def auth_signup(
 
 
 @auth_app.command("login")
-@handled_without_json
+@handled_hidden_json
 def auth_login(
     ctx: typer.Context,
     provider: Annotated[
@@ -1365,7 +1370,7 @@ def auth_login(
 
 @auth_app.command("status")
 @claims("auth status", "get-current-principal")
-@handled_without_json
+@handled_hidden_json
 def auth_status(
     ctx: typer.Context,
     verify: Annotated[
@@ -1387,7 +1392,7 @@ def auth_status(
 
 
 @auth_app.command("logout")
-@handled_without_json
+@handled_hidden_json
 def auth_logout(
     ctx: typer.Context,
     local_only: Annotated[

@@ -530,3 +530,27 @@ def test_local_status_and_logout_json(
     assert main(["-o", "json", "auth", "logout", "--local-only"]) == ExitCode.OK
     assert json.loads(capsys.readouterr().out) == {"local_cleared": True, "revocation": "not_attempted"}
     assert next(iter(store.states.values())).read().generation == 1
+
+
+@pytest.mark.parametrize("command", ["signup", "login", "status", "logout"])
+def test_the_auth_commands_hide_json_from_their_help(capsys: pytest.CaptureFixture[str], command: str) -> None:
+    assert main(["auth", command, "--help"]) == ExitCode.OK
+    assert "--json" not in click.unstyle(capsys.readouterr().out)
+
+
+def test_a_hidden_json_flag_still_prints_json(
+    monkeypatch: pytest.MonkeyPatch,
+    cli_config_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    no_network_or_browser: list[str],
+) -> None:
+    """A script that passes --json to every command keeps working on the auth commands, over --output table."""
+    from compose_api_client.auth import storage
+
+    store = storage.MemoryCredentialStore()
+    monkeypatch.setenv("COMPOSE_API_CLI_AUTH0_CLIENT_ID", CLIENT_ID)
+    monkeypatch.setattr(storage, "open_persistent_store", lambda *args, **kwargs: store)
+    assert main(["-o", "table", "auth", "status", "--json"]) == ExitCode.AUTH_REQUIRED
+    assert json.loads(capsys.readouterr().out)["state"] == "missing"
+    assert main(["-o", "table", "auth", "logout", "--local-only", "--json"]) == ExitCode.OK
+    assert json.loads(capsys.readouterr().out) == {"local_cleared": True, "revocation": "not_attempted"}

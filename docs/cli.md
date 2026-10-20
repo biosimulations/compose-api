@@ -152,9 +152,9 @@ compose-api --ephemeral-auth run experiment.omex           # sign in for this on
 
 ## JSON output
 
-Every API and config command takes `--json`, which prints JSON instead of a table. It's the same as `--output json`
-before the command name, and it overrides that option. The `auth` commands take `-o json` only, so their help shows
-one spelling of JSON output, not two. JSON is also the default whenever output isn't a terminal, so
+Every command takes `--json`, which prints JSON instead of a table. It's the same as `--output json` before the
+command name, and it overrides that option. The `auth` commands accept `--json` without listing it in their help:
+`-o json` is the spelling documented for them. JSON is also the default whenever output isn't a terminal, so
 `compose-api simulations list | jq` needs neither.
 
 ## What a run did: events and traces
