@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shlex
 import sys
 import webbrowser
 from collections.abc import Callable
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import TypeAlias
 
 from compose_api_client.auth.callback import CallbackListener
@@ -40,14 +42,28 @@ def _callback_forwarder() -> str | None:
     """Who carries the loopback callback back from the person's own browser when `$BROWSER` opens the link, if anyone.
 
     VS Code (Remote-SSH, Dev Containers) sets `$BROWSER` to a helper that opens the link on the person's computer, and
-    forwards the ports this host listens on; WSL forwards localhost from Windows. Any other `$BROWSER`, often a text
-    browser set in a server's dotfiles, says nothing about where the person is.
+    forwards the ports this host listens on; WSL's `wslview` opens the Windows browser. An environment marker alone
+    does not identify the handler: shell configuration can replace `$BROWSER` with a text browser or another command.
+    Unknown commands, argument wrappers and fallback lists conservatively get the device code under `auto`.
     """
-    if not os.environ.get("BROWSER"):
+    browser = os.environ.get("BROWSER", "")
+    if not browser or os.pathsep in browser:
         return None
-    if os.environ.get("VSCODE_IPC_HOOK_CLI") or os.environ.get("TERM_PROGRAM") == "vscode":
+    # webbrowser treats a value containing %s as a command line; otherwise it is a literal executable name/path.
+    if "%s" in browser:
+        try:
+            command = shlex.split(browser)
+        except ValueError:
+            return None
+        if len(command) != 2 or command[1] != "%s":
+            return None
+        browser = command[0]
+    helpers = ((PurePosixPath(browser), "browser.sh"), (PureWindowsPath(browser), "browser.cmd"))
+    vscode_helper = any(path.is_absolute() and path.parts[-3:] == ("bin", "helpers", name) for path, name in helpers)
+    if vscode_helper and (os.environ.get("VSCODE_IPC_HOOK_CLI") or os.environ.get("TERM_PROGRAM") == "vscode"):
         return "VS Code"
-    if os.environ.get("WSL_DISTRO_NAME"):
+    path = PurePosixPath(browser)
+    if os.environ.get("WSL_DISTRO_NAME") and (browser == "wslview" or (path.is_absolute() and path.name == "wslview")):
         return "WSL"
     return None
 

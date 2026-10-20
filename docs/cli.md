@@ -78,8 +78,10 @@ compose-api auth logout --local-only
 
 `--method` chooses how a sign-in reaches you: `auto` (the default) picks from the environment: the device code over
 SSH (`SSH_CONNECTION`), on a headless host or in a GitHub Codespace, and the browser otherwise. Over SSH or without a
-display, a `$BROWSER` that VS Code (Remote-SSH, Dev Containers) or WSL set still gets the browser, since they forward
-the callback port; any other `$BROWSER`, such as a text browser in a server's dotfiles, does not. A Codespace still gets
+display, a recognized VS Code `bin/helpers/browser.sh` or `browser.cmd` helper, or WSL's `wslview`, still gets the
+browser, since they forward the callback port. VS Code or WSL environment markers alone do not qualify: a text
+browser, an unknown command or a fallback list in `$BROWSER` gets the device code. An unrecognized helper can still be
+chosen explicitly with `--method browser`. A Codespace still gets
 the device code, because one opened in a web browser cannot receive the callback. Whenever `auto` picks anything but
 your desktop's browser, the command says why and how to choose another way. `browser` opens the system browser (or
 `$BROWSER`); `url` prints the sign-in link instead of opening anything; `device` is RFC 8628, for signing in on another

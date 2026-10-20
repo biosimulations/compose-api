@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import logging
+import os
 import socket
 import webbrowser
 from collections.abc import Iterator
@@ -363,6 +364,41 @@ def test_auto_picks_device_in_a_codespace_even_with_vscode_and_browser_set(monke
     assert "--method browser works too" in " ".join(note.split()), "it does, from desktop VS Code"
 
 
+@pytest.mark.parametrize(
+    "browser",
+    [
+        "w3m",
+        "/usr/bin/firefox",
+        "lynx %s",
+        f"w3m{os.pathsep}{VSCODE_HELPER}",
+        f"wslview{os.pathsep}w3m",
+        f"w3m %s {VSCODE_HELPER}",
+        '"unclosed %s',
+    ],
+)
+def test_environment_markers_do_not_identify_an_unknown_browser(monkeypatch: pytest.MonkeyPatch, browser: str) -> None:
+    _environment(monkeypatch, BROWSER=browser, SSH_CONNECTION=SSH, TERM_PROGRAM="vscode", WSL_DISTRO_NAME="Ubuntu")
+    monkeypatch.setattr("sys.platform", "linux")
+    assert auto_method(PORT)[0] is SignInMethod.DEVICE
+
+
+@pytest.mark.parametrize(
+    ("browser", "env"),
+    [
+        (f"{VSCODE_HELPER} %s", {"TERM_PROGRAM": "vscode"}),
+        ('"/opt/VS Code/bin/helpers/browser.sh" %s', {"VSCODE_IPC_HOOK_CLI": VSCODE_IPC}),
+        ("/usr/bin/wslview", {"WSL_DISTRO_NAME": "Ubuntu"}),
+        ("wslview %s", {"WSL_DISTRO_NAME": "Ubuntu"}),
+    ],
+)
+def test_auto_recognizes_forwarding_helpers_and_a_single_url_argument(
+    monkeypatch: pytest.MonkeyPatch, browser: str, env: dict[str, str]
+) -> None:
+    _environment(monkeypatch, BROWSER=browser, **env)
+    monkeypatch.setattr("sys.platform", "linux")
+    assert auto_method(PORT)[0] is SignInMethod.BROWSER
+
+
 @pytest.mark.parametrize("method", [SignInMethod.BROWSER, SignInMethod.URL, SignInMethod.DEVICE])
 def test_an_explicit_method_is_never_second_guessed(monkeypatch: pytest.MonkeyPatch, method: SignInMethod) -> None:
     _environment(monkeypatch, SSH_CONNECTION=SSH, CODESPACES="true")
@@ -370,6 +406,48 @@ def test_an_explicit_method_is_never_second_guessed(monkeypatch: pytest.MonkeyPa
     request = SignInRequest(signup=False, provider=None, method=method, persistent=True)
     assert resolve(cli_settings(), request, notify=notes.append) is request
     assert notes == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "env",
+    [
+        {"SSH_CONNECTION": SSH, "TERM_PROGRAM": "vscode"},
+        {"WSL_DISTRO_NAME": "Ubuntu"},
+    ],
+    ids=["vscode-ssh", "headless-wsl"],
+)
+async def test_auto_with_a_text_browser_uses_device_without_launching_it(
+    monkeypatch: pytest.MonkeyPatch, fake_tenant: FakeTenant, env: dict[str, str]
+) -> None:
+    _environment(monkeypatch, BROWSER="w3m", **env)
+    monkeypatch.setattr("sys.platform", "linux")
+    # Keep the real webbrowser.get(): a VS Code/WSL marker does not turn this controller into a forwarding helper.
+    monkeypatch.setattr(webbrowser, "_tryorder", [])
+    monkeypatch.setattr(webbrowser, "_browsers", {})
+    controller = webbrowser.GenericBrowser("w3m")
+    webbrowser.register("w3m", None, controller, preferred=True)
+    assert webbrowser.get() is controller
+    opened: list[str] = []
+
+    def open_text_browser(url: str, new: int = 0, autoraise: bool = True) -> bool:
+        opened.append(url)
+        return False
+
+    monkeypatch.setattr(controller, "open", open_text_browser)
+    fake_tenant.queue(FakeTenant.DEVICE, fake_tenant.device_response(interval=1))
+    fake_tenant.queue(FakeTenant.TOKEN, fake_tenant.token_response())
+    request = SignInRequest(signup=False, provider=None, method=SignInMethod.AUTO, persistent=True)
+    grant = await sign_in(
+        cli_settings(),
+        request,
+        notify=lambda _message: None,
+        launcher=open_system_browser,
+        transport=fake_tenant.transport,
+    )
+    assert grant.identity.subject == fake_tenant.subject
+    assert opened == [] and fake_tenant.authorize_requests == []
+    assert len(fake_tenant.forms(FakeTenant.DEVICE)) == 1
 
 
 @pytest.mark.parametrize(
@@ -396,13 +474,17 @@ def test_the_system_browser_is_the_desktop_or_browser_env(
         handed.append(("default", url))  # webbrowser's whole list, text browsers included
         return True
 
-    class FirstChoice:
-        def open(self, url: str, new: int = 0, autoraise: bool = True) -> bool:
-            handed.append(("$BROWSER", url))
-            return True
+    def helper_open(url: str, new: int = 0, autoraise: bool = True) -> bool:
+        handed.append(("$BROWSER", url))
+        return True
 
+    # Exercise the real controller selection, intercepting only the final launch.
+    monkeypatch.setattr(webbrowser, "_tryorder", [])
+    monkeypatch.setattr(webbrowser, "_browsers", {})
+    controller = webbrowser.GenericBrowser(browser_env or "unused-browser")
+    webbrowser.register(controller.name, None, controller, preferred=True)
+    monkeypatch.setattr(controller, "open", helper_open)
     monkeypatch.setattr(webbrowser, "open", default_open)
-    monkeypatch.setattr(webbrowser, "get", lambda using=None: FirstChoice())
     assert open_system_browser("https://tenant.example/authorize") is (handed_to is not None)
     assert handed == ([] if handed_to is None else [(handed_to, "https://tenant.example/authorize")])
 
