@@ -4,23 +4,41 @@ import type { NavigationMenuItem } from '@nuxt/ui'
 // Shell after ../platform/frontend/app/app.vue: UHeader + UNavigationMenu + UMain + footer.
 const { rejected, clearRejected } = useAuth()
 
-const items: NavigationMenuItem[][] = [
+// Starting something new and the registry are menus; the four kinds of results stay one click away. Nine flat tabs
+// did not fit a laptop-width header.
+const route = useRoute()
+const under = (...prefixes: string[]) => prefixes.some(p => route.path === p || route.path.startsWith(`${p}/`))
+const items = computed<NavigationMenuItem[][]>(() => [
   [
-    { label: 'Run', icon: 'i-lucide-play', to: '/simulations/new' },
-    { label: 'Write', icon: 'i-lucide-square-pen', to: '/composites/new' },
-    { label: 'SED-ML', icon: 'i-lucide-scale', to: '/sedml' },
-    { label: 'Simulations', icon: 'i-lucide-list', to: '/simulations' },
+    {
+      label: 'New',
+      icon: 'i-lucide-plus',
+      active: under('/simulations/new', '/composites', '/sedml'),
+      children: [
+        { label: 'Run a simulation', icon: 'i-lucide-play', to: '/simulations/new', description: 'Upload a composite or a COMBINE archive.' },
+        { label: 'Write a composite', icon: 'i-lucide-square-pen', to: '/composites/new', description: 'Author a process-bigraph document, then run it.' },
+        { label: 'Run SED-ML', icon: 'i-lucide-scale', to: '/sedml', description: 'Run an archive on several solvers and compare them.' }
+      ]
+    },
+    { label: 'Simulations', icon: 'i-lucide-list', to: '/simulations', active: under('/simulations') && !under('/simulations/new') },
     { label: 'Comparisons', icon: 'i-lucide-git-compare', to: '/comparisons' },
     { label: 'Suites', icon: 'i-lucide-list-checks', to: '/suites' },
     { label: 'Datasets', icon: 'i-lucide-files', to: '/datasets' },
-    { label: 'Environments', icon: 'i-lucide-package-check', to: '/environments' },
-    { label: 'Catalog', icon: 'i-lucide-boxes', to: '/catalog' }
+    {
+      label: 'Registry',
+      icon: 'i-lucide-boxes',
+      active: under('/environments', '/catalog'),
+      children: [
+        { label: 'Environments', icon: 'i-lucide-package-check', to: '/environments', description: 'Where documents run, and the interfaces each provides.' },
+        { label: 'Catalog', icon: 'i-lucide-boxes', to: '/catalog', description: 'Every registered component and its curation level.' }
+      ]
+    }
   ],
   [
     { label: 'API docs', icon: 'i-lucide-book-open', to: '/docs', external: true, target: '_blank' },
     { label: 'GitHub', icon: 'i-simple-icons-github', to: 'https://github.com/biosimulations/compose-api', target: '_blank' }
   ]
-]
+])
 
 const version = ref<string | null>(null)
 onMounted(async () => {
@@ -42,7 +60,18 @@ onMounted(async () => {
       <UNavigationMenu :items="items[0]" class="hidden lg:flex" />
 
       <template #right>
-        <UNavigationMenu :items="items[1]" class="hidden lg:flex" />
+        <UTooltip v-for="link in items[1]" :key="link.label" :text="link.label">
+          <UButton
+            :to="link.to"
+            :external="link.external"
+            :target="link.target"
+            :icon="link.icon"
+            :aria-label="link.label"
+            color="neutral"
+            variant="ghost"
+            class="hidden lg:inline-flex"
+          />
+        </UTooltip>
         <AuthMenu />
       </template>
 
