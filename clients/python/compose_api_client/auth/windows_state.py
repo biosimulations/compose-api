@@ -1,4 +1,5 @@
-"""Windows owner-only ACL enforcement for non-secret concurrency state (loaded on Windows only)."""
+"""Windows owner-only ACL enforcement for non-secret concurrency state, and the session's Credential Manager item
+(loaded on Windows only)."""
 
 from __future__ import annotations
 
@@ -11,6 +12,7 @@ TOKEN_QUERY = 0x0008
 OBJECT_INHERIT_ACE = 0x1
 CONTAINER_INHERIT_ACE = 0x2
 FILE_ALL_ACCESS = 0x001F01FF
+ERROR_NOT_FOUND = 1168
 
 
 def _principals() -> tuple[Any, tuple[Any, ...]]:
@@ -88,17 +90,50 @@ def replace(source: str, target: Path) -> None:
 
 
 def write_credential(service: str, account: str, value: str) -> None:
-    """Atomic Credential Manager overwrite, without keyring's legacy shadow-copy migration."""
+    """Atomic Credential Manager overwrite, without keyring's legacy shadow-copy migration.
+
+    The item holds `value`'s UTF-8 bytes. pywin32 writes a blob only from a `str`, as UTF-16, which would double a
+    session past the item's 2560 bytes (#320), so it is handed the `str` whose UTF-16-LE code units are those bytes;
+    an odd length gains a NUL. `value` must be ASCII without NUL, as compact JSON is: then every code unit lies between
+    0x0001 and 0x7F7F, never NUL or a surrogate, and pywin32 stores it unchanged.
+    """
     import win32cred
 
+    data = value.encode("ascii")
+    if b"\0" in data:
+        raise ValueError("a credential value cannot contain NUL")
+    if len(data) % 2:
+        data += b"\0"
     win32cred.CredWrite(
         {
             "Type": win32cred.CRED_TYPE_GENERIC,
             "TargetName": service,
             "UserName": account,
-            "CredentialBlob": value,
+            "CredentialBlob": data.decode("utf-16-le"),
             "Persist": win32cred.CRED_PERSIST_LOCAL_MACHINE,
             "Comment": "Compose API CLI session",
         },
         0,
     )
+
+
+def read_credential(service: str, account: str) -> str | None:
+    """What `write_credential` stored for `account`, or None.
+
+    Not keyring's `get_password`: it decodes a blob as UTF-16 first and tries UTF-8 only when that fails, and an
+    even-length ASCII blob decodes as UTF-16 without failing, into other characters.
+    """
+    import pywintypes
+    import win32cred
+
+    try:
+        credential = win32cred.CredRead(Type=win32cred.CRED_TYPE_GENERIC, TargetName=service)
+    except pywintypes.error as error:
+        if error.winerror == ERROR_NOT_FOUND:
+            return None
+        raise
+    if credential["UserName"] != account:
+        return None  # not this account's item, as keyring treats it
+    blob: bytes = credential["CredentialBlob"]
+    # Undecodable bytes survive as lone surrogates, which the store refuses as an invalid encoding.
+    return blob.removesuffix(b"\0").decode("utf-8", "surrogateescape")
