@@ -146,7 +146,7 @@ const columns: TableColumn<SimulationSummary>[] = [
     </PageHeader>
     <UContainer class="py-6 flex flex-col gap-4">
       <div class="flex flex-wrap items-center gap-2">
-        <USelect v-model="status" :items="[...STATUSES]" placeholder="Any status" class="w-44" clearable />
+        <AnySelect v-model="status" :items="STATUSES" placeholder="Any status" class="w-44" />
         <UInput v-model.lazy="simulator" placeholder="Simulator name or hash prefix" icon="i-lucide-cpu" class="w-64" />
         <UInput v-model="since" type="date" class="w-44" title="Submitted on or after" />
         <UInputTags v-model="labels" placeholder="Label key:value" icon="i-lucide-filter" class="w-64" title="Labels, e.g. source:biomodels; all must match" />

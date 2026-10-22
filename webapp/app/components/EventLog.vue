@@ -75,7 +75,7 @@ function toggle(i: number) {
 <template>
   <div class="flex flex-col gap-3">
     <div class="flex flex-wrap items-center gap-2">
-      <USelect v-model="level" :items="levels" placeholder="Any level" class="w-36" clearable />
+      <AnySelect v-model="level" :items="levels" placeholder="Any level" class="w-36" />
       <UInput v-model.lazy="eventName" placeholder="Event name, e.g. job.started" icon="i-lucide-search" class="w-72" />
       <UButton icon="i-lucide-refresh-cw" variant="ghost" color="neutral" :loading="loading" @click="fetchMore(true)" />
       <span class="text-sm text-muted ml-auto">
