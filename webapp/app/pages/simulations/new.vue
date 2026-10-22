@@ -130,7 +130,7 @@ async function submit() {
       <section v-else-if="step === 1" class="flex flex-col gap-6">
         <template v-if="mode === 'archive'">
           <UFormField label="Simulator" :help="prebuilt.length ? 'A prebuilt image this deployment lists, or the shared container' : 'This deployment lists no prebuilt images; runs use the shared container'">
-            <USelect v-model="simulator" :items="prebuilt" placeholder="Shared container" clearable class="w-72" :disabled="!prebuilt.length" />
+            <AnySelect v-model="simulator" :items="prebuilt" placeholder="Shared container" class="w-72" :disabled="!prebuilt.length" />
           </UFormField>
           <UFormField label="Interval time" help="End time point, between 0 and 1000">
             <UInputNumber v-model="intervalTime" :min="0" :max="1000" :step="0.1" class="w-48" />

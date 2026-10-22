@@ -55,7 +55,7 @@ onMounted(load)
     <PageHeader title="Datasets" :description="`${total} files recorded by simulation runs`" />
     <UContainer class="py-6 flex flex-col gap-4">
       <div class="flex flex-wrap items-center gap-2">
-        <USelect v-model="kind" :items="kinds" placeholder="Any kind" class="w-40" clearable />
+        <AnySelect v-model="kind" :items="kinds" placeholder="Any kind" class="w-40" />
         <UInput v-model.lazy="q" placeholder="Path or name contains…" icon="i-lucide-search" class="w-64" />
         <UInput v-model.lazy.number="simulationId" type="number" placeholder="Simulation #" icon="i-lucide-hash" :min="1" class="w-40" />
       </div>
