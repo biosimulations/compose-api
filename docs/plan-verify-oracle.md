@@ -1,6 +1,6 @@
 # The BioSimulators verify oracle: checking our SED-ML comparisons against biosim's `/verify` API
 
-**Status (2026-10-22): in progress** (V0, V1 merged; V2 and V3 in review). Linking out to biosim.biosimulations.org pages is deferred: the platform's UI does
+**Status (2026-10-22): in progress** (V0–V3 merged; V4 in review). Linking out to biosim.biosimulations.org pages is deferred: the platform's UI does
 not use verification yet. Its `/utilities/verify-model` card is a dead link (`frontend/app/pages/utilities/index.vue`
 at `62bc540`), and project and run pages have no verification view to link to. This plan uses the API directly. One
 PR per step, each merged with a merge commit; deploying is a release, as usual.
@@ -9,9 +9,9 @@ PR per step, each merged with a merge commit; deploying is a release, as usual.
 |---|---|---|
 | V0 | This document | merged (#341) |
 | V1 | Legacy runs as references: a `biomodels:` source's original biosimulations.org run (no new simulation) | merged (#342), released 0.7.33 |
-| V2 | A client for the verify API, and a durable `verification` record per comparison | in review |
-| V3 | The verification worker: submit within the rate limit, poll, store, fold into the comparison | in review |
-| V4 | Triggers: one comparison on demand (API + CLI), and a suite option (`verify:`) | — |
+| V2 | A client for the verify API, and a durable `verification` record per comparison | merged (#344) |
+| V3 | The verification worker: submit within the rate limit, poll, store, fold into the comparison | merged (#344) |
+| V4 | Triggers: one comparison on demand (API + CLI), and a suite option (`verify:`) | in review |
 | V5 | Surface: the comparison page and the suite summary show each verification's verdict | — |
 
 ## Context
@@ -160,6 +160,20 @@ independent oracle.
   the verification.
 
 ### V4. Triggers
+
+**As built.**
+- `POST /comparisons/{id}/verify` takes an optional body, `{"simulators": [...]}`; without one it uses
+  `verify_simulators`. It answers 201 with the new verification, or 200 with the one already queued or running for the
+  same simulators, so asking twice costs biosim nothing.
+- `POST /suites/{name}/runs/{number}/verify?which=failing|all` replaces the planned
+  `comparisons verify --suite … --run … --failing`. The CLI commands are `comparisons verify`,
+  `comparisons verifications` and `suites verify NAME NUMBER [--all]`.
+- **"failing" means** a finished comparison whose solvers differ, that is incomplete, or that no agreeing reference
+  settles: none (no legacy project), or one that disagrees.
+- **`verify:` applies when a comparison is scored.** That happens when the comparison or its suite run is read, as
+  the monthly suites workflow does; nothing scores comparisons in the background.
+- **The suite page** shows each row's newest verification and its `verify_close`, and the summary counts `verifying`,
+  `verified` and `oracle_agrees`.
 - **One comparison, on demand.**
   - `POST /comparisons/{id}/verify` queues one (`kind=omex`). `GET /comparisons/{id}/verifications` lists them.
   - Their `operation_id`s get CLI commands (`compose-api comparisons verify`, `… verifications`), since the `@claims`

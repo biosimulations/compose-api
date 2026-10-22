@@ -99,9 +99,16 @@ from .suite_run_row import SuiteRunRow
 from .suite_run_row_drift_type_0 import SuiteRunRowDriftType0
 from .suite_run_view import SuiteRunView
 from .suite_run_view_summary import SuiteRunViewSummary
+from .suite_verify import SuiteVerify
+from .suite_verify_result import SuiteVerifyResult
 from .tolerances import Tolerances
 from .validation_error import ValidationError
 from .validation_error_context import ValidationErrorContext
+from .verification import Verification
+from .verification_failed_simulators_item import VerificationFailedSimulatorsItem
+from .verification_state import VerificationState
+from .verify_request import VerifyRequest
+from .verify_suite_run_which import VerifySuiteRunWhich
 from .visibility import Visibility
 
 __all__ = (
@@ -198,8 +205,15 @@ __all__ = (
     "SuiteRunRowDriftType0",
     "SuiteRunView",
     "SuiteRunViewSummary",
+    "SuiteVerify",
+    "SuiteVerifyResult",
     "Tolerances",
     "ValidationError",
     "ValidationErrorContext",
+    "Verification",
+    "VerificationFailedSimulatorsItem",
+    "VerificationState",
+    "VerifyRequest",
+    "VerifySuiteRunWhich",
     "Visibility",
 )

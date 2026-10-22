@@ -10,6 +10,7 @@ from compose_api.db.services.comparisons_db import ClaimedSuiteRun
 from compose_api.dependencies import get_required_database_service
 from compose_api.sedml import service, sources, suites
 from compose_api.sedml.compare import compare
+from compose_api.sedml.models import SuiteVerifyResult
 from compose_api.sedml.suites import Suite
 from compose_api.sedml.translator import TranslatorUnavailableError
 
@@ -36,6 +37,8 @@ class SuiteRunRow(BaseModel):
     drift: dict[str, Drift] | None = None
     expected: str | None = None
     failure: str | None = None
+    verification: str | None = None  # the newest verification's state (docs/plan-verify-oracle.md)
+    verify_close: bool | None = None
 
 
 class SuiteRunView(BaseModel):
@@ -167,6 +170,11 @@ async def view(suite: Suite, number: int) -> SuiteRunView | None:
         if before is not None and c.status != "running":
             entry.drift = await _drift(row, before)
         rows.append(entry)
+    latest = await db.latest_verifications([r.comparison_id for r in rows if r.comparison_id is not None])
+    for entry in rows:
+        v = latest.get(entry.comparison_id or -1)
+        if v is not None:
+            entry.verification, entry.verify_close = v.state, v.verify_close
     for source, why in (run.failures or {}).items():
         expected = suite.expected_for(source)
         rows.append(
@@ -182,11 +190,35 @@ async def view(suite: Suite, number: int) -> SuiteRunView | None:
         "running": sum(1 for r in rows if r.status == "running"),
         "failed": sum(1 for r in rows if r.failure and not r.expected),
         "drifted": sum(1 for r in rows if r.drift and any(d.close is False for d in r.drift.values())),
+        "verifying": sum(1 for r in rows if r.verification in ("requested", "submitted")),
+        "verified": sum(1 for r in rows if r.verification == "completed"),
+        "oracle_agrees": sum(1 for r in rows if r.verify_close is True),
     }
     return SuiteRunView(
         suite=suite.name, number=number, created_at=service._iso(run.created_at), status=run.status,
         baseline=suite.baseline, rows=rows, summary=summary,
     )  # fmt: skip
+
+
+async def verify(suite: Suite, number: int, which: str) -> SuiteVerifyResult | None:
+    """Queue a verification for each of the run's finished comparisons that ``which`` picks (V4)."""
+    from compose_api.sedml import verifications  # late: verifications imports the service
+
+    db = get_required_database_service().get_comparisons_db()
+    if not any(r.number == number for r in await db.suite_runs(suite.name)):
+        return None
+    result = SuiteVerifyResult(queued=[], already=[], running=0)
+    for row in await db.suite_comparisons(suite.name, number):
+        c = await service.comparison_view(row)
+        if c.status == "running":
+            result.running += 1
+            continue
+        if which == "failing" and not verifications.needs_verification(c):
+            continue
+        full = await db.get(c.comparison_id)
+        _, created = await verifications.queue(full or row)
+        (result.queued if created else result.already).append(c.comparison_id)
+    return result
 
 
 def _worst(result: dict[str, Any]) -> tuple[str | None, float | str | None]:

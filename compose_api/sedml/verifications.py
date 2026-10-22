@@ -23,9 +23,10 @@ from sqlalchemy.sql.elements import ColumnElement
 from compose_api.common.gateway.models import Namespace
 from compose_api.config import get_settings
 from compose_api.db.services.comparisons_db import ClaimedVerification, ComparisonRow
-from compose_api.dependencies import get_required_database_service
+from compose_api.db.tables.comparison_tables import ORMVerification
+from compose_api.dependencies import get_required_database_service, get_submission_worker
 from compose_api.sedml import service
-from compose_api.sedml.models import Tolerances
+from compose_api.sedml.models import Comparison, Tolerances, Verification
 from compose_api.sedml.verify import (
     RateBudget,
     VerifyClient,
@@ -179,3 +180,59 @@ async def source_archive(row: ComparisonRow) -> bytes:
         return path.read_bytes()
     except FileNotFoundError as e:
         raise VerificationFailedError(f"its archive {path} is gone") from e
+
+
+# -- queueing (V4) -- #
+
+ACTIVE = ("requested", "submitted")
+
+
+def needs_verification(comparison: Comparison) -> bool:
+    """D3's "failing": a finished comparison whose solvers differ, that is incomplete, or that no agreeing reference
+    settles (none, as for a source with no legacy project, or one that disagrees)."""
+    if comparison.status == "running":
+        return False
+    result = comparison.result or {}
+    return not (comparison.close is True and result.get("close_to_references") is True)
+
+
+async def queue(comparison: ComparisonRow, simulators: list[str] | None = None) -> tuple[ORMVerification, bool]:
+    """A verification of the comparison, and whether it is new: one already queued or running for the same
+    simulators is returned instead, so asking twice costs biosim nothing."""
+    db = get_required_database_service().get_comparisons_db()
+    chosen = list(dict.fromkeys(simulators or get_settings().verify_simulators))
+    for existing in await db.verifications(comparison.comparison.id):
+        if existing.state in ACTIVE and list(existing.simulators) == chosen:
+            return existing, False
+    tolerances = comparison.comparison.settings.get("tolerances", {})
+    verification_id = await db.insert_verification(comparison.comparison.id, chosen, {"tolerances": tolerances})
+    worker = get_submission_worker()
+    if worker is not None:
+        worker.kick()
+    created = next(v for v in await db.verifications(comparison.comparison.id) if v.id == verification_id)
+    return created, True
+
+
+def view(row: ORMVerification) -> Verification:
+    result = row.result or {}
+    runs = (result.get("workflow_results") or {}).get("sims_run_info") or []
+    origins = []
+    for info in runs:
+        version = (info.get("biosim_sim_run") or {}).get("simulator_version") or {}
+        if version.get("id"):
+            origins.append(f"biosimulators:{version['id']}:{version.get('version', '')}")
+    return Verification(
+        verification_id=row.id,
+        comparison_id=row.comparison_id,
+        state=row.state,  # type: ignore[arg-type]
+        simulators=list(row.simulators or []),
+        workflow_id=row.workflow_id,
+        workflow_status=row.workflow_status,
+        verify_close=row.verify_close,
+        references=origins if row.state == "completed" else [],
+        failed_simulators=list(result.get("failed_simulators") or []),
+        attempts=row.attempts,
+        last_error=row.last_error,
+        created_at=service._iso(row.created_at),
+        updated_at=service._iso(row.updated_at),
+    )

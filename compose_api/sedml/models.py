@@ -1,8 +1,8 @@
 """What the SED-ML routes take and answer."""
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 Severity = Literal["error", "warning", "info"]
 
@@ -87,3 +87,48 @@ class ComparisonSeries(BaseModel):
     labels: list[str]
     solvers: dict[str, dict[str, list[float | None]]]
     references: dict[str, dict[str, list[float | None]]]
+
+
+#: A BioSimulators simulator as biosim's /verify takes it: ``name`` or ``name:version``.
+SIMULATOR_PATTERN = r"^[a-z0-9][a-z0-9_-]*(:[A-Za-z0-9_.+-]+)?$"
+
+
+class VerifyRequest(BaseModel):
+    """Which BioSimulators simulators to verify a comparison with (docs/plan-verify-oracle.md, V4)."""
+
+    simulators: list[Annotated[str, StringConstraints(pattern=SIMULATOR_PATTERN)]] | None = Field(
+        default=None,
+        min_length=2,
+        max_length=10,
+        description="`name` or `name:version`; by default the service's (amici, copasi, pysces, tellurium, vcell)",
+    )
+
+
+class Verification(BaseModel):
+    """One request to biosim's /verify API about a comparison: the archive the comparison ran, on BioSimulators'
+    simulators (docs/plan-verify-oracle.md). Once `completed`, each simulator's reports are a reference on the
+    comparison, and `verify_close` says whether the simulators agree with each other."""
+
+    verification_id: int
+    comparison_id: int
+    state: Literal["requested", "submitted", "completed", "failed"]
+    simulators: list[str]
+    workflow_id: str | None = None
+    workflow_status: str | None = None
+    verify_close: bool | None = Field(default=None, description="BioSimulators' simulators agree on every report")
+    references: list[str] = Field(default_factory=list, description="the reference origins it added")
+    failed_simulators: list[dict[str, Any]] = Field(
+        default_factory=list, description="simulators whose runs at biosimulations.org produced no results"
+    )
+    attempts: int = 0
+    last_error: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class SuiteVerifyResult(BaseModel):
+    """Verifications queued for a suite run's comparisons."""
+
+    queued: list[int] = Field(description="comparisons a verification was queued for")
+    already: list[int] = Field(description="comparisons with a verification already queued or running")
+    running: int = Field(description="comparisons still running, not yet looked at")

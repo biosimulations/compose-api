@@ -3,15 +3,15 @@
 import math
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
 
 from compose_api.authentication import get_optional_principal
 from compose_api.authorization import OptionalCaller, readable_clause, readable_simulation_ids
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.db.services.comparisons_db import ComparisonRow
 from compose_api.dependencies import get_required_database_service
-from compose_api.sedml import service
-from compose_api.sedml.models import Comparison, ComparisonPage, ComparisonSeries
+from compose_api.sedml import service, verifications
+from compose_api.sedml.models import Comparison, ComparisonPage, ComparisonSeries, Verification, VerifyRequest
 
 config = RouterConfig(router=APIRouter(), prefix="/comparisons", dependencies=[Depends(get_optional_principal)])
 
@@ -92,3 +92,49 @@ async def get_comparison_series(comparison_id: int, report: str, caller: Optiona
         solvers={solver: finite(r.get(report, {})) for solver, r in found.items()},
         references={ref.origin: finite(ref.reports.get(report, {})) for ref in row.references},
     )
+
+
+@config.router.post(
+    path="/{comparison_id}/verify",
+    response_model=Verification,
+    operation_id="verify-comparison",
+    tags=["SED-ML"],
+    summary="Check a comparison against BioSimulators' simulators through biosim's /verify (queued; 201 when new)",
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        200: {
+            "model": Verification,
+            "description": "A verification for the same simulators is already queued or running; it is returned",
+        },
+        201: {"description": "Queued"},
+        404: {"description": "No such comparison"},
+    },
+)
+async def verify_comparison(
+    comparison_id: int,
+    caller: OptionalCaller,
+    response: Response,
+    request: Annotated[VerifyRequest | None, Body()] = None,
+) -> Verification:
+    row = await _readable_comparison(comparison_id, caller)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Comparison {comparison_id} not found.")
+    verification, created = await verifications.queue(row, request.simulators if request else None)
+    response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    return verifications.view(verification)
+
+
+@config.router.get(
+    path="/{comparison_id}/verifications",
+    response_model=list[Verification],
+    operation_id="list-comparison-verifications",
+    tags=["SED-ML"],
+    summary="A comparison's verifications against biosim's /verify, oldest first",
+    responses={404: {"description": "No such comparison"}},
+)
+async def list_comparison_verifications(comparison_id: int, caller: OptionalCaller) -> list[Verification]:
+    row = await _readable_comparison(comparison_id, caller)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Comparison {comparison_id} not found.")
+    found = await get_required_database_service().get_comparisons_db().verifications(comparison_id)
+    return [verifications.view(v) for v in found]

@@ -145,6 +145,10 @@ class ComparisonsDatabaseService(ABC):
         """The comparison's verifications, oldest first."""
 
     @abstractmethod
+    async def latest_verifications(self, comparison_ids: list[int]) -> dict[int, ORMVerification]:
+        """Each comparison's newest verification, for those that have one."""
+
+    @abstractmethod
     async def replace_reference(self, comparison_id: int, origin: str, reports: dict[str, Any]) -> None:
         """Add the reference, or replace the one from the same origin."""
 
@@ -363,6 +367,19 @@ class ComparisonsORMExecutor(ComparisonsDatabaseService):
                 .order_by(ORMVerification.id)
             )
             return list(rows.scalars())
+
+    @override
+    async def latest_verifications(self, comparison_ids: list[int]) -> dict[int, ORMVerification]:
+        if not comparison_ids:
+            return {}
+        async with self.session_maker() as session:
+            rows = await session.execute(
+                select(ORMVerification)
+                .where(ORMVerification.comparison_id.in_(comparison_ids))
+                .order_by(ORMVerification.comparison_id, ORMVerification.id.desc())
+                .distinct(ORMVerification.comparison_id)
+            )
+            return {r.comparison_id: r for r in rows.scalars()}
 
     @override
     async def replace_reference(self, comparison_id: int, origin: str, reports: dict[str, Any]) -> None:
