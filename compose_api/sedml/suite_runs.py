@@ -104,6 +104,8 @@ async def _submit_source(suite: Suite, source: str, number: int) -> str | None:
         references = None
         if kind == "biomodels":
             path = await sources.biomodel_archive(ident)
+            # its original BioSimulators runs on biosimulations.org (docs/plan-verify-oracle.md, V1)
+            references = await sources.biomodel_references(ident) or None
         else:
             path = await sources.project_archive(ident)
             info = await sources.project(ident)

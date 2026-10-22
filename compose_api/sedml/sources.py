@@ -181,6 +181,35 @@ async def project(project_id: str) -> ProjectInfo:
     return info
 
 
+async def legacy_projects(model_id: str) -> list[ProjectInfo]:
+    """The biosimulations.org projects imported from a BioModels entry: those named ``<model id>_<simulator>_<title>``
+    (275 of the first 300 curated entries have one; docs/plan-verify-oracle.md, V1)."""
+    check_biomodel_id(model_id)
+    prefix = f"{model_id}_"
+    return [_project(p) for p in await _projects() if str(p.get("id", "")).startswith(prefix)]
+
+
+async def biomodel_references(model_id: str) -> dict[str, dict[str, dict[str, Series]]]:
+    """A BioModels entry's original BioSimulators results, from its biosimulations.org projects' runs, as references:
+    ``{"biosimulations:<simulator>": {"<sedml>/<report>": {label: series}}}``. Their archives are the entry's own, so
+    the report names line up with the comparison's. A project whose results cannot be read is skipped: a reference is
+    evidence, never a reason to refuse the run."""
+    references: dict[str, dict[str, dict[str, Series]]] = {}
+    try:
+        found = await legacy_projects(model_id)
+    except (SourceNotFoundError, SourceUnavailableError):
+        return references
+    for legacy in found:
+        try:
+            info = await project(legacy.id)
+            reference = await project_reference(legacy.id)
+        except (SourceNotFoundError, SourceUnavailableError, OSError, zipfile.BadZipFile, ValueError, KeyError):
+            continue
+        if reference:
+            references.setdefault(f"biosimulations:{info.simulator or info.run}", reference)
+    return references
+
+
 async def project_archive(project_id: str) -> Path:
     """The project's archive (its run's input), cached by its last update."""
     info = await project(project_id)
