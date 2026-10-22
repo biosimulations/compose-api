@@ -59,3 +59,15 @@ async def test_slurm_job_submit(
         assert submitted_job is not None and len(submitted_job) == 1
         assert submitted_job[0].job_id == job_id
         assert submitted_job[0].name == "my_test_job"
+
+
+def test_sacct_none_start_of_a_job_cancelled_before_it_ran_is_missing() -> None:
+    """The line the throwaway cluster's sacct printed for a job scancelled while pending. Its start "None" used to
+    reach ``datetime.fromisoformat`` in update_hpcrun_status: the monitor raised on every pass, and the run stayed
+    RUNNING."""
+    job = SlurmJob.from_sacct_formatted_output(
+        "1|my_test_job|root|root|CANCELLED by 0|None|2026-10-22T17:26:33|00:00:00|0:0|"
+    )
+    assert job.job_state == "CANCELLED"
+    assert job.start_time is None
+    assert job.end_time == "2026-10-22T17:26:33"
