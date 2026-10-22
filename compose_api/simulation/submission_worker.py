@@ -30,11 +30,13 @@ import uuid
 
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService
+from compose_api.db.services.comparisons_db import ClaimedSuiteRun
 from compose_api.observability.api_events import record_api_event
 from compose_api.simulation import staging
 from compose_api.simulation.hpc_utils import get_correlation_id
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import JobType, Simulation, Submission, SubmissionState
+from compose_api.simulation.scheduling import SubmissionPolicy
 from compose_api.simulation.simulation_service import SimulationService
 
 logger = logging.getLogger(__name__)
@@ -66,6 +68,7 @@ class SubmissionWorker:
         self.owner = owner or f"{os.environ.get('HOSTNAME', 'api')}-{uuid.uuid4().hex[:8]}"
         self._wake = asyncio.Event()
         self._working: dict[int, asyncio.Task[None]] = {}
+        self._suite: asyncio.Task[None] | None = None
         self._loop: asyncio.Task[None] | None = None
         self._stopping = False
 
@@ -86,6 +89,10 @@ class SubmissionWorker:
             self._loop.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._loop
+        if self._suite is not None:
+            self._suite.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await self._suite
         working = list(self._working.items())
         for _, task in working:
             task.cancel()
@@ -107,36 +114,91 @@ class SubmissionWorker:
                 await asyncio.wait_for(self._wake.wait(), timeout=poll)
 
     async def run_once(self) -> list[int]:
-        """Claim what fits in the free slots and start working on it; the simulations claimed."""
+        """Pick up a suite run to submit, if none is in hand; claim what fits in the free slots, ask the scheduling
+        policy which of it to work on now, and put the rest back. The simulations started."""
+        await self._claim_suite_runs()
         settings = get_settings()
         free = settings.submission_worker_concurrency - len(self._working)
         if free <= 0:
             return []
-        claimed = await self.database_service.get_hpc_db().claim_submissions(
+        hpc_db = self.database_service.get_hpc_db()
+        claimed = await hpc_db.claim_submissions(
             owner=self.owner,
             lease_seconds=settings.submission_lease_seconds,
             limit=free,
             exclude=frozenset(self._working),
         )
-        for submission in claimed:
+        if not claimed:
+            return []
+        go, wait = SubmissionPolicy.from_settings().select(claimed, await hpc_db.submission_load())
+        for submission in wait:
+            await hpc_db.defer_submission(submission.simulation_id, self.owner, settings.submission_defer_seconds)
+        for submission in go:
             if submission.state is not SubmissionState.REQUESTED:
                 logger.info(f"Simulation {submission.simulation_id}: claimed, resuming from {submission.state}")
             task = asyncio.create_task(self._work(submission), name=f"submission-{submission.simulation_id}")
             self._working[submission.simulation_id] = task
             task.add_done_callback(functools.partial(self._done, submission.simulation_id))
-        return [s.simulation_id for s in claimed]
+        return [s.simulation_id for s in go]
 
     def _done(self, simulation_id: int, _task: "asyncio.Task[None]") -> None:
         self._working.pop(simulation_id, None)
         self.kick()  # a slot is free
+
+    # -- suite runs (docs/plan-durable-submission.md, Q4) -- #
+
+    async def _claim_suite_runs(self) -> None:
+        """One suite run at a time per worker: its sources are submitted in order, each recorded before the next."""
+        if self._suite is not None:
+            return
+        runs = await self.database_service.get_comparisons_db().claim_suite_runs(
+            owner=self.owner, lease_seconds=get_settings().submission_lease_seconds, limit=1
+        )
+        if runs:
+            run = runs[0]
+            if run.next_source:
+                logger.info(f"suite {run.collection} run {run.number}: claimed, resuming at source {run.next_source}")
+            self._suite = asyncio.create_task(self._work_suite(run), name=f"suite-run-{run.id}")
+
+    async def _work_suite(self, run: ClaimedSuiteRun) -> None:
+        from compose_api.sedml import suite_runs  # late: the SED-ML modules import the simulation ones
+
+        db = self.database_service.get_comparisons_db()
+        lease = get_settings().submission_lease_seconds
+        step = asyncio.current_task()
+
+        async def keep() -> None:
+            while True:
+                await asyncio.sleep(max(1.0, lease / 3))
+                with contextlib.suppress(Exception):
+                    if not await db.renew_suite_run_lease(run.id, self.owner, lease) and step is not None:
+                        step.cancel(msg="lost lease")
+                        return
+
+        renewing = asyncio.create_task(keep())
+        try:
+            await suite_runs.submit_run(run, self.owner)
+        except asyncio.CancelledError:
+            if self._stopping:
+                raise
+            task = asyncio.current_task()
+            if task is not None:
+                task.uncancel()
+        except Exception:
+            logger.exception(f"suite {run.collection} run {run.number}: submission failed; resumed on a later pass")
+        finally:
+            renewing.cancel()
+            self._suite = None
+            self.kick()
 
     async def drain(self, timeout: float = 60.0) -> None:
         """Work until nothing is due or in hand (for tests and one-off use)."""
         async with asyncio.timeout(timeout):
             while True:
                 claimed = await self.run_once()
-                if self._working:
-                    await asyncio.wait(list(self._working.values()), return_when=asyncio.FIRST_COMPLETED)
+                pending = [*self._working.values(), *([self._suite] if self._suite is not None else [])]
+                if pending:
+                    await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
                 elif not claimed:
                     return
 

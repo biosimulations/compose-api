@@ -1,20 +1,19 @@
 """Running a suite and reading a suite run (compose_api/sedml/suites.py; docs/plan-sedml.md, phase 6)."""
 
-import asyncio
 import logging
 from typing import Any
 
 from fastapi import BackgroundTasks
 from pydantic import BaseModel
 
+from compose_api.db.services.comparisons_db import ClaimedSuiteRun
 from compose_api.dependencies import get_required_database_service
-from compose_api.sedml import service, sources
+from compose_api.sedml import service, sources, suites
 from compose_api.sedml.compare import compare
 from compose_api.sedml.suites import Suite
 from compose_api.sedml.translator import TranslatorUnavailableError
 
 logger = logging.getLogger(__name__)
-_running: set[asyncio.Task[None]] = set()
 
 
 class Drift(BaseModel):
@@ -55,52 +54,85 @@ class SuiteRunInfo(BaseModel):
     status: str
 
 
+#: Where a suite's runs wait, and how far behind interactive ones (docs/plan-durable-submission.md, Q3).
+SUITE_PRIORITY = -10
+
+
+def suite_queue(name: str) -> str:
+    return f"suite:{name}"
+
+
 async def start(suite: Suite) -> int:
-    """A new run of the suite, its sources fetched, translated and submitted in the background; its number."""
-    run_id, number = await get_required_database_service().get_comparisons_db().new_suite_run(suite.name)
-    task = asyncio.create_task(_submit_all(suite, run_id, number))
-    _running.add(task)
-    task.add_done_callback(_running.discard)
+    """A new run of the suite, recorded with its sources; the submission worker fetches, translates and submits them,
+    resuming after a restart from the source it had reached. Its number."""
+    from compose_api.dependencies import get_submission_worker  # late: dependencies imports the simulation modules
+
+    _, number = await get_required_database_service().get_comparisons_db().new_suite_run(suite.name, suite.sources)
+    worker = get_submission_worker()
+    if worker is not None:
+        worker.kick()
     return number
 
 
-async def _submit_all(suite: Suite, run_id: int, number: int) -> None:
-    failures: dict[str, Any] = {}
+async def submit_run(run: ClaimedSuiteRun, owner: str) -> None:
+    """Submit a claimed suite run's sources from where it got to: skip one already submitted (by an earlier worker),
+    record each one's progress (and its failure) before the next, and finish the run after the last. Stops quietly if
+    the run was taken over (its lease lost)."""
+    db = get_required_database_service().get_comparisons_db()
+    found = suites.suite(run.collection)
+    sources_ = list(run.sources or [])
+    for index in range(run.next_source, len(sources_)):
+        source = sources_[index]
+        failure = None
+        if found is None:
+            failure = (source, f"the suite {run.collection!r} is no longer defined")
+        elif not await db.suite_source_submitted(run.collection, run.number, source):
+            why = await _submit_source(found, source, run.number)
+            failure = (source, why) if why is not None else None
+        if not await db.advance_suite_run(run.id, owner, index + 1, failure):
+            logger.warning(f"suite {run.collection} run {run.number}: taken over at source {index}; stopping")
+            return
+    await db.finish_suite_run(run.id, owner)
+
+
+async def _submit_source(suite: Suite, source: str, number: int) -> str | None:
+    """Fetch, translate and queue one source's runs; why not, if it could not be."""
     jobs = BackgroundTasks()
     solvers = service.chosen_solvers(suite.solvers)
-    for source in suite.sources:
-        kind, _, ident = source.partition(":")
-        try:
-            references = None
-            if kind == "biomodels":
-                path = await sources.biomodel_archive(ident)
-            else:
-                path = await sources.project_archive(ident)
-                info = await sources.project(ident)
-                reference = await sources.project_reference(ident)
-                references = {f"biosimulations:{info.simulator or info.run}": reference} if reference else None
-            translation = await service.translate_upload(path, solvers)
-            ids = await service.submit(
-                translation, path, source, solvers, None, [suite.name], None, suite.tolerances, jobs,
-                references=references, collection=suite.name, suite_run=number,
-            )  # fmt: skip
-            if not ids:
-                failures[source] = (
-                    "no task was accepted by any solver: "
-                    + "; ".join(f"{f.code} {f.message}" for f in translation.findings if f.severity == "error")[:2000]
-                )
-        except (
-            sources.SourceNotFoundError,
-            sources.SourceUnavailableError,
-            TranslatorUnavailableError,
-            ValueError,
-        ) as e:
-            failures[source] = str(e)[:2000]
-        except Exception as e:  # one source must not stop the rest
-            logger.exception("suite %s run %d: %s failed", suite.name, number, source)
-            failures[source] = f"{type(e).__name__}: {e}"[:2000]
-    await get_required_database_service().get_comparisons_db().finish_suite_run(run_id, failures)
-    await jobs()  # the runs' submissions (run_simulation's background work)
+    kind, _, ident = source.partition(":")
+    try:
+        references = None
+        if kind == "biomodels":
+            path = await sources.biomodel_archive(ident)
+        else:
+            path = await sources.project_archive(ident)
+            info = await sources.project(ident)
+            reference = await sources.project_reference(ident)
+            references = {f"biosimulations:{info.simulator or info.run}": reference} if reference else None
+        translation = await service.translate_upload(path, solvers)
+        ids = await service.submit(
+            translation, path, source, solvers, None, [suite.name], None, suite.tolerances, jobs,
+            references=references, collection=suite.name, suite_run=number,
+            queue=suite_queue(suite.name), priority=SUITE_PRIORITY, batch=True,
+        )  # fmt: skip
+        if not ids:
+            return (
+                "no task was accepted by any solver: "
+                + "; ".join(f"{f.code} {f.message}" for f in translation.findings if f.severity == "error")[:2000]
+            )
+    except (
+        sources.SourceNotFoundError,
+        sources.SourceUnavailableError,
+        TranslatorUnavailableError,
+        ValueError,
+    ) as e:
+        return str(e)[:2000]
+    except Exception as e:  # one source must not stop the rest
+        logger.exception("suite %s run %d: %s failed", suite.name, number, source)
+        return f"{type(e).__name__}: {e}"[:2000]
+    finally:
+        await jobs()  # cleanup only: the runs themselves are queued for the submission worker
+    return None
 
 
 async def runs(suite: Suite) -> list[SuiteRunInfo]:

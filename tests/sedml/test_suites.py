@@ -1,19 +1,19 @@
 """Suites (docs/plan-sedml.md, phase 6): the seed suites parse, and a suite run submits every source, is read per
 source (agreement, references), and once a run is the baseline, the next is compared with it solver by solver."""
 
-import asyncio
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import pytest
 
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.db.database_service import DatabaseServiceSQL
-from compose_api.sedml import suite_runs, suites
+from compose_api.sedml import suites
 from compose_api.sedml.suites import Suite, load_suites
 from compose_api.simulation.models import JobType
+from compose_api.simulation.submission_worker import SubmissionWorker
 from tests.sedml.conftest import PROJECT, needs_translator
 
 
@@ -50,9 +50,9 @@ async def _finish(database_service: DatabaseServiceSQL, runs: list[Any], tmp_pat
             path.write_text("\n".join(rows) + "\n")
 
 
-async def _settled() -> None:
-    while suite_runs._running:
-        await asyncio.gather(*list(suite_runs._running))
+async def _settled(database_service: DatabaseServiceSQL) -> None:
+    """The submission worker takes the suite run's sources (its runs here are recorded, not queued)."""
+    await SubmissionWorker(database_service, cast(Any, None), cast(Any, None), owner="suite-test").drain()
 
 
 @needs_translator
@@ -75,7 +75,7 @@ async def test_a_suite_run_and_its_drift_from_the_baseline(
 
     started = (await client.post("/suites/test-suite/run")).json()
     assert started["number"] == 1
-    await _settled()
+    await _settled(database_service)
     assert [r["number"] for r in (await client.get("/suites/test-suite/runs")).json()] == [1]
     first = submitted["runs"]
     assert len(first) == 4  # two sources, two solvers each; the third source is not upstream
@@ -98,7 +98,7 @@ async def test_a_suite_run_and_its_drift_from_the_baseline(
     # run 1 accepted as the baseline; run 2's COPASI results drift, Tellurium's do not
     monkeypatch.setattr(test_suite, "baseline", 1)
     assert (await client.post("/suites/test-suite/run")).json()["number"] == 2
-    await _settled()
+    await _settled(database_service)
     second = submitted["runs"][4:]
     await _finish(database_service, [r for r in second if r[0].labels["solver"] == "tellurium"], tmp_path)
     await _finish(database_service, [r for r in second if r[0].labels["solver"] == "copasi"], tmp_path, scale=1.5)
