@@ -19,6 +19,8 @@ from compose_api_client.profiles import CliSettings
 
 SERVICE = "compose-api.cli.v1"
 MAX_RECORD_BYTES = 65536
+WINDOWS_ITEM_BYTES = 2560  # one Credential Manager blob (CRED_MAX_CREDENTIAL_BLOB_SIZE), holding the record as UTF-8
+PROBE_VALUE = "compose-api-storage-probe"  # non-secret; an odd length, so a Windows probe takes the padded path
 # Where there is no usable OS store, the memory-only alternative is the only safe one; there is no file fallback.
 EPHEMERAL_HINT = " (on a host without one, API commands can sign in for a single run with --ephemeral-auth)"
 APPROVED_BACKENDS = frozenset({
@@ -81,20 +83,45 @@ class KeyringCredentialStore:
                 + EPHEMERAL_HINT
             )
         self.backend = backend
+        # Credential Manager items, the probe's included, are written and read natively (windows_state); keyring
+        # still deletes them.
+        self.windows = backend_type.__module__ == "keyring.backends.Windows"
+
+    def _get(self, service: str, account: str) -> str | None:
+        if self.windows:
+            from compose_api_client.auth.windows_state import read_credential
+
+            return read_credential(service, account)
+        return self.backend.get_password(service, account)
+
+    def _set(self, service: str, account: str, value: str) -> None:
+        if self.windows:
+            from compose_api_client.auth.windows_state import write_credential
+
+            # keyring's Windows set_password backs up the previous item under a compound name, and writes UTF-16.
+            # Use the native single-item replacement instead, so spent credentials never survive as shadow copies
+            # and the record is stored as UTF-8.
+            write_credential(service, account, value)
+        else:
+            self.backend.set_password(service, account, value)
 
     def probe(self) -> None:
-        """Detect write-locked stores before interactive sign-in using an ephemeral, non-secret marker."""
+        """Detect write-locked stores before interactive sign-in using an ephemeral, non-secret marker.
+
+        It is written and read as a session is (natively on Windows), and deleted through keyring as logout deletes, so
+        a store that would refuse the save fails here, before the browser opens.
+        """
         account = uuid.uuid4().hex
         service = f"{SERVICE}.probe.{account}"
         try:
             try:
-                self.backend.set_password(service, account, "compose-api-storage-probe")
-                usable = self.backend.get_password(service, account) == "compose-api-storage-probe"
+                self._set(service, account, PROBE_VALUE)
+                usable = self._get(service, account) == PROBE_VALUE
             finally:
                 # Even a failed write may have taken effect; never leave a probe intentionally.
-                if self.backend.get_password(service, account) is not None:
+                if self._get(service, account) is not None:
                     self.backend.delete_password(service, account)
-                removed = self.backend.get_password(service, account) is None
+                removed = self._get(service, account) is None
         except Exception:
             raise StorageError(
                 "OS credential store is locked or not writable; unlock it before signing in" + EPHEMERAL_HINT
@@ -104,7 +131,7 @@ class KeyringCredentialStore:
 
     def _read(self, binding_key: str) -> str | None:
         try:
-            return self.backend.get_password(f"{SERVICE}.{binding_key}", binding_key)
+            return self._get(f"{SERVICE}.{binding_key}", binding_key)
         except Exception:
             # Third-party OS bindings have heterogeneous errors. Never propagate their text or cause.
             raise StorageError("OS credential store is unavailable or locked; unlock it and retry") from None
@@ -133,21 +160,17 @@ class KeyringCredentialStore:
         payload = record.model_dump(mode="json")
         payload["access_token"] = record.access_token.get_secret_value()
         payload["refresh_token"] = None if record.refresh_token is None else record.refresh_token.get_secret_value()
-        raw = json.dumps(payload, separators=(",", ":"))
-        # Windows generic credentials have a 2560-byte blob limit; never split a record.
-        windows = type(self.backend).__module__ == "keyring.backends.Windows"
-        if len(raw.encode()) > MAX_RECORD_BYTES or (windows and len(raw.encode("utf-16-le")) > 2560):
-            raise StorageError("Credential record exceeds this OS backend's atomic item limit; session not saved")
+        # ASCII, as the Windows item requires (`write_credential`): non-ASCII characters are escaped, never written.
+        raw = json.dumps(payload, separators=(",", ":"), ensure_ascii=True)
+        # Never split a record. A realistic session (about 1700 bytes) fits a Credential Manager item only as UTF-8.
+        if len(raw.encode()) > (WINDOWS_ITEM_BYTES if self.windows else MAX_RECORD_BYTES):
+            raise StorageError(
+                "Credential record exceeds this OS backend's atomic item limit, so the session was not saved; API"
+                " commands can still sign in for a single run with --ephemeral-auth"
+            )
         try:
-            if windows:
-                from compose_api_client.auth.windows_state import write_credential
-
-                # keyring's Windows set_password backs up the previous item under a compound name. Use the
-                # native single-item replacement instead so spent credentials never survive as shadow copies.
-                write_credential(f"{SERVICE}.{binding_key}", binding_key, raw)
-            else:
-                self.backend.set_password(f"{SERVICE}.{binding_key}", binding_key, raw)
-            saved = self.backend.get_password(f"{SERVICE}.{binding_key}", binding_key)
+            self._set(f"{SERVICE}.{binding_key}", binding_key, raw)
+            saved = self._get(f"{SERVICE}.{binding_key}", binding_key)
         except Exception:
             raise StorageError(
                 "OS credential write could not be confirmed; sign in again after repairing the store"
@@ -179,13 +202,6 @@ def open_persistent_store(settings: CliSettings, *, check: bool = True, writable
             "OS credential backend is unavailable; persistent sign-in requires a supported keyring" + EPHEMERAL_HINT
         ) from None
     store = KeyringCredentialStore(backend)
-    if writable and type(backend).__module__ == "keyring.backends.Windows":
-        # A realistic session overflows a Credential Manager item (#320), so `save` would refuse it only after a
-        # completed sign-in. Stop before the browser opens instead.
-        raise StorageError(
-            "Windows Credential Manager cannot hold a saved session yet, so sign-in was not started; API commands can"
-            " sign in for a single run with --ephemeral-auth"
-        )
     if writable:
         store.probe()
     if check:

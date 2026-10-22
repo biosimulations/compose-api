@@ -56,8 +56,8 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gnome-keyring dbus
 
-      # On Windows a realistic session exceeds Credential Manager's 2560-byte limit; the test asserts that it is
-      # refused cleanly, which is the documented behaviour until sessions are stored in that limit.
+      # On Windows a realistic session fits Credential Manager's 2560-byte item only as UTF-8 (#320); the test saves
+      # and reloads one of each length parity and checks the bytes the item holds.
       - name: Exercise the real credential store
         env:
           COMPOSE_API_TEST_OS_KEYRING: "1"

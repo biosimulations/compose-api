@@ -343,6 +343,64 @@ def no_os_keyring(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(keyring, "get_keyring", FailKeyring)
 
 
+class WinError(Exception):
+    """`pywintypes.error`: a Win32 error code and the function that failed."""
+
+    def __init__(self, winerror: int, funcname: str, strerror: str) -> None:
+        super().__init__(winerror, funcname, strerror)
+        self.winerror = winerror
+        self.funcname = funcname
+
+
+class FakeCredentialManager:
+    """pywin32's `win32cred` over a dict, as Windows behaves where the CLI relies on it: `CredWrite` takes the blob as a
+    `str` and keeps its UTF-16-LE bytes, refusing more than 2560 of them; `CredRead` returns those bytes; a missing
+    item is error 1168."""
+
+    CRED_TYPE_GENERIC = 1
+    CRED_PERSIST_LOCAL_MACHINE = 2
+    CRED_PERSIST_ENTERPRISE = 3  # what keyring's own set_password writes with; the CLI never calls it on Windows
+
+    def __init__(self) -> None:
+        self.items: dict[str, dict[str, Any]] = {}
+        self.writes: list[str] = []
+
+    def CredWrite(self, credential: dict[str, Any], flags: int) -> None:
+        blob = credential["CredentialBlob"]
+        assert isinstance(blob, str) and flags == 0, "pywin32 converts only a str blob"
+        data = blob.encode("utf-16-le")
+        if len(data) > 2560:  # CRED_MAX_CREDENTIAL_BLOB_SIZE
+            raise WinError(87, "CredWrite", "The parameter is incorrect.")
+        self.writes.append(credential["TargetName"])
+        self.items[credential["TargetName"]] = {**credential, "CredentialBlob": data}
+
+    def CredRead(self, TargetName: str, Type: int, Flags: int = 0) -> dict[str, Any]:
+        assert Type == self.CRED_TYPE_GENERIC
+        if TargetName not in self.items:
+            raise WinError(1168, "CredRead", "Element not found.")
+        return dict(self.items[TargetName])
+
+    def CredDelete(self, TargetName: str, Type: int, Flags: int = 0) -> None:
+        if self.items.pop(TargetName, None) is None:
+            raise WinError(1168, "CredDelete", "Element not found.")
+
+
+@pytest.fixture
+def windows_credential_manager(monkeypatch: pytest.MonkeyPatch) -> FakeCredentialManager:
+    """A fake Credential Manager behind both callers: the CLI's native calls (`auth/windows_state.py`) and keyring's
+    Windows backend, which the CLI still uses to delete. `keyring.get_keyring()` returns that backend."""
+    from keyring.backends import Windows
+
+    manager = FakeCredentialManager()
+    errors = SimpleNamespace(error=WinError)
+    monkeypatch.setitem(sys.modules, "win32cred", manager)
+    monkeypatch.setitem(sys.modules, "pywintypes", errors)
+    monkeypatch.setattr(Windows, "win32cred", manager, raising=False)
+    monkeypatch.setattr(Windows, "pywintypes", errors, raising=False)
+    monkeypatch.setattr(keyring, "get_keyring", Windows.WinVaultKeyring)
+    return manager
+
+
 def use_profile(monkeypatch: pytest.MonkeyPatch, settings: CliSettings) -> None:
     """Point the default profile at `settings` through the environment, as a person's shell would."""
     for field in ("api_base_url", "auth0_domain", "auth0_audience", "auth0_client_id", "callback_port"):
