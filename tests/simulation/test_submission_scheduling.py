@@ -1,5 +1,6 @@
 """Scheduling and resumable suite runs (docs/plan-durable-submission.md, Q3 and Q4)."""
 
+import asyncio
 import datetime
 from collections import Counter
 from collections.abc import Iterator
@@ -136,3 +137,28 @@ async def test_a_source_already_submitted_before_a_restart_is_not_submitted_agai
     )  # fmt: skip
     await SubmissionWorker(database_service, cast(Any, None), cast(Any, None), owner="w").drain()
     assert submitted == ["biomodels:B2"]
+
+
+@pytest.mark.asyncio
+async def test_a_worker_shutting_down_gives_its_suite_run_back_at_once(
+    database_service: DatabaseServiceSQL, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The next worker resumes the run straight away, without waiting out the lease (kill test, 2026-10-22)."""
+    test_suite = Suite(name="handover-suite", description="two", sources=["biomodels:A1", "biomodels:B2"])
+    monkeypatch.setattr(suites, "load_suites", lambda: {"handover-suite": test_suite})
+    started = asyncio.Event()
+
+    async def slow_source(suite: Suite, source: str, number: int) -> str | None:
+        started.set()
+        await asyncio.sleep(3600)  # the pod goes away mid-source
+        return None
+
+    monkeypatch.setattr(suite_runs, "_submit_source", slow_source)
+    number = await suite_runs.start(test_suite)
+    first = SubmissionWorker(database_service, cast(Any, None), cast(Any, None), owner="first")
+    await first.run_once()
+    await asyncio.wait_for(started.wait(), timeout=10)
+    await first.close()
+
+    claimed = await database_service.get_comparisons_db().claim_suite_runs(owner="second", lease_seconds=60, limit=1)
+    assert [(r.collection, r.number, r.next_source) for r in claimed] == [("handover-suite", number, 0)]

@@ -61,6 +61,11 @@ class ComparisonsDatabaseService(ABC):
     async def renew_suite_run_lease(self, run_id: int, owner: str, lease_seconds: int) -> bool: ...
 
     @abstractmethod
+    async def release_suite_run(self, run_id: int, owner: str) -> None:
+        """Give the run back at once (a worker shutting down), so the next worker resumes it without waiting out the
+        lease."""
+
+    @abstractmethod
     async def advance_suite_run(
         self, run_id: int, owner: str, next_source: int, failure: tuple[str, str] | None = None
     ) -> bool:
@@ -170,6 +175,10 @@ class ComparisonsORMExecutor(ComparisonsDatabaseService):
     async def renew_suite_run_lease(self, run_id: int, owner: str, lease_seconds: int) -> bool:
         expires = func.localtimestamp() + func.make_interval(0, 0, 0, 0, 0, 0, lease_seconds)
         return await self._update_held(run_id, owner, lease_expires_at=expires)
+
+    @override
+    async def release_suite_run(self, run_id: int, owner: str) -> None:
+        await self._update_held(run_id, owner, lease_owner=None, lease_expires_at=None)
 
     @override
     async def advance_suite_run(

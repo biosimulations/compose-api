@@ -69,6 +69,7 @@ class SubmissionWorker:
         self._wake = asyncio.Event()
         self._working: dict[int, asyncio.Task[None]] = {}
         self._suite: asyncio.Task[None] | None = None
+        self._suite_run_id: int | None = None
         self._loop: asyncio.Task[None] | None = None
         self._stopping = False
 
@@ -89,10 +90,15 @@ class SubmissionWorker:
             self._loop.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._loop
-        if self._suite is not None:
-            self._suite.cancel()
+        suite, suite_run_id = self._suite, self._suite_run_id
+        if suite is not None:
+            suite.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):
-                await self._suite
+                await suite
+            if suite_run_id is not None:
+                # its progress is recorded source by source, so the next worker resumes it at once
+                with contextlib.suppress(Exception):
+                    await self.database_service.get_comparisons_db().release_suite_run(suite_run_id, self.owner)
         working = list(self._working.items())
         for _, task in working:
             task.cancel()
@@ -158,6 +164,7 @@ class SubmissionWorker:
             run = runs[0]
             if run.next_source:
                 logger.info(f"suite {run.collection} run {run.number}: claimed, resuming at source {run.next_source}")
+            self._suite_run_id = run.id
             self._suite = asyncio.create_task(self._work_suite(run), name=f"suite-run-{run.id}")
 
     async def _work_suite(self, run: ClaimedSuiteRun) -> None:
@@ -188,8 +195,9 @@ class SubmissionWorker:
             logger.exception(f"suite {run.collection} run {run.number}: submission failed; resumed on a later pass")
         finally:
             renewing.cancel()
-            self._suite = None
-            self.kick()
+            if not self._stopping:  # close() still needs to know which run to give back
+                self._suite, self._suite_run_id = None, None
+                self.kick()
 
     async def drain(self, timeout: float = 60.0) -> None:
         """Work until nothing is due or in hand (for tests and one-off use)."""
