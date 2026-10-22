@@ -108,6 +108,7 @@ class FakeService:
             (("/core/",), lambda: self._catalogue(path)),
             (("/datasets",), lambda: _datasets(path)),
             (("/simulations",), lambda: _simulations(path)),
+            (("/comparisons/", "/suites/"), lambda: _verifications(request)),
         ]
         for prefixes, respond in routes:
             if path.startswith(prefixes):
@@ -181,6 +182,27 @@ def _simulations(path: str) -> httpx.Response:
         rows = [_summary(4334, "completed"), _summary(4333, "submitting")]
         return httpx.Response(200, json={"simulations": rows, "total": 7, "next_offset": 2})
     return httpx.Response(200, json={**_summary(4334, "completed"), "event_count": 21, "dataset_count": 2})
+
+
+def _verification(simulators: list[str]) -> dict[str, Any]:
+    return {
+        "verification_id": 7, "comparison_id": 354, "state": "completed", "simulators": simulators,
+        "workflow_id": "wf-1", "verify_close": True, "references": ["biosimulators:copasi:4.45.296"],
+        "failed_simulators": [], "attempts": 0, "last_error": None,
+    }  # fmt: skip
+
+
+def _verifications(request: httpx.Request) -> httpx.Response:
+    path = request.url.path
+    if path == "/comparisons/354/verify":
+        body = json.loads(request.content or b"null") or {}
+        return httpx.Response(201, json=_verification(body.get("simulators") or ["amici", "copasi"]))
+    if path == "/comparisons/354/verifications":
+        return httpx.Response(200, json=[_verification(["amici", "copasi"])])
+    if path == "/suites/biomodels-curated-300/runs/1/verify":
+        which = request.url.params.get("which")
+        return httpx.Response(200, json={"queued": [1, 2] if which == "all" else [2], "already": [], "running": 0})
+    return httpx.Response(404, json={"detail": "no"})
 
 
 def _datasets(path: str) -> httpx.Response:
@@ -443,6 +465,25 @@ def test_simulations_list_and_show(service: Callable[..., FakeService]) -> None:
     shown = json.loads(invoke("simulations", "show", "4334").stdout)
     assert (shown["event_count"], shown["dataset_count"]) == (21, 2)
     assert invoke("simulations", "list", "--since", "yesterday").exit_code == 2
+
+
+def test_comparisons_verify_and_a_suite_runs_verifications(service: Callable[..., FakeService]) -> None:
+    fake = service()
+    queued = json.loads(
+        invoke("comparisons", "verify", "354", "--simulator", "copasi", "--simulator", "tellurium").stdout
+    )
+    assert queued["simulators"] == ["copasi", "tellurium"]
+    assert json.loads(fake.requests[-1].content) == {"simulators": ["copasi", "tellurium"]}
+    plain = invoke("comparisons", "verify", "354")
+    assert plain.exit_code == 0, plain.stdout + str(plain.exception)
+    assert not fake.requests[-1].content  # no body: the service's simulators
+    [listed] = json.loads(invoke("comparisons", "verifications", "354").stdout)
+    assert listed["verify_close"] is True
+    table = runner.invoke(app, ["--output", "table", "comparisons", "verifications", "354"], env={"COLUMNS": "200"})
+    assert table.exit_code == 0 and "completed" in table.stdout and "biosimulators:copasi" in table.stdout
+    assert json.loads(invoke("suites", "verify", "biomodels-curated-300", "1").stdout)["queued"] == [2]
+    assert fake.requests[-1].url.params["which"] == "failing"
+    assert json.loads(invoke("suites", "verify", "biomodels-curated-300", "1", "--all").stdout)["queued"] == [1, 2]
 
 
 def test_parse_since() -> None:

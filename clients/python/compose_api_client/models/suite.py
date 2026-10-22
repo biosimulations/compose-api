@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..models.suite_verify import SuiteVerify
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
@@ -29,6 +30,9 @@ class Suite:
             `atol = max(abs_tol_min, max|a|*abs_tol_scale, max|b|*abs_tol_scale)` (docs/plan-sedml.md, D4).
         baseline (int | None | Unset): the accepted suite run that later runs are compared with
         expected (list[ExpectedFailure] | Unset):
+        verify (SuiteVerify | Unset): check comparisons against biosim's /verify once they finish: those that differ,
+            are incomplete or have no reference that agrees (failing), or every one (docs/plan-verify-oracle.md, D3)
+            Default: SuiteVerify.NONE.
     """
 
     name: str
@@ -38,6 +42,7 @@ class Suite:
     tolerances: Tolerances | Unset = UNSET
     baseline: int | None | Unset = UNSET
     expected: list[ExpectedFailure] | Unset = UNSET
+    verify: SuiteVerify | Unset = SuiteVerify.NONE
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -73,6 +78,10 @@ class Suite:
                 expected_item = expected_item_data.to_dict()
                 expected.append(expected_item)
 
+        verify: str | Unset = UNSET
+        if not isinstance(self.verify, Unset):
+            verify = self.verify.value
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
@@ -88,6 +97,8 @@ class Suite:
             field_dict["baseline"] = baseline
         if expected is not UNSET:
             field_dict["expected"] = expected
+        if verify is not UNSET:
+            field_dict["verify"] = verify
 
         return field_dict
 
@@ -145,6 +156,13 @@ class Suite:
 
                 expected.append(expected_item)
 
+        _verify = d.pop("verify", UNSET)
+        verify: SuiteVerify | Unset
+        if isinstance(_verify, Unset):
+            verify = UNSET
+        else:
+            verify = SuiteVerify(_verify)
+
         suite = cls(
             name=name,
             description=description,
@@ -153,6 +171,7 @@ class Suite:
             tolerances=tolerances,
             baseline=baseline,
             expected=expected,
+            verify=verify,
         )
 
         suite.additional_properties = d

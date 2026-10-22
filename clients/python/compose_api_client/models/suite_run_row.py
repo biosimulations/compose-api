@@ -30,6 +30,8 @@ class SuiteRunRow:
         drift (None | SuiteRunRowDriftType0 | Unset):
         expected (None | str | Unset):
         failure (None | str | Unset):
+        verification (None | str | Unset):
+        verify_close (bool | None | Unset):
     """
 
     source: str
@@ -43,6 +45,8 @@ class SuiteRunRow:
     drift: None | SuiteRunRowDriftType0 | Unset = UNSET
     expected: None | str | Unset = UNSET
     failure: None | str | Unset = UNSET
+    verification: None | str | Unset = UNSET
+    verify_close: bool | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -108,6 +112,18 @@ class SuiteRunRow:
         else:
             failure = self.failure
 
+        verification: None | str | Unset
+        if isinstance(self.verification, Unset):
+            verification = UNSET
+        else:
+            verification = self.verification
+
+        verify_close: bool | None | Unset
+        if isinstance(self.verify_close, Unset):
+            verify_close = UNSET
+        else:
+            verify_close = self.verify_close
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
@@ -132,6 +148,10 @@ class SuiteRunRow:
             field_dict["expected"] = expected
         if failure is not UNSET:
             field_dict["failure"] = failure
+        if verification is not UNSET:
+            field_dict["verification"] = verification
+        if verify_close is not UNSET:
+            field_dict["verify_close"] = verify_close
 
         return field_dict
 
@@ -233,6 +253,24 @@ class SuiteRunRow:
 
         failure = _parse_failure(d.pop("failure", UNSET))
 
+        def _parse_verification(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        verification = _parse_verification(d.pop("verification", UNSET))
+
+        def _parse_verify_close(data: object) -> bool | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(bool | None | Unset, data)
+
+        verify_close = _parse_verify_close(d.pop("verify_close", UNSET))
+
         suite_run_row = cls(
             source=source,
             status=status,
@@ -245,6 +283,8 @@ class SuiteRunRow:
             drift=drift,
             expected=expected,
             failure=failure,
+            verification=verification,
+            verify_close=verify_close,
         )
 
         suite_run_row.additional_properties = d

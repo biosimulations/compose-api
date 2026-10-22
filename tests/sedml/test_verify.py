@@ -15,9 +15,12 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from compose_api.common.gateway.models import Namespace
+from compose_api.common.hpc.models import SlurmJob
 from compose_api.config import get_settings, override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
+from compose_api.sedml import suites
 from compose_api.sedml.models import Tolerances
+from compose_api.sedml.suites import Suite
 from compose_api.sedml.verify import (
     RateBudget,
     VerifyClient,
@@ -30,7 +33,7 @@ from compose_api.sedml.verify import (
     verify_close,
 )
 from compose_api.simulation.hpc_utils import get_internal_experiment_dir
-from compose_api.simulation.models import SimulationRequest, SimulatorVersion
+from compose_api.simulation.models import JobType, SimulationRequest, SimulatorVersion
 from compose_api.simulation.submission_worker import SubmissionWorker
 
 RESOURCES = Path(__file__).resolve().parents[1] / "fixtures" / "resources"
@@ -344,3 +347,143 @@ async def test_a_comparison_whose_archive_is_gone_fails_its_verification(
     [verification] = await db.verifications(comparison_id)
     assert verification.state == "failed" and "is gone" in (verification.last_error or "")
     assert biosim.posted == []
+
+
+# -- triggers (V4) -- #
+
+
+async def _finished_comparison(
+    database_service: DatabaseServiceSQL, simulation_request: SimulationRequest, simulator: SimulatorVersion,
+    mount: Path, name: str, values: dict[str, list[float]], collection: str | None = None,
+    suite_run: int | None = None, reference: list[float] | None = None, finished: bool = True,
+) -> int:  # fmt: skip
+    """A comparison whose members (by solver, their PX column) have completed and written their report."""
+    db = database_service.get_comparisons_db()
+    hpc_db = database_service.get_hpc_db()
+    comparison_id = await db.insert(
+        name=name, source=f"biomodels:{name}", sedml=SEDML, task="task1", collection=collection, suite_run=suite_run,
+        settings={"tolerances": Tolerances().model_dump(), "reports": {REPORT: {"file": "r.csv", "labels": ["PX"]}},
+                  "solvers": sorted(values)},
+    )  # fmt: skip
+    for solver, column in values.items():
+        experiment_id = f"{name}-{solver}"
+        sim = await database_service.get_simulator_db().insert_simulation(simulation_request, experiment_id, simulator)
+        await db.add_member(comparison_id, sim.database_id, solver)
+        root = get_internal_experiment_dir(experiment_id, Namespace(get_settings().namespace))
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "r.csv").write_text("PX\n" + "".join(f"{v}\n" for v in column))
+        (root / "source.omex").write_bytes(ARCHIVE.read_bytes())
+        if finished:
+            run = await hpc_db.insert_hpcrun(
+                slurmjobid=sim.database_id + 70000, job_type=JobType.SIMULATION, ref_id=sim.database_id,
+                correlation_id=f"verify-{sim.database_id}",
+            )  # fmt: skip
+            await hpc_db.update_hpcrun_status(
+                run.database_id,
+                SlurmJob(job_id=sim.database_id + 70000, name="x", account="a", user_name="u", job_state="COMPLETED"),
+            )
+    if reference is not None:
+        await db.add_reference(comparison_id, "biosimulations:copasi", {REPORT: {"PX": reference}})
+    return comparison_id
+
+
+@pytest.mark.asyncio
+async def test_verifying_a_comparison_queues_once_per_set_of_simulators(
+    client: httpx.AsyncClient, database_service: DatabaseServiceSQL, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion, mount: Path,
+) -> None:  # fmt: skip
+    comparison_id = await _finished_comparison(
+        database_service, simulation_request, simulator, mount, "BIOMD1", {"copasi": [1, 2], "tellurium": [1, 2]}
+    )
+    first = await client.post(f"/comparisons/{comparison_id}/verify")
+    assert first.status_code == 201
+    body = first.json()
+    assert body["state"] == "requested" and body["simulators"] == get_settings().verify_simulators
+    again = await client.post(
+        f"/comparisons/{comparison_id}/verify", content=b"null", headers={"Content-Type": "application/json"}
+    )  # what the client sends for the default
+    assert again.status_code == 200 and again.json()["verification_id"] == body["verification_id"]
+    other = await client.post(f"/comparisons/{comparison_id}/verify", json={"simulators": ["copasi", "amici:0.34.2"]})
+    assert other.status_code == 201 and other.json()["simulators"] == ["copasi", "amici:0.34.2"]
+    listed = (await client.get(f"/comparisons/{comparison_id}/verifications")).json()
+    assert [v["verification_id"] for v in listed] == [body["verification_id"], other.json()["verification_id"]]
+    [row] = [
+        v
+        for v in await database_service.get_comparisons_db().verifications(comparison_id)
+        if v.id == body["verification_id"]
+    ]
+    assert row.settings["tolerances"] == Tolerances().model_dump()  # the comparison's own (D4)
+
+    assert (await client.post("/comparisons/999999/verify")).status_code == 404
+    assert (await client.get("/comparisons/999999/verifications")).status_code == 404
+    bad = await client.post(f"/comparisons/{comparison_id}/verify", json={"simulators": ["copasi; rm", "x"]})
+    assert bad.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_a_completed_verification_reads_back_with_its_references(
+    client: httpx.AsyncClient, database_service: DatabaseServiceSQL, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion, tmp_path: Path, mount: Path,
+) -> None:  # fmt: skip
+    comparison_id = await _comparison(database_service, simulation_request, simulator, tmp_path)
+    assert (
+        await client.post(f"/comparisons/{comparison_id}/verify", json={"simulators": ["copasi", "amici"]})
+    ).status_code == 201
+    biosim = FakeBiosim([{**_recorded(), "workflow_id": "wf-1"}])
+    await _worker(database_service, biosim).drain()
+    [v] = (await client.get(f"/comparisons/{comparison_id}/verifications")).json()
+    assert (
+        v["state"] == "completed"
+        and v["verify_close"] is True
+        and v["references"]
+        == ["biosimulators:copasi:4.45.296", "biosimulators:tellurium:2.2.10", "biosimulators:amici:0.34.2"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_suite_run_verifies_its_failing_comparisons_or_all(
+    client: httpx.AsyncClient, database_service: DatabaseServiceSQL, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion, mount: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:  # fmt: skip
+    monkeypatch.setattr(suites, "load_suites", lambda: {"oracle-suite": Suite(name="oracle-suite", description="x",
+                                                                              sources=["biomodels:A1"])})  # fmt: skip
+    _, number = await database_service.get_comparisons_db().new_suite_run("oracle-suite", [])
+    same = {"copasi": [1.0, 2.0], "tellurium": [1.0, 2.0]}
+    args = (database_service, simulation_request, simulator, mount)
+    settled = await _finished_comparison(*args, "S1", same, "oracle-suite", number, reference=[1.0, 2.0])
+    differ = await _finished_comparison(
+        *args, "S2", {"copasi": [1.0, 2.0], "tellurium": [5.0, 9.0]}, "oracle-suite", number
+    )
+    unreferenced = await _finished_comparison(*args, "S3", same, "oracle-suite", number)
+    await _finished_comparison(*args, "S4", same, "oracle-suite", number, finished=False)
+
+    failing = (await client.post(f"/suites/oracle-suite/runs/{number}/verify")).json()
+    assert sorted(failing["queued"]) == sorted([differ, unreferenced]) and failing["running"] == 1
+    every = (await client.post(f"/suites/oracle-suite/runs/{number}/verify?which=all")).json()
+    assert every["queued"] == [settled] and sorted(every["already"]) == sorted([differ, unreferenced])
+    view = (await client.get(f"/suites/oracle-suite/runs/{number}")).json()
+    assert view["summary"]["verifying"] == 3
+    assert {r["comparison_id"]: r["verification"] for r in view["rows"]}[differ] == "requested"
+    assert (await client.post("/suites/oracle-suite/runs/99/verify")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_a_suites_verify_option_queues_as_its_comparisons_finish(
+    client: httpx.AsyncClient, database_service: DatabaseServiceSQL, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion, mount: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:  # fmt: skip
+    test_suite = Suite(name="auto-suite", description="x", sources=["biomodels:A1"], verify="failing")
+    monkeypatch.setattr(suites, "load_suites", lambda: {"auto-suite": test_suite})
+    _, number = await database_service.get_comparisons_db().new_suite_run("auto-suite", [])
+    args = (database_service, simulation_request, simulator, mount)
+    same = {"copasi": [1.0, 2.0], "tellurium": [1.0, 2.0]}
+    settled = await _finished_comparison(*args, "A1", same, "auto-suite", number, reference=[1.0, 2.0])
+    differ = await _finished_comparison(
+        *args, "A2", {"copasi": [1.0, 2.0], "tellurium": [5.0, 9.0]}, "auto-suite", number
+    )
+    await client.get(f"/suites/auto-suite/runs/{number}")  # reading the run scores its finished comparisons
+    db = database_service.get_comparisons_db()
+    assert await db.verifications(settled) == []
+    assert [v.state for v in await db.verifications(differ)] == ["requested"]
+    await client.get(f"/suites/auto-suite/runs/{number}")
+    assert len(await db.verifications(differ)) == 1  # queued once, when it finished

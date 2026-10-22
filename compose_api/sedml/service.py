@@ -186,7 +186,10 @@ async def comparison_view(row: ComparisonRow) -> Comparison:
         result = await _compute(c.settings, full or row)
         status = "complete" if all(m.status == "completed" for m in members) else "incomplete"
         await db.get_comparisons_db().set_result(c.id, status, result)
-    return Comparison(
+        just_finished = True
+    else:
+        just_finished = False
+    view = Comparison(
         comparison_id=c.id,
         created_at=_iso(c.created_at),
         name=c.name,
@@ -199,6 +202,23 @@ async def comparison_view(row: ComparisonRow) -> Comparison:
         result=result,
         close=None if result is None else bool(result.get("close")) and status == "complete",
     )
+    if just_finished and c.collection:
+        await _verify_by_suite(row, view)
+    return view
+
+
+async def _verify_by_suite(row: ComparisonRow, comparison: Comparison) -> None:
+    """A suite's `verify` option (docs/plan-verify-oracle.md, V4), applied as each of its comparisons finishes."""
+    from compose_api.sedml import suites, verifications  # late: verifications imports this module
+
+    found = suites.suite(row.comparison.collection or "")
+    if found is None or found.verify == "none":
+        return
+    if found.verify == "all" or verifications.needs_verification(comparison):
+        try:
+            await verifications.queue(row)
+        except Exception:  # evidence, never a reason to fail reading the comparison
+            logger.exception(f"comparison {comparison.comparison_id}: could not queue its verification")
 
 
 async def member_reports(

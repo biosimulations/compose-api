@@ -52,9 +52,11 @@ from compose_api_client.api.results import (
 from compose_api_client.api.sed_ml import (
     get_comparison,
     get_comparison_series,
+    list_comparison_verifications,
     list_comparisons,
     preview_sedml,
     run_sedml,
+    verify_comparison,
 )
 from compose_api_client.api.simulation import run_simulation
 from compose_api_client.api.simulations import get_simulation, list_simulations
@@ -69,7 +71,7 @@ from compose_api_client.api.sources import (
     search_biomodels,
     search_biosimulations_projects,
 )
-from compose_api_client.api.suites import get_suite_run, list_suite_runs, list_suites, run_suite
+from compose_api_client.api.suites import get_suite_run, list_suite_runs, list_suites, run_suite, verify_suite_run
 from compose_api_client.ext._policy import (
     _UNKNOWN_OUTCOME,
     _UNREADABLE,
@@ -141,6 +143,10 @@ from compose_api_client.models import (
     Suite,
     SuiteRunInfo,
     SuiteRunView,
+    SuiteVerifyResult,
+    Verification,
+    VerifyRequest,
+    VerifySuiteRunWhich,
 )
 from compose_api_client.types import UNSET, File, Response
 
@@ -877,6 +883,28 @@ class ComposeSession:
         r, _ = self._send(op, lambda c: get_comparison.sync_detailed(comparison_id, client=c))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
+    def verify_comparison(self, comparison_id: int, simulators: list[str] | None = None) -> Verification:
+        """Queue a check of the comparison against BioSimulators' simulators (biosim's /verify); one already queued
+        or running for the same simulators is returned instead."""
+        op = Operation("POST", f"/comparisons/{comparison_id}/verify", replayable=False)
+        body = VerifyRequest(simulators=simulators) if simulators else None  # no body: the service's default
+        r, _ = self._send(op, lambda c: verify_comparison.sync_detailed(comparison_id, client=c, body=body))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def comparison_verifications(self, comparison_id: int) -> list[Verification]:
+        """The comparison's verifications, oldest first."""
+        op = Operation("GET", f"/comparisons/{comparison_id}/verifications", replayable=True)
+        r, _ = self._send(op, lambda c: list_comparison_verifications.sync_detailed(comparison_id, client=c))
+        return list(_parsed(r, op=op))
+
+    def verify_suite_run(self, name: str, number: int, *, which: str = "failing") -> SuiteVerifyResult:
+        """Queue verifications for a suite run's finished comparisons: ``failing`` ones, or ``all``."""
+        op = Operation("POST", f"/suites/{name}/runs/{number}/verify", replayable=False)
+        r, _ = self._send(
+            op, lambda c: verify_suite_run.sync_detailed(name, number, client=c, which=VerifySuiteRunWhich(which))
+        )
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
     def simulation(self, simulation_id: int) -> SimulationDetail:
         """One simulation: its latest SLURM job and how many events and datasets its run recorded."""
         op = Operation("GET", f"/simulations/{simulation_id}", replayable=True)
@@ -1603,6 +1631,28 @@ class AsyncComposeSession:
         """One comparison: its runs, and per report and data set each solver pair's score once all have finished."""
         op = Operation("GET", f"/comparisons/{comparison_id}", replayable=True)
         r, _ = await self._send(op, lambda c: get_comparison.asyncio_detailed(comparison_id, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def verify_comparison(self, comparison_id: int, simulators: list[str] | None = None) -> Verification:
+        """Queue a check of the comparison against BioSimulators' simulators (biosim's /verify); one already queued
+        or running for the same simulators is returned instead."""
+        op = Operation("POST", f"/comparisons/{comparison_id}/verify", replayable=False)
+        body = VerifyRequest(simulators=simulators) if simulators else None  # no body: the service's default
+        r, _ = await self._send(op, lambda c: verify_comparison.asyncio_detailed(comparison_id, client=c, body=body))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def comparison_verifications(self, comparison_id: int) -> list[Verification]:
+        """The comparison's verifications, oldest first."""
+        op = Operation("GET", f"/comparisons/{comparison_id}/verifications", replayable=True)
+        r, _ = await self._send(op, lambda c: list_comparison_verifications.asyncio_detailed(comparison_id, client=c))
+        return list(_parsed(r, op=op))
+
+    async def verify_suite_run(self, name: str, number: int, *, which: str = "failing") -> SuiteVerifyResult:
+        """Queue verifications for a suite run's finished comparisons: ``failing`` ones, or ``all``."""
+        op = Operation("POST", f"/suites/{name}/runs/{number}/verify", replayable=False)
+        r, _ = await self._send(
+            op, lambda c: verify_suite_run.asyncio_detailed(name, number, client=c, which=VerifySuiteRunWhich(which))
+        )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def simulation(self, simulation_id: int) -> SimulationDetail:

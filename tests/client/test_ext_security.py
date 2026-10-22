@@ -642,6 +642,8 @@ SUBMISSIONS: list[tuple[str, str, tuple[Any, ...], dict[str, Any]]] = [
     ("run_biomodel", "/sources/biomodels/{model_id}/run", ("BIOMD1",), {}),
     ("run_biosimulations_project", "/sources/biosimulations/{project_id}/run", ("project",), {}),
     ("run_suite", "/suites/{name}/run", ("suite",), {}),
+    ("verify_comparison", "/comparisons/{comparison_id}/verify", (354,), {}),
+    ("verify_suite_run", "/suites/{name}/runs/{number}/verify", ("suite", 1), {}),
     ("build_environment", "/registry/environments/{name}/build", ("environment",), {}),
     ("build_simulator", "/registry/simulators/{simulator_id}/build", (7,), {}),
 ]
@@ -677,7 +679,8 @@ async def test_all_submissions_are_sent_exactly_once(
             await invoke(api, method, *args, **kwargs)
     [request] = transport.requests
     assert request.method == "POST"
-    expected_path = re.sub(r"\{[^}]+\}", str(args[0]), path) if "{" in path else path
+    values = iter(args)
+    expected_path = re.sub(r"\{[^}]+\}", lambda _: str(next(values)), path)
     assert request.url.path == expected_path
     if failure == "401":
         assert "was not submitted" in str(caught.value)

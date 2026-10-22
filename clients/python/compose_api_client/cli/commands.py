@@ -1529,6 +1529,55 @@ def comparisons_show(
         emit(settings.output, s.comparison(comparison_id).to_dict())
 
 
+VERIFICATION_COLUMNS = ["verification", "state", "simulators", "agree", "references", "error"]
+
+
+def _verification_row(v: Any) -> dict[str, Any]:
+    d = v.to_dict()
+    return {
+        "verification": d["verification_id"],
+        "state": d["state"],
+        "simulators": ", ".join(_listed(d.get("simulators"))),
+        "agree": d.get("verify_close"),
+        "references": ", ".join(_listed(d.get("references"))) or None,
+        "error": d.get("last_error"),
+    }
+
+
+@comparisons_app.command("verify")
+@claims("comparisons verify", "verify-comparison")
+@handled
+def comparisons_verify(
+    ctx: typer.Context,
+    comparison_id: Annotated[int, typer.Argument(help="The comparison id.")],
+    simulator: Annotated[
+        list[str] | None,
+        typer.Option("--simulator", help="A simulator, name or name:version; repeat. Default: the service's."),
+    ] = None,
+) -> None:
+    """Check a comparison against BioSimulators' simulators through biosim's /verify (queued; poll with
+    `comparisons verifications`)."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        v = s.verify_comparison(comparison_id, simulator or None)
+    emit(settings.output, v.to_dict() if settings.output is Output.JSON else [_verification_row(v)],
+         VERIFICATION_COLUMNS)  # fmt: skip
+
+
+@comparisons_app.command("verifications")
+@claims("comparisons verifications", "list-comparison-verifications")
+@handled
+def comparisons_verifications(
+    ctx: typer.Context, comparison_id: Annotated[int, typer.Argument(help="The comparison id.")]
+) -> None:
+    """A comparison's verifications, oldest first: their state, and whether BioSimulators' simulators agree."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        found = s.comparison_verifications(comparison_id)
+    emit(settings.output, [v.to_dict() for v in found] if settings.output is Output.JSON
+         else [_verification_row(v) for v in found], VERIFICATION_COLUMNS)  # fmt: skip
+
+
 # -- sources -------------------------------------------------------------------------------------------------------
 
 Out = Annotated[Path | None, typer.Option("--out", "-O", help="Write the archive here (a file or a directory).")]
@@ -1775,6 +1824,26 @@ def suites_run(ctx: typer.Context, name: SuiteName) -> None:
     settings = _settings(ctx)
     with make_session(settings) as s:
         emit(settings.output, s.run_suite(name).to_dict())
+
+
+@suites_app.command("verify")
+@claims("suites verify", "verify-suite-run")
+@handled
+def suites_verify(
+    ctx: typer.Context,
+    name: SuiteName,
+    number: Annotated[int, typer.Argument(help="The run's number.")],
+    all_: Annotated[
+        bool,
+        typer.Option(
+            "--all", help="Every finished comparison, not only those that differ or lack agreeing references."
+        ),
+    ] = False,
+) -> None:
+    """Queue a check against biosim's /verify for a suite run's finished comparisons."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.verify_suite_run(name, number, which="all" if all_ else "failing").to_dict())
 
 
 @app.command("build-log")
