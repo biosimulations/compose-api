@@ -1062,6 +1062,19 @@ def simulations_show(
         emit(settings.output, s.simulation(simulation_id).to_dict())
 
 
+@simulations_app.command("cancel")
+@claims("simulations cancel", "cancel-simulation")
+@handled
+def simulations_cancel(
+    ctx: typer.Context, simulation_id: Annotated[int, typer.Argument(help="The simulation id.")]
+) -> None:
+    """Cancel a run (sign in first: `compose-api auth login`). A queued run is withdrawn at once; a run SLURM has is
+    cancelled there, and its status reads cancelled once the service sees that."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.cancel_simulation(simulation_id).to_dict())
+
+
 # -- events and traces --------------------------------------------------------------------------------------------
 
 

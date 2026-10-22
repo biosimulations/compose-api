@@ -20,6 +20,7 @@ from compose_api.simulation.models import (
     JobType,
     RemoteContainerImage,
     Simulation,
+    SimulationCancellation,
     SimulationRequest,
     SimulatorVersion,
     SubmissionState,
@@ -268,3 +269,179 @@ async def test_the_stale_check_leaves_queued_runs_to_the_worker(
     with override_settings(submission_stale_seconds=300):
         failed = await JobMonitor(database_service, slurm_service=cast(Any, None)).fail_stale_submissions()
     assert simulation_id not in failed
+
+
+# -- cancelling a queued run ----------------------------------------------------------------------------------------
+
+
+async def _cancel(database_service: DatabaseServiceSQL, simulation_id: int) -> SimulationCancellation:
+    # no SLURM: a queued run is withdrawn in the database, so a cancel that reached the scheduler would raise here
+    return await handlers.cancel_simulation(
+        simulation_id, "auth0|alice", database_service, simulation_service_slurm=cast(SimulationService, None)
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_requested_run_is_withdrawn_and_never_submitted(
+    database_service: DatabaseServiceSQL, simulation_request: SimulationRequest, simulator: SimulatorVersion,
+    staging_dir: Path,
+) -> None:  # fmt: skip
+    simulation_id = await _queue(database_service, simulation_request)
+    hpc_db = database_service.get_hpc_db()
+    queued = await hpc_db.get_submission(simulation_id)
+    assert queued is not None
+
+    cancelled = await _cancel(database_service, simulation_id)
+
+    assert cancelled.withdrawn and cancelled.slurm_job_id is None
+    run = await hpc_db.get_hpcrun_by_ref(simulation_id, JobType.SIMULATION)
+    assert run is not None and run.status == JobStatus.CANCELLED and run.slurmjobid is None
+    assert run.error_message == "Cancelled by a signed-in user", "who cancelled is never in the readable record"
+    after = await hpc_db.get_submission(simulation_id)
+    assert after is not None and after.state is SubmissionState.FAILED
+    assert not (staging_dir / queued.experiment_id).exists(), "a withdrawn run's staged files are removed"
+    cluster = FakeCluster()
+    await _worker(database_service, cluster).drain()
+    assert cluster.submitted == []
+    with pytest.raises(handlers.CancelRefusedError, match="already finished"):
+        await _cancel(database_service, simulation_id)
+
+
+@pytest.mark.asyncio
+async def test_withdrawing_a_preparing_run_takes_the_lease_from_its_worker(
+    database_service: DatabaseServiceSQL, async_postgres_engine: AsyncEngine, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion, staging_dir: Path,
+) -> None:  # fmt: skip
+    simulation_id = await _queue(database_service, simulation_request)
+    # a live worker is fetching its image
+    await _set(
+        async_postgres_engine, simulation_id,
+        "state = 'preparing', lease_owner = 'busy', lease_expires_at = localtimestamp + interval '5 minutes'",
+    )  # fmt: skip
+    assert (await _cancel(database_service, simulation_id)).withdrawn
+
+    hpc_db = database_service.get_hpc_db()
+    # the worker's next steps both check its lease, so it stops before sbatch
+    assert not await hpc_db.set_submission_state(simulation_id, "busy", SubmissionState.SUBMITTING)
+    assert await hpc_db.complete_submission(simulation_id, "busy", 812345, "corr-too-late") is None
+    run = await hpc_db.get_hpcrun_by_ref(simulation_id, JobType.SIMULATION)
+    assert run is not None and run.status == JobStatus.CANCELLED
+
+
+@pytest.mark.asyncio
+async def test_a_run_being_sbatched_is_not_withdrawn(
+    database_service: DatabaseServiceSQL, async_postgres_engine: AsyncEngine, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion, staging_dir: Path,
+) -> None:  # fmt: skip
+    simulation_id = await _queue(database_service, simulation_request)
+    await _set(
+        async_postgres_engine, simulation_id,
+        "state = 'submitting', lease_owner = 'busy', lease_expires_at = localtimestamp + interval '5 minutes'",
+    )  # fmt: skip
+    with pytest.raises(handlers.CancelRefusedError, match="being submitted"):
+        await _cancel(database_service, simulation_id)
+    hpc_db = database_service.get_hpc_db()
+    assert await hpc_db.get_hpcrun_by_ref(simulation_id, JobType.SIMULATION) is None
+    assert await hpc_db.complete_submission(simulation_id, "busy", 812345, "corr-in-time") is not None
+
+
+@pytest.mark.asyncio
+async def test_a_withdrawal_racing_the_worker_has_exactly_one_outcome(
+    database_service: DatabaseServiceSQL, async_postgres_engine: AsyncEngine, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion, staging_dir: Path,
+) -> None:  # fmt: skip
+    """The worker's last two steps (move to submitting, record the job) against a withdrawal, on real Postgres: never
+    both a SLURM job and a cancelled run."""
+    hpc_db = database_service.get_hpc_db()
+    for i in range(12):
+        simulation_id = await _queue(database_service, simulation_request)
+        await _set(
+            async_postgres_engine, simulation_id,
+            "state = 'preparing', lease_owner = 'w', lease_expires_at = localtimestamp + interval '5 minutes'",
+        )  # fmt: skip
+
+        async def worker(simulation_id: int = simulation_id, i: int = i) -> bool:
+            if not await hpc_db.set_submission_state(simulation_id, "w", SubmissionState.SUBMITTING):
+                return False
+            return await hpc_db.complete_submission(simulation_id, "w", 900000 + i, f"corr-race-{i}") is not None
+
+        withdrawn, submitted = await asyncio.gather(
+            hpc_db.withdraw_submission(simulation_id, "Cancelled by auth0|alice"), worker()
+        )
+        assert (withdrawn is not None) != submitted, "exactly one of withdraw and submit wins"
+        run = await hpc_db.get_hpcrun_by_ref(simulation_id, JobType.SIMULATION)
+        assert run is not None
+        assert run.status == (JobStatus.CANCELLED if withdrawn is not None else JobStatus.RUNNING)
+
+
+@pytest.mark.asyncio
+async def test_a_withdrawal_waiting_on_a_submission_does_not_deadlock_its_run_insert(
+    database_service: DatabaseServiceSQL, async_postgres_engine: AsyncEngine, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion, staging_dir: Path,
+) -> None:  # fmt: skip
+    """The interleaving made deterministic: complete_submission holds the submission row, the withdrawal locks the
+    simulation and waits for that row, then the run insert's foreign-key check asks for KEY SHARE on the simulation.
+    Under FOR UPDATE on the simulation that is a deadlock, which Postgres breaks by aborting one; under FOR NO KEY
+    UPDATE the insert goes ahead and the withdrawal finds the run."""
+    simulation_id = await _queue(database_service, simulation_request)
+    await _set(async_postgres_engine, simulation_id, "state = 'preparing'")
+    async with async_postgres_engine.connect() as held:
+        await held.begin()
+        await held.execute(text(f"SELECT 1 FROM submission WHERE simulation_id = {simulation_id} FOR UPDATE"))  # noqa: S608
+        withdrawal = asyncio.create_task(
+            database_service.get_hpc_db().withdraw_submission(simulation_id, "Cancelled by auth0|alice")
+        )
+        async with async_postgres_engine.connect() as probe:  # wait until the withdrawal is blocked on our row
+            for _ in range(100):
+                waiting = await probe.execute(
+                    text(
+                        "SELECT count(*) FROM pg_stat_activity"
+                        " WHERE wait_event_type = 'Lock' AND pid <> pg_backend_pid()"
+                    )
+                )
+                if waiting.scalar_one():
+                    break
+                await asyncio.sleep(0.05)
+            else:
+                pytest.fail("the withdrawal never waited on the submission row")
+        # what the run insert's foreign-key check takes on the simulation
+        await held.execute(text(f"SELECT 1 FROM simulation WHERE id = {simulation_id} FOR KEY SHARE"))  # noqa: S608
+        await held.execute(text(f"UPDATE submission SET state = 'submitted' WHERE simulation_id = {simulation_id}"))  # noqa: S608
+        await held.commit()
+    assert await asyncio.wait_for(withdrawal, timeout=10) is None, "the submission moved on, so nothing is withdrawn"
+
+
+@pytest.mark.asyncio
+async def test_failing_a_submission_waits_for_a_run_being_recorded(
+    database_service: DatabaseServiceSQL, async_postgres_engine: AsyncEngine, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion, staging_dir: Path,
+) -> None:  # fmt: skip
+    """A worker that lost its lease fails the run while another worker is recording its SLURM job: the failure waits
+    on the submission row, sees the committed run, and records nothing, so a running job never gains a FAILED twin."""
+    simulation_id = await _queue(database_service, simulation_request)
+    await _set(async_postgres_engine, simulation_id, "state = 'submitting', lease_owner = 'b'")
+    hpc_db = database_service.get_hpc_db()
+    async with async_postgres_engine.connect() as held:  # worker b inside complete_submission, not yet committed
+        await held.begin()
+        await held.execute(text(f"SELECT 1 FROM submission WHERE simulation_id = {simulation_id} FOR UPDATE"))  # noqa: S608
+        failing = asyncio.create_task(hpc_db.fail_submission(simulation_id, "worker a gave up"))
+        await asyncio.sleep(0.5)
+        assert not failing.done(), "the failure waits for the submission row"
+        await held.execute(
+            text(
+                "INSERT INTO hpcrun (job_type, correlation_id, slurmjobid, backend, status, simulation_id)"  # noqa: S608
+                f" VALUES ('SIMULATION', 'corr-b-{simulation_id}', 905001, 'slurm', 'RUNNING', {simulation_id})"
+            )
+        )
+        await held.execute(text(f"UPDATE submission SET state = 'submitted' WHERE simulation_id = {simulation_id}"))  # noqa: S608
+        await held.commit()
+    assert await asyncio.wait_for(failing, timeout=10) is None
+    async with async_postgres_engine.connect() as conn:
+        statuses = (
+            (
+                await conn.execute(text(f"SELECT status FROM hpcrun WHERE simulation_id = {simulation_id}"))  # noqa: S608
+            )
+            .scalars()
+            .all()
+        )
+    assert list(statuses) == ["RUNNING"], "one run, the one being recorded"

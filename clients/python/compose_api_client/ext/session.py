@@ -59,7 +59,7 @@ from compose_api_client.api.sed_ml import (
     verify_comparison,
 )
 from compose_api_client.api.simulation import run_simulation
-from compose_api_client.api.simulations import get_simulation, list_simulations
+from compose_api_client.api.simulations import cancel_simulation, get_simulation, list_simulations
 from compose_api_client.api.sources import (
     get_biomodel,
     get_biomodel_omex,
@@ -136,6 +136,7 @@ from compose_api_client.models import (
     RunTraceTree,
     SedmlPreview,
     SedmlRunResult,
+    SimulationCancellation,
     SimulationDetail,
     SimulationExperiment,
     SimulationPage,
@@ -911,6 +912,12 @@ class ComposeSession:
         r, _ = self._send(op, lambda c: get_simulation.sync_detailed(simulation_id, client=c))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
+    def cancel_simulation(self, simulation_id: int) -> SimulationCancellation:
+        """Cancel a run (needs a signed-in session): withdrawn from the queue, or SLURM asked to cancel its job."""
+        op = Operation("DELETE", f"/simulations/{simulation_id}", replayable=False)
+        r, _ = self._send(op, lambda c: cancel_simulation.sync_detailed(simulation_id, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
     # -- events and traces ----------------------------------------------------------------------------------------
 
     def events(
@@ -1658,6 +1665,11 @@ class AsyncComposeSession:
     async def simulation(self, simulation_id: int) -> SimulationDetail:
         op = Operation("GET", f"/simulations/{simulation_id}", replayable=True)
         r, _ = await self._send(op, lambda c: get_simulation.asyncio_detailed(simulation_id, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def cancel_simulation(self, simulation_id: int) -> SimulationCancellation:
+        op = Operation("DELETE", f"/simulations/{simulation_id}", replayable=False)
+        r, _ = await self._send(op, lambda c: cancel_simulation.asyncio_detailed(simulation_id, client=c))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def events(

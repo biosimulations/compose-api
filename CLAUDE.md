@@ -135,7 +135,7 @@ themselves when the service is `None`. Two consequences worth knowing:
 module-level `config = RouterConfig(router=APIRouter(), prefix=..., dependencies=[])`. Registration failures are logged
 and swallowed — an import error in a router silently drops its endpoints rather than failing startup. Prefixes:
 `/simulation` (submit), `/results` (status, results file, events, trace), `/core` (deprecated Postgres simulator/process/step lists),
-`/curated` (pre-baked copasi/tellurium runs), `/simulations` (listing), `/datasets` (a run's files). Every endpoint sets an explicit `operation_id` because those become the generated
+`/curated` (pre-baked copasi/tellurium runs), `/simulations` (listing, describe, cancel), `/datasets` (a run's files). Every endpoint sets an explicit `operation_id` because those become the generated
 client's method names.
 
 **Authentication** is optional Auth0 bearer, all in `compose_api/authentication.py`. Every router in `APP_ROUTERS`
