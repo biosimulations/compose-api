@@ -83,9 +83,12 @@ async def run_biomodel(
         path = await sources.biomodel_archive(model_id)
     except (sources.SourceNotFoundError, sources.SourceUnavailableError) as e:
         raise _upstream(e) from e
+    # its original BioSimulators runs on biosimulations.org, as references (docs/plan-verify-oracle.md, V1)
+    references = await sources.biomodel_references(model_id)
     return await run_archive(
-        path, f"biomodels:{model_id}", solvers, task, tags, description, Tolerances(), background_tasks
-    )
+        path, f"biomodels:{model_id}", solvers, task, tags, description, Tolerances(), background_tasks,
+        references=references or None,
+    )  # fmt: skip
 
 
 @config.router.get(

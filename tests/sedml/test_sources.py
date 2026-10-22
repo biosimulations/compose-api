@@ -107,3 +107,32 @@ async def test_running_a_project_compares_its_solvers_and_its_original_results(
     assert len(series["labels"]) == 21
     missing = await client.get(f"/comparisons/{comparison['comparison_id']}/series", params={"report": "nope"})
     assert missing.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_a_biomodels_entry_has_its_biosimulations_runs_as_references() -> None:
+    """docs/plan-verify-oracle.md, V1: projects imported from BioModels are named `<model id>_<simulator>_<title>`,
+    and their reports use the entry's own SED-ML report names, so they line up with a comparison's reports."""
+    assert [p.id for p in await sources.legacy_projects("BIOMD0000000012")] == [
+        "BIOMD0000000012_copasi_A_synthetic_oscillatory_networ"
+    ]
+    assert await sources.legacy_projects("BIOMD0000000099") == []
+    references = await sources.biomodel_references("BIOMD0000000012")
+    assert list(references) == ["biosimulations:copasi"]
+    report = references["biosimulations:copasi"]["BIOMD0000000012_url.sedml/autogen_report_for_task1"]
+    assert "PX" in report and len(report["PX"]) > 1
+    assert await sources.biomodel_references("BIOMD0000000099") == {}
+
+
+@needs_translator
+@pytest.mark.asyncio
+async def test_running_a_biomodels_entry_compares_it_with_its_biosimulations_run(
+    client: httpx.AsyncClient, submitted: dict[str, Any], database_service: DatabaseServiceSQL
+) -> None:
+    response = await client.post("/sources/biomodels/BIOMD0000000012/run")
+    assert response.status_code == 200, response.text
+    (comparison,) = response.json()["comparisons"]
+    stored = await database_service.get_comparisons_db().get(comparison["comparison_id"])
+    assert stored is not None
+    assert [r.origin for r in stored.references] == ["biosimulations:copasi"]
+    assert list(stored.references[0].reports) == ["autogen_report_for_task1"]
