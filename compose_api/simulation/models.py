@@ -376,6 +376,16 @@ class SimulationDetail(SimulationSummary):
     dataset_count: int = 0
 
 
+class SimulationCancellation(BaseModel):
+    """A cancellation accepted. ``withdrawn``: the run was taken off the queue before SLURM had it, and is cancelled
+    now. Otherwise SLURM was asked to cancel ``slurm_job_id``, and the run's status reads ``cancelled`` once the job
+    monitor sees SLURM report it."""
+
+    simulation_id: int
+    withdrawn: bool
+    slurm_job_id: int | None = None
+
+
 class SimulationPage(BaseModel):
     simulations: list[SimulationSummary]
     total: int

@@ -50,6 +50,11 @@ class SimulationService(ABC):
         pass
 
     @abstractmethod
+    async def cancel_simulation_job(self, slurmjobid: int) -> None:
+        """Ask SLURM to cancel the run's job; the job monitor records the transition when SLURM reports it."""
+        pass
+
+    @abstractmethod
     async def build_container(self, simulator_version: SimulatorVersion, random_str: str) -> HpcRun:
         pass
 
@@ -81,6 +86,11 @@ class SimulationServiceHpc(SimulationService):
     async def find_simulation_job(self, experiment_id: str) -> int | None:
         slurm_service, _, _ = self._get_services()
         return await slurm_service.find_job_by_name(get_slurm_job_name(experiment_id=experiment_id))
+
+    @override
+    async def cancel_simulation_job(self, slurmjobid: int) -> None:
+        slurm_service, _, _ = self._get_services()
+        await slurm_service.cancel_job(slurmjobid)
 
     @override
     async def submit_simulation_job(

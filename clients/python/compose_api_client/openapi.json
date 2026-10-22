@@ -477,6 +477,56 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "Simulations"
+        ],
+        "summary": "Cancel a run: withdraw it from the queue, or ask SLURM to cancel its job",
+        "description": "Any signed-in caller who may read the simulation may cancel it, while no simulation has an owner (every one is\npublic until submissions stamp one, docs/plan-observability.md step 5); then its owner and configured admins.",
+        "operationId": "cancel-simulation",
+        "parameters": [
+          {
+            "name": "simulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Simulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimulationCancellation"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Cancelling needs a signed-in caller"
+          },
+          "404": {
+            "description": "The simulation does not exist, or the caller may not read it"
+          },
+          "409": {
+            "description": "The run has finished, or is being submitted to SLURM right now"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/results/simulations/status/batch": {
@@ -5088,6 +5138,36 @@
         ],
         "title": "SedmlTask",
         "description": "One SED-ML task: its translation's template text, the solvers that accept it, and its reports and plots."
+      },
+      "SimulationCancellation": {
+        "properties": {
+          "simulation_id": {
+            "type": "integer",
+            "title": "Simulation Id"
+          },
+          "withdrawn": {
+            "type": "boolean",
+            "title": "Withdrawn"
+          },
+          "slurm_job_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slurm Job Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "simulation_id",
+          "withdrawn"
+        ],
+        "title": "SimulationCancellation",
+        "description": "A cancellation accepted. ``withdrawn``: the run was taken off the queue before SLURM had it, and is cancelled\nnow. Otherwise SLURM was asked to cancel ``slurm_job_id``, and the run's status reads ``cancelled`` once the job\nmonitor sees SLURM report it."
       },
       "SimulationDetail": {
         "properties": {

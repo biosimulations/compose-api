@@ -90,7 +90,12 @@ export interface paths {
         get: operations["get-simulation"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Cancel a run: withdraw it from the queue, or ask SLURM to cancel its job
+         * @description Any signed-in caller who may read the simulation may cancel it, while no simulation has an owner (every one is
+         *     public until submissions stamp one, docs/plan-observability.md step 5); then its owner and configured admins.
+         */
+        delete: operations["cancel-simulation"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1641,6 +1646,20 @@ export interface components {
             plots?: string[];
         };
         /**
+         * SimulationCancellation
+         * @description A cancellation accepted. ``withdrawn``: the run was taken off the queue before SLURM had it, and is cancelled
+         *     now. Otherwise SLURM was asked to cancel ``slurm_job_id``, and the run's status reads ``cancelled`` once the job
+         *     monitor sees SLURM report it.
+         */
+        SimulationCancellation: {
+            /** Simulation Id */
+            simulation_id: number;
+            /** Withdrawn */
+            withdrawn: boolean;
+            /** Slurm Job Id */
+            slurm_job_id?: number | null;
+        };
+        /**
          * SimulationDetail
          * @description A simulation with what its run recorded.
          */
@@ -2139,6 +2158,58 @@ export interface operations {
             };
             /** @description The simulation does not exist, or the caller may not read it */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "cancel-simulation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                simulation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimulationCancellation"];
+                };
+            };
+            /** @description Cancelling needs a signed-in caller */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The simulation does not exist, or the caller may not read it */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The run has finished, or is being submitted to SLURM right now */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -121,6 +121,14 @@ class HPCDatabaseService(ABC):
         pass
 
     @abstractmethod
+    async def withdraw_submission(self, simulation_id: int, reason: str) -> HpcRun | None:
+        """Cancel a run before it is sbatched: a submission still ``requested`` or ``preparing`` becomes ``failed`` and
+        the run a CANCELLED one with ``reason``. Its lease is taken from any worker, which then stops at its next step
+        (each checks the lease) before it can sbatch. None, and nothing written, when the submission is past
+        ``preparing`` (sbatch may be in flight) or the simulation has a run already."""
+        pass
+
+    @abstractmethod
     async def get_hpcruns_by_refs(self, ref_ids: list[int], job_type: JobType) -> list[HpcRun]:
         pass
 
@@ -398,9 +406,43 @@ class HPCORMExecutor(HPCDatabaseService):
 
     @override
     async def fail_submission(self, simulation_id: int, reason: str) -> HpcRun | None:
+        return await self._end_unsubmitted(simulation_id, reason, JobStatusDB.FAILED, "submission-failed")
+
+    @override
+    async def withdraw_submission(self, simulation_id: int, reason: str) -> HpcRun | None:
+        return await self._end_unsubmitted(
+            simulation_id,
+            reason,
+            JobStatusDB.CANCELLED,
+            "submission-cancelled",
+            only=(SubmissionState.REQUESTED, SubmissionState.PREPARING),
+        )
+
+    async def _end_unsubmitted(
+        self,
+        simulation_id: int,
+        reason: str,
+        status: JobStatusDB,
+        correlation_prefix: str,
+        only: tuple[SubmissionState, ...] | None = None,
+    ) -> HpcRun | None:
+        """Record a submission that will never reach SLURM as a finished run with ``status``, unless the simulation
+        has a run already, or (with ``only``) its submission is in none of those states: then None."""
         async with self.async_session_maker() as session, session.begin():
-            # Lock the simulation so the submitting task and the monitor cannot both record a run for it.
-            await session.execute(select(ORMSimulation.id).where(ORMSimulation.id == simulation_id).with_for_update())
+            # Lock the simulation so the submitting task and the monitor cannot both record a run for it. NO KEY UPDATE
+            # (key_share): complete_submission holds the submission row while its run insert takes KEY SHARE on the
+            # simulation for the foreign key, so a FOR UPDATE here would deadlock against it.
+            await session.execute(
+                select(ORMSimulation.id).where(ORMSimulation.id == simulation_id).with_for_update(key_share=True)
+            )
+            if only is not None:
+                # Lock the submission too: the worker's state moves and complete_submission wait for this transaction,
+                # then find their lease gone.
+                state = await session.execute(
+                    select(ORMSubmission.state).where(ORMSubmission.simulation_id == simulation_id).with_for_update()
+                )
+                if state.scalar_one_or_none() not in {s.value for s in only}:
+                    return None
             existing = await session.execute(
                 select(ORMHpcRun.id).where(
                     ORMHpcRun.simulation_id == simulation_id, ORMHpcRun.job_type == JobTypeDB.SIMULATION
@@ -423,13 +465,13 @@ class HPCORMExecutor(HPCDatabaseService):
             orm_hpc_run = ORMHpcRun(
                 slurmjobid=None,
                 job_type=JobTypeDB.SIMULATION,
-                status=JobStatusDB.FAILED,
+                status=status,
                 simulation_id=simulation_id,
                 start_time=now,
                 end_time=now,
                 error_message=reason,
-                # Unique per simulation (one failure at most, under the lock); no trace id, so no events to ingest.
-                correlation_id=f"submission-failed-{simulation_id}",
+                # Unique per simulation (one such run at most, under the lock); no trace id, so no events to ingest.
+                correlation_id=f"{correlation_prefix}-{simulation_id}",
             )
             session.add(orm_hpc_run)
             await session.flush()

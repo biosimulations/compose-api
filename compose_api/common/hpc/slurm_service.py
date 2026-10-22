@@ -92,6 +92,13 @@ class SlurmService:
                 return max(ids)
         return None
 
+    async def cancel_job(self, job_id: int) -> None:
+        """``scancel`` the job. SLURM accepts a job that has already ended and does nothing, so this is idempotent."""
+        command = f"scancel {int(job_id)}"
+        return_code, _stdout, stderr = await self.ssh_service.run_command(command=command)
+        if return_code != 0:
+            raise RuntimeError(f"scancel could not cancel job {job_id}: {stderr[:200]}")
+
     async def submit_build_job(
         self,
         local_sbatch_file: Path,

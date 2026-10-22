@@ -24,6 +24,7 @@ from compose_api.dependencies import (
     get_required_simulation_service,
     get_submission_worker,
 )
+from compose_api.observability.api_events import record_api_event
 from compose_api.registry.manifest import SERVICE_BUNDLE
 from compose_api.simulation import builds, images, staging
 from compose_api.simulation.hpc_utils import get_experiment_id, get_singularity_hash
@@ -35,11 +36,13 @@ from compose_api.simulation.models import (
     JobType,
     RegisteredSimulators,
     RemoteContainerImage,
+    SimulationCancellation,
     SimulationExperiment,
     SimulationFileType,
     SimulationRequest,
     SimulatorVersion,
     SubmissionSpec,
+    SubmissionState,
 )
 from compose_api.simulation.prebuilt import prebuilt_definition, prebuilt_image, prebuilt_image_of
 from compose_api.simulation.simulation_service import SimulationService
@@ -320,3 +323,49 @@ async def _build_container_and_wait(
             )
     job_monitor.internal_unsubscribe(slurmjobid)
     return hpc_run
+
+
+class CancelRefusedError(Exception):
+    """The run cannot be cancelled in its current state; the message says why (the route's 409)."""
+
+
+async def cancel_simulation(
+    simulation_id: int,
+    requested_by: str,
+    database_service: DatabaseService,
+    simulation_service_slurm: SimulationService | None,
+) -> SimulationCancellation:
+    """Cancel a run the caller may read (the route checks).
+
+    - **Queued** (``requested`` or ``preparing``): withdrawn before any sbatch, under the submission's lock; the run is
+      CANCELLED at once and its staged files are removed.
+    - **Being submitted** (``submitting``): refused, since sbatch may be in flight; a moment later the run has its job.
+    - **In SLURM**: ``scancel``. The job monitor records CANCELLED, with its ``slurm.cancelled`` event, when SLURM
+      reports it.
+    - **Finished**: refused.
+    """
+    hpc_db = database_service.get_hpc_db()
+    reason = f"Cancelled by {requested_by}"
+    submission = await hpc_db.get_submission(simulation_id)
+    if submission is not None and submission.state in (SubmissionState.REQUESTED, SubmissionState.PREPARING):
+        if await hpc_db.withdraw_submission(simulation_id, reason) is not None:
+            staging.remove_staging(submission.experiment_id, submission.staged_on_store)
+            logger.info(f"Simulation {simulation_id}: withdrawn from the submission queue ({reason})")
+            return SimulationCancellation(simulation_id=simulation_id, withdrawn=True)
+        submission = await hpc_db.get_submission(simulation_id)  # it moved on meanwhile; answer its new state
+    if submission is not None and submission.state == SubmissionState.SUBMITTING:
+        raise CancelRefusedError(f"Simulation {simulation_id} is being submitted to SLURM; cancel again in a moment.")
+    hpc_run = await hpc_db.get_hpcrun_by_ref(simulation_id, JobType.SIMULATION)
+    if hpc_run is not None and hpc_run.status in builds.FINISHED:
+        status = hpc_run.status.value if hpc_run.status else "finished"
+        raise CancelRefusedError(f"Simulation {simulation_id} has already finished ({status}).")
+    if hpc_run is None or hpc_run.slurmjobid is None:
+        raise CancelRefusedError(f"Simulation {simulation_id} has no SLURM job to cancel.")
+    if simulation_service_slurm is None:
+        raise RuntimeError("the simulation service is not initialized, so SLURM cannot be asked to cancel")
+    await simulation_service_slurm.cancel_simulation_job(hpc_run.slurmjobid)
+    await record_api_event(
+        database_service, hpc_run, "dispatch.cancel_requested", {"slurm_job_id": hpc_run.slurmjobid, "by": requested_by}
+    )
+    logger.info(f"Simulation {simulation_id}: scancel {hpc_run.slurmjobid} ({reason})")
+    return SimulationCancellation(simulation_id=simulation_id, withdrawn=False, slurm_job_id=hpc_run.slurmjobid)

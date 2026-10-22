@@ -853,6 +853,7 @@ $ compose-api simulations [OPTIONS] COMMAND [ARGS]...
 
 * `list`: Simulations you can read, newest first,...
 * `show`: One simulation: its simulator, its latest...
+* `cancel`: Cancel a run (sign in first: `compose-api...
 
 ### `compose-api simulations list`
 
@@ -885,6 +886,26 @@ One simulation: its simulator, its latest SLURM job, and how many events and dat
 
 ```console
 $ compose-api simulations show [OPTIONS] SIMULATION_ID
+```
+
+**Arguments**:
+
+* `SIMULATION_ID`: The simulation id.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api simulations cancel`
+
+Cancel a run (sign in first: `compose-api auth login`). A queued run is withdrawn at once; a run SLURM has is
+cancelled there, and its status reads cancelled once the service sees that.
+
+**Usage**:
+
+```console
+$ compose-api simulations cancel [OPTIONS] SIMULATION_ID
 ```
 
 **Arguments**:
