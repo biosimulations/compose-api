@@ -144,6 +144,16 @@ class Settings(BaseSettings):
     submission_queue_share: float = 0.5
     submission_max_preparing: int = 8
     submission_defer_seconds: int = 10
+    # The verify oracle (docs/plan-verify-oracle.md, V2/V3): biosim's /verify API, the BioSimulators simulators a
+    # verification asks for, and the pace. biosim allows 5 workflow starts a minute anonymously (30 authenticated,
+    # D6), shared with every other caller from our address, so the worker stays under it; a 429 still defers by its
+    # Retry-After. A submitted verification is polled every verify_poll_seconds until it finishes or
+    # verify_deadline_seconds pass.
+    biosim_api_url: str = "https://api.biosim.biosimulations.org"
+    verify_simulators: list[str] = ["amici", "copasi", "pysces", "tellurium", "vcell"]
+    verify_per_minute: float = 4.0
+    verify_poll_seconds: int = 30
+    verify_deadline_seconds: int = 3600
     # How often the API checks every simulator's SIF against the store and adopts unrecorded ones
     # (compose_api/simulation/images.py); the first pass runs at startup.
     image_verify_interval_seconds: int = 3600

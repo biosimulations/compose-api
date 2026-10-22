@@ -30,8 +30,9 @@ import uuid
 
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService
-from compose_api.db.services.comparisons_db import ClaimedSuiteRun
+from compose_api.db.services.comparisons_db import ClaimedSuiteRun, ClaimedVerification
 from compose_api.observability.api_events import record_api_event
+from compose_api.sedml.verify import RateBudget, VerifyClient
 from compose_api.simulation import staging
 from compose_api.simulation.hpc_utils import get_correlation_id
 from compose_api.simulation.job_monitor import JobMonitor
@@ -61,6 +62,7 @@ class SubmissionWorker:
         job_monitor: JobMonitor,
         *,
         owner: str | None = None,
+        verify_client: VerifyClient | None = None,
     ) -> None:
         self.database_service = database_service
         self.simulation_service = simulation_service
@@ -70,6 +72,11 @@ class SubmissionWorker:
         self._working: dict[int, asyncio.Task[None]] = {}
         self._suite: asyncio.Task[None] | None = None
         self._suite_run_id: int | None = None
+        # the verify oracle (docs/plan-verify-oracle.md, V3): one batch of verifications in hand at a time
+        self._verify_client = verify_client
+        self._verify_budget = RateBudget(get_settings().verify_per_minute)
+        self._verifying: asyncio.Task[None] | None = None
+        self._verifications: list[ClaimedVerification] = []
         self._loop: asyncio.Task[None] | None = None
         self._stopping = False
 
@@ -99,6 +106,15 @@ class SubmissionWorker:
                 # its progress is recorded source by source, so the next worker resumes it at once
                 with contextlib.suppress(Exception):
                     await self.database_service.get_comparisons_db().release_suite_run(suite_run_id, self.owner)
+        verifying = self._verifying
+        if verifying is not None:
+            verifying.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await verifying
+            db = self.database_service.get_comparisons_db()
+            for v in self._verifications:
+                with contextlib.suppress(Exception):
+                    await db.update_verification(v.id, self.owner, lease_owner=None, lease_expires_at=None)
         working = list(self._working.items())
         for _, task in working:
             task.cancel()
@@ -123,6 +139,7 @@ class SubmissionWorker:
         """Pick up a suite run to submit, if none is in hand; claim what fits in the free slots, ask the scheduling
         policy which of it to work on now, and put the rest back. The simulations started."""
         await self._claim_suite_runs()
+        await self._claim_verifications()
         settings = get_settings()
         free = settings.submission_worker_concurrency - len(self._working)
         if free <= 0:
@@ -199,12 +216,42 @@ class SubmissionWorker:
                 self._suite, self._suite_run_id = None, None
                 self.kick()
 
+    # -- verifications (docs/plan-verify-oracle.md, V3) -- #
+
+    async def _claim_verifications(self) -> None:
+        """A few due verifications at a time, stepped one after another (they share one rate budget)."""
+        if self._verifying is not None:
+            return
+        claimed = await self.database_service.get_comparisons_db().claim_verifications(
+            owner=self.owner, lease_seconds=get_settings().submission_lease_seconds, limit=4
+        )
+        if claimed:
+            self._verifications = claimed
+            self._verifying = asyncio.create_task(self._work_verifications(claimed), name="verifications")
+
+    async def _work_verifications(self, claimed: list[ClaimedVerification]) -> None:
+        from compose_api.sedml import verifications  # late: the SED-ML modules import the simulation ones
+
+        client = self._verify_client or VerifyClient()
+        try:
+            for v in claimed:
+                try:
+                    await verifications.advance(v, self.owner, client, self._verify_budget)
+                except Exception:
+                    logger.exception(f"verification {v.id}: step failed; retried when its lease expires")
+        finally:
+            if not self._stopping:  # close() still needs to know which rows to give back
+                self._verifying, self._verifications = None, []
+
     async def drain(self, timeout: float = 60.0) -> None:
         """Work until nothing is due or in hand (for tests and one-off use)."""
         async with asyncio.timeout(timeout):
             while True:
                 claimed = await self.run_once()
-                pending = [*self._working.values(), *([self._suite] if self._suite is not None else [])]
+                pending = [
+                    *self._working.values(),
+                    *(t for t in (self._suite, self._verifying) if t is not None),
+                ]
                 if pending:
                     await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
                 elif not claimed:
