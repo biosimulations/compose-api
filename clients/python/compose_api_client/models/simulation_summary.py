@@ -11,6 +11,7 @@ from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
     from ..models.simulation_summary_labels import SimulationSummaryLabels
+    from ..models.submission_info import SubmissionInfo
 
 
 T = TypeVar("T", bound="SimulationSummary")
@@ -38,6 +39,7 @@ class SimulationSummary:
         labels (SimulationSummaryLabels | Unset):
         tags (list[str] | Unset):
         description (None | str | Unset):
+        submission (None | SubmissionInfo | Unset):
     """
 
     simulation_id: int
@@ -57,9 +59,12 @@ class SimulationSummary:
     labels: SimulationSummaryLabels | Unset = UNSET
     tags: list[str] | Unset = UNSET
     description: None | str | Unset = UNSET
+    submission: None | SubmissionInfo | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        from ..models.submission_info import SubmissionInfo  # noqa: PLC0415
+
         simulation_id = self.simulation_id
 
         experiment_id = self.experiment_id
@@ -136,6 +141,14 @@ class SimulationSummary:
         else:
             description = self.description
 
+        submission: dict[str, Any] | None | Unset
+        if isinstance(self.submission, Unset):
+            submission = UNSET
+        elif isinstance(self.submission, SubmissionInfo):
+            submission = self.submission.to_dict()
+        else:
+            submission = self.submission
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
@@ -169,12 +182,15 @@ class SimulationSummary:
             field_dict["tags"] = tags
         if description is not UNSET:
             field_dict["description"] = description
+        if submission is not UNSET:
+            field_dict["submission"] = submission
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.simulation_summary_labels import SimulationSummaryLabels  # noqa: PLC0415
+        from ..models.submission_info import SubmissionInfo  # noqa: PLC0415
 
         d = dict(src_dict)
         simulation_id = d.pop("simulation_id")
@@ -284,6 +300,23 @@ class SimulationSummary:
 
         description = _parse_description(d.pop("description", UNSET))
 
+        def _parse_submission(data: object) -> None | SubmissionInfo | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, dict):
+                    raise TypeError()
+                submission_type_0 = SubmissionInfo.from_dict(data)
+
+                return submission_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(None | SubmissionInfo | Unset, data)
+
+        submission = _parse_submission(d.pop("submission", UNSET))
+
         simulation_summary = cls(
             simulation_id=simulation_id,
             experiment_id=experiment_id,
@@ -302,6 +335,7 @@ class SimulationSummary:
             labels=labels,
             tags=tags,
             description=description,
+            submission=submission,
         )
 
         simulation_summary.additional_properties = d

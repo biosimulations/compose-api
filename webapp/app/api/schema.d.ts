@@ -1681,6 +1681,7 @@ export interface components {
             tags?: string[];
             /** Description */
             description?: string | null;
+            submission?: components["schemas"]["SubmissionInfo"] | null;
             /**
              * Event Count
              * @default 0
@@ -1755,6 +1756,7 @@ export interface components {
             tags?: string[];
             /** Description */
             description?: string | null;
+            submission?: components["schemas"]["SubmissionInfo"] | null;
         };
         /** SimulatorVersion */
         SimulatorVersion: {
@@ -1802,6 +1804,31 @@ export interface components {
             /** Children */
             children?: components["schemas"]["SpanTree"][];
         };
+        /**
+         * SubmissionInfo
+         * @description Where a run is on its way to SLURM (docs/plan-durable-submission.md): the detail behind `submitting`.
+         */
+        SubmissionInfo: {
+            state: components["schemas"]["SubmissionState"];
+            /** Queue */
+            queue: string;
+            /** Position */
+            position?: number | null;
+            /**
+             * Attempts
+             * @default 0
+             */
+            attempts: number;
+            /** Last Error */
+            last_error?: string | null;
+        };
+        /**
+         * SubmissionState
+         * @description Where a run is on its way to SLURM (docs/plan-durable-submission.md, Q1). The public status stays
+         *     ``submitting`` until the run has a SLURM job; this is the detail behind it.
+         * @enum {string}
+         */
+        SubmissionState: "requested" | "preparing" | "submitting" | "submitted" | "failed";
         /** Suite */
         Suite: {
             /** Name */

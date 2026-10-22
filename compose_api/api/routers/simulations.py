@@ -22,6 +22,8 @@ from compose_api.simulation.models import (
     SimulationDetail,
     SimulationPage,
     SimulationSummary,
+    SubmissionInfo,
+    SubmissionState,
     Visibility,
 )
 from compose_api.simulation.prebuilt import prebuilt_definition, prebuilt_image_of
@@ -84,6 +86,20 @@ def _summary(row: SimulationRow) -> SimulationSummary:
         labels=dict(row.simulation.labels or {}),
         tags=list(row.simulation.tags or []),
         description=row.simulation.description,
+        submission=_submission(row),
+    )
+
+
+def _submission(row: SimulationRow) -> SubmissionInfo | None:
+    queued = row.submission
+    if queued is None:
+        return None
+    return SubmissionInfo(
+        state=SubmissionState(queued.state),
+        queue=queued.queue,
+        position=row.position,
+        attempts=queued.attempts,
+        last_error=queued.last_error,
     )
 
 

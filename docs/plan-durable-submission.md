@@ -9,8 +9,8 @@ release to deploy.)**
 |---|---|---|
 | 1 | This document, revised | **done** #258 |
 | 2 | Staging, the `submission` table, and the worker (Q1, Q2) | **done** #333 |
-| 3 | Scheduling and caps (Q3); resumable suite runs and the batch profile for SED-ML runs (Q4) | in review |
-| 4 | Surface the submission (API, CLI, UI); retire #256's heartbeat and stale check | — |
+| 3 | Scheduling and caps (Q3); resumable suite runs and the batch profile for SED-ML runs (Q4) | **done** #334 |
+| 4 | Surface the submission (API, CLI, UI); retire #256's heartbeat | in review; the stale check stays one release (below) |
 | 5 | Then the 300-model BioModels suite | — |
 | later | Registry `/build` endpoints through the queue; pulls as Kubernetes Jobs (former D4); per-owner fairness | — |
 
@@ -177,6 +177,16 @@ Everything in stage 1 is lost when the process stops: the task, the uploaded fil
      drops the column.
 5. **The 300-model suite:** a generator script, and `examples/biomodels-curated-300/suite.yaml`. It runs once the QoS
    limits are known.
+
+## Notes
+
+- **2026-10-22, step 4: the stale check stays for one more release.** `supervise_dispatch` and the heartbeat writes
+  are gone; nothing writes `dispatch_heartbeat_at` any more.
+  - `fail_stale_submissions` still runs, because it covers simulations with no queued submission. During the rolling
+    deploy of the first queue release, the old pod records simulations without a `submission` row. The backfill also
+    marks pre-queue simulations that never reached SLURM `failed`, and the stale check gives each of them its FAILED
+    run and reason.
+  - A later release drops the check and the column, once no such simulation can be waiting.
 
 ## Verification
 

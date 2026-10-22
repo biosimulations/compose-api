@@ -3333,6 +3333,10 @@ components:
           - type: string
           - type: 'null'
           title: Description
+        submission:
+          anyOf:
+          - $ref: '#/components/schemas/SubmissionInfo'
+          - type: 'null'
         event_count:
           type: integer
           title: Event Count
@@ -3466,6 +3470,10 @@ components:
           - type: string
           - type: 'null'
           title: Description
+        submission:
+          anyOf:
+          - $ref: '#/components/schemas/SubmissionInfo'
+          - type: 'null'
       type: object
       required:
       - simulation_id
@@ -3567,6 +3575,47 @@ components:
       title: SpanTree
       description: A span with its own events (those whose ``span_id`` is the span's)
         and its children, by start time.
+    SubmissionInfo:
+      properties:
+        state:
+          $ref: '#/components/schemas/SubmissionState'
+        queue:
+          type: string
+          title: Queue
+        position:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Position
+        attempts:
+          type: integer
+          title: Attempts
+          default: 0
+        last_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Error
+      type: object
+      required:
+      - state
+      - queue
+      title: SubmissionInfo
+      description: 'Where a run is on its way to SLURM (docs/plan-durable-submission.md):
+        the detail behind `submitting`.'
+    SubmissionState:
+      type: string
+      enum:
+      - requested
+      - preparing
+      - submitting
+      - submitted
+      - failed
+      title: SubmissionState
+      description: 'Where a run is on its way to SLURM (docs/plan-durable-submission.md,
+        Q1). The public status stays
+
+        ``submitting`` until the run has a SLURM job; this is the detail behind it.'
     Suite:
       properties:
         name:

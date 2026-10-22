@@ -478,3 +478,15 @@ def test_token_flag_is_rejected_without_echoing_value() -> None:
     r = runner.invoke(app, ["--token", sentinel, "health"])
     assert r.exit_code == 2
     assert sentinel not in r.stdout + r.stderr
+
+
+def test_a_queued_runs_place_is_shown_while_it_is_submitting() -> None:
+    from compose_api_client.cli.commands import queued
+
+    assert queued({"status": "submitting", "submission": {"state": "requested", "position": 3}}) == "requested #3"
+    assert queued({"status": "submitting", "submission": {"state": "preparing", "attempts": 0}}) == "preparing"
+    assert queued({"status": "submitting", "submission": {"state": "submitting", "attempts": 1}}) == (
+        "submitting (attempt 2)"
+    )
+    assert queued({"status": "running", "submission": {"state": "submitted"}}) == ""
+    assert queued({"status": "submitting", "submission": None}) == ""  # recorded before the queue
