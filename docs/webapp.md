@@ -83,9 +83,25 @@ three of these at `GET /webapp/config`:
 
 Rules for the token:
 
-- Only API requests carry it.
+- Only API requests carry it: a request gets the token only when its destination is the API's own origin and path
+  (`app/utils/apiAuth.ts`, after the platform's `isPlatformApiRequest`), never another host or a lookalike.
 - When the API rejects it (401), the UI drops it, carries on anonymously, and shows a banner. It does not retry.
+- When the session can no longer be renewed (the refresh token expired or was revoked), the UI signs the person out
+  locally and says so, with a button to sign in again.
 - Downloads by a signed-in user are fetched with the token, because a plain link cannot carry the header.
+- After sign-in the UI asks `GET /auth/me` who the caller is, once. A token the API rejects shows up at once, and the
+  account menu lists the roles the API sees.
+- "Create account" opens Auth0's sign-up page. Signing in returns to the page the person started from.
+
+The token is kept in the browser's local storage, with rotating refresh tokens, as the platform frontend does
+(decision D1 in [plan-webapp-login](plan-webapp-login.md)). Because script injection could read it, every `/ui`
+response carries these security headers:
+
+- A `Content-Security-Policy` that allows scripts only from this origin, plus the hashes of the build's inline
+  scripts, which the API computes from the files it serves. Connections are allowed only to this origin and the Auth0
+  tenant. The page cannot be framed. It is **report-only** until `WEBAPP_CSP_ENFORCE=true`. Browsers post violations
+  to `POST /webapp/csp-report`, which the API logs as `CSP violation report`.
+- `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`.
 
 Today a token changes nothing a caller can read, because every simulation is public.
 

@@ -2,7 +2,7 @@
 import type { NavigationMenuItem } from '@nuxt/ui'
 
 // Shell after ../platform/frontend/app/app.vue: UHeader + UNavigationMenu + UMain + footer.
-const { rejected, clearRejected } = useAuth()
+const { rejected, clearRejected, expired, clearExpired, login } = useAuth()
 
 // Starting something new and the registry are menus; the four kinds of results stay one click away. Nine flat tabs
 // did not fit a laptop-width header.
@@ -89,6 +89,17 @@ onMounted(async () => {
         title="Sign-in not accepted"
         :description="rejected"
         :close="{ onClick: clearRejected }"
+        class="rounded-none"
+      />
+      <UAlert
+        v-if="expired"
+        color="info"
+        variant="subtle"
+        icon="i-lucide-log-in"
+        title="Signed out"
+        :description="expired"
+        :actions="[{ label: 'Sign in', onClick: () => login() }]"
+        :close="{ onClick: clearExpired }"
         class="rounded-none"
       />
       <NuxtPage />
