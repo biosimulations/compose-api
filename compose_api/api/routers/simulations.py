@@ -193,6 +193,7 @@ async def get_simulation(simulation_id: int, caller: OptionalCaller) -> Simulati
         401: {"description": "Cancelling needs a signed-in caller"},
         404: {"description": "The simulation does not exist, or the caller may not read it"},
         409: {"description": "The run has finished, or is being submitted to SLURM right now"},
+        502: {"description": "SLURM could not be asked to cancel the job; try again"},
     },
     tags=["Simulations"],
     summary="Cancel a run: withdraw it from the queue, or ask SLURM to cancel its job",
@@ -219,3 +220,5 @@ async def cancel_simulation(simulation_id: int, caller: OptionalCaller) -> Simul
         )
     except handlers.CancelRefusedError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
+    except handlers.CancelUnavailableError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e

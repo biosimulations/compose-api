@@ -516,6 +516,9 @@
           "409": {
             "description": "The run has finished, or is being submitted to SLURM right now"
           },
+          "502": {
+            "description": "SLURM could not be asked to cancel the job; try again"
+          },
           "422": {
             "description": "Validation Error",
             "content": {

@@ -296,7 +296,7 @@ async def test_a_requested_run_is_withdrawn_and_never_submitted(
     assert cancelled.withdrawn and cancelled.slurm_job_id is None
     run = await hpc_db.get_hpcrun_by_ref(simulation_id, JobType.SIMULATION)
     assert run is not None and run.status == JobStatus.CANCELLED and run.slurmjobid is None
-    assert run.error_message == "Cancelled by auth0|alice"
+    assert run.error_message == "Cancelled by a signed-in user", "who cancelled is never in the readable record"
     after = await hpc_db.get_submission(simulation_id)
     assert after is not None and after.state is SubmissionState.FAILED
     assert not (staging_dir / queued.experiment_id).exists(), "a withdrawn run's staged files are removed"
@@ -353,7 +353,6 @@ async def test_a_withdrawal_racing_the_worker_has_exactly_one_outcome(
     """The worker's last two steps (move to submitting, record the job) against a withdrawal, on real Postgres: never
     both a SLURM job and a cancelled run."""
     hpc_db = database_service.get_hpc_db()
-    outcomes = set()
     for i in range(12):
         simulation_id = await _queue(database_service, simulation_request)
         await _set(
@@ -373,8 +372,6 @@ async def test_a_withdrawal_racing_the_worker_has_exactly_one_outcome(
         run = await hpc_db.get_hpcrun_by_ref(simulation_id, JobType.SIMULATION)
         assert run is not None
         assert run.status == (JobStatus.CANCELLED if withdrawn is not None else JobStatus.RUNNING)
-        outcomes.add("withdrawn" if withdrawn is not None else "submitted")
-    assert outcomes, "the race ran"
 
 
 @pytest.mark.asyncio
@@ -412,3 +409,39 @@ async def test_a_withdrawal_waiting_on_a_submission_does_not_deadlock_its_run_in
         await held.execute(text(f"UPDATE submission SET state = 'submitted' WHERE simulation_id = {simulation_id}"))  # noqa: S608
         await held.commit()
     assert await asyncio.wait_for(withdrawal, timeout=10) is None, "the submission moved on, so nothing is withdrawn"
+
+
+@pytest.mark.asyncio
+async def test_failing_a_submission_waits_for_a_run_being_recorded(
+    database_service: DatabaseServiceSQL, async_postgres_engine: AsyncEngine, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion, staging_dir: Path,
+) -> None:  # fmt: skip
+    """A worker that lost its lease fails the run while another worker is recording its SLURM job: the failure waits
+    on the submission row, sees the committed run, and records nothing, so a running job never gains a FAILED twin."""
+    simulation_id = await _queue(database_service, simulation_request)
+    await _set(async_postgres_engine, simulation_id, "state = 'submitting', lease_owner = 'b'")
+    hpc_db = database_service.get_hpc_db()
+    async with async_postgres_engine.connect() as held:  # worker b inside complete_submission, not yet committed
+        await held.begin()
+        await held.execute(text(f"SELECT 1 FROM submission WHERE simulation_id = {simulation_id} FOR UPDATE"))  # noqa: S608
+        failing = asyncio.create_task(hpc_db.fail_submission(simulation_id, "worker a gave up"))
+        await asyncio.sleep(0.5)
+        assert not failing.done(), "the failure waits for the submission row"
+        await held.execute(
+            text(
+                "INSERT INTO hpcrun (job_type, correlation_id, slurmjobid, backend, status, simulation_id)"  # noqa: S608
+                f" VALUES ('SIMULATION', 'corr-b-{simulation_id}', 905001, 'slurm', 'RUNNING', {simulation_id})"
+            )
+        )
+        await held.execute(text(f"UPDATE submission SET state = 'submitted' WHERE simulation_id = {simulation_id}"))  # noqa: S608
+        await held.commit()
+    assert await asyncio.wait_for(failing, timeout=10) is None
+    async with async_postgres_engine.connect() as conn:
+        statuses = (
+            (
+                await conn.execute(text(f"SELECT status FROM hpcrun WHERE simulation_id = {simulation_id}"))  # noqa: S608
+            )
+            .scalars()
+            .all()
+        )
+    assert list(statuses) == ["RUNNING"], "one run, the one being recorded"

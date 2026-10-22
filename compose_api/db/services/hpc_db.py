@@ -435,14 +435,14 @@ class HPCORMExecutor(HPCDatabaseService):
             await session.execute(
                 select(ORMSimulation.id).where(ORMSimulation.id == simulation_id).with_for_update(key_share=True)
             )
-            if only is not None:
-                # Lock the submission too: the worker's state moves and complete_submission wait for this transaction,
-                # then find their lease gone.
-                state = await session.execute(
-                    select(ORMSubmission.state).where(ORMSubmission.simulation_id == simulation_id).with_for_update()
-                )
-                if state.scalar_one_or_none() not in {s.value for s in only}:
-                    return None
+            # Lock the submission too (when there is one): a complete_submission in flight holds it, so this waits
+            # for its run to commit and then sees it below, instead of recording a second run beside it. The worker's
+            # state moves wait for this transaction too, and then find their lease gone.
+            state = await session.execute(
+                select(ORMSubmission.state).where(ORMSubmission.simulation_id == simulation_id).with_for_update()
+            )
+            if only is not None and state.scalar_one_or_none() not in {s.value for s in only}:
+                return None
             existing = await session.execute(
                 select(ORMHpcRun.id).where(
                     ORMHpcRun.simulation_id == simulation_id, ORMHpcRun.job_type == JobTypeDB.SIMULATION

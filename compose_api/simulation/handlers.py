@@ -329,6 +329,10 @@ class CancelRefusedError(Exception):
     """The run cannot be cancelled in its current state; the message says why (the route's 409)."""
 
 
+class CancelUnavailableError(Exception):
+    """SLURM could not be asked to cancel the job (unreachable, or scancel failed); trying again may work."""
+
+
 async def cancel_simulation(
     simulation_id: int,
     requested_by: str,
@@ -341,16 +345,18 @@ async def cancel_simulation(
       CANCELLED at once and its staged files are removed.
     - **Being submitted** (``submitting``): refused, since sbatch may be in flight; a moment later the run has its job.
     - **In SLURM**: ``scancel``. The job monitor records CANCELLED, with its ``slurm.cancelled`` event, when SLURM
-      reports it.
+      reports it. This answers that the cancel was requested: a job that finished in the meantime keeps its status.
     - **Finished**: refused.
+
+    Who cancelled is logged here only: the run's message and events are readable by anyone who may read the run.
     """
     hpc_db = database_service.get_hpc_db()
-    reason = f"Cancelled by {requested_by}"
+    reason = "Cancelled by a signed-in user"
     submission = await hpc_db.get_submission(simulation_id)
     if submission is not None and submission.state in (SubmissionState.REQUESTED, SubmissionState.PREPARING):
         if await hpc_db.withdraw_submission(simulation_id, reason) is not None:
             staging.remove_staging(submission.experiment_id, submission.staged_on_store)
-            logger.info(f"Simulation {simulation_id}: withdrawn from the submission queue ({reason})")
+            logger.info(f"Simulation {simulation_id}: withdrawn from the submission queue, by {requested_by}")
             return SimulationCancellation(simulation_id=simulation_id, withdrawn=True)
         submission = await hpc_db.get_submission(simulation_id)  # it moved on meanwhile; answer its new state
     if submission is not None and submission.state == SubmissionState.SUBMITTING:
@@ -362,10 +368,12 @@ async def cancel_simulation(
     if hpc_run is None or hpc_run.slurmjobid is None:
         raise CancelRefusedError(f"Simulation {simulation_id} has no SLURM job to cancel.")
     if simulation_service_slurm is None:
-        raise RuntimeError("the simulation service is not initialized, so SLURM cannot be asked to cancel")
-    await simulation_service_slurm.cancel_simulation_job(hpc_run.slurmjobid)
-    await record_api_event(
-        database_service, hpc_run, "dispatch.cancel_requested", {"slurm_job_id": hpc_run.slurmjobid, "by": requested_by}
-    )
-    logger.info(f"Simulation {simulation_id}: scancel {hpc_run.slurmjobid} ({reason})")
+        raise CancelUnavailableError("the simulation service is not running, so SLURM cannot be asked to cancel")
+    try:
+        await simulation_service_slurm.cancel_simulation_job(hpc_run.slurmjobid)
+    except Exception as e:
+        logger.exception(f"Simulation {simulation_id}: scancel {hpc_run.slurmjobid} failed")
+        raise CancelUnavailableError(f"SLURM could not cancel job {hpc_run.slurmjobid}; try again") from e
+    await record_api_event(database_service, hpc_run, "dispatch.cancel_requested", {"slurm_job_id": hpc_run.slurmjobid})
+    logger.info(f"Simulation {simulation_id}: scancel {hpc_run.slurmjobid}, requested by {requested_by}")
     return SimulationCancellation(simulation_id=simulation_id, withdrawn=False, slurm_job_id=hpc_run.slurmjobid)

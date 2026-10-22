@@ -5,23 +5,30 @@ tests/simulation/test_submission_worker.py."""
 import asyncio
 import tempfile
 import uuid
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import cast
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from compose_api.api.main import app
 from compose_api.authorization import Caller, get_caller
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
+from compose_api.config import override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
+from compose_api.dependencies import get_simulation_service, set_simulation_service
+from compose_api.simulation import handlers
 from compose_api.simulation.hpc_utils import _namespace_path
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import JobStatus, JobType, SimulationRequest, SimulatorVersion, Visibility
-from compose_api.simulation.simulation_service import SimulationServiceHpc
+from compose_api.simulation.simulation_service import SimulationService, SimulationServiceHpc
+from tests.fixtures.mocks import TestBackgroundTask
 from tests.fixtures.slurm_fixtures_backend import SlurmBackend
 
 
@@ -141,5 +148,83 @@ async def test_cancelling_a_running_simulation_cancels_its_slurm_job(
         assert again.status_code == 409 and "already finished (cancelled)" in again.json()["detail"]
     finally:
         await slurm_service.cancel_job(job_id)  # idempotent; leaves nothing running if an assertion failed
+        await hpc_db.delete_hpcrun(run.database_id)
+        await sim_db.delete_simulation(sim.database_id)
+
+
+@pytest.fixture
+def staged_locally(tmp_path: Path) -> Iterator[Path]:
+    with override_settings(submission_staging_dir=str(tmp_path / "staging")):
+        yield tmp_path / "staging"
+
+
+async def _queued(database_service: DatabaseServiceSQL, simulation_request: SimulationRequest) -> int:
+    experiment = await handlers.run_simulation(
+        simulation_request=simulation_request,
+        database_service=database_service,
+        simulation_service_slurm=cast(SimulationService, None),
+        job_monitor=cast(JobMonitor, None),
+        background_tasks=TestBackgroundTask(),
+    )
+    return experiment.simulation_database_id
+
+
+@pytest.mark.asyncio
+async def test_a_queued_run_is_withdrawn_through_the_route_and_a_second_cancel_is_refused(
+    http: AsyncClient, database_service: DatabaseServiceSQL, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion, staged_locally: Path,
+) -> None:  # fmt: skip
+    simulation_id = await _queued(database_service, simulation_request)
+    _as(ALICE)
+    r = await http.delete(f"/simulations/{simulation_id}")
+    assert r.status_code == 202, r.text
+    assert r.json() == {"simulation_id": simulation_id, "withdrawn": True, "slurm_job_id": None}
+    listed = await http.get(f"/simulations/{simulation_id}")
+    assert listed.json()["status"] == "cancelled"
+    assert ALICE.subject not in listed.text, "who cancelled is not published"
+    again = await http.delete(f"/simulations/{simulation_id}")
+    assert again.status_code == 409 and "already finished (cancelled)" in again.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_a_run_being_submitted_is_a_409_through_the_route(
+    http: AsyncClient, database_service: DatabaseServiceSQL, async_postgres_engine: AsyncEngine,
+    simulation_request: SimulationRequest, simulator: SimulatorVersion, staged_locally: Path,
+) -> None:  # fmt: skip
+    simulation_id = await _queued(database_service, simulation_request)
+    async with async_postgres_engine.begin() as conn:
+        await conn.execute(text(f"UPDATE submission SET state = 'submitting' WHERE simulation_id = {simulation_id}"))  # noqa: S608
+    _as(ALICE)
+    r = await http.delete(f"/simulations/{simulation_id}")
+    assert r.status_code == 409 and "being submitted" in r.json()["detail"]
+
+
+class _UnreachableCluster:
+    """The SSH side failing, as a real scancel over a dropped connection does (only the transport is replaced)."""
+
+    async def cancel_simulation_job(self, slurmjobid: int) -> None:
+        raise OSError("ssh: connection reset")
+
+
+@pytest.mark.asyncio
+async def test_a_scancel_that_cannot_reach_slurm_is_a_502(
+    http: AsyncClient, database_service: DatabaseServiceSQL, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion,
+) -> None:  # fmt: skip
+    sim_db, hpc_db = database_service.get_simulator_db(), database_service.get_hpc_db()
+    sim = await sim_db.insert_simulation(
+        sim_request=simulation_request, experiment_id="experiment-cancel-502", simulator_version=simulator
+    )
+    run = await hpc_db.insert_hpcrun(
+        slurmjobid=7201, job_type=JobType.SIMULATION, ref_id=sim.database_id, correlation_id="corr-cancel-502"
+    )
+    saved = get_simulation_service()
+    set_simulation_service(cast(SimulationService, _UnreachableCluster()))
+    try:
+        _as(ALICE)
+        r = await http.delete(f"/simulations/{sim.database_id}")
+        assert r.status_code == 502 and "try again" in r.json()["detail"]
+    finally:
+        set_simulation_service(saved)
         await hpc_db.delete_hpcrun(run.database_id)
         await sim_db.delete_simulation(sim.database_id)
