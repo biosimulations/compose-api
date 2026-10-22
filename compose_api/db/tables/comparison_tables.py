@@ -69,3 +69,9 @@ class ORMSuiteRun(DeclarativeTableBase):
     number: Mapped[int] = mapped_column(nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="submitting")
     failures: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    # Its progress, so a restart resumes it (docs/plan-durable-submission.md, Q4): the sources to submit, the next one,
+    # and the submission worker holding it while it is `submitting`.
+    sources: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    next_source: Mapped[int] = mapped_column(nullable=False, server_default="0")
+    lease_owner: Mapped[str | None] = mapped_column(nullable=True)
+    lease_expires_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)

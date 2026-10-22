@@ -67,6 +67,9 @@ async def submit(
     references: dict[str, dict[str, dict[str, list[float]]]] | None = None,
     collection: str | None = None,
     suite_run: int | None = None,
+    queue: str = "interactive",
+    priority: int = 0,
+    batch: bool = False,
 ) -> list[int]:
     """One comparison per accepted task (all, or those named), one run per solver that accepted it; the ids.
     `references[origin]["<sedml>/<report>"]` (the archive's own `reports.h5`, a biosimulations.org run's) are stored
@@ -120,7 +123,8 @@ async def submit(
             request = SimulationRequest(
                 request_file_path=input_file,
                 simulation_file_type=SimulationFileType.OMEX,
-                is_batch=False,
+                # a suite's runs are queued behind interactive ones, with the batch resources (Q3, Q4)
+                is_batch=batch,
                 end_time_point=1.0,
                 labels=labels(
                     source=source_kind or "upload",
@@ -142,6 +146,8 @@ async def submit(
                 simulation_service_slurm=get_required_simulation_service(),
                 background_tasks=background_tasks,
                 job_monitor=get_required_job_monitor(),
+                queue=queue,
+                priority=priority,
             )
             await db.get_comparisons_db().add_member(comparison_id, experiment.simulation_database_id, solver_id)
         created.append(comparison_id)

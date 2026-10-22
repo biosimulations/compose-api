@@ -1,7 +1,7 @@
 import datetime
 import logging
 from abc import ABC, abstractmethod
-from typing import override
+from typing import TYPE_CHECKING, override
 
 from sqlalchemy import ColumnElement, Result, and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -27,6 +27,9 @@ from compose_api.simulation.models import (
     SubmissionState,
     WorkerEvent,
 )
+
+if TYPE_CHECKING:
+    from compose_api.simulation.scheduling import Load
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +90,14 @@ class HPCDatabaseService(ABC):
     @abstractmethod
     async def retry_submission(self, simulation_id: int, owner: str, error: str, delay_seconds: int) -> None:
         """Count a failed attempt, keep its error, and release the row until ``delay_seconds`` from now."""
+
+    @abstractmethod
+    async def defer_submission(self, simulation_id: int, owner: str, delay_seconds: int) -> None:
+        """Put a claimed row back, due again in ``delay_seconds``, without counting an attempt (it is over a cap)."""
+
+    @abstractmethod
+    async def submission_load(self) -> "Load":
+        """Active runs per queue (submitting, or on SLURM and unfinished), and runs making an image ready."""
 
     @abstractmethod
     async def release_submission(self, simulation_id: int, owner: str) -> None:
@@ -262,6 +273,50 @@ class HPCORMExecutor(HPCDatabaseService):
             lease_owner=None,
             lease_expires_at=None,
         )
+
+    @override
+    async def defer_submission(self, simulation_id: int, owner: str, delay_seconds: int) -> None:
+        await self._update_held(
+            simulation_id,
+            owner,
+            next_attempt_at=_seconds_from_now(delay_seconds),
+            lease_owner=None,
+            lease_expires_at=None,
+        )
+
+    @override
+    async def submission_load(self) -> "Load":
+        from compose_api.simulation.scheduling import Load
+
+        unfinished = (
+            select(ORMHpcRun.id)
+            .where(
+                ORMHpcRun.simulation_id == ORMSubmission.simulation_id,
+                ORMHpcRun.job_type == JobTypeDB.SIMULATION,
+                ORMHpcRun.status.not_in(TERMINAL_JOB_STATUSES),
+            )
+            .exists()
+        )
+        active = (
+            select(ORMSubmission.queue, func.count())
+            .where(
+                or_(
+                    ORMSubmission.state == SubmissionState.SUBMITTING.value,
+                    and_(ORMSubmission.state == SubmissionState.SUBMITTED.value, unfinished),
+                )
+            )
+            .group_by(ORMSubmission.queue)
+        )
+        preparing = select(func.count()).where(
+            ORMSubmission.state == SubmissionState.PREPARING.value,
+            ORMSubmission.lease_expires_at > func.localtimestamp(),
+        )
+        async with self.async_session_maker() as session:
+            load = Load()
+            for queue, count in (await session.execute(active)).all():
+                load.active[queue] = count
+            load.preparing = (await session.execute(preparing)).scalar_one()
+            return load
 
     @override
     async def release_submission(self, simulation_id: int, owner: str) -> None:

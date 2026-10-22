@@ -8,8 +8,8 @@ release to deploy.)**
 | Step | What | State |
 |---|---|---|
 | 1 | This document, revised | **done** #258 |
-| 2 | Staging, the `submission` table, and the worker (Q1, Q2) | in review |
-| 3 | Scheduling and caps (Q3); resumable suite runs and the batch profile for SED-ML runs (Q4) | — |
+| 2 | Staging, the `submission` table, and the worker (Q1, Q2) | **done** #333 |
+| 3 | Scheduling and caps (Q3); resumable suite runs and the batch profile for SED-ML runs (Q4) | in review |
 | 4 | Surface the submission (API, CLI, UI); retire #256's heartbeat and stale check | — |
 | 5 | Then the 300-model BioModels suite | — |
 | later | Registry `/build` endpoints through the queue; pulls as Kubernetes Jobs (former D4); per-owner fairness | — |
@@ -134,8 +134,8 @@ Everything in stage 1 is lost when the process stops: the task, the uploaded fil
 
   | Setting | Caps | Default |
   |---|---|---|
-  | `submission_max_active_jobs` | simulation runs on SLURM that have not finished | 200; set it below the `vcell-services` QoS limits once they are checked |
-  | `submission_max_preparing` | concurrent image fetches and builds | 4 |
+  | `submission_max_active_jobs` | simulation runs on SLURM that have not finished | 100 (open question 1) |
+  | `submission_max_preparing` | concurrent image fetches and builds | 8 |
   | `submission_queue_share` | the fraction of the active cap one non-interactive queue may use | 0.5, so interactive runs are never starved |
 
 - **The effect:** a 600-run suite drains at a steady rate behind interactive work, instead of 600 `sbatch` calls in a
@@ -216,7 +216,13 @@ The 2026-10-11 draft predates environment-builds phases 1–4. Against `main`:
 
 ## Open questions
 
-1. **The `vcell-services` QoS limits** (`sacctmgr show qos vcell-services`). They set `submission_max_active_jobs`.
+1. ~~**The `vcell-services` QoS limits**~~ *Answered 2026-10-22, from the API pod:*
+   - The QoS sets no job or submit limit; only `MaxWall` is set, at 1 day.
+   - The `vcell` partition has 5 nodes × 128 CPUs and about 257 GB per node, shared with VCell's own work.
+   - So `submission_max_active_jobs` is what keeps a large suite polite. It defaults to 100, about 15% of the partition
+     at the batch profile, and a suite gets half of it.
+   - The store is writable by the API's user (uid 16997 sees `prod/` as `appuser:appgroup`, mode 775), so staging
+     under `prod/staging/` works.
 2. **Replicas.** The production overlay runs one API replica; the base sets three. The worker is written for several,
    and step 2's claim test runs two workers against one database.
 3. **Fairness per requester:** owners are not stamped yet (observability step 5). `requested_by` keeps the subject for

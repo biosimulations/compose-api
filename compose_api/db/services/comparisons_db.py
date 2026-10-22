@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, override
 
-from sqlalchemy import ColumnElement, exists, func, not_, select
+from sqlalchemy import ColumnElement, exists, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from compose_api.db.tables.comparison_tables import (
@@ -23,6 +23,17 @@ class ComparisonRow:
     references: list[ORMComparisonReference] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class ClaimedSuiteRun:
+    """A suite run a worker holds: which sources it has to submit, and where it got to."""
+
+    id: int
+    collection: str
+    number: int
+    sources: list[str]
+    next_source: int
+
+
 class ComparisonsDatabaseService(ABC):
     @abstractmethod
     async def insert(
@@ -38,11 +49,31 @@ class ComparisonsDatabaseService(ABC):
         """A new comparison, `running`, with no members; its id."""
 
     @abstractmethod
-    async def new_suite_run(self, collection: str) -> tuple[int, int]:
-        """The suite's next run (its number one more than the last): its id and number."""
+    async def new_suite_run(self, collection: str, sources: list[str] | None = None) -> tuple[int, int]:
+        """The suite's next run (its number one more than the last), `submitting` its ``sources``: its id and
+        number."""
 
     @abstractmethod
-    async def finish_suite_run(self, run_id: int, failures: dict[str, Any]) -> None: ...
+    async def claim_suite_runs(self, owner: str, lease_seconds: int, limit: int) -> list["ClaimedSuiteRun"]:
+        """Lease up to ``limit`` suite runs still `submitting` that no live worker holds (``SKIP LOCKED``)."""
+
+    @abstractmethod
+    async def renew_suite_run_lease(self, run_id: int, owner: str, lease_seconds: int) -> bool: ...
+
+    @abstractmethod
+    async def advance_suite_run(
+        self, run_id: int, owner: str, next_source: int, failure: tuple[str, str] | None = None
+    ) -> bool:
+        """Record that the run has got past source ``next_source - 1``, with its failure if it had one; False when
+        ``owner`` no longer holds the run."""
+
+    @abstractmethod
+    async def finish_suite_run(self, run_id: int, owner: str | None = None) -> None:
+        """Every source is through: the run is `submitted`, and released."""
+
+    @abstractmethod
+    async def suite_source_submitted(self, collection: str, number: int, source: str) -> bool:
+        """Whether the run already has a comparison for ``source`` (submitted before a restart)."""
 
     @abstractmethod
     async def suite_runs(self, collection: str) -> list[ORMSuiteRun]:
@@ -97,22 +128,93 @@ class ComparisonsORMExecutor(ComparisonsDatabaseService):
             return row.id
 
     @override
-    async def new_suite_run(self, collection: str) -> tuple[int, int]:
+    async def new_suite_run(self, collection: str, sources: list[str] | None = None) -> tuple[int, int]:
         async with self.session_maker() as session, session.begin():
             last = (
                 await session.execute(select(func.max(ORMSuiteRun.number)).where(ORMSuiteRun.collection == collection))
             ).scalar_one()
-            run = ORMSuiteRun(collection=collection, number=(last or 0) + 1)
+            run = ORMSuiteRun(collection=collection, number=(last or 0) + 1, sources=list(sources or []))
             session.add(run)
             await session.flush()
             return run.id, run.number
 
     @override
-    async def finish_suite_run(self, run_id: int, failures: dict[str, Any]) -> None:
+    async def claim_suite_runs(self, owner: str, lease_seconds: int, limit: int) -> list["ClaimedSuiteRun"]:
+        now = func.localtimestamp()
+        due = (
+            select(ORMSuiteRun.id)
+            .where(
+                ORMSuiteRun.status == "submitting",
+                or_(ORMSuiteRun.lease_expires_at.is_(None), ORMSuiteRun.lease_expires_at < now),
+            )
+            .order_by(ORMSuiteRun.id)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        async with self.session_maker() as session, session.begin():
+            ids = list((await session.execute(due)).scalars().all())
+            if not ids:
+                return []
+            await session.execute(
+                update(ORMSuiteRun)
+                .where(ORMSuiteRun.id.in_(ids))
+                .values(lease_owner=owner, lease_expires_at=now + func.make_interval(0, 0, 0, 0, 0, 0, lease_seconds))
+            )
+            rows = await session.execute(select(ORMSuiteRun).where(ORMSuiteRun.id.in_(ids)).order_by(ORMSuiteRun.id))
+            return [
+                ClaimedSuiteRun(r.id, r.collection, r.number, list(r.sources or []), r.next_source)
+                for r in rows.scalars()
+            ]
+
+    @override
+    async def renew_suite_run_lease(self, run_id: int, owner: str, lease_seconds: int) -> bool:
+        expires = func.localtimestamp() + func.make_interval(0, 0, 0, 0, 0, 0, lease_seconds)
+        return await self._update_held(run_id, owner, lease_expires_at=expires)
+
+    @override
+    async def advance_suite_run(
+        self, run_id: int, owner: str, next_source: int, failure: tuple[str, str] | None = None
+    ) -> bool:
+        async with self.session_maker() as session, session.begin():
+            run = (
+                await session.execute(
+                    select(ORMSuiteRun)
+                    .where(ORMSuiteRun.id == run_id, ORMSuiteRun.lease_owner == owner)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if run is None:
+                return False
+            run.next_source = next_source
+            if failure is not None:
+                run.failures = {**run.failures, failure[0]: failure[1]}
+            return True
+
+    @override
+    async def finish_suite_run(self, run_id: int, owner: str | None = None) -> None:
         async with self.session_maker() as session, session.begin():
             run = await session.get(ORMSuiteRun, run_id)
-            if run is not None:
-                run.status, run.failures = "submitted", failures
+            if run is not None and (owner is None or run.lease_owner == owner):
+                run.status, run.lease_owner, run.lease_expires_at = "submitted", None, None
+
+    @override
+    async def suite_source_submitted(self, collection: str, number: int, source: str) -> bool:
+        async with self.session_maker() as session:
+            found = await session.execute(
+                select(ORMComparison.id).where(
+                    ORMComparison.collection == collection,
+                    ORMComparison.suite_run == number,
+                    ORMComparison.source == source,
+                )
+            )
+            return found.first() is not None
+
+    async def _update_held(self, run_id: int, owner: str, **values: object) -> bool:
+        async with self.session_maker() as session, session.begin():
+            result = await session.execute(
+                update(ORMSuiteRun).where(ORMSuiteRun.id == run_id, ORMSuiteRun.lease_owner == owner).values(**values)
+            )
+            return bool(result.rowcount)  # type: ignore[attr-defined]
 
     @override
     async def suite_runs(self, collection: str) -> list[ORMSuiteRun]:
