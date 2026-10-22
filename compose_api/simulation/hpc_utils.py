@@ -56,6 +56,12 @@ def get_slurm_sim_experiment_dir(experiment_id: str) -> Path:
     return _namespace_path() / "sims" / f"experiment-{experiment_id}"
 
 
+def get_slurm_staging_dir(experiment_id: str) -> Path:
+    """Where the API stages a queued run's files on the store (docs/plan-durable-submission.md, Q1). Not the experiment
+    directory, which stays the SLURM service user's: the worker copies the staged files there at dispatch."""
+    return _namespace_path() / "staging" / experiment_id
+
+
 def get_internal_experiment_dir(experiment_id: str, namespace: Namespace) -> Path:
     settings = get_settings()
     return Path(settings.internal_mount_dir) / f"{namespace.value}/sims/experiment-{experiment_id}"

@@ -7,8 +7,8 @@ release to deploy.)**
 
 | Step | What | State |
 |---|---|---|
-| 1 | This document, revised | **this PR** |
-| 2 | Staging, the `submission` table, and the worker (Q1, Q2) | next |
+| 1 | This document, revised | **done** #258 |
+| 2 | Staging, the `submission` table, and the worker (Q1, Q2) | in review |
 | 3 | Scheduling and caps (Q3); resumable suite runs and the batch profile for SED-ML runs (Q4) | — |
 | 4 | Surface the submission (API, CLI, UI); retire #256's heartbeat and stale check | — |
 | 5 | Then the 300-model BioModels suite | — |

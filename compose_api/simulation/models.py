@@ -252,6 +252,49 @@ class SimulationRequest(BaseModel):
     source_file_path: Path | None = None
 
 
+class SubmissionState(StrEnum):
+    """Where a run is on its way to SLURM (docs/plan-durable-submission.md, Q1). The public status stays
+    ``submitting`` until the run has a SLURM job; this is the detail behind it."""
+
+    REQUESTED = "requested"  # recorded and staged, waiting for the worker
+    PREPARING = "preparing"  # its image is being fetched or built
+    SUBMITTING = "submitting"  # the image is ready; sbatch is next
+    SUBMITTED = "submitted"  # SLURM has the job (the run's status takes over)
+    FAILED = "failed"  # it will not reach SLURM; the reason is on its FAILED run
+
+
+#: The states the worker still owns.
+ACTIVE_SUBMISSION_STATES = (SubmissionState.REQUESTED, SubmissionState.PREPARING, SubmissionState.SUBMITTING)
+
+
+@dataclass(frozen=True)
+class SubmissionSpec:
+    """How a new run is queued: its queue and priority (docs/plan-durable-submission.md, Q3), who asked, and whether
+    its staged files are on the store the cluster sees (else in a local directory the worker uploads from)."""
+
+    staged_on_store: bool
+    queue: str = "interactive"
+    priority: int = 0
+    requested_by: str | None = None
+
+
+class Submission(BaseModel):
+    """A queued run as the worker sees it: enough to rebuild its job after a restart."""
+
+    simulation_id: int
+    experiment_id: str
+    simulator_id: int
+    state: SubmissionState
+    queue: str
+    priority: int
+    requested_by: str | None = None
+    request: SimulationRequest  # its paths are the staged files
+    staged_on_store: bool
+    attempts: int = 0
+    last_error: str | None = None
+    created_at: datetime.datetime
+
+
 class SimulationResults(BaseModel):
     """
     Simulation has been sent to HPC, and can be in any of the SLURM job allowed states including finished.

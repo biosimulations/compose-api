@@ -1,4 +1,5 @@
 import os
+import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import lru_cache
@@ -126,6 +127,15 @@ class Settings(BaseSettings):
     # submission_timeout_seconds is cancelled and fails the simulation; a first container build can take an hour.
     submission_stale_seconds: int = 300
     submission_timeout_seconds: int = 4 * 3600
+    # The durable submission queue (docs/plan-durable-submission.md). A run is staged and recorded as `requested`;
+    # the submission worker leases due rows (a lost worker's lease expires and another resumes the row), retries a
+    # transient failure with backoff up to submission_max_attempts, and works on up to submission_worker_concurrency
+    # rows at once. Where the store is not mounted (development, tests), files are staged in submission_staging_dir.
+    submission_lease_seconds: int = 120
+    submission_max_attempts: int = 6
+    submission_worker_concurrency: int = 8
+    submission_poll_seconds: float = 5.0
+    submission_staging_dir: str = os.path.join(tempfile.gettempdir(), "compose-api-staging")
     # How often the API checks every simulator's SIF against the store and adopts unrecorded ones
     # (compose_api/simulation/images.py); the first pass runs at startup.
     image_verify_interval_seconds: int = 3600

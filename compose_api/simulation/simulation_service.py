@@ -1,5 +1,6 @@
 import logging
 import random
+import shlex
 import string
 import tempfile
 from abc import ABC, abstractmethod
@@ -37,7 +38,15 @@ class SimulationService(ABC):
         simulation: Simulation,
         experiment_id: str,
         correlation_id: str,
+        staged_on_store: bool = False,
     ) -> int:
+        """sbatch the run. With ``staged_on_store``, its files are already on the cluster (staged, their paths the
+        cluster's) and are copied into the experiment directory there; otherwise they are uploaded."""
+        pass
+
+    @abstractmethod
+    async def find_simulation_job(self, experiment_id: str) -> int | None:
+        """The SLURM job already submitted for this run, if any (its job name is the experiment id)."""
         pass
 
     @abstractmethod
@@ -69,11 +78,17 @@ class SimulationServiceHpc(SimulationService):
         return SlurmService(ssh_service=ssh_service), ssh_service, get_settings()
 
     @override
+    async def find_simulation_job(self, experiment_id: str) -> int | None:
+        slurm_service, _, _ = self._get_services()
+        return await slurm_service.find_job_by_name(get_slurm_job_name(experiment_id=experiment_id))
+
+    @override
     async def submit_simulation_job(
         self,
         simulation: Simulation,
         experiment_id: str,
         correlation_id: str,
+        staged_on_store: bool = False,
     ) -> int:
         if simulation.sim_request.request_file_path is None:
             raise RuntimeError("Simulation.sim_request.omex_archive is not available. Cannot submit Simulation job.")
@@ -115,22 +130,27 @@ class SimulationServiceHpc(SimulationService):
             with open(local_submit_file, "w") as f:
                 f.write(script_content)
 
-            await ssh_service.run_command(f"mkdir {experiment_path}")
-            if simulation.sim_request.source_file_path is not None:
-                # a SED-ML run's original archive, announced by the job script as the `sedml-omex` dataset
-                await ssh_service.scp_upload(
-                    local_file=simulation.sim_request.source_file_path,
-                    remote_path=experiment_path / SOURCE_FILE_NAME,
-                )
+            remote_input = get_slurm_sim_input_file_path(
+                experiment_id=slurm_job_name, suffix=simulation.sim_request.simulation_file_type.get_files_suffix()
+            )
+            source = simulation.sim_request.source_file_path  # a SED-ML run's original archive (`sedml-omex`)
+            # -p: a retried attempt finds the directory an earlier one made
+            await _checked(ssh_service, f"mkdir -p {shlex.quote(str(experiment_path))}")
+            if staged_on_store:
+                # staged by the API on the store (compose_api/simulation/staging.py): a copy on the cluster itself
+                copies = [(simulation.sim_request.request_file_path, remote_input)]
+                if source is not None:
+                    copies.append((source, experiment_path / SOURCE_FILE_NAME))
+                for staged, target in copies:
+                    await _checked(ssh_service, f"cp {shlex.quote(str(staged))} {shlex.quote(str(target))}")
+            elif source is not None:
+                await ssh_service.scp_upload(local_file=source, remote_path=experiment_path / SOURCE_FILE_NAME)
             # submit the build script to slurm
             slurm_jobid = await slurm_service.submit_job(
                 local_sbatch_file=local_submit_file,
                 remote_sbatch_file=get_slurm_submit_file(slurm_job_name=slurm_job_name),
-                local_input_file=simulation.sim_request.request_file_path,
-                remote_input_file=get_slurm_sim_input_file_path(
-                    experiment_id=slurm_job_name,
-                    suffix=simulation.sim_request.simulation_file_type.get_files_suffix(),
-                ),
+                local_input_file=None if staged_on_store else simulation.sim_request.request_file_path,
+                remote_input_file=None if staged_on_store else remote_input,
             )
             return slurm_jobid
 
@@ -240,3 +260,9 @@ class SimulationServiceHpc(SimulationService):
     @override
     async def close(self) -> None:
         pass
+
+
+async def _checked(ssh_service: SSHService, command: str) -> None:
+    return_code, _stdout, stderr = await ssh_service.run_command(command)
+    if return_code != 0:
+        raise RuntimeError(f"{command.split()[0]} failed on the cluster ({return_code}): {stderr[:200]}")

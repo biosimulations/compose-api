@@ -8,9 +8,11 @@ import pytest
 from sqlalchemy import Connection, Enum, inspect, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.db.db_utils import DeclarativeTableBase, create_db
+from compose_api.simulation.models import JobType, SimulationRequest, SimulatorVersion
 
-HEAD = "9e4b2f6a1c05"
+HEAD = "4a7c1e9d2b63"
 
 NEW_COLUMNS = {
     "hpcrun": {"trace_id", "events_cursor", "last_event_at", "exit_code", "backend", "external_id"},
@@ -106,4 +108,28 @@ async def test_a_job_status_type_built_before_pending_gains_it(async_postgres_en
         await conn.execute(text("UPDATE alembic_version SET version_num = 'c41f0b7a9d20'"))
     await create_db(async_postgres_engine)
     assert "PENDING" in (await _enum_labels(async_postgres_engine))["jobstatusdb"]
+    assert await _revision(async_postgres_engine) == HEAD
+
+
+@pytest.mark.asyncio
+async def test_existing_simulations_get_a_submission_row_for_their_state(
+    async_postgres_engine: AsyncEngine,
+    database_service: DatabaseServiceSQL,
+    simulation_request: SimulationRequest,
+    simulator: SimulatorVersion,
+) -> None:
+    """Simulations from before the queue: one that reached SLURM is `submitted`; one that never did is `failed`, so the
+    worker never takes up a run whose files were never staged."""
+    simulator_db = database_service.get_simulator_db()
+    ran = (await simulator_db.insert_simulation(simulation_request, "backfill-ran", simulator)).database_id
+    never = (await simulator_db.insert_simulation(simulation_request, "backfill-never", simulator)).database_id
+    await database_service.get_hpc_db().insert_hpcrun(4242, JobType.SIMULATION, ran, "backfill-corr")
+    async with async_postgres_engine.begin() as conn:
+        await conn.execute(text("DELETE FROM submission"))
+        await conn.execute(text("UPDATE alembic_version SET version_num = '9e4b2f6a1c05'"))
+    await create_db(async_postgres_engine)
+    query = text(f"SELECT simulation_id, state FROM submission WHERE simulation_id IN ({ran}, {never})")  # noqa: S608
+    async with async_postgres_engine.connect() as conn:
+        states = {row[0]: row[1] for row in (await conn.execute(query)).all()}
+    assert states == {ran: "submitted", never: "failed"}
     assert await _revision(async_postgres_engine) == HEAD
