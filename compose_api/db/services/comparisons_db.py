@@ -145,6 +145,10 @@ class ComparisonsDatabaseService(ABC):
         """The comparison's verifications, oldest first."""
 
     @abstractmethod
+    async def resume_verification(self, verification_id: int) -> bool:
+        """Poll a failed verification's workflow again, with a fresh deadline; False unless it was `failed`."""
+
+    @abstractmethod
     async def latest_verifications(self, comparison_ids: list[int]) -> dict[int, ORMVerification]:
         """Each comparison's newest verification, for those that have one."""
 
@@ -367,6 +371,29 @@ class ComparisonsORMExecutor(ComparisonsDatabaseService):
                 .order_by(ORMVerification.id)
             )
             return list(rows.scalars())
+
+    @override
+    async def resume_verification(self, verification_id: int) -> bool:
+        async with self.session_maker() as session, session.begin():
+            result = await session.execute(
+                update(ORMVerification)
+                .where(
+                    ORMVerification.id == verification_id,
+                    ORMVerification.state == "failed",
+                    ORMVerification.workflow_id.is_not(None),
+                )
+                .values(
+                    state="submitted",
+                    submitted_at=func.localtimestamp(),
+                    next_attempt_at=func.localtimestamp(),
+                    attempts=0,
+                    last_error=None,
+                    lease_owner=None,
+                    lease_expires_at=None,
+                    updated_at=func.localtimestamp(),
+                )
+            )
+            return bool(result.rowcount)  # type: ignore[attr-defined]
 
     @override
     async def latest_verifications(self, comparison_ids: list[int]) -> dict[int, ORMVerification]:

@@ -1393,7 +1393,8 @@ paths:
                 $ref: '#/components/schemas/Verification'
         '200':
           description: A verification for the same simulators is already queued or
-            running; it is returned
+            running, or failed while biosim was still working on it and is now polled
+            again; it is returned
           content:
             application/json:
               schema:

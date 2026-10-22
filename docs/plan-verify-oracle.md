@@ -172,6 +172,10 @@ independent oracle.
   settles: none (no legacy project), or one that disagrees.
 - **`verify:` applies when a comparison is scored.** That happens when the comparison or its suite run is read, as
   the monthly suites workflow does; nothing scores comparisons in the background.
+- **Resuming (2026-10-22, after the first triage).** `verify_deadline_seconds` is 6 hours, not 1: 34 of 96
+  workflows were still `IN_PROGRESS` at biosim after an hour. Asking to verify again resumes a verification that
+  failed while its workflow was unfinished (past the deadline, or out of attempts reading it), polling the same
+  `workflow_id` with a fresh deadline. One biosim itself failed is submitted afresh.
 - **The suite page** shows each row's newest verification and its `verify_close`, and the summary counts `verifying`,
   `verified` and `oracle_agrees`.
 - **One comparison, on demand.**

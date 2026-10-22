@@ -9,7 +9,9 @@ own state, so a restart resumes it with the same ``workflow_id``:
 - **completed:** each BioSimulators simulator's reports become a reference on the comparison (D1), the comparison is
   scored again so ``close_to_references`` covers them, and ``verify_close`` records whether the simulators agree.
 
-A 429 waits out its ``Retry-After`` without counting as an attempt; a network error or a 5xx is retried with the
+Asking to verify a comparison again resumes a verification that failed while biosim was still working on it (past
+the deadline, or out of attempts reading it), with the same ``workflow_id``. A 429 waits out its ``Retry-After``
+without counting as an attempt; a network error or a 5xx is retried with the
 submission queue's backoff; a 4xx, or a workflow biosim reports as failed, fails the verification with its reason.
 """
 
@@ -201,16 +203,33 @@ async def queue(comparison: ComparisonRow, simulators: list[str] | None = None) 
     simulators is returned instead, so asking twice costs biosim nothing."""
     db = get_required_database_service().get_comparisons_db()
     chosen = list(dict.fromkeys(simulators or get_settings().verify_simulators))
-    for existing in await db.verifications(comparison.comparison.id):
-        if existing.state in ACTIVE and list(existing.simulators) == chosen:
+    found = [v for v in await db.verifications(comparison.comparison.id) if list(v.simulators) == chosen]
+    for existing in found:
+        if existing.state in ACTIVE:
             return existing, False
+    if found and resumable(found[-1]):
+        # biosim is still working on it (we stopped waiting, or could not read it): poll it again, not resubmit
+        await db.resume_verification(found[-1].id)
+        _kick()
+        return next(v for v in await db.verifications(comparison.comparison.id) if v.id == found[-1].id), False
     tolerances = comparison.comparison.settings.get("tolerances", {})
     verification_id = await db.insert_verification(comparison.comparison.id, chosen, {"tolerances": tolerances})
+    _kick()
+    created = next(v for v in await db.verifications(comparison.comparison.id) if v.id == verification_id)
+    return created, True
+
+
+def resumable(row: ORMVerification) -> bool:
+    """A verification that failed on our side while its workflow was still unfinished at biosim: past our deadline,
+    or out of attempts at reading it."""
+    unfinished = row.workflow_status in (VerifyStatus.PENDING.value, VerifyStatus.IN_PROGRESS.value)
+    return row.state == "failed" and row.workflow_id is not None and unfinished
+
+
+def _kick() -> None:
     worker = get_submission_worker()
     if worker is not None:
         worker.kick()
-    created = next(v for v in await db.verifications(comparison.comparison.id) if v.id == verification_id)
-    return created, True
 
 
 def view(row: ORMVerification) -> Verification:

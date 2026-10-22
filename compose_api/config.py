@@ -153,7 +153,9 @@ class Settings(BaseSettings):
     verify_simulators: list[str] = ["amici", "copasi", "pysces", "tellurium", "vcell"]
     verify_per_minute: float = 4.0
     verify_poll_seconds: int = 30
-    verify_deadline_seconds: int = 3600
+    # Six hours: on 2026-10-22 a 96-archive triage left 34 workflows IN_PROGRESS well past an hour on biosim's
+    # shared queue. Asking to verify again resumes one that ran out of time (verifications.queue).
+    verify_deadline_seconds: int = 6 * 3600
     # How often the API checks every simulator's SIF against the store and adopts unrecorded ones
     # (compose_api/simulation/images.py); the first pass runs at startup.
     image_verify_interval_seconds: int = 3600

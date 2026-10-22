@@ -323,13 +323,13 @@ async def test_a_verification_past_its_deadline_fails(
     verification_id = await db.insert_verification(comparison_id, ["copasi"], {})
     old = (
         "UPDATE verification SET state = 'submitted', workflow_id = 'wf-1',"  # noqa: S608
-        f" submitted_at = localtimestamp - interval '2 hours' WHERE id = {verification_id}"
+        f" submitted_at = localtimestamp - interval '7 hours' WHERE id = {verification_id}"
     )
     async with async_postgres_engine.begin() as conn:
         await conn.execute(text(old))
     await _worker(database_service, FakeBiosim([_pending("wf-1", "IN_PROGRESS")])).drain()
     [verification] = await db.verifications(comparison_id)
-    assert verification.state == "failed" and "after 3600 s" in (verification.last_error or "")
+    assert verification.state == "failed" and "after 21600 s" in (verification.last_error or "")
 
 
 @pytest.mark.asyncio
@@ -487,3 +487,38 @@ async def test_a_suites_verify_option_queues_as_its_comparisons_finish(
     assert [v.state for v in await db.verifications(differ)] == ["requested"]
     await client.get(f"/suites/auto-suite/runs/{number}")
     assert len(await db.verifications(differ)) == 1  # queued once, when it finished
+
+
+@pytest.mark.asyncio
+async def test_asking_again_resumes_a_verification_biosim_was_still_working_on(
+    client: httpx.AsyncClient, database_service: DatabaseServiceSQL, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion, tmp_path: Path, mount: Path, async_postgres_engine: AsyncEngine,
+) -> None:  # fmt: skip
+    comparison_id = await _comparison(database_service, simulation_request, simulator, tmp_path)
+    db = database_service.get_comparisons_db()
+    simulators = ["copasi", "tellurium"]
+    timed_out = await db.insert_verification(comparison_id, simulators, {})
+    biosim_failed = await db.insert_verification(comparison_id, ["amici", "copasi"], {})
+    async with async_postgres_engine.begin() as conn:
+        await conn.execute(text(
+            "UPDATE verification SET state = 'failed', workflow_id = 'wf-slow', workflow_status = 'IN_PROGRESS',"  # noqa: S608
+            f" last_error = 'wf-slow still IN_PROGRESS after 3600 s' WHERE id = {timed_out}"
+        ))  # fmt: skip
+        await conn.execute(text(
+            "UPDATE verification SET state = 'failed', workflow_id = 'wf-bad', workflow_status = 'FAILED',"  # noqa: S608
+            f" last_error = 'Verification workflow ended with status FAILED' WHERE id = {biosim_failed}"
+        ))  # fmt: skip
+
+    resumed = await client.post(f"/comparisons/{comparison_id}/verify", json={"simulators": simulators})
+    assert resumed.status_code == 200
+    body = resumed.json()
+    assert (body["verification_id"], body["state"], body["last_error"]) == (timed_out, "submitted", None)
+    biosim = FakeBiosim([{**_recorded(), "workflow_id": "wf-slow"}])
+    await _worker(database_service, biosim).drain()
+    assert biosim.posted == [] and biosim.got == ["wf-slow"]  # the same workflow, polled again, not resubmitted
+    [done] = [v for v in await db.verifications(comparison_id) if v.id == timed_out]
+    assert done.state == "completed" and done.verify_close is True
+
+    # a workflow biosim itself failed is not resumed: asking again submits a new one
+    fresh = await client.post(f"/comparisons/{comparison_id}/verify", json={"simulators": ["amici", "copasi"]})
+    assert fresh.status_code == 201 and fresh.json()["verification_id"] != biosim_failed

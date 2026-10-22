@@ -3444,7 +3444,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description A verification for the same simulators is already queued or running; it is returned */
+            /** @description A verification for the same simulators is already queued or running, or failed while biosim was still working on it and is now polled again; it is returned */
             200: {
                 headers: {
                     [name: string]: unknown;
