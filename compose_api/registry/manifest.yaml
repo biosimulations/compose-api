@@ -45,8 +45,8 @@ entries:
   - id: viva-pde-particle
     package: viva-pde-particle
     source: https://github.com/vivarium-collective/viva-pde-particle
-    # the commit behind the deployed image (PREBUILT_SIMULATORS pins its digest, tagged sha-fe20abc)
-    commit: fe20abce60eb627e627c7dcde07950d37131ef32
+    # the commit behind the deployed image (PREBUILT_SIMULATORS pins its digest, tagged sha-8c16827)
+    commit: 8c168271e3b48ac667cde9092ca025be0f444d65
     module_roots:
       - viva_pde_particle
     level: tested
