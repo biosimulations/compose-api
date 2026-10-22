@@ -12,6 +12,7 @@ from compose_api.db.tables.comparison_tables import (
     ORMComparisonMember,
     ORMComparisonReference,
     ORMSuiteRun,
+    ORMVerification,
 )
 from compose_api.db.tables.simulator_tables import ORMSimulation
 
@@ -32,6 +33,22 @@ class ClaimedSuiteRun:
     number: int
     sources: list[str]
     next_source: int
+
+
+@dataclass(frozen=True)
+class ClaimedVerification:
+    """A verification a worker holds (docs/plan-verify-oracle.md, V3)."""
+
+    id: int
+    comparison_id: int
+    kind: str
+    simulators: list[str]
+    settings: dict[str, Any]
+    state: str
+    workflow_id: str | None
+    attempts: int
+    #: seconds since it was submitted to biosim, by the database's clock (the deadline, V3)
+    submitted_seconds_ago: float | None
 
 
 class ComparisonsDatabaseService(ABC):
@@ -106,6 +123,30 @@ class ComparisonsDatabaseService(ABC):
 
     @abstractmethod
     async def set_result(self, comparison_id: int, status: str, result: dict[str, Any] | None) -> None: ...
+
+    # -- verifications (docs/plan-verify-oracle.md, V2) -- #
+
+    @abstractmethod
+    async def insert_verification(
+        self, comparison_id: int, simulators: list[str], settings: dict[str, Any], kind: str = "omex"
+    ) -> int:
+        """A new `requested` verification of the comparison; its id."""
+
+    @abstractmethod
+    async def claim_verifications(self, owner: str, lease_seconds: int, limit: int) -> list[ClaimedVerification]:
+        """Lease up to ``limit`` due verifications (`requested` or `submitted`) that no live worker holds."""
+
+    @abstractmethod
+    async def update_verification(self, verification_id: int, owner: str, **values: Any) -> bool:
+        """Set fields on a verification ``owner`` holds; False when it no longer holds it."""
+
+    @abstractmethod
+    async def verifications(self, comparison_id: int) -> list[ORMVerification]:
+        """The comparison's verifications, oldest first."""
+
+    @abstractmethod
+    async def replace_reference(self, comparison_id: int, origin: str, reports: dict[str, Any]) -> None:
+        """Add the reference, or replace the one from the same origin."""
 
 
 class ComparisonsORMExecutor(ComparisonsDatabaseService):
@@ -251,6 +292,92 @@ class ComparisonsORMExecutor(ComparisonsDatabaseService):
     async def add_member(self, comparison_id: int, simulation_id: int, solver: str) -> None:
         async with self.session_maker() as session, session.begin():
             session.add(ORMComparisonMember(comparison_id=comparison_id, simulation_id=simulation_id, solver=solver))
+
+    @override
+    async def insert_verification(
+        self, comparison_id: int, simulators: list[str], settings: dict[str, Any], kind: str = "omex"
+    ) -> int:
+        async with self.session_maker() as session, session.begin():
+            row = ORMVerification(comparison_id=comparison_id, kind=kind, simulators=simulators, settings=settings)
+            session.add(row)
+            await session.flush()
+            return row.id
+
+    @override
+    async def claim_verifications(self, owner: str, lease_seconds: int, limit: int) -> list[ClaimedVerification]:
+        now = func.localtimestamp()
+        due = (
+            select(ORMVerification.id)
+            .where(
+                ORMVerification.state.in_(["requested", "submitted"]),
+                ORMVerification.next_attempt_at <= now,
+                or_(ORMVerification.lease_expires_at.is_(None), ORMVerification.lease_expires_at < now),
+            )
+            .order_by(ORMVerification.next_attempt_at, ORMVerification.id)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        async with self.session_maker() as session, session.begin():
+            ids = list((await session.execute(due)).scalars().all())
+            if not ids:
+                return []
+            await session.execute(
+                update(ORMVerification)
+                .where(ORMVerification.id.in_(ids))
+                .values(lease_owner=owner, lease_expires_at=now + func.make_interval(0, 0, 0, 0, 0, 0, lease_seconds))
+            )
+            rows = await session.execute(
+                select(ORMVerification, func.localtimestamp()).where(ORMVerification.id.in_(ids))
+            )
+            return [
+                ClaimedVerification(
+                    id=r.id,
+                    comparison_id=r.comparison_id,
+                    kind=r.kind,
+                    simulators=list(r.simulators or []),
+                    settings=dict(r.settings or {}),
+                    state=r.state,
+                    workflow_id=r.workflow_id,
+                    attempts=r.attempts,
+                    submitted_seconds_ago=None if r.submitted_at is None else (db_now - r.submitted_at).total_seconds(),
+                )
+                for r, db_now in rows.tuples()
+            ]
+
+    @override
+    async def update_verification(self, verification_id: int, owner: str, **values: Any) -> bool:
+        async with self.session_maker() as session, session.begin():
+            result = await session.execute(
+                update(ORMVerification)
+                .where(ORMVerification.id == verification_id, ORMVerification.lease_owner == owner)
+                .values(updated_at=func.localtimestamp(), **values)
+            )
+            return bool(result.rowcount)  # type: ignore[attr-defined]
+
+    @override
+    async def verifications(self, comparison_id: int) -> list[ORMVerification]:
+        async with self.session_maker() as session:
+            rows = await session.execute(
+                select(ORMVerification)
+                .where(ORMVerification.comparison_id == comparison_id)
+                .order_by(ORMVerification.id)
+            )
+            return list(rows.scalars())
+
+    @override
+    async def replace_reference(self, comparison_id: int, origin: str, reports: dict[str, Any]) -> None:
+        async with self.session_maker() as session, session.begin():
+            existing = (
+                await session.execute(
+                    select(ORMComparisonReference).where(
+                        ORMComparisonReference.comparison_id == comparison_id, ORMComparisonReference.origin == origin
+                    )
+                )
+            ).scalar_one_or_none()
+            if existing is None:
+                session.add(ORMComparisonReference(comparison_id=comparison_id, origin=origin, reports=reports))
+            else:
+                existing.reports = reports
 
     @override
     async def add_reference(self, comparison_id: int, origin: str, reports: dict[str, Any]) -> None:

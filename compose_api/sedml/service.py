@@ -6,6 +6,7 @@ import datetime
 import logging
 import shutil
 import tempfile
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 from fastapi import BackgroundTasks
@@ -105,11 +106,7 @@ async def submit(
             suite_run=suite_run,
         )
         for origin, by_output in references.items():
-            matched = {
-                report_id: by_output[f"{task.sedml}/{report_id}"]
-                for report_id in task.reports
-                if f"{task.sedml}/{report_id}" in by_output
-            }
+            matched = match_references(task.sedml, task.reports, by_output)
             if matched:
                 await db.get_comparisons_db().add_reference(comparison_id, origin, matched)
         for solver_id, archive in task.archives.items():
@@ -152,6 +149,24 @@ async def submit(
             await db.get_comparisons_db().add_member(comparison_id, experiment.simulation_database_id, solver_id)
         created.append(comparison_id)
     return created
+
+
+def match_references(
+    sedml: str, report_ids: Iterable[str], by_output: Mapping[str, dict[str, list[float]]]
+) -> dict[str, dict[str, list[float]]]:
+    """A reference's outputs (``{"<sedml>/<output>": {label: series}}``) for the task's reports, by report id."""
+    return {r: by_output[f"{sedml}/{r}"] for r in report_ids if f"{sedml}/{r}" in by_output}
+
+
+async def recompute(comparison_id: int) -> None:
+    """Score a finished comparison again, after a reference was added (the verify oracle, docs/plan-verify-oracle.md
+    V3). One still running is scored when its members finish, with every reference it has by then."""
+    db = get_required_database_service()
+    row = await db.get_comparisons_db().get(comparison_id)
+    if row is None or row.comparison.status == "running":
+        return
+    result = await _compute(row.comparison.settings, row)
+    await db.get_comparisons_db().set_result(comparison_id, row.comparison.status, result)
 
 
 async def comparison_view(row: ComparisonRow) -> Comparison:

@@ -1,16 +1,16 @@
 # The BioSimulators verify oracle: checking our SED-ML comparisons against biosim's `/verify` API
 
-**Status (2026-10-22): proposed.** Linking out to biosim.biosimulations.org pages is deferred: the platform's UI does
+**Status (2026-10-22): in progress** (V0, V1 merged; V2 and V3 in review). Linking out to biosim.biosimulations.org pages is deferred: the platform's UI does
 not use verification yet. Its `/utilities/verify-model` card is a dead link (`frontend/app/pages/utilities/index.vue`
 at `62bc540`), and project and run pages have no verification view to link to. This plan uses the API directly. One
 PR per step, each merged with a merge commit; deploying is a release, as usual.
 
 | Step | What | State |
 |---|---|---|
-| V0 | This document | proposed |
-| V1 | Legacy runs as references: a `biomodels:` source's original biosimulations.org run (no new simulation) | — |
-| V2 | A client for the verify API, and a durable `verification` record per comparison | — |
-| V3 | The verification worker: submit within the rate limit, poll, store, fold into the comparison | — |
+| V0 | This document | merged (#341) |
+| V1 | Legacy runs as references: a `biomodels:` source's original biosimulations.org run (no new simulation) | merged (#342), released 0.7.33 |
+| V2 | A client for the verify API, and a durable `verification` record per comparison | in review |
+| V3 | The verification worker: submit within the rate limit, poll, store, fold into the comparison | in review |
 | V4 | Triggers: one comparison on demand (API + CLI), and a suite option (`verify:`) | — |
 | V5 | Surface: the comparison page and the suite summary show each verification's verdict | — |
 
@@ -84,6 +84,12 @@ independent oracle.
   `sedml-omex` dataset, `source.omex`. Its SED-ML and models then match ours, and the dataset names (`<sedml>/<report>`)
   line up with our reports. `include_outputs=true` brings back the series for D1. The tolerances are the comparison's
   own.
+
+  **Amended (2026-10-22): minus manifest entries for files it lacks.** BioModels archives often list files they do not
+  ship (13 in BIOMD0000000012's), and BioSimulators refuses such an archive: its runs fail, and before platform#154 the
+  verification even came back `COMPLETED` with no runs. `verify.sanitize_archive` drops those entries and nothing
+  else; the dropped locations are kept on the verification (`settings.dropped_manifest_entries`). BIOMD0000000012
+  cleaned this way ran on COPASI, Tellurium and AMICI, all three close to each other.
 - **D5. Durable and rate-limited, like the submission queue** (`docs/plan-durable-submission.md`). A `verification` row
   per request, with state `requested → submitted → completed | failed`, the `workflow_id`, and the stored result. The
   submission worker gains a verification step:
@@ -133,7 +139,7 @@ independent oracle.
   | `lease_owner`, `lease_expires_at` | the worker holding it |
   | `created_at`, `updated_at` | |
 
-  A revision adds the indexes (the `tests/common/test_migrations.py` conventions).
+  It is a new table, so `create_all` makes it with its index on `(state, next_attempt_at)`; no revision is needed.
 
 ### V3. The verification worker
 - **Where it runs.** Inside `SubmissionWorker` (`compose_api/simulation/submission_worker.py`), alongside suite runs,
