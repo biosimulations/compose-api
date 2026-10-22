@@ -12,7 +12,8 @@ import click
 import compose_api_client.profiles
 import pytest
 import typer
-from compose_api_client.cli.commands import __version__, app, main
+from compose_api_client.auth.models import Provider, SignInMethod
+from compose_api_client.cli.commands import METHODS, PROVIDERS, __version__, app, main
 from compose_api_client.ext.errors import ExitCode
 from compose_api_client.profiles import BUILTIN_PROFILES, PROFILE_FIELDS
 
@@ -30,15 +31,15 @@ auth0_audience = "https://api.compose.example.org"
 LEAK_CANARY = "server-secret-4c1d"
 
 # Commands that sign in, use a session, or read the profile, with the options each one takes. Root options
-# (--profile, --ephemeral-auth, --device, --no-browser, -o) come before the command. "experiment.omex" stands for a
+# (--profile, --ephemeral-auth, --method, -o) come before the command. "experiment.omex" stands for a
 # real archive (`_with_archive`).
 SIGN_IN_FLOW_COMMANDS = [
     ["auth", "signup"],
-    ["auth", "signup", "--provider", "google", "--no-browser"],
-    ["auth", "login", "--device"],
+    ["auth", "signup", "--provider", "google", "--method", "url"],
+    ["auth", "login", "--method", "device"],
 ]
 EPHEMERAL_COMMANDS = [
-    ["--ephemeral-auth", "--device", "simulators", "list"],
+    ["--ephemeral-auth", "--method", "device", "simulators", "list"],
     ["--ephemeral-auth", "run", "experiment.omex", "--interval", "2.5", "--batch"],
 ]
 # API commands use the profile's stored session when there is one, and call anonymously when there is none.
@@ -61,9 +62,31 @@ def _with_archive(argv: list[str], directory: Path) -> list[str]:
     return [str(archive) if part == "experiment.omex" else part for part in argv]
 
 
+#: Options whose value is a separate word, so `_command_path` can skip it.
+_VALUE_OPTIONS = frozenset({
+    "--url",
+    "--profile",
+    "--timeout",
+    "--output",
+    "-o",
+    "--method",
+    "--provider",
+    "--interval",
+})
+
+
 def _command_path(argv: list[str]) -> list[str]:
     """The command words of `argv`, without the root options in front and the arguments after."""
-    words = [part for part in argv if not part.startswith("-")]
+    words: list[str] = []
+    skip_value = False
+    for part in argv:
+        if skip_value:
+            skip_value = False
+            continue
+        if part.startswith("-"):
+            skip_value = part in _VALUE_OPTIONS
+            continue
+        words.append(part)
     group: click.Command = typer.main.get_group(app)
     path: list[str] = []
     for word in words:
@@ -126,6 +149,12 @@ def test_every_documented_command_is_registered(capsys: pytest.CaptureFixture[st
     assert f"Usage: compose-api {' '.join(path)}" in click.unstyle(capsys.readouterr().out)
 
 
+def test_the_option_choices_are_the_enums() -> None:
+    # Literal in commands.py, so building the CLI does not import the auth package.
+    assert list(METHODS.choices) == [method.value for method in SignInMethod]
+    assert list(PROVIDERS.choices) == [provider.value for provider in Provider]
+
+
 def test_provider_defaults() -> None:
     auth = typer.main.get_group(app).commands["auth"]
     assert isinstance(auth, click.Group)
@@ -142,7 +171,7 @@ def test_provider_defaults() -> None:
     [
         ["frobnicate"],
         ["auth", "login", "--provider", "github"],
-        ["auth", "login", "--device", "--no-browser"],
+        ["auth", "login", "--method", "carrier-pigeon"],
         ["auth", "login", "--token", "abc"],
         ["auth", "signup", "--password", "abc"],
         ["auth", "status", "--header", "Authorization: x"],
@@ -152,10 +181,10 @@ def test_provider_defaults() -> None:
         ["status", "-3"],
         ["run"],
         ["run", "no-such-archive.omex"],
-        ["simulators", "list", "--device"],  # interactive sign-in is never implied
-        ["--device", "simulators", "list"],
-        ["--no-browser", "simulators", "list"],
-        ["--ephemeral-auth", "--device", "--no-browser", "simulators", "list"],
+        ["simulators", "list", "--method", "device"],  # interactive sign-in is never implied
+        ["--method", "device", "simulators", "list"],
+        ["--method", "url", "simulators", "list"],
+        ["--method", "auto", "simulators", "list"],  # given at all, it needs --ephemeral-auth
     ],
 )
 def test_usage_errors_exit_2_without_output(
@@ -184,11 +213,12 @@ def test_a_refused_secret_option_never_echoes_its_value(
     assert "SECRET-SENTINEL" not in captured.out + captured.err
 
 
-def test_device_and_no_browser_need_ephemeral_auth(
-    capsys: pytest.CaptureFixture[str], no_network_or_browser: list[str]
+@pytest.mark.parametrize("method", ["device", "auto"])
+def test_method_needs_ephemeral_auth(
+    capsys: pytest.CaptureFixture[str], no_network_or_browser: list[str], method: str
 ) -> None:
-    assert main(["--device", "simulators", "list"]) == ExitCode.USAGE
-    message = "--device and --no-browser choose how --ephemeral-auth signs in, so they need --ephemeral-auth"
+    assert main(["--method", method, "simulators", "list"]) == ExitCode.USAGE
+    message = "--method chooses how --ephemeral-auth signs in, so it needs --ephemeral-auth"
     assert message in " ".join(capsys.readouterr().err.split())
 
 
@@ -320,7 +350,7 @@ def test_sign_in_stops_before_the_browser_while_there_is_nowhere_to_keep_a_sessi
     from keyring.backends.fail import Keyring
 
     monkeypatch.setattr(keyring, "get_keyring", Keyring)
-    assert main([*argv, "--json"]) == ExitCode.CONFIG
+    assert main(["-o", "json", *argv]) == ExitCode.CONFIG
     captured = capsys.readouterr()
     error = json.loads(captured.out)["error"]
     assert error["category"] == "storage"
@@ -335,11 +365,11 @@ def test_google_sign_in_needs_its_connection_named(
 ) -> None:
     write_cli_config(cli_config_path, BARE_PROFILE)
     monkeypatch.setenv("COMPOSE_API_CLI_AUTH0_CLIENT_ID", CLIENT_ID)
-    assert main(["--profile", "dev", "auth", "login", "--provider", "google"]) == ExitCode.CONFIG
+    assert main(["--profile", "dev", "auth", "login", "--provider", "google", "--method", "browser"]) == ExitCode.CONFIG
     assert "needs google_connection set for profile 'dev'" in capsys.readouterr().err
-    # With --device the provider is chosen on the hosted page, so no connection is needed; the tests' refusing
+    # With --method device the provider is chosen on the hosted page, so no connection is needed; the tests' refusing
     # credential store is what stops this one, still before any network request.
-    assert main(["--profile", "dev", "auth", "login", "--provider", "google", "--device"]) == ExitCode.CONFIG
+    assert main(["--profile", "dev", "auth", "login", "--provider", "google", "--method", "device"]) == ExitCode.CONFIG
     assert "Unsupported OS credential backend" in capsys.readouterr().err
 
 
@@ -359,7 +389,7 @@ def test_session_commands_need_a_usable_store_and_never_fall_back(
     the --ephemeral-auth variants, which need no store.
     """
     monkeypatch.setenv("COMPOSE_API_CLI_AUTH0_CLIENT_ID", CLIENT_ID)
-    assert main([*argv, "--json"]) == ExitCode.CONFIG
+    assert main(["-o", "json", *argv]) == ExitCode.CONFIG
     error = json.loads(capsys.readouterr().out)["error"]
     assert error["category"] == "storage"
     assert "--ephemeral-auth" in error["message"], "a host without a store is pointed at the memory-only alternative"
@@ -367,7 +397,7 @@ def test_session_commands_need_a_usable_store_and_never_fall_back(
 
 def test_json_errors_are_objects_on_stdout(capsys: pytest.CaptureFixture[str], cli_config_path: Path) -> None:
     write_cli_config(cli_config_path, BARE_PROFILE)
-    assert main(["--profile", "dev", "auth", "login", "--json"]) == ExitCode.CONFIG
+    assert main(["-o", "json", "--profile", "dev", "auth", "login"]) == ExitCode.CONFIG
     captured = capsys.readouterr()
     error = json.loads(captured.out)["error"]
     assert error["category"] == "configuration"
@@ -494,9 +524,33 @@ def test_local_status_and_logout_json(
     store = storage.MemoryCredentialStore()
     monkeypatch.setenv("COMPOSE_API_CLI_AUTH0_CLIENT_ID", CLIENT_ID)
     monkeypatch.setattr(storage, "open_persistent_store", lambda *args, **kwargs: store)
-    assert main(["auth", "status", "--json"]) == ExitCode.AUTH_REQUIRED
+    assert main(["-o", "json", "auth", "status"]) == ExitCode.AUTH_REQUIRED
     status = json.loads(capsys.readouterr().out)
     assert (status["state"], status["checked_with_api"]) == ("missing", False)
-    assert main(["auth", "logout", "--local-only", "--json"]) == ExitCode.OK
+    assert main(["-o", "json", "auth", "logout", "--local-only"]) == ExitCode.OK
     assert json.loads(capsys.readouterr().out) == {"local_cleared": True, "revocation": "not_attempted"}
     assert next(iter(store.states.values())).read().generation == 1
+
+
+@pytest.mark.parametrize("command", ["signup", "login", "status", "logout"])
+def test_the_auth_commands_hide_json_from_their_help(capsys: pytest.CaptureFixture[str], command: str) -> None:
+    assert main(["auth", command, "--help"]) == ExitCode.OK
+    assert "--json" not in click.unstyle(capsys.readouterr().out)
+
+
+def test_a_hidden_json_flag_still_prints_json(
+    monkeypatch: pytest.MonkeyPatch,
+    cli_config_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    no_network_or_browser: list[str],
+) -> None:
+    """A script that passes --json to every command keeps working on the auth commands, over --output table."""
+    from compose_api_client.auth import storage
+
+    store = storage.MemoryCredentialStore()
+    monkeypatch.setenv("COMPOSE_API_CLI_AUTH0_CLIENT_ID", CLIENT_ID)
+    monkeypatch.setattr(storage, "open_persistent_store", lambda *args, **kwargs: store)
+    assert main(["-o", "table", "auth", "status", "--json"]) == ExitCode.AUTH_REQUIRED
+    assert json.loads(capsys.readouterr().out)["state"] == "missing"
+    assert main(["-o", "table", "auth", "logout", "--local-only", "--json"]) == ExitCode.OK
+    assert json.loads(capsys.readouterr().out) == {"local_cleared": True, "revocation": "not_attempted"}

@@ -7,7 +7,7 @@ import httpx
 import pytest
 from compose_api_client.auth import signin
 from compose_api_client.auth.device import DEFAULT_INTERVAL_SECONDS, device_sign_in
-from compose_api_client.auth.models import Provider, SignInRequest, TokenGrant
+from compose_api_client.auth.models import Provider, SignInMethod, SignInRequest, TokenGrant
 from compose_api_client.auth.oauth import DEVICE_CODE_GRANT, Auth0OAuthClient
 from compose_api_client.auth.signin import ephemeral_session, sign_in
 from compose_api_client.auth.storage import MemoryCredentialStore
@@ -45,8 +45,8 @@ class FakeTime:
         self.now += seconds
 
 
-def _request(*, provider: Provider | None = None, persistent: bool = True) -> SignInRequest:
-    return SignInRequest(signup=False, provider=provider, device=True, open_browser=False, persistent=persistent)
+def _request(*, provider: Provider | None = None, persistent: bool = True, signup: bool = False) -> SignInRequest:
+    return SignInRequest(signup=signup, provider=provider, method=SignInMethod.DEVICE, persistent=persistent)
 
 
 async def _device_sign_in(
@@ -55,12 +55,13 @@ async def _device_sign_in(
     *,
     messages: list[str] | None = None,
     provider: Provider | None = None,
+    signup: bool = False,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> TokenGrant:
     async with Auth0OAuthClient(cli_settings(), transport=transport or tenant.transport) as client:
         return await device_sign_in(
             client,
-            _request(provider=provider),
+            _request(provider=provider, signup=signup),
             notify=(messages if messages is not None else []).append,
             sleep=clock.sleep,
             monotonic=clock.monotonic,
@@ -251,6 +252,18 @@ async def test_a_provider_with_device_is_advice_not_a_parameter(fake_tenant: Fak
     await _device_sign_in(fake_tenant, clock, messages=messages, provider=Provider.GOOGLE)
     assert "Choose Google on that page" in messages[0]
     assert "connection" not in fake_tenant.forms(FakeTenant.DEVICE)[0]
+    assert "Sign up" not in messages[0]
+
+
+@pytest.mark.asyncio
+async def test_a_device_signup_says_to_choose_sign_up(fake_tenant: FakeTenant) -> None:
+    # The device endpoint takes no screen_hint, so `auth signup` over SSH lands on the sign-in page.
+    messages: list[str] = []
+    fake_tenant.queue(FakeTenant.DEVICE, fake_tenant.device_response())
+    fake_tenant.queue(FakeTenant.TOKEN, fake_tenant.token_response())
+    await _device_sign_in(fake_tenant, FakeTime(), messages=messages, provider=Provider.EMAIL, signup=True)
+    assert "To create an account, choose Sign up on that page." in messages[0]
+    assert "screen_hint" not in fake_tenant.forms(FakeTenant.DEVICE)[0]
 
 
 @pytest.mark.asyncio
@@ -313,7 +326,9 @@ async def test_an_ephemeral_session_lives_for_one_block_only(
     if device:
         fake_tenant.queue(FakeTenant.DEVICE, fake_tenant.device_response(interval=1))
         fake_tenant.queue(FakeTenant.TOKEN, fake_tenant.token_response())  # offers a refresh token regardless
-    request = SignInRequest(signup=True, provider=None, device=device, open_browser=True, persistent=True)
+    request = SignInRequest(
+        signup=True, provider=None, method=SignInMethod.DEVICE if device else SignInMethod.BROWSER, persistent=True
+    )
 
     async with ephemeral_session(
         settings, request, notify=lambda _m: None, launcher=FakeBrowser(fake_tenant), transport=fake_tenant.transport

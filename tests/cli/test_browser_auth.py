@@ -3,19 +3,22 @@
 import argparse
 import asyncio
 import logging
+import os
 import socket
+import webbrowser
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import NoReturn
 from urllib.parse import parse_qsl, urlsplit
 
 import httpx
 import pytest
-from compose_api_client.auth.browser import browser_sign_in
+from compose_api_client.auth.browser import auto_method, browser_sign_in, open_system_browser
 from compose_api_client.auth.callback import CONNECTION_TIMEOUT_SECONDS, CallbackListener, CallbackResult
-from compose_api_client.auth.models import Provider, SessionRecord, SignInRequest
+from compose_api_client.auth.models import Provider, SessionRecord, SignInMethod, SignInRequest
 from compose_api_client.auth.oauth import Auth0OAuthClient
-from compose_api_client.auth.signin import persistent_sign_in, sign_in
+from compose_api_client.auth.signin import persistent_sign_in, resolve, sign_in
 from compose_api_client.auth.storage import MemoryCredentialStore
 from compose_api_client.cli.auth_commands import sign_in_command
 from compose_api_client.cli.wiring import Wiring
@@ -42,7 +45,8 @@ STATE = "expected-state-0123456789"
 
 
 def _request(*, signup: bool = False, provider: Provider | None = None, open_browser: bool = True) -> SignInRequest:
-    return SignInRequest(signup=signup, provider=provider, device=False, open_browser=open_browser, persistent=True)
+    method = SignInMethod.BROWSER if open_browser else SignInMethod.URL
+    return SignInRequest(signup=signup, provider=provider, method=method, persistent=True)
 
 
 def _previous_session(settings: CliSettings) -> tuple[MemoryCredentialStore, SessionRecord]:
@@ -257,8 +261,327 @@ async def test_google_without_a_configured_connection_fails_before_anything(
     assert browser.urls == [] and fake_tenant.requests == []
 
 
+SSH = "192.0.2.10 51000 192.0.2.1 22"
+VSCODE_HELPER = "/home/someone/.vscode-server/bin/0123abcd/bin/helpers/browser.sh"
+VSCODE_IPC = "/run/user/1000/vscode-ipc-0123.sock"
+PORT = 8411  # not the default, so a note that names the callback port is seen to take it from the profile
+
+
+@pytest.mark.parametrize(
+    ("platform", "env", "expected", "says"),
+    [
+        ("linux", {"DISPLAY": ":0"}, SignInMethod.BROWSER, ()),
+        ("linux", {"WAYLAND_DISPLAY": "wayland-0"}, SignInMethod.BROWSER, ()),
+        ("darwin", {}, SignInMethod.BROWSER, ()),  # a desktop Mac always has a display, and no variable for it
+        ("win32", {}, SignInMethod.BROWSER, ()),  # so does a Windows desktop
+        ("linux", {"DISPLAY": ":0", "BROWSER": "firefox"}, SignInMethod.BROWSER, ()),  # a desktop's own choice
+        ("linux", {}, SignInMethod.DEVICE, ("since this host has no display", f"port {PORT}", "--method url")),
+        ("linux", {"BROWSER": "lynx"}, SignInMethod.DEVICE, ("since this host has no display",)),
+        (
+            "darwin",
+            {"SSH_CONNECTION": SSH},
+            SignInMethod.DEVICE,
+            ("since this is an SSH session", f"ssh -L {PORT}:127.0.0.1:{PORT}", "--method url"),
+        ),
+        ("win32", {"SSH_CONNECTION": SSH}, SignInMethod.DEVICE, ("since this is an SSH session",)),
+        # X11 forwarding: a browser would open, but on this host, and the callback could not reach it from there.
+        ("linux", {"SSH_CONNECTION": SSH, "DISPLAY": "localhost:10.0"}, SignInMethod.DEVICE, ("an SSH session",)),
+        # A text browser from a server's dotfiles would take over the terminal, and forwards nothing.
+        ("linux", {"SSH_CONNECTION": SSH, "BROWSER": "w3m"}, SignInMethod.DEVICE, ("an SSH session",)),
+        # VS Code without a $BROWSER helper has nothing to hand the link to.
+        ("linux", {"SSH_CONNECTION": SSH, "VSCODE_IPC_HOOK_CLI": VSCODE_IPC}, SignInMethod.DEVICE, ("an SSH session",)),
+        (
+            "linux",
+            {"SSH_CONNECTION": SSH, "BROWSER": VSCODE_HELPER, "VSCODE_IPC_HOOK_CLI": VSCODE_IPC},
+            SignInMethod.BROWSER,
+            ("through $BROWSER, since VS Code forwards the callback port", "--method device"),
+        ),
+        (
+            "linux",
+            {"SSH_CONNECTION": SSH, "BROWSER": VSCODE_HELPER, "TERM_PROGRAM": "vscode"},
+            SignInMethod.BROWSER,
+            ("since VS Code forwards the callback port",),
+        ),
+        (  # a Dev Container: no SSH and no display, and VS Code forwards its ports too
+            "linux",
+            {"BROWSER": VSCODE_HELPER, "TERM_PROGRAM": "vscode"},
+            SignInMethod.BROWSER,
+            ("since VS Code forwards the callback port",),
+        ),
+        (  # WSL without WSLg: no display, and wslview opens the Windows browser
+            "linux",
+            {"BROWSER": "wslview", "WSL_DISTRO_NAME": "Ubuntu"},
+            SignInMethod.BROWSER,
+            ("since WSL forwards the callback port", "--method device"),
+        ),
+    ],
+    ids=[
+        "linux-x11",
+        "linux-wayland",
+        "macos-desktop",
+        "windows-desktop",
+        "desktop-browser-env",
+        "headless",
+        "headless-text-browser",
+        "ssh-macos",
+        "ssh-windows",
+        "ssh-x11-forwarding",
+        "ssh-text-browser",
+        "ssh-vscode-without-browser-env",
+        "vscode-remote-ssh",
+        "vscode-remote-ssh-term-program",
+        "vscode-dev-container",
+        "wsl",
+    ],
+)
+def test_auto_picks_from_the_environment_and_says_why(
+    monkeypatch: pytest.MonkeyPatch,
+    platform: str,
+    env: dict[str, str],
+    expected: SignInMethod,
+    says: tuple[str, ...],
+) -> None:
+    _environment(monkeypatch, **env)
+    monkeypatch.setattr("sys.platform", platform)
+    method, note = auto_method(PORT)
+    assert method is expected
+    if not says:
+        assert note is None, "the browser on this computer's desktop goes without saying"
+        return
+    assert note is not None
+    flat = " ".join(note.split())
+    assert all(fragment in flat for fragment in says), flat
+    # Over SSH it would open on this host's screen, and without a display it cannot open at all.
+    assert "--method browser" not in flat
+
+
+def test_auto_picks_device_in_a_codespace_even_with_vscode_and_browser_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A codespace opened in a web browser cannot receive the callback on 127.0.0.1, whatever $BROWSER does with a link.
+    _environment(monkeypatch, CODESPACES="true", BROWSER="/vscode/bin/helpers/browser.sh", TERM_PROGRAM="vscode")
+    monkeypatch.setattr("sys.platform", "linux")
+    method, note = auto_method(PORT)
+    assert method is SignInMethod.DEVICE
+    assert note is not None and "since this is a GitHub Codespace" in note
+    assert "--method browser works too" in " ".join(note.split()), "it does, from desktop VS Code"
+
+
+@pytest.mark.parametrize(
+    "browser",
+    [
+        "w3m",
+        "/usr/bin/firefox",
+        "lynx %s",
+        f"w3m{os.pathsep}{VSCODE_HELPER}",
+        f"wslview{os.pathsep}w3m",
+        f"w3m %s {VSCODE_HELPER}",
+        '"unclosed %s',
+    ],
+)
+def test_environment_markers_do_not_identify_an_unknown_browser(monkeypatch: pytest.MonkeyPatch, browser: str) -> None:
+    _environment(monkeypatch, BROWSER=browser, SSH_CONNECTION=SSH, TERM_PROGRAM="vscode", WSL_DISTRO_NAME="Ubuntu")
+    monkeypatch.setattr("sys.platform", "linux")
+    assert auto_method(PORT)[0] is SignInMethod.DEVICE
+
+
+@pytest.mark.parametrize(
+    ("browser", "env"),
+    [
+        (f"{VSCODE_HELPER} %s", {"TERM_PROGRAM": "vscode"}),
+        ('"/opt/VS Code/bin/helpers/browser.sh" %s', {"VSCODE_IPC_HOOK_CLI": VSCODE_IPC}),
+        ("/usr/bin/wslview", {"WSL_DISTRO_NAME": "Ubuntu"}),
+        ("wslview %s", {"WSL_DISTRO_NAME": "Ubuntu"}),
+    ],
+)
+def test_auto_recognizes_forwarding_helpers_and_a_single_url_argument(
+    monkeypatch: pytest.MonkeyPatch, browser: str, env: dict[str, str]
+) -> None:
+    _environment(monkeypatch, BROWSER=browser, **env)
+    monkeypatch.setattr("sys.platform", "linux")
+    assert auto_method(PORT)[0] is SignInMethod.BROWSER
+
+
+@pytest.mark.parametrize("method", [SignInMethod.BROWSER, SignInMethod.URL, SignInMethod.DEVICE])
+def test_an_explicit_method_is_never_second_guessed(monkeypatch: pytest.MonkeyPatch, method: SignInMethod) -> None:
+    _environment(monkeypatch, SSH_CONNECTION=SSH, CODESPACES="true")
+    notes: list[str] = []
+    request = SignInRequest(signup=False, provider=None, method=method, persistent=True)
+    assert resolve(cli_settings(), request, notify=notes.append) is request
+    assert notes == []
+
+
 @pytest.mark.asyncio
-async def test_no_browser_prints_only_this_transactions_link(fake_tenant: FakeTenant) -> None:
+@pytest.mark.parametrize(
+    "env",
+    [
+        {"SSH_CONNECTION": SSH, "TERM_PROGRAM": "vscode"},
+        {"WSL_DISTRO_NAME": "Ubuntu"},
+    ],
+    ids=["vscode-ssh", "headless-wsl"],
+)
+async def test_auto_with_a_text_browser_uses_device_without_launching_it(
+    monkeypatch: pytest.MonkeyPatch, fake_tenant: FakeTenant, env: dict[str, str]
+) -> None:
+    _environment(monkeypatch, BROWSER="w3m", **env)
+    monkeypatch.setattr("sys.platform", "linux")
+    # Keep the real webbrowser.get(): a VS Code/WSL marker does not turn this controller into a forwarding helper.
+    monkeypatch.setattr(webbrowser, "_tryorder", [])
+    monkeypatch.setattr(webbrowser, "_browsers", {})
+    controller = webbrowser.GenericBrowser("w3m")
+    webbrowser.register("w3m", None, controller, preferred=True)
+    assert webbrowser.get() is controller
+    opened: list[str] = []
+
+    def open_text_browser(url: str, new: int = 0, autoraise: bool = True) -> bool:
+        opened.append(url)
+        return False
+
+    monkeypatch.setattr(controller, "open", open_text_browser)
+    fake_tenant.queue(FakeTenant.DEVICE, fake_tenant.device_response(interval=1))
+    fake_tenant.queue(FakeTenant.TOKEN, fake_tenant.token_response())
+    request = SignInRequest(signup=False, provider=None, method=SignInMethod.AUTO, persistent=True)
+    grant = await sign_in(
+        cli_settings(),
+        request,
+        notify=lambda _message: None,
+        launcher=open_system_browser,
+        transport=fake_tenant.transport,
+    )
+    assert grant.identity.subject == fake_tenant.subject
+    assert opened == [] and fake_tenant.authorize_requests == []
+    assert len(fake_tenant.forms(FakeTenant.DEVICE)) == 1
+
+
+@pytest.mark.asyncio
+async def test_an_explicit_browser_method_never_launches_a_text_browser(
+    monkeypatch: pytest.MonkeyPatch, fake_tenant: FakeTenant
+) -> None:
+    """`--method browser` over SSH with `BROWSER=w3m` stops with the other ways to sign in, instead of running w3m in
+    this terminal and saying to continue in a browser window only after it exits."""
+    _environment(monkeypatch, BROWSER="w3m", SSH_CONNECTION=SSH)
+    monkeypatch.setattr("sys.platform", "linux")
+    monkeypatch.setattr(webbrowser, "_tryorder", [])
+    monkeypatch.setattr(webbrowser, "_browsers", {})
+    controller = webbrowser.GenericBrowser("w3m")
+    webbrowser.register("w3m", None, controller, preferred=True)
+
+    def open_text_browser(url: str, new: int = 0, autoraise: bool = True) -> bool:
+        raise AssertionError("w3m would run in this terminal")
+
+    monkeypatch.setattr(controller, "open", open_text_browser)
+    settings = cli_settings()
+    messages: list[str] = []
+    with pytest.raises(InteractionError, match=r"no browser could be opened.*--method url.*--method device"):
+        await sign_in(
+            settings,
+            _request(),
+            notify=messages.append,
+            launcher=open_system_browser,
+            transport=fake_tenant.transport,
+        )
+    assert messages == [] and fake_tenant.authorize_requests == []
+    assert _port_is_free(settings.callback_port)
+
+
+@pytest.mark.parametrize(
+    "browser",
+    ["w3m", "/usr/bin/lynx", "/usr/bin/lynx %s", "www-browser", f"/vscode/bin/helpers/browser.sh{os.pathsep}elinks"],
+)
+def test_a_text_browser_in_browser_env_is_never_launched(monkeypatch: pytest.MonkeyPatch, browser: str) -> None:
+    """Without a display, a text browser from a server's dotfiles is no handler: alone, by path, as a command line or
+    anywhere in a fallback list."""
+    _environment(monkeypatch, BROWSER=browser)
+    monkeypatch.setattr("sys.platform", "linux")
+
+    def launch(*args: object, **kwargs: object) -> NoReturn:
+        raise AssertionError("a text browser would take over this terminal")
+
+    monkeypatch.setattr(webbrowser, "get", launch)
+    monkeypatch.setattr(webbrowser, "open", launch)
+    assert open_system_browser("https://tenant.example/authorize") is False
+
+
+@pytest.mark.parametrize(
+    ("display", "browser_env", "platform", "handed_to"),
+    [
+        (":0", None, "linux", "default"),  # a Linux desktop
+        (None, None, "darwin", "default"),  # macOS has no display variable and always a desktop
+        (None, "/vscode/bin/helpers/browser.sh", "linux", "$BROWSER"),  # Remote-SSH: the helper opens it locally
+        (None, None, "linux", None),  # headless with no handler: nothing to hand it to
+    ],
+)
+def test_the_system_browser_is_the_desktop_or_browser_env(
+    monkeypatch: pytest.MonkeyPatch,
+    display: str | None,
+    browser_env: str | None,
+    platform: str,
+    handed_to: str | None,
+) -> None:
+    _environment(monkeypatch, DISPLAY=display, BROWSER=browser_env)
+    monkeypatch.setattr("sys.platform", platform)
+    handed: list[tuple[str, str]] = []
+
+    def default_open(url: str, new: int = 0, autoraise: bool = True) -> bool:
+        handed.append(("default", url))  # webbrowser's whole list, text browsers included
+        return True
+
+    def helper_open(url: str, new: int = 0, autoraise: bool = True) -> bool:
+        handed.append(("$BROWSER", url))
+        return True
+
+    # Exercise the real controller selection, intercepting only the final launch.
+    monkeypatch.setattr(webbrowser, "_tryorder", [])
+    monkeypatch.setattr(webbrowser, "_browsers", {})
+    controller = webbrowser.GenericBrowser(browser_env or "unused-browser")
+    webbrowser.register(controller.name, None, controller, preferred=True)
+    monkeypatch.setattr(controller, "open", helper_open)
+    monkeypatch.setattr(webbrowser, "open", default_open)
+    assert open_system_browser("https://tenant.example/authorize") is (handed_to is not None)
+    assert handed == ([] if handed_to is None else [(handed_to, "https://tenant.example/authorize")])
+
+
+@pytest.mark.parametrize("failure", ["no handler", "handler failed"])
+def test_a_browser_env_that_does_not_open_is_not_a_browser(monkeypatch: pytest.MonkeyPatch, failure: str) -> None:
+    _environment(monkeypatch, BROWSER="/no/such/browser-helper")
+    monkeypatch.setattr("sys.platform", "linux")
+
+    class Fails:
+        def open(self, url: str, new: int = 0, autoraise: bool = True) -> bool:
+            return False  # GenericBrowser: the command exited non-zero, or could not start
+
+    def get(using: str | None = None) -> Fails:
+        if failure == "no handler":
+            raise webbrowser.Error("could not locate runnable browser")
+        return Fails()
+
+    def default_open(url: str, new: int = 0, autoraise: bool = True) -> bool:
+        raise AssertionError("without a display, webbrowser's other choices are text browsers")
+
+    monkeypatch.setattr(webbrowser, "get", get)
+    monkeypatch.setattr(webbrowser, "open", default_open)
+    assert open_system_browser("https://tenant.example/authorize") is False
+
+
+def _environment(monkeypatch: pytest.MonkeyPatch, **values: str | None) -> None:
+    """Set the variables `auto` and the launcher read, clearing every one not given."""
+    for name in (
+        "SSH_CONNECTION",
+        "BROWSER",
+        "CODESPACES",
+        "DISPLAY",
+        "WAYLAND_DISPLAY",
+        "VSCODE_IPC_HOOK_CLI",
+        "TERM_PROGRAM",
+        "WSL_DISTRO_NAME",
+    ):
+        value = values.get(name)
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+
+
+@pytest.mark.asyncio
+async def test_the_url_method_prints_only_this_transactions_link(fake_tenant: FakeTenant) -> None:
     browser = FakeBrowser(fake_tenant)
     messages: list[str] = []
 
@@ -268,7 +591,7 @@ async def test_no_browser_prints_only_this_transactions_link(fake_tenant: FakeTe
         browser.visit_later(link)
 
     def never(_url: str) -> bool:
-        raise AssertionError("--no-browser must not launch a browser")
+        raise AssertionError("--method url must not launch a browser")
 
     grant = await sign_in(
         cli_settings(),
@@ -284,13 +607,13 @@ async def test_no_browser_prints_only_this_transactions_link(fake_tenant: FakeTe
     assert dict(parse_qsl(urlsplit(link).query)) == authorize, "the printed link is this transaction's own"
     [form] = fake_tenant.forms(FakeTenant.TOKEN)
     assert form["code_verifier"] not in message and form["code"] not in message
-    assert "--device" in message
+    assert "--method device" in message
 
 
 @pytest.mark.asyncio
 async def test_a_browser_that_cannot_open_ends_cleanly(fake_tenant: FakeTenant) -> None:
     settings = cli_settings()
-    with pytest.raises(InteractionError, match=r"--no-browser .* --device"):
+    with pytest.raises(InteractionError, match=r"--method url .* --method device"):
         await sign_in(
             settings,
             _request(),
@@ -306,7 +629,7 @@ async def test_a_browser_that_cannot_open_ends_cleanly(fake_tenant: FakeTenant) 
 async def test_an_occupied_callback_port_fails_before_the_browser_or_network(fake_tenant: FakeTenant) -> None:
     settings = cli_settings()
     browser = FakeBrowser(fake_tenant)
-    with _occupied(settings.callback_port), pytest.raises(InteractionError, match="--device"):
+    with _occupied(settings.callback_port), pytest.raises(InteractionError, match="--method device"):
         await sign_in(settings, _request(), notify=lambda _m: None, launcher=browser, transport=fake_tenant.transport)
     assert browser.urls == [] and fake_tenant.requests == []
 
@@ -487,4 +810,4 @@ async def test_save_failure_after_sign_in_revokes_the_new_refresh_token(fake_ten
 
 def _login_args(*, provider: str | None = None) -> argparse.Namespace:
     """What `compose-api auth login [--provider P]` hands `sign_in_command` (see `commands.auth_login`)."""
-    return argparse.Namespace(profile=None, provider=provider, device=False, no_browser=False, json=False)
+    return argparse.Namespace(profile=None, provider=provider, method="browser", json=False)

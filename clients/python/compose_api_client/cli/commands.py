@@ -109,8 +109,7 @@ class Settings:
     quiet: bool = False
     url_explicit: bool = False
     ephemeral_auth: bool = False  # sign in for this command only (--ephemeral-auth)
-    device: bool = False  # ... with a device code
-    no_browser: bool = False  # ... printing the sign-in URL instead of opening it
+    method: str = "auto"  # how --ephemeral-auth signs in: auto, browser, url or device
 
 
 def _note(message: str) -> None:
@@ -196,16 +195,14 @@ def _origin(url: str) -> str | None:
 
 def _ephemeral_tokens(profile: CliSettings, settings: Settings, wiring: Wiring) -> TokenSource:
     """Sign in for this one command and hold the session in memory only; nothing is stored or renewed."""
-    from compose_api_client.auth.models import SignInRequest
+    from compose_api_client.auth.models import SignInMethod, SignInRequest
     from compose_api_client.auth.signin import ephemeral_session
     from compose_api_client.auth.sources import OneCommandSession
     from compose_api_client.cli.render import notify
     from compose_api_client.cli.wiring import run as run_network
 
     profile.require_client_id()
-    request = SignInRequest(
-        signup=False, provider=None, device=settings.device, open_browser=not settings.no_browser, persistent=False
-    )
+    request = SignInRequest(signup=False, provider=None, method=SignInMethod(settings.method), persistent=False)
 
     async def sign_in() -> SessionRecord:
         async with ephemeral_session(
@@ -257,6 +254,12 @@ app.add_typer(auth_app, name="auth")
 config_app = typer.Typer(help="Inspect the CLI configuration.", no_args_is_help=True)
 app.add_typer(config_app, name="config")
 
+# Literal lists, so building the CLI does not import the auth package; tests/cli/test_commands.py keeps them in step.
+#: The identity providers `auth signup` / `auth login` can start with (`compose_api_client.auth.models.Provider`).
+PROVIDERS = click.Choice(["email", "google"])
+#: How a sign-in reaches the person (`compose_api_client.auth.models.SignInMethod`).
+METHODS = click.Choice(["auto", "browser", "url", "device"])
+
 
 def _print_version(value: bool) -> None:
     """`--version`: this client's version. The `version` command asks the server for its own."""
@@ -297,12 +300,14 @@ def root(
             help="Sign in for this command only, keeping credentials in memory (for hosts without a credential store).",
         ),
     ] = False,
-    device: Annotated[
-        bool, typer.Option("--device", help="With --ephemeral-auth: sign in on another device (RFC 8628).")
-    ] = False,
-    no_browser: Annotated[
-        bool, typer.Option("--no-browser", help="With --ephemeral-auth: print the sign-in URL instead of opening it.")
-    ] = False,
+    method: Annotated[
+        str,
+        typer.Option(
+            "--method",
+            click_type=METHODS,
+            help="How --ephemeral-auth signs in: auto (device over SSH, else browser), browser, url or device.",
+        ),
+    ] = "auto",
     version: Annotated[
         bool,
         typer.Option(
@@ -319,12 +324,9 @@ def root(
             soft_wrap=True,
         )
         raise typer.Exit(EXIT_USAGE)
-    if (device or no_browser) and not ephemeral_auth:
-        raise click.UsageError(
-            "--device and --no-browser choose how --ephemeral-auth signs in, so they need --ephemeral-auth"
-        )
-    if device and no_browser:
-        raise click.UsageError("--device and --no-browser are mutually exclusive")
+    # Given at all, even as `--method auto`: only --ephemeral-auth reads it.
+    if ctx.get_parameter_source("method") not in (None, click.core.ParameterSource.DEFAULT) and not ephemeral_auth:
+        raise click.UsageError("--method chooses how --ephemeral-auth signs in, so it needs --ephemeral-auth")
     ctx.obj = Settings(
         url=url if url is not None else DEFAULT_URL,
         profile=profile,
@@ -334,8 +336,7 @@ def root(
         quiet=quiet,
         url_explicit=url is not None,
         ephemeral_auth=ephemeral_auth,
-        device=device,
-        no_browser=no_browser,
+        method=method,
     )
     if verbose:
         import logging
@@ -394,12 +395,27 @@ JSON_OPTION = inspect.Parameter(
     default=False,
     annotation=Annotated[bool, typer.Option("--json", help="Print JSON (the same as --output json).")],
 )
+#: The same option, accepted but left out of the help (``handled_hidden_json``).
+HIDDEN_JSON_OPTION = JSON_OPTION.replace(
+    annotation=Annotated[bool, typer.Option("--json", hidden=True, help="Print JSON (the same as --output json).")]
+)
 
 
 def handled(fn: F) -> F:
     """Map exceptions to a message on stderr and the documented exit code (``--verbose`` re-raises), and give the
-    command a ``--json`` option. Every command goes through here, so every command's help shows it."""
+    command a ``--json`` option. Every command goes through here or ``handled_hidden_json``, so every command takes
+    it."""
+    return _handled(fn, JSON_OPTION)
 
+
+def handled_hidden_json(fn: F) -> F:
+    """``handled``, with ``--json`` accepted but left out of the help: the auth commands document ``-o json`` alone,
+    so their help doesn't offer two spellings of one option, and a script that passes ``--json`` to every command
+    keeps working."""
+    return _handled(fn, HIDDEN_JSON_OPTION)
+
+
+def _handled(fn: F, json_option: inspect.Parameter) -> F:
     @functools.wraps(fn)
     def wrapper(*args: Any, json_output: bool = False, **kwargs: Any) -> Any:
         # Typer passes a plain click.Context, so test for that: a typer.Context check never matched, and the
@@ -426,9 +442,9 @@ def handled(fn: F) -> F:
 
     signature = inspect.signature(fn, eval_str=True)
     wrapper.__signature__ = signature.replace(  # type: ignore[attr-defined]
-        parameters=[*signature.parameters.values(), JSON_OPTION]
+        parameters=[*signature.parameters.values(), json_option]
     )
-    wrapper.__annotations__ = {**fn.__annotations__, "json_output": JSON_OPTION.annotation}
+    wrapper.__annotations__ = {**fn.__annotations__, "json_output": json_option.annotation}
     return wrapper  # type: ignore[return-value]
 
 
@@ -1280,10 +1296,6 @@ def openapi(
         raise typer.Exit(EXIT_JOB)
 
 
-#: The identity providers `auth signup` / `auth login` can start with (`compose_api_client.auth.models.Provider`).
-PROVIDERS = click.Choice(["email", "google"])
-
-
 @config_app.command("show")
 @handled
 def config_show(ctx: typer.Context) -> None:
@@ -1314,26 +1326,33 @@ def config_show(ctx: typer.Context) -> None:
 
 
 @auth_app.command("signup")
-@handled
+@handled_hidden_json
 def auth_signup(
     ctx: typer.Context,
-    provider: Annotated[str, typer.Option(click_type=PROVIDERS, help="Identity provider: email or google.")] = "email",
-    device: Annotated[bool, typer.Option("--device", help="Sign in on another device (RFC 8628).")] = False,
-    no_browser: Annotated[
-        bool, typer.Option("--no-browser", help="Print the sign-in URL instead of opening it.")
-    ] = False,
+    provider: Annotated[
+        str,
+        typer.Option(
+            click_type=PROVIDERS,
+            help="Identity provider: email or google. With --method device it is advice: the page chooses.",
+        ),
+    ] = "email",
+    method: Annotated[
+        str,
+        typer.Option(
+            "--method",
+            click_type=METHODS,
+            help="How to sign in: auto (device over SSH, else browser), browser, url (print the link) or device.",
+        ),
+    ] = "auto",
 ) -> None:
     """Create an account in the browser, then sign in."""
     from compose_api_client.cli import auth_commands
 
-    if device and no_browser:
-        raise typer.BadParameter("--device and --no-browser are mutually exclusive")
     settings = _settings(ctx)
     ns = argparse.Namespace(
         profile=settings.profile,
         provider=provider,
-        device=device,
-        no_browser=no_browser,
+        method=method,
         json=resolve(settings.output) is Output.JSON,
     )
     code = auth_commands.signup(ns)
@@ -1342,28 +1361,33 @@ def auth_signup(
 
 
 @auth_app.command("login")
-@handled
+@handled_hidden_json
 def auth_login(
     ctx: typer.Context,
     provider: Annotated[
-        str | None, typer.Option(click_type=PROVIDERS, help="Identity provider: email or google.")
+        str | None,
+        typer.Option(
+            click_type=PROVIDERS,
+            help="Identity provider: email or google. With --method device it is advice: the page chooses.",
+        ),
     ] = None,
-    device: Annotated[bool, typer.Option("--device", help="Sign in on another device (RFC 8628).")] = False,
-    no_browser: Annotated[
-        bool, typer.Option("--no-browser", help="Print the sign-in URL instead of opening it.")
-    ] = False,
+    method: Annotated[
+        str,
+        typer.Option(
+            "--method",
+            click_type=METHODS,
+            help="How to sign in: auto (device over SSH, else browser), browser, url (print the link) or device.",
+        ),
+    ] = "auto",
 ) -> None:
     """Sign in in the browser or with a device code."""
     from compose_api_client.cli import auth_commands
 
-    if device and no_browser:
-        raise typer.BadParameter("--device and --no-browser are mutually exclusive")
     settings = _settings(ctx)
     ns = argparse.Namespace(
         profile=settings.profile,
         provider=provider,
-        device=device,
-        no_browser=no_browser,
+        method=method,
         json=resolve(settings.output) is Output.JSON,
     )
     code = auth_commands.login(ns)
@@ -1373,7 +1397,7 @@ def auth_login(
 
 @auth_app.command("status")
 @claims("auth status", "get-current-principal")
-@handled
+@handled_hidden_json
 def auth_status(
     ctx: typer.Context,
     verify: Annotated[
@@ -1395,7 +1419,7 @@ def auth_status(
 
 
 @auth_app.command("logout")
-@handled
+@handled_hidden_json
 def auth_logout(
     ctx: typer.Context,
     local_only: Annotated[

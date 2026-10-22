@@ -78,7 +78,7 @@ class CallbackListener:
             raise InteractionError(
                 f"cannot listen on 127.0.0.1:{self.port} for the sign-in callback; something else is probably using"
                 " that port. Auth0 only returns to the callback port registered for this application, so the CLI"
-                " will not pick another: free the port, or sign in from another device with --device"
+                " will not pick another: free the port, or sign in from another device with --method device"
             )
         return self
 

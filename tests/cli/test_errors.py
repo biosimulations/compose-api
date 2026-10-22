@@ -221,16 +221,36 @@ SCENARIOS: dict[str, Scenario] = {
         ["auth", "status", "--verify"], ExitCode.CONFIG, "storage", "--ephemeral-auth", session=None, keyring=False
     ),
     "api-unreachable-after-login": Scenario(
-        ["auth", "login"], ExitCode.NETWORK, "network", "auth status --verify", api=_unreachable, session=None
+        ["auth", "login", "--method", "browser"],
+        ExitCode.NETWORK,
+        "network",
+        "auth status --verify",
+        api=_unreachable,
+        session=None,
     ),
     "denied-in-browser": Scenario(
-        ["auth", "login"], ExitCode.AUTH_REQUIRED, "authentication", "nothing was saved", session=None, browser="deny"
+        ["auth", "login", "--method", "browser"],
+        ExitCode.AUTH_REQUIRED,
+        "authentication",
+        "nothing was saved",
+        session=None,
+        browser="deny",
     ),
-    "no-browser": Scenario(
-        ["auth", "login"], ExitCode.CONFIG, "interaction", "--no-browser", session=None, browser="cannot-open"
+    "browser-cannot-open": Scenario(
+        ["auth", "login", "--method", "browser"],
+        ExitCode.CONFIG,
+        "interaction",
+        "--method url",
+        session=None,
+        browser="cannot-open",
     ),
     "callback-port-taken": Scenario(
-        ["auth", "login"], ExitCode.CONFIG, "interaction", "--device", session=None, occupy_callback_port=True
+        ["auth", "login", "--method", "browser"],
+        ExitCode.CONFIG,
+        "interaction",
+        "--method device",
+        session=None,
+        occupy_callback_port=True,
     ),
 }
 
@@ -282,7 +302,7 @@ def test_each_failure_in_the_matrix_has_its_code_and_a_safe_next_step(
         if scenario.occupy_callback_port:
             squatter.bind(("127.0.0.1", settings.callback_port))
             squatter.listen()
-        code = main([*argv, "--json"])
+        code = main(["-o", "json", *argv])
     captured = capsys.readouterr()
     error = json.loads(captured.out.splitlines()[-1])["error"]
     assert (code, error["category"], error["exit_code"]) == (scenario.code, scenario.category, int(scenario.code))
@@ -341,12 +361,12 @@ def test_a_whole_session_never_leaks_a_credential(
     )
     archive = _archive(tmp_path / "experiment.omex")
     journey = [
-        ["auth", "login"],
+        ["auth", "login", "--method", "browser"],  # pinned: `auto` resolves differently on a headless runner
         ["auth", "status", "--verify"],
         ["simulators", "list"],
         ["run", str(archive)],
         ["status", str(FakeComposeApi.SIMULATION_ID)],
-        ["auth", "status", "--json"],
+        ["-o", "json", "auth", "status"],
     ]
     for argv in journey:
         assert main(argv) == ExitCode.OK, argv
@@ -396,7 +416,7 @@ def test_text_and_json_report_the_same_facts(
     for argv, facts in cases:
         assert main(["-o", "table", *argv]) == ExitCode.OK
         text = capsys.readouterr().out
-        assert main([*argv, "--json"]) == ExitCode.OK
+        assert main(["-o", "json", *argv]) == ExitCode.OK
         document = json.loads(capsys.readouterr().out)
         for fact in facts(document):
             assert str(fact) in text, (argv, fact)

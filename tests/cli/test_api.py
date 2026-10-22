@@ -9,7 +9,7 @@ from typing import Any
 
 import httpx
 import pytest
-from compose_api_client.auth.models import SessionRecord
+from compose_api_client.auth.models import SessionRecord, SignInMethod
 from compose_api_client.auth.storage import SERVICE, MemoryCredentialStore
 from compose_api_client.cli.commands import main
 from compose_api_client.cli.wiring import Wiring
@@ -312,7 +312,14 @@ def test_ephemeral_auth_signs_in_for_one_command_and_keeps_nothing(
             api_transport=fake_compose_api.transport,
         ),
     )
-    argv = ["--ephemeral-auth", *(["--device"] if device else []), "simulators", "list", "--json"]
+    argv = [
+        "--ephemeral-auth",
+        "--method",
+        "device" if device else "browser",  # pinned: `auto` resolves differently on a headless CI runner
+        "simulators",
+        "list",
+        "--json",
+    ]
     assert main(argv) == ExitCode.OK
     assert json.loads(capsys.readouterr().out)["versions"][0]["database_id"] == FakeComposeApi.SIMULATOR_ID
     [request] = fake_compose_api.transport.requests
@@ -355,7 +362,7 @@ def test_login_is_confirmed_by_the_api(
             api_transport=fake_compose_api.transport,
         ),
     )
-    assert main(["-o", "table", "auth", "login"]) == ExitCode.OK
+    assert main(["-o", "table", "auth", "login", "--method", "browser"]) == ExitCode.OK
     out = capsys.readouterr().out
     assert f"Identity: {fake_tenant.subject} ({AUTH0_TEST_ISSUER})" in out
     assert "API: confirmed this identity just now" in out
@@ -389,15 +396,69 @@ def test_login_on_windows_keeps_the_session_in_one_credential_manager_item(
             api_transport=fake_compose_api.transport,
         ),
     )
-    assert main(["auth", "login", "--json"]) == ExitCode.OK
+    assert main(["-o", "json", "auth", "login", "--method", "browser"]) == ExitCode.OK
     items = windows_credential_manager.items
     assert list(items) == [f"{SERVICE}.{settings.binding_key(persistent=True)}"], "the probe left nothing behind"
     [item] = items.values()
     assert json.loads(item["CredentialBlob"].removesuffix(b"\0").decode("ascii"))["refresh_token"] == REFRESH_TOKEN
     capsys.readouterr()
-    assert main(["auth", "status", "--json"]) == ExitCode.OK
+    assert main(["-o", "json", "auth", "status"]) == ExitCode.OK
     status = json.loads(capsys.readouterr().out)
     assert status["state"] == "valid" and status["identity"]["subject"] == fake_tenant.subject
+
+
+def test_a_plain_login_over_ssh_signs_in_with_a_device_code(
+    monkeypatch: pytest.MonkeyPatch,
+    cli_config_path: Path,
+    fake_tenant: FakeTenant,
+    fake_compose_api: FakeComposeApi,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`auto` through the CLI. Over SSH it takes the device code without launching a browser, says why, and needs no
+    google_connection for `--provider google`, since the person chooses Google on the hosted page. The environment
+    is read once: `auth login` resolves the method to check the provider, and the sign-in keeps that choice."""
+    from compose_api_client.auth.browser import auto_method
+
+    chosen: list[int] = []
+
+    def counted(port: int) -> tuple[SignInMethod, str | None]:
+        chosen.append(port)
+        return auto_method(port)
+
+    monkeypatch.setattr("compose_api_client.auth.signin.auto_method", counted)
+    settings = cli_settings(google_connection=None)
+    fields = ("api_base_url", "auth0_domain", "auth0_audience", "auth0_client_id")
+    write_cli_config(
+        cli_config_path,
+        "[profiles.remote]\n"
+        + "".join(f'{field} = "{getattr(settings, field)}"\n' for field in fields)
+        + f"callback_port = {settings.callback_port}\n",
+    )
+    for name in ("BROWSER", "CODESPACES", "DISPLAY", "WAYLAND_DISPLAY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("SSH_CONNECTION", "192.0.2.10 51000 192.0.2.1 22")
+    fake_tenant.queue(FakeTenant.DEVICE, fake_tenant.device_response(interval=1))
+    fake_tenant.queue(FakeTenant.TOKEN, fake_tenant.token_response())
+    browser = FakeBrowser(fake_tenant)
+    store = MemoryCredentialStore()
+    wire(
+        monkeypatch,
+        Wiring(
+            store_factory=lambda _settings: store,
+            launcher=browser,
+            auth0_transport=fake_tenant.transport,
+            api_transport=fake_compose_api.transport,
+        ),
+    )
+    assert main(["--profile", "remote", "-o", "table", "auth", "login", "--provider", "google"]) == ExitCode.OK
+    assert browser.urls == [] and fake_tenant.authorize_requests == []
+    assert len(fake_tenant.forms(FakeTenant.DEVICE)) == 1
+    err = " ".join(capsys.readouterr().err.split())
+    assert err.count("Signing in with a device code, since this is an SSH session.") == 1
+    assert f"ssh -L {settings.callback_port}:127.0.0.1:{settings.callback_port}" in err
+    assert "Choose Google on that page" in err
+    assert chosen == [settings.callback_port]
+    assert store.load(settings.binding_key(persistent=True)) is not None
 
 
 @pytest.mark.parametrize("failure", ["unreachable", "404"])
@@ -426,7 +487,9 @@ def test_an_unreachable_api_after_login_keeps_the_session_unconfirmed(
             api_transport=httpx.MockTransport(unreachable),
         ),
     )
-    assert main(["auth", "login", "--json"]) == (ExitCode.NETWORK if failure == "unreachable" else ExitCode.FAILURE)
+    assert main(["-o", "json", "auth", "login", "--method", "browser"]) == (
+        ExitCode.NETWORK if failure == "unreachable" else ExitCode.FAILURE
+    )
     error = json.loads(capsys.readouterr().out)["error"]
     assert error["category"] == ("network" if failure == "unreachable" else "not_found")
     assert error["message"].startswith("signed in and saved the session, but the Compose API did not confirm it")
@@ -441,12 +504,12 @@ def test_status_is_local_until_asked_to_verify(
     assert main(["-o", "table", "auth", "status"]) == ExitCode.OK
     out = capsys.readouterr().out
     assert "API: never confirmed" in out
-    assert main(["auth", "status", "--verify", "--json"]) == ExitCode.OK
+    assert main(["-o", "json", "auth", "status", "--verify"]) == ExitCode.OK
     document = json.loads(capsys.readouterr().out)
     assert document["checked_with_api"] is True and document["api_verified_at"] is not None
     assert main(["-o", "table", "auth", "status"]) == ExitCode.OK
     assert "API: last confirmed" in capsys.readouterr().out
-    assert main(["auth", "status", "--json"]) == ExitCode.OK
+    assert main(["-o", "json", "auth", "status"]) == ExitCode.OK
     assert json.loads(capsys.readouterr().out)["checked_with_api"] is False
 
 

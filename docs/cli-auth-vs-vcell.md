@@ -8,7 +8,7 @@ does more than VCell's helper; how to use the CLI is in [cli.md](cli.md), and th
 |:---|:---|:---|
 | **Shape** | A library function, `login_interactive()`, that returns an `ApiClient`. | CLI commands: `auth login`, `auth signup`, `auth status`, `auth logout`. |
 | **OAuth library** | `requests_oauth2client` handles all protocol work. | Authlib supplies only protocol pieces (the login URL, PKCE, ID-token rules); httpx and PyJWT do the rest (`auth/oauth.py`). |
-| **Sign-in methods** | Browser only. | Browser; device code (`--device`) for SSH or machines without a browser; `--no-browser` to print the link instead. |
+| **Sign-in methods** | Browser only. | Browser; device code (`--method device`) for SSH or machines without a browser; `--method url` to print the link instead; `auto` picks from the environment. |
 | **PKCE, state, nonce** | Yes, by default in `requests_oauth2client`; `validate_callback` checks the state. | Yes, explicitly: S256 challenge, constant-time state comparison, nonce, and the `iss` callback parameter (RFC 9207). |
 | **Audience parameter** | Not sent. | Sent as the profile's `auth0_audience` (for example `https://api.compose.cam.uchc.edu`). |
 | **Token sent to the API** | The ID token. | The access token (`ext/session.py`). |
@@ -30,9 +30,9 @@ secret, `token_endpoint_auth_method=none`).
    - each attempt generates its own `state`, `nonce` and code verifier;
    - the listener binds `127.0.0.1:<callback_port>/callback` *before* the browser opens;
    - `--provider email|google` picks the Auth0 connection, `auth signup` adds `screen_hint=signup` and
-     `prompt=login`, and `--no-browser` prints the link instead of opening it;
+     `prompt=login`, and `--method url` prints the link instead of opening it;
    - the callback's `Host`, `state` and optional `iss` are checked before the code is exchanged with its verifier.
-2. **Device authorization grant** (RFC 8628, `--device`, `auth/device.py`): the verification page must be on the
+2. **Device authorization grant** (RFC 8628, `--method device`, `auth/device.py`): the verification page must be on the
    tenant's own host; polling follows the server's interval, adds 5 s on `slow_down`, and backs off on transient
    failures.
 3. **Refresh and revocation** (RFC 6749, RFC 7009): a stored session asks for `offline_access`. It renews the access
@@ -49,7 +49,7 @@ sequenceDiagram
     participant Auth0 as Auth0 tenant
     participant API as compose-api (/auth/me)
 
-    User->>CLI: compose-api auth login [--device | --provider]
+    User->>CLI: compose-api auth login [--method browser|url|device | --provider]
     CLI->>Store: Probe that the store is writable, take the login lock
     CLI->>Auth0: GET /.well-known/openid-configuration
     alt Browser (RFC 8252 + PKCE)
@@ -57,7 +57,7 @@ sequenceDiagram
         CLI->>Auth0: Open /authorize (S256 challenge, state, nonce, connection)
         Auth0-->>CLI: Redirect to GET /callback?code=...&state=...
         CLI->>Auth0: POST /oauth/token (authorization_code + code_verifier)
-    else Device (RFC 8628, --device)
+    else Device (RFC 8628, --method device)
         CLI->>Auth0: POST /oauth/device/code
         CLI->>User: Print the verification URL and user code
         CLI->>Auth0: Poll POST /oauth/token (device_code)

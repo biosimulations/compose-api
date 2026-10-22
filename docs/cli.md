@@ -69,18 +69,36 @@ compose-api auth signup                     # create an email-and-password accou
 compose-api auth signup --provider google   # first sign-in with Google creates the account
 compose-api auth login                      # returning user: choose email or Google on the page
 compose-api auth login --provider google
-compose-api auth login --device             # sign in on another device (SSH, containers)
+compose-api auth login --method device      # sign in on another device (SSH, containers)
 compose-api auth status                     # what is stored locally; contacts nothing
 compose-api auth status --verify            # renews if needed and asks GET /auth/me to confirm the identity
 compose-api auth logout                     # revokes the refresh token with Auth0, then erases the session
 compose-api auth logout --local-only
 ```
 
+`--method` chooses how a sign-in reaches you: `auto` (the default) picks from the environment: the device code over
+SSH (`SSH_CONNECTION`), on a headless host or in a GitHub Codespace, and the browser otherwise. Over SSH or without a
+display, a recognized VS Code `bin/helpers/browser.sh` or `browser.cmd` helper, or WSL's `wslview`, still gets the
+browser, since they forward the callback port. VS Code or WSL environment markers alone do not qualify: a text
+browser, an unknown command or a fallback list in `$BROWSER` gets the device code. An unrecognized helper can still be
+chosen explicitly with `--method browser`. A Codespace still gets
+the device code, because one opened in a web browser cannot receive the callback. Whenever `auto` picks anything but
+your desktop's browser, the command says why and how to choose another way. `browser` opens the system browser, or
+`$BROWSER` without a display. A text browser there (`w3m`, `lynx`, `links`, `elinks`, `www-browser`) would take over
+the terminal, so it counts as none and the command says to use `url` or `device`. `url` prints the sign-in link instead
+of opening anything; `device` is RFC 8628, for signing in on another device. The same option works with
+`--ephemeral-auth` before any command.
+
 The session is one record in your operating system's credential store (macOS Keychain, Linux Secret Service or
 Windows Credential Manager), under `compose-api.cli.v1.<digest>`. Plaintext and unknown keyring backends are refused;
 there is no file fallback. On hosts without a credential store, use `--ephemeral-auth` before the command (for example
-`compose-api --ephemeral-auth --device simulators list`),
+`compose-api --ephemeral-auth --method device simulators list`),
 which signs in for a single command in memory without requesting a refresh token.
+
+The browser flow listens on `http://127.0.0.1:8400/callback`, the only callback the tenant's applications register,
+so `COMPOSE_API_CLI_CALLBACK_PORT` cannot move it. If port 8400 is already in use, sign-in stops before the browser
+opens; over SSH, `ssh -L 8400:127.0.0.1:8400` forwards the callback to your own computer, which makes
+`--method url` work there.
 
 For CI and non-interactive automation, set `COMPOSE_API_TOKEN` in the environment. When set, it takes precedence over a
 stored session for the active profile (printing a one-line notice to stderr), is never renewed or printed, and is still
@@ -140,7 +158,8 @@ compose-api --ephemeral-auth run experiment.omex           # sign in for this on
 ## JSON output
 
 Every command takes `--json`, which prints JSON instead of a table. It's the same as `--output json` before the
-command name, and it overrides that option. JSON is also the default whenever output isn't a terminal, so
+command name, and it overrides that option. The `auth` commands accept `--json` without listing it in their help:
+`-o json` is the spelling documented for them. JSON is also the default whenever output isn't a terminal, so
 `compose-api simulations list | jq` needs neither.
 
 ## What a run did: events and traces
@@ -230,8 +249,7 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 * `-v, --verbose`: Log HTTP requests; tracebacks on errors.
 * `-q, --quiet`: No progress lines.
 * `--ephemeral-auth`: Sign in for this command only, keeping credentials in memory (for hosts without a credential store).
-* `--device`: With --ephemeral-auth: sign in on another device (RFC 8628).
-* `--no-browser`: With --ephemeral-auth: print the sign-in URL instead of opening it.
+* `--method [auto|browser|url|device]`: How --ephemeral-auth signs in: auto (device over SSH, else browser), browser, url or device.  [default: auto]
 * `--version`: Print this program's version and exit.
 * `--install-completion`: Install completion for the current shell.
 * `--show-completion`: Show completion for the current shell, to copy it or customize the installation.
@@ -1589,10 +1607,8 @@ $ compose-api auth signup [OPTIONS]
 
 **Options**:
 
-* `--provider [email|google]`: Identity provider: email or google.  [default: email]
-* `--device`: Sign in on another device (RFC 8628).
-* `--no-browser`: Print the sign-in URL instead of opening it.
-* `--json`: Print JSON (the same as --output json).
+* `--provider [email|google]`: Identity provider: email or google. With --method device it is advice: the page chooses.  [default: email]
+* `--method [auto|browser|url|device]`: How to sign in: auto (device over SSH, else browser), browser, url (print the link) or device.  [default: auto]
 * `--help`: Show this message and exit.
 
 ### `compose-api auth login`
@@ -1607,10 +1623,8 @@ $ compose-api auth login [OPTIONS]
 
 **Options**:
 
-* `--provider [email|google]`: Identity provider: email or google.
-* `--device`: Sign in on another device (RFC 8628).
-* `--no-browser`: Print the sign-in URL instead of opening it.
-* `--json`: Print JSON (the same as --output json).
+* `--provider [email|google]`: Identity provider: email or google. With --method device it is advice: the page chooses.
+* `--method [auto|browser|url|device]`: How to sign in: auto (device over SSH, else browser), browser, url (print the link) or device.  [default: auto]
 * `--help`: Show this message and exit.
 
 ### `compose-api auth status`
@@ -1626,7 +1640,6 @@ $ compose-api auth status [OPTIONS]
 **Options**:
 
 * `--verify`: Refresh if needed and confirm the identity with the API.
-* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ### `compose-api auth logout`
@@ -1642,7 +1655,6 @@ $ compose-api auth logout [OPTIONS]
 **Options**:
 
 * `--local-only`: Erase the local session without contacting Auth0.
-* `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
 ## `compose-api config`
