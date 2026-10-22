@@ -1,5 +1,9 @@
 """Windows owner-only ACL enforcement for non-secret concurrency state, and the session's Credential Manager item
-(loaded on Windows only)."""
+(loaded on Windows only).
+
+Only `read_credential` reads the item back; keyring and other tools that decode the blob as UTF-16 show it as garbled
+text.
+"""
 
 from __future__ import annotations
 
