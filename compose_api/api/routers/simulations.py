@@ -15,10 +15,12 @@ from compose_api.common.gateway.models import RouterConfig
 from compose_api.config import get_settings
 from compose_api.db.services.datasets_db import DatasetQuery
 from compose_api.db.services.simulators_db import SUBMITTING, SimulationQuery, SimulationRow
-from compose_api.dependencies import get_required_database_service
+from compose_api.dependencies import get_required_database_service, get_simulation_service
+from compose_api.simulation import handlers
 from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.labels import LABEL_KEYS, LabelError, parse_label_filters
 from compose_api.simulation.models import (
+    SimulationCancellation,
     SimulationDetail,
     SimulationPage,
     SimulationSummary,
@@ -180,3 +182,43 @@ async def get_simulation(simulation_id: int, caller: OptionalCaller) -> Simulati
         DatasetQuery(simulation_id=simulation_id, available=None, limit=1)
     )
     return SimulationDetail(**summary.model_dump(), event_count=event_count, dataset_count=dataset_count)
+
+
+@config.router.delete(
+    path="/{simulation_id}",
+    response_model=SimulationCancellation,
+    status_code=202,
+    operation_id="cancel-simulation",
+    responses={
+        401: {"description": "Cancelling needs a signed-in caller"},
+        404: {"description": "The simulation does not exist, or the caller may not read it"},
+        409: {"description": "The run has finished, or is being submitted to SLURM right now"},
+        502: {"description": "SLURM could not be asked to cancel the job; try again"},
+    },
+    tags=["Simulations"],
+    summary="Cancel a run: withdraw it from the queue, or ask SLURM to cancel its job",
+)
+async def cancel_simulation(simulation_id: int, caller: OptionalCaller) -> SimulationCancellation:
+    """Any signed-in caller who may read the simulation may cancel it, while no simulation has an owner (every one is
+    public until submissions stamp one, docs/plan-observability.md step 5); then its owner and configured admins."""
+    if caller is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Cancelling a simulation needs a signed-in caller",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    db = get_required_database_service()
+    row = await db.get_simulator_db().get_simulation_row(simulation_id)
+    if row is None or not can_read(caller, row.simulation.to_simulation_access()):
+        raise HTTPException(status_code=404, detail=f"Simulation with id {simulation_id} not found.")
+    try:
+        return await handlers.cancel_simulation(
+            simulation_id,
+            requested_by=caller.subject,
+            database_service=db,
+            simulation_service_slurm=get_simulation_service(),
+        )
+    except handlers.CancelRefusedError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    except handlers.CancelUnavailableError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e

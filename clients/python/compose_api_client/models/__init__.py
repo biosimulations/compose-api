@@ -81,6 +81,7 @@ from .sedml_finding_severity import SedmlFindingSeverity
 from .sedml_preview import SedmlPreview
 from .sedml_run_result import SedmlRunResult
 from .sedml_task import SedmlTask
+from .simulation_cancellation import SimulationCancellation
 from .simulation_detail import SimulationDetail
 from .simulation_detail_labels import SimulationDetailLabels
 from .simulation_experiment import SimulationExperiment
@@ -187,6 +188,7 @@ __all__ = (
     "SedmlPreview",
     "SedmlRunResult",
     "SedmlTask",
+    "SimulationCancellation",
     "SimulationDetail",
     "SimulationDetailLabels",
     "SimulationExperiment",
