@@ -27,18 +27,57 @@ watch(page, load)
 
 const UBadge = resolveComponent('UBadge')
 const NuxtLink = resolveComponent('NuxtLink')
-const verdict = (c: Comparison) =>
+type Badge = { color: 'success' | 'error' | 'warning' | 'neutral', text: string }
+type Result = { close_to_references?: boolean | null, references?: string[], reports?: Record<string, { worst?: { score?: number | string | null } }> }
+const resultOf = (c: Comparison) => (c.result ?? null) as Result | null
+
+// Whether the solvers agree with each other: the comparison's own verdict.
+const agreement = (c: Comparison): Badge =>
   c.status === 'running' ? { color: 'neutral', text: 'running' }
-  : c.close ? { color: 'success', text: 'solvers agree' }
-  : { color: 'error', text: c.status === 'incomplete' ? 'incomplete' : 'solvers differ' }
+  : c.status === 'incomplete' ? { color: 'warning', text: 'a run failed' }
+  : c.close ? { color: 'success', text: 'agree' }
+  : { color: 'error', text: 'differ' }
+
+// Whether they also match the results the archive was published with, when it carried any.
+const original = (c: Comparison): Badge | null => {
+  const r = resultOf(c)
+  if (!r?.references?.length) return null
+  if (r.close_to_references === true) return { color: 'success', text: 'match' }
+  if (r.close_to_references === false) return { color: 'error', text: 'differ' }
+  return { color: 'neutral', text: 'not compared' }
+}
+
+// The largest score over every report (close below 1), so a near miss shows without opening the comparison.
+const worst = (c: Comparison): number | null => {
+  const scores = Object.values(resultOf(c)?.reports ?? {}).map(r => r.worst?.score).filter((s): s is number => typeof s === 'number')
+  return scores.length ? Math.max(...scores) : null
+}
+
+const badge = (b: Badge | null) => b ? h(UBadge, { color: b.color, variant: 'subtle' }, () => b.text) : h('span', { class: 'text-muted' }, '—')
 
 const columns: TableColumn<Comparison>[] = [
   { accessorKey: 'comparison_id', header: 'ID', cell: ({ row }) => h(NuxtLink, { to: `/comparisons/${row.original.comparison_id}`, class: 'font-mono text-primary' }, () => `#${row.original.comparison_id}`) },
-  { accessorKey: 'name', header: 'Model and task' },
-  { accessorKey: 'source', header: 'Source', cell: ({ row }) => h('span', { class: 'text-xs font-mono' }, row.original.source) },
+  { id: 'agreement', header: 'Solvers agree', cell: ({ row }) => badge(agreement(row.original)) },
+  { id: 'original', header: 'Original results', cell: ({ row }) => badge(original(row.original)) },
+  {
+    id: 'worst',
+    header: 'Worst score',
+    cell: ({ row }) => {
+      const s = worst(row.original)
+      return s === null ? h('span', { class: 'text-muted' }, '—') : h('span', { class: ['font-mono tabular-nums', s < 1 ? 'text-success' : 'text-error'] }, s.toPrecision(3))
+    }
+  },
+  {
+    accessorKey: 'name',
+    header: 'Model and task',
+    // Names are archive file names and run long; the full name and the source are in the tooltip and the detail page.
+    cell: ({ row }) => h('div', { class: 'max-w-xs xl:max-w-md', title: `${row.original.name}\n${row.original.source}` }, [
+      h('div', { class: 'truncate' }, row.original.name),
+      h('div', { class: 'truncate text-xs font-mono text-muted' }, row.original.source)
+    ])
+  },
   { id: 'solvers', header: 'Solvers', cell: ({ row }) => row.original.members.map(m => m.solver).join(', ') },
-  { id: 'verdict', header: 'Result', cell: ({ row }) => { const v = verdict(row.original); return h(UBadge, { color: v.color, variant: 'subtle' }, () => v.text) } },
-  { accessorKey: 'created_at', header: 'Created', cell: ({ row }) => formatTime(row.original.created_at) }
+  { accessorKey: 'created_at', header: 'Created', cell: ({ row }) => h('span', { class: 'whitespace-nowrap' }, formatTime(row.original.created_at)) }
 ]
 </script>
 
