@@ -152,6 +152,9 @@ class Settings(BaseSettings):
 
     # The static web UI build served at /ui (webapp/, `npm run generate`). Absent: the API runs without a UI.
     webapp_dist_dir: str = f"{REPO_ROOT}/webapp/.output/public"
+    # Enforce the UI's Content-Security-Policy (compose_api/api/webapp.py) instead of only reporting violations to
+    # /webapp/csp-report. Turn on once the reports show the policy matches what the UI loads.
+    webapp_csp_enforce: bool = False
 
     @field_validator("admin_role")
     @classmethod

@@ -13,7 +13,7 @@ let client: Client<paths> | null = null
 
 const auth: Middleware = {
   async onRequest({ request }) {
-    const token = await accessToken()
+    const token = await accessToken(request)
     if (token) request.headers.set('Authorization', `Bearer ${token}`)
     return request
   },
@@ -71,7 +71,7 @@ export function errorViolations(error: unknown): Violation[] {
  */
 export async function downloadFile(path: string, query: Record<string, string | number>, filename: string) {
   const url = apiUrl(path, query)
-  const token = await accessToken()
+  const token = await accessToken(url)
   const a = document.createElement('a')
   a.download = filename
   if (!token) {
@@ -87,9 +87,9 @@ export async function downloadFile(path: string, query: Record<string, string | 
   setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000)
 }
 
-/** A `fetch` that adds the caller's token: for loaders (zarrita, viewers) that fetch API URLs themselves. */
+/** A `fetch` that adds the caller's token to API URLs: for loaders (zarrita, viewers) that fetch them themselves. */
 export const authFetch: typeof fetch = async (input, init) => {
-  const token = await accessToken()
+  const token = await accessToken(input)
   if (!token) return fetch(input, init)
   const headers = new Headers(init?.headers)
   headers.set('Authorization', `Bearer ${token}`)
@@ -103,6 +103,7 @@ export function datasetFilesUrl(id: string): string {
 
 /** Fetch a file's body with the caller's token, for inline previews. */
 export async function fetchContent(path: string): Promise<Response> {
-  const token = await accessToken()
-  return fetch(apiUrl(path), token ? { headers: { Authorization: `Bearer ${token}` } } : undefined)
+  const url = apiUrl(path)
+  const token = await accessToken(url)
+  return fetch(url, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined)
 }
