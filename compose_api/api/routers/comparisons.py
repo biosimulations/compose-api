@@ -104,7 +104,8 @@ async def get_comparison_series(comparison_id: int, report: str, caller: Optiona
     responses={
         200: {
             "model": Verification,
-            "description": "A verification for the same simulators is already queued or running; it is returned",
+            "description": "A verification for the same simulators is already queued or running, or failed while "
+            "biosim was still working on it and is now polled again; it is returned",
         },
         201: {"description": "Queued"},
         404: {"description": "No such comparison"},
