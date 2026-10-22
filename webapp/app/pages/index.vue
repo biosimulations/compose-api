@@ -62,7 +62,7 @@ onMounted(async () => {
             class="flex items-center gap-4 px-4 py-3 rounded-lg border border-default hover:bg-elevated"
           >
             <span class="font-mono text-muted w-16">#{{ s.simulation_id }}</span>
-            <StatusBadge :status="s.status" />
+            <StatusBadge :status="s.status" :submission="s.submission" />
             <span class="truncate">{{ s.simulator ?? s.container_def_hash.slice(0, 12) }}</span>
             <span class="ml-auto text-sm text-muted">{{ formatTime(s.created_at) }}</span>
           </NuxtLink>

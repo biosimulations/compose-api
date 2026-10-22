@@ -3,7 +3,7 @@
 import datetime
 from typing import Any
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint, func, text
+from sqlalchemy import ForeignKey, Index, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -69,3 +69,40 @@ class ORMSuiteRun(DeclarativeTableBase):
     number: Mapped[int] = mapped_column(nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="submitting")
     failures: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    # Its progress, so a restart resumes it (docs/plan-durable-submission.md, Q4): the sources to submit, the next one,
+    # and the submission worker holding it while it is `submitting`.
+    sources: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    next_source: Mapped[int] = mapped_column(nullable=False, server_default="0")
+    lease_owner: Mapped[str | None] = mapped_column(nullable=True)
+    lease_expires_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
+
+
+class ORMVerification(DeclarativeTableBase):
+    """A request to biosim's /verify API about one comparison (docs/plan-verify-oracle.md, V2): the archive the
+    comparison ran, sent to BioSimulators' simulators, polled until it finishes, and its output kept here (biosim's
+    workflow history is not kept forever). The submission worker drives it through `requested -> submitted ->
+    completed | failed`, under a lease like a submission."""
+
+    __tablename__ = "verification"
+    __table_args__ = (Index("ix_verification_due", "state", "next_attempt_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    comparison_id: Mapped[int] = mapped_column(
+        ForeignKey("comparison.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    kind: Mapped[str] = mapped_column(String(8), nullable=False, server_default="omex")  # omex | runs
+    simulators: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    settings: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    state: Mapped[str] = mapped_column(String(16), nullable=False, server_default="requested")
+    workflow_id: Mapped[str | None] = mapped_column(nullable=True)
+    workflow_status: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)  # biosim's VerifyWorkflowOutput
+    verify_close: Mapped[bool | None] = mapped_column(nullable=True)  # BioSimulators' simulators agree
+    attempts: Mapped[int] = mapped_column(nullable=False, server_default="0")
+    next_attempt_at: Mapped[datetime.datetime] = mapped_column(nullable=False, server_default=func.localtimestamp())
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lease_owner: Mapped[str | None] = mapped_column(nullable=True)
+    lease_expires_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
+    submitted_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(nullable=False, server_default=func.localtimestamp())
+    updated_at: Mapped[datetime.datetime] = mapped_column(nullable=False, server_default=func.localtimestamp())

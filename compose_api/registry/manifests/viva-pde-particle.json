@@ -3,10 +3,10 @@
   "schema_version": "pbg-interfaces/1",
   "environment": {
     "name": "viva-pde-particle",
-    "image": "ghcr.io/vivarium-collective/viva-pde-particle-compose@sha256:e3c0b03e938ba47eedf2c9fee523cec9a88e6cb7b611fa8283f3048dd3418f28",
+    "image": "ghcr.io/vivarium-collective/viva-pde-particle-compose@sha256:7ada62566485d57bcc33c359ae4e0c697da5c4e0faf83b9960d1d938c609849d",
     "python": "3.12.13",
-    "process_bigraph": "1.8.5",
-    "bigraph_schema": "1.7.0",
+    "process_bigraph": "1.9.1",
+    "bigraph_schema": "1.8.1",
     "packages": {
       "viva_pde_particle": "0.0.0"
     },

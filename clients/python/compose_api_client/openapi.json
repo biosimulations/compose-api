@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "compose-api",
-    "version": "0.7.27"
+    "version": "0.7.33"
   },
   "paths": {
     "/curated/copasi": {
@@ -2049,6 +2049,127 @@
         }
       }
     },
+    "/comparisons/{comparison_id}/verify": {
+      "post": {
+        "tags": [
+          "SED-ML"
+        ],
+        "summary": "Check a comparison against BioSimulators' simulators through biosim's /verify (queued; 201 when new)",
+        "operationId": "verify-comparison",
+        "parameters": [
+          {
+            "name": "comparison_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Comparison Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/VerifyRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Verification"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A verification for the same simulators is already queued or running; it is returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Verification"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such comparison"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/comparisons/{comparison_id}/verifications": {
+      "get": {
+        "tags": [
+          "SED-ML"
+        ],
+        "summary": "A comparison's verifications against biosim's /verify, oldest first",
+        "operationId": "list-comparison-verifications",
+        "parameters": [
+          {
+            "name": "comparison_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Comparison Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Verification"
+                  },
+                  "title": "Response List-Comparison-Verifications"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such comparison"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/sources/biomodels/search": {
       "get": {
         "tags": [
@@ -2834,6 +2955,76 @@
           },
           "404": {
             "description": "No such suite"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suites/{name}/runs/{number}/verify": {
+      "post": {
+        "tags": [
+          "Suites"
+        ],
+        "summary": "Queue a verification against biosim's /verify for a suite run's finished comparisons",
+        "operationId": "verify-suite-run",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Number"
+            }
+          },
+          {
+            "name": "which",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "failing",
+                "all"
+              ],
+              "type": "string",
+              "description": "failing: those that differ, are incomplete, or no agreeing reference settles; all: every one",
+              "default": "failing",
+              "title": "Which"
+            },
+            "description": "failing: those that differ, are incomplete, or no agreeing reference settles; all: every one"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuiteVerifyResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such suite or run"
           },
           "422": {
             "description": "Validation Error",
@@ -5228,6 +5419,16 @@
             ],
             "title": "Description"
           },
+          "submission": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubmissionInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "event_count": {
             "type": "integer",
             "title": "Event Count",
@@ -5449,6 +5650,16 @@
               }
             ],
             "title": "Description"
+          },
+          "submission": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubmissionInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -5591,6 +5802,63 @@
         "title": "SpanTree",
         "description": "A span with its own events (those whose ``span_id`` is the span's) and its children, by start time."
       },
+      "SubmissionInfo": {
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/SubmissionState"
+          },
+          "queue": {
+            "type": "string",
+            "title": "Queue"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts",
+            "default": 0
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state",
+          "queue"
+        ],
+        "title": "SubmissionInfo",
+        "description": "Where a run is on its way to SLURM (docs/plan-durable-submission.md): the detail behind `submitting`."
+      },
+      "SubmissionState": {
+        "type": "string",
+        "enum": [
+          "requested",
+          "preparing",
+          "submitting",
+          "submitted",
+          "failed"
+        ],
+        "title": "SubmissionState",
+        "description": "Where a run is on its way to SLURM (docs/plan-durable-submission.md, Q1). The public status stays\n``submitting`` until the run has a SLURM job; this is the detail behind it."
+      },
       "Suite": {
         "properties": {
           "name": {
@@ -5645,6 +5913,17 @@
             },
             "type": "array",
             "title": "Expected"
+          },
+          "verify": {
+            "type": "string",
+            "enum": [
+              "none",
+              "failing",
+              "all"
+            ],
+            "title": "Verify",
+            "description": "check comparisons against biosim's /verify once they finish: those that differ, are incomplete or have no reference that agrees (failing), or every one (docs/plan-verify-oracle.md, D3)",
+            "default": "none"
           }
         },
         "type": "object",
@@ -5799,6 +6078,28 @@
               }
             ],
             "title": "Failure"
+          },
+          "verification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification"
+          },
+          "verify_close": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verify Close"
           }
         },
         "type": "object",
@@ -5871,6 +6172,39 @@
         ],
         "title": "SuiteRunView"
       },
+      "SuiteVerifyResult": {
+        "properties": {
+          "queued": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Queued",
+            "description": "comparisons a verification was queued for"
+          },
+          "already": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Already",
+            "description": "comparisons with a verification already queued or running"
+          },
+          "running": {
+            "type": "integer",
+            "title": "Running",
+            "description": "comparisons still running, not yet looked at"
+          }
+        },
+        "type": "object",
+        "required": [
+          "queued",
+          "already",
+          "running"
+        ],
+        "title": "SuiteVerifyResult",
+        "description": "Verifications queued for a suite run's comparisons."
+      },
       "Tolerances": {
         "properties": {
           "rel_tol": {
@@ -5935,6 +6269,158 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "Verification": {
+        "properties": {
+          "verification_id": {
+            "type": "integer",
+            "title": "Verification Id"
+          },
+          "comparison_id": {
+            "type": "integer",
+            "title": "Comparison Id"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "requested",
+              "submitted",
+              "completed",
+              "failed"
+            ],
+            "title": "State"
+          },
+          "simulators": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Simulators"
+          },
+          "workflow_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Id"
+          },
+          "workflow_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Status"
+          },
+          "verify_close": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verify Close",
+            "description": "BioSimulators' simulators agree on every report"
+          },
+          "references": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "References",
+            "description": "the reference origins it added"
+          },
+          "failed_simulators": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Failed Simulators",
+            "description": "simulators whose runs at biosimulations.org produced no results"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts",
+            "default": 0
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "verification_id",
+          "comparison_id",
+          "state",
+          "simulators"
+        ],
+        "title": "Verification",
+        "description": "One request to biosim's /verify API about a comparison: the archive the comparison ran, on BioSimulators'\nsimulators (docs/plan-verify-oracle.md). Once `completed`, each simulator's reports are a reference on the\ncomparison, and `verify_close` says whether the simulators agree with each other."
+      },
+      "VerifyRequest": {
+        "properties": {
+          "simulators": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9_-]*(:[A-Za-z0-9_.+-]+)?$"
+                },
+                "type": "array",
+                "maxItems": 10,
+                "minItems": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simulators",
+            "description": "`name` or `name:version`; by default the service's (amici, copasi, pysces, tellurium, vcell)"
+          }
+        },
+        "type": "object",
+        "title": "VerifyRequest",
+        "description": "Which BioSimulators simulators to verify a comparison with (docs/plan-verify-oracle.md, V4)."
       },
       "Visibility": {
         "type": "string",

@@ -91,15 +91,24 @@ from .simulation_summary_labels import SimulationSummaryLabels
 from .simulator_version import SimulatorVersion
 from .solver import Solver
 from .span_tree import SpanTree
+from .submission_info import SubmissionInfo
+from .submission_state import SubmissionState
 from .suite import Suite
 from .suite_run_info import SuiteRunInfo
 from .suite_run_row import SuiteRunRow
 from .suite_run_row_drift_type_0 import SuiteRunRowDriftType0
 from .suite_run_view import SuiteRunView
 from .suite_run_view_summary import SuiteRunViewSummary
+from .suite_verify import SuiteVerify
+from .suite_verify_result import SuiteVerifyResult
 from .tolerances import Tolerances
 from .validation_error import ValidationError
 from .validation_error_context import ValidationErrorContext
+from .verification import Verification
+from .verification_failed_simulators_item import VerificationFailedSimulatorsItem
+from .verification_state import VerificationState
+from .verify_request import VerifyRequest
+from .verify_suite_run_which import VerifySuiteRunWhich
 from .visibility import Visibility
 
 __all__ = (
@@ -188,14 +197,23 @@ __all__ = (
     "SimulatorVersion",
     "Solver",
     "SpanTree",
+    "SubmissionInfo",
+    "SubmissionState",
     "Suite",
     "SuiteRunInfo",
     "SuiteRunRow",
     "SuiteRunRowDriftType0",
     "SuiteRunView",
     "SuiteRunViewSummary",
+    "SuiteVerify",
+    "SuiteVerifyResult",
     "Tolerances",
     "ValidationError",
     "ValidationErrorContext",
+    "Verification",
+    "VerificationFailedSimulatorsItem",
+    "VerificationState",
+    "VerifyRequest",
+    "VerifySuiteRunWhich",
     "Visibility",
 )

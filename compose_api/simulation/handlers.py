@@ -5,9 +5,7 @@ import shutil
 import string
 import tempfile
 import zipfile
-from collections.abc import Coroutine
 from pathlib import Path
-from typing import Any
 
 from fastapi import BackgroundTasks, HTTPException
 from pbest.containerization.container_constructor import generate_container_def_file
@@ -24,11 +22,11 @@ from compose_api.dependencies import (
     get_required_database_service,
     get_required_job_monitor,
     get_required_simulation_service,
+    get_submission_worker,
 )
-from compose_api.observability.api_events import record_api_event
 from compose_api.registry.manifest import SERVICE_BUNDLE
-from compose_api.simulation import builds, images
-from compose_api.simulation.hpc_utils import get_correlation_id, get_experiment_id, get_singularity_hash
+from compose_api.simulation import builds, images, staging
+from compose_api.simulation.hpc_utils import get_experiment_id, get_singularity_hash
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.labels import labels
 from compose_api.simulation.models import (
@@ -37,11 +35,11 @@ from compose_api.simulation.models import (
     JobType,
     RegisteredSimulators,
     RemoteContainerImage,
-    Simulation,
     SimulationExperiment,
     SimulationFileType,
     SimulationRequest,
     SimulatorVersion,
+    SubmissionSpec,
 )
 from compose_api.simulation.prebuilt import prebuilt_definition, prebuilt_image, prebuilt_image_of
 from compose_api.simulation.simulation_service import SimulationService
@@ -72,7 +70,13 @@ async def run_simulation(
     simulation_service_slurm: SimulationService,
     job_monitor: JobMonitor,
     background_tasks: BackgroundTasks,
+    *,
+    queue: str = "interactive",
+    priority: int = 0,
+    requested_by: str | None = None,
 ) -> SimulationExperiment:
+    """Record a run and queue it for the submission worker; its ids. ``queue`` and ``priority`` place it in line
+    (docs/plan-durable-submission.md, Q3); ``requested_by`` is the caller's subject, kept for fair scheduling."""
     with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
         if simulation_request.simulator is not None:
             # an owner-published image (settings.prebuilt_simulators), instead of the shared container
@@ -95,28 +99,23 @@ async def run_simulation(
     random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
     experiment_id = get_experiment_id(simulator=simulator_version, random_str=random_string_7_hex)
 
+    # Durable before the response (docs/plan-durable-submission.md, Q1): the files staged, and the simulation recorded
+    # with its `requested` submission in one transaction. The submission worker takes it from there, after a restart
+    # too, so nothing here outlives the request.
+    staged_request, on_store = staging.stage_request(simulation_request, experiment_id)
     simulation = await simulator_db.insert_simulation(
-        sim_request=simulation_request, experiment_id=experiment_id, simulator_version=simulator_version
+        sim_request=staged_request,
+        experiment_id=experiment_id,
+        simulator_version=simulator_version,
+        submission=SubmissionSpec(staged_on_store=on_store, queue=queue, priority=priority, requested_by=requested_by),
     )
-
-    async def perform_job() -> None:
-        await supervise_dispatch(
-            database_service.get_hpc_db(),
-            simulation.database_id,
-            _dispatch_job(
-                database_service=database_service,
-                job_monitor=job_monitor,
-                simulation=simulation,
-                simulation_service_slurm=simulation_service_slurm,
-                experiment_id=experiment_id,
-            ),
-        )
+    worker = get_submission_worker()
+    if worker is not None:
+        worker.kick()
 
     def remove_temp_dir() -> None:
         shutil.rmtree(tmp_dir)
 
-    # Tasks are executed in order, https://www.starlette.dev/background/
-    background_tasks.add_task(perform_job)
     background_tasks.add_task(remove_temp_dir)
 
     return SimulationExperiment(
@@ -168,92 +167,6 @@ async def run_curated_pbif(
         except Exception as e:
             logger.exception(msg=f"Failed to start {simulator_name} run", exc_info=e)
             raise HTTPException(500)
-
-
-#: How often a submitting task heartbeats; well inside settings.submission_stale_seconds.
-DISPATCH_HEARTBEAT_SECONDS = 30
-
-
-async def supervise_dispatch(
-    hpc_db: HPCDatabaseService, simulation_id: int, dispatch: Coroutine[Any, Any, None]
-) -> None:
-    """Run a simulation's submission, heartbeating on the simulation while it works (#238).
-
-    A submission that raises or outlives settings.submission_timeout_seconds fails the simulation with the reason,
-    instead of leaving it with no run, "submitting" forever. One whose task is lost outright (the API restarted) stops
-    heartbeating, and the job monitor fails it (JobMonitor.fail_stale_submissions).
-    """
-
-    async def heartbeat() -> None:
-        while True:
-            try:
-                await hpc_db.touch_submission(simulation_id)
-            except Exception:
-                logger.exception(f"Could not record the dispatch heartbeat of simulation {simulation_id}")
-            await asyncio.sleep(DISPATCH_HEARTBEAT_SECONDS)
-
-    timeout = get_settings().submission_timeout_seconds
-    beating = asyncio.create_task(heartbeat())
-    reason: str | None = None
-    try:
-        async with asyncio.timeout(timeout):
-            await dispatch
-    except TimeoutError:
-        reason = f"Submission did not reach SLURM within {timeout} s; resubmit the simulation."
-        logger.exception(f"Simulation {simulation_id}: {reason}")
-    except Exception as e:
-        reason = f"Submission failed before reaching SLURM: {type(e).__name__}: {e}"
-        logger.exception(f"Simulation {simulation_id}: submission failed")
-    finally:
-        beating.cancel()
-    if reason is not None:
-        await hpc_db.fail_submission(simulation_id, reason)
-
-
-async def _dispatch_job(
-    database_service: DatabaseService,
-    job_monitor: JobMonitor,
-    simulation_service_slurm: SimulationService,
-    simulation: Simulation,
-    experiment_id: str,
-) -> None:
-    simulator_version = simulation.simulator_version
-    hpc_db = database_service.get_hpc_db()
-    random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
-
-    await ensure_image(
-        simulator_version,
-        database_service=database_service,
-        simulation_service_slurm=simulation_service_slurm,
-        job_monitor=job_monitor,
-        random_string=random_string_7_hex,
-    )
-
-    # Minted before submission so the job can carry the run's trace context (docs/plan-observability.md O1).
-    correlation_id = get_correlation_id(random_string=random_string_7_hex, job_type=JobType.SIMULATION)
-    sim_slurmjobid = await simulation_service_slurm.submit_simulation_job(
-        simulation=simulation,
-        experiment_id=experiment_id,
-        correlation_id=correlation_id,
-    )
-
-    hpcrun = await hpc_db.insert_hpcrun(
-        slurmjobid=sim_slurmjobid,
-        job_type=JobType.SIMULATION,
-        ref_id=simulation.database_id,
-        correlation_id=correlation_id,
-    )
-    await record_api_event(
-        database_service,
-        hpcrun,
-        "dispatch.submitted",
-        {
-            "slurm_job_id": sim_slurmjobid,
-            "simulation_id": simulation.database_id,
-            "simulator_id": simulator_version.database_id,
-            "experiment_id": experiment_id,
-        },
-    )
 
 
 #: One build at a time per container definition: runs submitted together with a new definition (a SED-ML comparison's

@@ -603,6 +603,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/comparisons/{comparison_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check a comparison against BioSimulators' simulators through biosim's /verify (queued; 201 when new) */
+        post: operations["verify-comparison"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/comparisons/{comparison_id}/verifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A comparison's verifications against biosim's /verify, oldest first */
+        get: operations["list-comparison-verifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sources/biomodels/search": {
         parameters: {
             query?: never;
@@ -818,6 +852,23 @@ export interface paths {
         put?: never;
         /** Run every source of the suite on its solvers (submitted in the background) */
         post: operations["run-suite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/suites/{name}/runs/{number}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue a verification against biosim's /verify for a suite run's finished comparisons */
+        post: operations["verify-suite-run"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1681,6 +1732,7 @@ export interface components {
             tags?: string[];
             /** Description */
             description?: string | null;
+            submission?: components["schemas"]["SubmissionInfo"] | null;
             /**
              * Event Count
              * @default 0
@@ -1755,6 +1807,7 @@ export interface components {
             tags?: string[];
             /** Description */
             description?: string | null;
+            submission?: components["schemas"]["SubmissionInfo"] | null;
         };
         /** SimulatorVersion */
         SimulatorVersion: {
@@ -1802,6 +1855,31 @@ export interface components {
             /** Children */
             children?: components["schemas"]["SpanTree"][];
         };
+        /**
+         * SubmissionInfo
+         * @description Where a run is on its way to SLURM (docs/plan-durable-submission.md): the detail behind `submitting`.
+         */
+        SubmissionInfo: {
+            state: components["schemas"]["SubmissionState"];
+            /** Queue */
+            queue: string;
+            /** Position */
+            position?: number | null;
+            /**
+             * Attempts
+             * @default 0
+             */
+            attempts: number;
+            /** Last Error */
+            last_error?: string | null;
+        };
+        /**
+         * SubmissionState
+         * @description Where a run is on its way to SLURM (docs/plan-durable-submission.md, Q1). The public status stays
+         *     ``submitting`` until the run has a SLURM job; this is the detail behind it.
+         * @enum {string}
+         */
+        SubmissionState: "requested" | "preparing" | "submitting" | "submitted" | "failed";
         /** Suite */
         Suite: {
             /** Name */
@@ -1820,6 +1898,13 @@ export interface components {
             baseline?: number | null;
             /** Expected */
             expected?: components["schemas"]["ExpectedFailure"][];
+            /**
+             * Verify
+             * @description check comparisons against biosim's /verify once they finish: those that differ, are incomplete or have no reference that agrees (failing), or every one (docs/plan-verify-oracle.md, D3)
+             * @default none
+             * @enum {string}
+             */
+            verify: "none" | "failing" | "all";
         };
         /** SuiteRunInfo */
         SuiteRunInfo: {
@@ -1856,6 +1941,10 @@ export interface components {
             expected?: string | null;
             /** Failure */
             failure?: string | null;
+            /** Verification */
+            verification?: string | null;
+            /** Verify Close */
+            verify_close?: boolean | null;
         };
         /** SuiteRunView */
         SuiteRunView: {
@@ -1875,6 +1964,27 @@ export interface components {
             summary: {
                 [key: string]: number;
             };
+        };
+        /**
+         * SuiteVerifyResult
+         * @description Verifications queued for a suite run's comparisons.
+         */
+        SuiteVerifyResult: {
+            /**
+             * Queued
+             * @description comparisons a verification was queued for
+             */
+            queued: number[];
+            /**
+             * Already
+             * @description comparisons with a verification already queued or running
+             */
+            already: number[];
+            /**
+             * Running
+             * @description comparisons still running, not yet looked at
+             */
+            running: number;
         };
         /**
          * Tolerances
@@ -1910,6 +2020,68 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /**
+         * Verification
+         * @description One request to biosim's /verify API about a comparison: the archive the comparison ran, on BioSimulators'
+         *     simulators (docs/plan-verify-oracle.md). Once `completed`, each simulator's reports are a reference on the
+         *     comparison, and `verify_close` says whether the simulators agree with each other.
+         */
+        Verification: {
+            /** Verification Id */
+            verification_id: number;
+            /** Comparison Id */
+            comparison_id: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "requested" | "submitted" | "completed" | "failed";
+            /** Simulators */
+            simulators: string[];
+            /** Workflow Id */
+            workflow_id?: string | null;
+            /** Workflow Status */
+            workflow_status?: string | null;
+            /**
+             * Verify Close
+             * @description BioSimulators' simulators agree on every report
+             */
+            verify_close?: boolean | null;
+            /**
+             * References
+             * @description the reference origins it added
+             */
+            references?: string[];
+            /**
+             * Failed Simulators
+             * @description simulators whose runs at biosimulations.org produced no results
+             */
+            failed_simulators?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Attempts
+             * @default 0
+             */
+            attempts: number;
+            /** Last Error */
+            last_error?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /**
+         * VerifyRequest
+         * @description Which BioSimulators simulators to verify a comparison with (docs/plan-verify-oracle.md, V4).
+         */
+        VerifyRequest: {
+            /**
+             * Simulators
+             * @description `name` or `name:version`; by default the service's (amici, copasi, pysces, tellurium, vcell)
+             */
+            simulators?: string[] | null;
         };
         /**
          * Visibility
@@ -3179,6 +3351,95 @@ export interface operations {
             };
         };
     };
+    "verify-comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comparison_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["VerifyRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description A verification for the same simulators is already queued or running; it is returned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Verification"];
+                };
+            };
+            /** @description Queued */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Verification"];
+                };
+            };
+            /** @description No such comparison */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "list-comparison-verifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comparison_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Verification"][];
+                };
+            };
+            /** @description No such comparison */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     "search-biomodels": {
         parameters: {
             query: {
@@ -3707,6 +3968,48 @@ export interface operations {
                 };
             };
             /** @description No such suite */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "verify-suite-run": {
+        parameters: {
+            query?: {
+                /** @description failing: those that differ, are incomplete, or no agreeing reference settles; all: every one */
+                which?: "failing" | "all";
+            };
+            header?: never;
+            path: {
+                name: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuiteVerifyResult"];
+                };
+            };
+            /** @description No such suite or run */
             404: {
                 headers: {
                     [name: string]: unknown;

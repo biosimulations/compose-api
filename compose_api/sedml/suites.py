@@ -5,6 +5,7 @@ as the suite's baseline, regression (each solver against its own result in the b
 
 import functools
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -29,6 +30,11 @@ class Suite(BaseModel):
     tolerances: Tolerances = Field(default_factory=Tolerances)
     baseline: int | None = Field(default=None, description="the accepted suite run that later runs are compared with")
     expected: list[ExpectedFailure] = Field(default_factory=list)
+    verify: Literal["none", "failing", "all"] = Field(
+        default="none",
+        description="check comparisons against biosim's /verify once they finish: those that differ, are incomplete "
+        "or have no reference that agrees (failing), or every one (docs/plan-verify-oracle.md, D3)",
+    )
 
     @field_validator("sources")
     @classmethod

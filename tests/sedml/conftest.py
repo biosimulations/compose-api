@@ -65,11 +65,20 @@ def recorded_sources(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterato
     """Upstream answered from fixtures; every URL asked is listed."""
     asked: list[str] = []
     run = json.loads((RECORDED / "ciliberto_project.json").read_text())["simulationRun"]
+    # BIOMD0000000012's COPASI project on biosimulations.org, imported from BioModels (docs/plan-verify-oracle.md, V1)
+    legacy = json.loads((RECORDED / "legacy_BIOMD12_project.json").read_text())
     answers: dict[str, Any] = {
         f"{sources.BIOMODELS}/search": json.loads((RECORDED / "biomodels_search.json").read_text()),
         f"{sources.BIOMODELS}/BIOMD0000000012": json.loads((RECORDED / "BIOMD0000000012.json").read_text()),
         f"{sources.BIOMODELS}/model/download/BIOMD0000000012": (RECORDED / "BIOMD0000000012.omex").read_bytes(),
-        f"{sources.BIOSIMULATIONS}/projects": [json.loads((RECORDED / "ciliberto_project.json").read_text())],
+        f"{sources.BIOSIMULATIONS}/projects": [json.loads((RECORDED / "ciliberto_project.json").read_text()), legacy],
+        f"{sources.BIOSIMULATIONS}/projects/{legacy['id']}": legacy,
+        f"{sources.BIOSIMULATIONS}/runs/{legacy['simulationRun']}": json.loads(
+            (RECORDED / "legacy_BIOMD12_run.json").read_text()
+        ),
+        f"{sources.BIOSIMULATIONS}/results/{legacy['simulationRun']}/download": (
+            RECORDED / "legacy_BIOMD12_results.zip"
+        ).read_bytes(),
         f"{sources.BIOSIMULATIONS}/projects/{PROJECT}": json.loads((RECORDED / "ciliberto_project.json").read_text()),
         f"{sources.BIOSIMULATIONS}/runs/{run}": json.loads((RECORDED / "ciliberto_run.json").read_text()),
         f"{sources.BIOSIMULATIONS}/runs/{run}/download": (

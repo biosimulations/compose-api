@@ -7,6 +7,7 @@ file that earlier submissions' jobs were mounting, and those jobs failed (squash
 
 import asyncio
 import contextlib
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
@@ -19,6 +20,7 @@ from compose_api.simulation import handlers
 from compose_api.simulation.models import RemoteContainerImage, SimulationRequest
 from compose_api.simulation.prebuilt import prebuilt_definition
 from compose_api.simulation.simulation_service import SimulationService
+from compose_api.simulation.submission_worker import SubmissionWorker
 from tests.fixtures.mocks import TestBackgroundTask
 
 # one image per test: the database lives for the module, and a recorded download is never fetched again
@@ -58,6 +60,9 @@ class _SlowFetchService:
         self.connections_during_fetch = engine.pool.checkedout()  # type: ignore [attr-defined]
         await self.database_service.get_simulator_db().insert_downloaded_simulator(remote_container_image)
 
+    async def find_simulation_job(self, experiment_id: str) -> int | None:
+        return None
+
     async def submit_simulation_job(self, **_: Any) -> int:
         self.submitted += 1
         return 900000 + self.submitted
@@ -65,27 +70,26 @@ class _SlowFetchService:
 
 @pytest.mark.asyncio
 async def test_concurrent_submissions_fetch_the_container_once(
-    database_service: DatabaseServiceSQL, simulation_request: SimulationRequest
+    database_service: DatabaseServiceSQL, simulation_request: SimulationRequest, tmp_path: Path
 ) -> None:
     service = _SlowFetchService(database_service)
-    background = TestBackgroundTask()
-    background.tasks_to_execute = []  # the mock's list is shared by the class
     request = simulation_request.model_copy(update={"simulator": "sim-a"})
-    with override_settings(prebuilt_simulators={"sim-a": CONCURRENT_IMAGE}):
+    with override_settings(
+        prebuilt_simulators={"sim-a": CONCURRENT_IMAGE},
+        submission_staging_dir=str(tmp_path),
+        submission_worker_concurrency=8,
+    ):
         for _ in range(8):
             await handlers.run_simulation(
                 simulation_request=request,
                 database_service=database_service,
                 simulation_service_slurm=cast(SimulationService, service),
                 job_monitor=cast(Any, None),
-                background_tasks=background,
+                background_tasks=TestBackgroundTask(),
             )
-        # each submission queues (dispatch, remove its temp dir); run the dispatches together, as the
-        # API does when submissions arrive faster than an image is fetched
-        dispatches = background.tasks_to_execute[0::2]
-        await asyncio.gather(*(dispatch() for dispatch in dispatches))
-        for cleanup in background.tasks_to_execute[1::2]:
-            cleanup()
+        # the worker takes the eight queued runs at once, as when submissions arrive faster than an image is fetched
+        worker = SubmissionWorker(database_service, cast(SimulationService, service), cast(Any, None), owner="w")
+        await worker.drain()
 
     assert service.submitted == 8
     assert service.fetches == 1

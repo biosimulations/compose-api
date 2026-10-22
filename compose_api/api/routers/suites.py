@@ -2,11 +2,14 @@
 (`examples/<name>/suite.yaml`) run on every solver, compared with each other, with references, and with the suite's
 accepted baseline run."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Annotated, Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from compose_api.authentication import OptionalPrincipal, get_optional_principal
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.sedml import suite_runs
+from compose_api.sedml.models import SuiteVerifyResult
 from compose_api.sedml.suite_runs import SuiteRunInfo, SuiteRunView
 from compose_api.sedml.suites import Suite, load_suites, suite
 
@@ -54,3 +57,26 @@ async def run_suite(name: str, principal: OptionalPrincipal) -> SuiteRunInfo:
     s = _suite(name)
     number = await suite_runs.start(s)
     return SuiteRunInfo(number=number, created_at=None, status="submitting")
+
+
+@config.router.post(
+    "/{name}/runs/{number}/verify", response_model=SuiteVerifyResult, operation_id="verify-suite-run",
+    tags=["Suites"],
+    summary="Queue a verification against biosim's /verify for a suite run's finished comparisons",
+    responses={404: {"description": "No such suite or run"}},
+)  # fmt: skip
+async def verify_suite_run(
+    name: str,
+    number: int,
+    principal: OptionalPrincipal,
+    which: Annotated[
+        Literal["failing", "all"],
+        Query(
+            description="failing: those that differ, are incomplete, or no agreeing reference settles; all: every one"
+        ),
+    ] = "failing",
+) -> SuiteVerifyResult:
+    found = await suite_runs.verify(_suite(name), number, which)
+    if found is None:
+        raise HTTPException(status_code=404, detail=f"Suite {name!r} has no run {number}.")
+    return found

@@ -32,6 +32,7 @@ from compose_api.simulation.models import (
 )
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 from compose_api.simulation.simulator_registry import registry_dependencies
+from compose_api.simulation.submission_worker import SubmissionWorker
 from tests.fixtures.mocks import TestBackgroundTask
 from tests.fixtures.simulation_fixtures import PRODUCTION_SIMULATOR_DEF_HASH
 from tests.fixtures.slurm_fixtures_backend import SlurmBackend
@@ -201,6 +202,9 @@ async def test_simulate(
     )
     assert sim_experiement is not None
     await test_bg_tasks.call_tasks()
+    # queued as `requested`; the submission worker takes it to SLURM (docs/plan-durable-submission.md)
+    worker = SubmissionWorker(database_service, simulation_service_slurm, job_monitor)
+    await worker.drain(timeout=1800)
 
     hpcrun = await database_service.get_hpc_db().get_hpcrun_by_ref(
         sim_experiement.simulation_database_id, JobType.SIMULATION

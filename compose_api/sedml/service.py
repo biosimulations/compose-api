@@ -6,6 +6,7 @@ import datetime
 import logging
 import shutil
 import tempfile
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 from fastapi import BackgroundTasks
@@ -67,6 +68,9 @@ async def submit(
     references: dict[str, dict[str, dict[str, list[float]]]] | None = None,
     collection: str | None = None,
     suite_run: int | None = None,
+    queue: str = "interactive",
+    priority: int = 0,
+    batch: bool = False,
 ) -> list[int]:
     """One comparison per accepted task (all, or those named), one run per solver that accepted it; the ids.
     `references[origin]["<sedml>/<report>"]` (the archive's own `reports.h5`, a biosimulations.org run's) are stored
@@ -102,11 +106,7 @@ async def submit(
             suite_run=suite_run,
         )
         for origin, by_output in references.items():
-            matched = {
-                report_id: by_output[f"{task.sedml}/{report_id}"]
-                for report_id in task.reports
-                if f"{task.sedml}/{report_id}" in by_output
-            }
+            matched = match_references(task.sedml, task.reports, by_output)
             if matched:
                 await db.get_comparisons_db().add_reference(comparison_id, origin, matched)
         for solver_id, archive in task.archives.items():
@@ -120,7 +120,8 @@ async def submit(
             request = SimulationRequest(
                 request_file_path=input_file,
                 simulation_file_type=SimulationFileType.OMEX,
-                is_batch=False,
+                # a suite's runs are queued behind interactive ones, with the batch resources (Q3, Q4)
+                is_batch=batch,
                 end_time_point=1.0,
                 labels=labels(
                     source=source_kind or "upload",
@@ -142,10 +143,30 @@ async def submit(
                 simulation_service_slurm=get_required_simulation_service(),
                 background_tasks=background_tasks,
                 job_monitor=get_required_job_monitor(),
+                queue=queue,
+                priority=priority,
             )
             await db.get_comparisons_db().add_member(comparison_id, experiment.simulation_database_id, solver_id)
         created.append(comparison_id)
     return created
+
+
+def match_references(
+    sedml: str, report_ids: Iterable[str], by_output: Mapping[str, dict[str, list[float]]]
+) -> dict[str, dict[str, list[float]]]:
+    """A reference's outputs (``{"<sedml>/<output>": {label: series}}``) for the task's reports, by report id."""
+    return {r: by_output[f"{sedml}/{r}"] for r in report_ids if f"{sedml}/{r}" in by_output}
+
+
+async def recompute(comparison_id: int) -> None:
+    """Score a finished comparison again, after a reference was added (the verify oracle, docs/plan-verify-oracle.md
+    V3). One still running is scored when its members finish, with every reference it has by then."""
+    db = get_required_database_service()
+    row = await db.get_comparisons_db().get(comparison_id)
+    if row is None or row.comparison.status == "running":
+        return
+    result = await _compute(row.comparison.settings, row)
+    await db.get_comparisons_db().set_result(comparison_id, row.comparison.status, result)
 
 
 async def comparison_view(row: ComparisonRow) -> Comparison:
@@ -165,7 +186,10 @@ async def comparison_view(row: ComparisonRow) -> Comparison:
         result = await _compute(c.settings, full or row)
         status = "complete" if all(m.status == "completed" for m in members) else "incomplete"
         await db.get_comparisons_db().set_result(c.id, status, result)
-    return Comparison(
+        just_finished = True
+    else:
+        just_finished = False
+    view = Comparison(
         comparison_id=c.id,
         created_at=_iso(c.created_at),
         name=c.name,
@@ -178,6 +202,23 @@ async def comparison_view(row: ComparisonRow) -> Comparison:
         result=result,
         close=None if result is None else bool(result.get("close")) and status == "complete",
     )
+    if just_finished and c.collection:
+        await _verify_by_suite(row, view)
+    return view
+
+
+async def _verify_by_suite(row: ComparisonRow, comparison: Comparison) -> None:
+    """A suite's `verify` option (docs/plan-verify-oracle.md, V4), applied as each of its comparisons finishes."""
+    from compose_api.sedml import suites, verifications  # late: verifications imports this module
+
+    found = suites.suite(row.comparison.collection or "")
+    if found is None or found.verify == "none":
+        return
+    if found.verify == "all" or verifications.needs_verification(comparison):
+        try:
+            await verifications.queue(row)
+        except Exception:  # evidence, never a reason to fail reading the comparison
+            logger.exception(f"comparison {comparison.comparison_id}: could not queue its verification")
 
 
 async def member_reports(

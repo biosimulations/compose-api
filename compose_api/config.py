@@ -1,4 +1,5 @@
 import os
+import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import lru_cache
@@ -126,6 +127,33 @@ class Settings(BaseSettings):
     # submission_timeout_seconds is cancelled and fails the simulation; a first container build can take an hour.
     submission_stale_seconds: int = 300
     submission_timeout_seconds: int = 4 * 3600
+    # The durable submission queue (docs/plan-durable-submission.md). A run is staged and recorded as `requested`;
+    # the submission worker leases due rows (a lost worker's lease expires and another resumes the row), retries a
+    # transient failure with backoff up to submission_max_attempts, and works on up to submission_worker_concurrency
+    # rows at once. Where the store is not mounted (development, tests), files are staged in submission_staging_dir.
+    submission_lease_seconds: int = 120
+    submission_max_attempts: int = 6
+    submission_worker_concurrency: int = 8
+    submission_poll_seconds: float = 5.0
+    submission_staging_dir: str = os.path.join(tempfile.gettempdir(), "compose-api-staging")
+    # The worker's caps (compose_api/simulation/scheduling.py): runs on SLURM (or about to be) at once, the share of
+    # that one non-interactive queue (a suite run) may take, and runs making an image ready at once. A run over a cap
+    # waits submission_defer_seconds and is looked at again. The vcell partition (5 nodes x 128 CPUs, 2026-10-22) is
+    # shared with VCell itself, and its QOS sets no job limit, so this cap is what keeps a large suite polite.
+    submission_max_active_jobs: int = 100
+    submission_queue_share: float = 0.5
+    submission_max_preparing: int = 8
+    submission_defer_seconds: int = 10
+    # The verify oracle (docs/plan-verify-oracle.md, V2/V3): biosim's /verify API, the BioSimulators simulators a
+    # verification asks for, and the pace. biosim allows 5 workflow starts a minute anonymously (30 authenticated,
+    # D6), shared with every other caller from our address, so the worker stays under it; a 429 still defers by its
+    # Retry-After. A submitted verification is polled every verify_poll_seconds until it finishes or
+    # verify_deadline_seconds pass.
+    biosim_api_url: str = "https://api.biosim.biosimulations.org"
+    verify_simulators: list[str] = ["amici", "copasi", "pysces", "tellurium", "vcell"]
+    verify_per_minute: float = 4.0
+    verify_poll_seconds: int = 30
+    verify_deadline_seconds: int = 3600
     # How often the API checks every simulator's SIF against the store and adopts unrecorded ones
     # (compose_api/simulation/images.py); the first pass runs at startup.
     image_verify_interval_seconds: int = 3600
@@ -152,6 +180,9 @@ class Settings(BaseSettings):
 
     # The static web UI build served at /ui (webapp/, `npm run generate`). Absent: the API runs without a UI.
     webapp_dist_dir: str = f"{REPO_ROOT}/webapp/.output/public"
+    # Enforce the UI's Content-Security-Policy (compose_api/api/webapp.py) instead of only reporting violations to
+    # /webapp/csp-report. Turn on once the reports show the policy matches what the UI loads.
+    webapp_csp_enforce: bool = False
 
     @field_validator("admin_role")
     @classmethod

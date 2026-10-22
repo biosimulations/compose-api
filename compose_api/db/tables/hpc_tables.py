@@ -1,8 +1,9 @@
 import datetime
 import enum
 import logging
+from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, String, func, text
+from sqlalchemy import DateTime, ForeignKey, Index, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -102,6 +103,31 @@ class ORMHpcRun(DeclarativeTableBase):
             end_time=str(self.end_time) if self.end_time else None,
             trace_id=self.trace_id,
         )
+
+
+class ORMSubmission(DeclarativeTableBase):
+    """A run on its way to SLURM (docs/plan-durable-submission.md): recorded with its simulation, claimed by a worker
+    under a lease, and moved forward one short step at a time, so a restart resumes it instead of losing it."""
+
+    __tablename__ = "submission"
+
+    simulation_id: Mapped[int] = mapped_column(ForeignKey("simulation.id", ondelete="CASCADE"), primary_key=True)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)  # SubmissionState
+    queue: Mapped[str] = mapped_column(String(64), nullable=False, server_default="interactive")
+    priority: Mapped[int] = mapped_column(nullable=False, server_default="0")
+    requested_by: Mapped[str | None] = mapped_column(nullable=True)  # a subject, for fairness; not ownership
+    # What dispatch needs from the request (a SimulationRequest whose paths are the staged files)
+    request: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    staged_on_store: Mapped[bool] = mapped_column(nullable=False, server_default="false")
+    attempts: Mapped[int] = mapped_column(nullable=False, server_default="0")
+    next_attempt_at: Mapped[datetime.datetime] = mapped_column(nullable=False, server_default=func.localtimestamp())
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lease_owner: Mapped[str | None] = mapped_column(nullable=True)
+    lease_expires_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(nullable=False, server_default=func.localtimestamp())
+    updated_at: Mapped[datetime.datetime] = mapped_column(nullable=False, server_default=func.localtimestamp())
+
+    __table_args__ = (Index("ix_submission_due", "state", "priority", "created_at"),)
 
 
 class ORMWorkerEvent(DeclarativeTableBase):

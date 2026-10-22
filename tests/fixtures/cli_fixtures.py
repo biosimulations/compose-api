@@ -359,7 +359,7 @@ class FakeCredentialManager:
 
     CRED_TYPE_GENERIC = 1
     CRED_PERSIST_LOCAL_MACHINE = 2
-    CRED_PERSIST_ENTERPRISE = 3  # keyring's own writes (the store probe)
+    CRED_PERSIST_ENTERPRISE = 3  # what keyring's own set_password writes with; the CLI never calls it on Windows
 
     def __init__(self) -> None:
         self.items: dict[str, dict[str, Any]] = {}
@@ -388,7 +388,7 @@ class FakeCredentialManager:
 @pytest.fixture
 def windows_credential_manager(monkeypatch: pytest.MonkeyPatch) -> FakeCredentialManager:
     """A fake Credential Manager behind both callers: the CLI's native calls (`auth/windows_state.py`) and keyring's
-    Windows backend, which the CLI still uses to probe and delete. `keyring.get_keyring()` returns that backend."""
+    Windows backend, which the CLI still uses to delete. `keyring.get_keyring()` returns that backend."""
     from keyring.backends import Windows
 
     manager = FakeCredentialManager()

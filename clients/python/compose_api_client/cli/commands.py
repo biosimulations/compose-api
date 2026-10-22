@@ -966,8 +966,22 @@ def results(
 # -- finding simulations ------------------------------------------------------------------------------------------
 
 SIMULATION_COLUMNS = [
-    "simulation_id", "created_at", "simulator_id", "simulator", "status", "slurm_job_id", "end_time", "tags",
+    "simulation_id", "created_at", "simulator_id", "simulator", "status", "queued", "slurm_job_id", "end_time", "tags",
 ]  # fmt: skip
+
+
+def queued(row: dict[str, Any]) -> str:
+    """Where a run still `submitting` is on its way to SLURM: "requested #3", "preparing", "submitting (attempt 2)"."""
+    submission = row.get("submission") or {}
+    state = submission.get("state")
+    if row.get("status") != "submitting" or not state:
+        return ""
+    if state == "requested" and submission.get("position"):
+        return f"requested #{submission['position']}"
+    attempts = submission.get("attempts") or 0
+    return f"{state} (attempt {attempts + 1})" if attempts else str(state)
+
+
 _UNITS = {"m": 60, "h": 3600, "d": 86400, "w": 604800}
 
 
@@ -1031,7 +1045,7 @@ def simulations_list(
             limit=limit,
             offset=offset,
         )
-    rows = [sim.to_dict() for sim in page.simulations]
+    rows = [{**(row := sim.to_dict()), "queued": queued(row)} for sim in page.simulations]
     shown = f"{offset + 1}-{offset + len(rows)}" if rows else "0"
     emit(settings.output, rows, SIMULATION_COLUMNS, title=f"simulations {shown} of {page.total}")
 
@@ -1539,6 +1553,55 @@ def comparisons_show(
         emit(settings.output, s.comparison(comparison_id).to_dict())
 
 
+VERIFICATION_COLUMNS = ["verification", "state", "simulators", "agree", "references", "error"]
+
+
+def _verification_row(v: Any) -> dict[str, Any]:
+    d = v.to_dict()
+    return {
+        "verification": d["verification_id"],
+        "state": d["state"],
+        "simulators": ", ".join(_listed(d.get("simulators"))),
+        "agree": d.get("verify_close"),
+        "references": ", ".join(_listed(d.get("references"))) or None,
+        "error": d.get("last_error"),
+    }
+
+
+@comparisons_app.command("verify")
+@claims("comparisons verify", "verify-comparison")
+@handled
+def comparisons_verify(
+    ctx: typer.Context,
+    comparison_id: Annotated[int, typer.Argument(help="The comparison id.")],
+    simulator: Annotated[
+        list[str] | None,
+        typer.Option("--simulator", help="A simulator, name or name:version; repeat. Default: the service's."),
+    ] = None,
+) -> None:
+    """Check a comparison against BioSimulators' simulators through biosim's /verify (queued; poll with
+    `comparisons verifications`)."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        v = s.verify_comparison(comparison_id, simulator or None)
+    emit(settings.output, v.to_dict() if settings.output is Output.JSON else [_verification_row(v)],
+         VERIFICATION_COLUMNS)  # fmt: skip
+
+
+@comparisons_app.command("verifications")
+@claims("comparisons verifications", "list-comparison-verifications")
+@handled
+def comparisons_verifications(
+    ctx: typer.Context, comparison_id: Annotated[int, typer.Argument(help="The comparison id.")]
+) -> None:
+    """A comparison's verifications, oldest first: their state, and whether BioSimulators' simulators agree."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        found = s.comparison_verifications(comparison_id)
+    emit(settings.output, [v.to_dict() for v in found] if settings.output is Output.JSON
+         else [_verification_row(v) for v in found], VERIFICATION_COLUMNS)  # fmt: skip
+
+
 # -- sources -------------------------------------------------------------------------------------------------------
 
 Out = Annotated[Path | None, typer.Option("--out", "-O", help="Write the archive here (a file or a directory).")]
@@ -1785,6 +1848,26 @@ def suites_run(ctx: typer.Context, name: SuiteName) -> None:
     settings = _settings(ctx)
     with make_session(settings) as s:
         emit(settings.output, s.run_suite(name).to_dict())
+
+
+@suites_app.command("verify")
+@claims("suites verify", "verify-suite-run")
+@handled
+def suites_verify(
+    ctx: typer.Context,
+    name: SuiteName,
+    number: Annotated[int, typer.Argument(help="The run's number.")],
+    all_: Annotated[
+        bool,
+        typer.Option(
+            "--all", help="Every finished comparison, not only those that differ or lack agreeing references."
+        ),
+    ] = False,
+) -> None:
+    """Queue a check against biosim's /verify for a suite run's finished comparisons."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.verify_suite_run(name, number, which="all" if all_ else "failing").to_dict())
 
 
 @app.command("build-log")

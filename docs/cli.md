@@ -1111,6 +1111,8 @@ $ compose-api comparisons [OPTIONS] COMMAND [ARGS]...
 
 * `list`: Comparisons, newest first.
 * `show`: One comparison: its runs, and per report...
+* `verify`: Check a comparison against BioSimulators'...
+* `verifications`: A comparison's verifications, oldest...
 * `series`: One report's columns from each run and...
 
 ### `compose-api comparisons list`
@@ -1139,6 +1141,46 @@ One comparison: its runs, and per report the worst data set once every run has f
 
 ```console
 $ compose-api comparisons show [OPTIONS] COMPARISON_ID
+```
+
+**Arguments**:
+
+* `COMPARISON_ID`: The comparison id.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api comparisons verify`
+
+Check a comparison against BioSimulators' simulators through biosim's /verify (queued; poll with
+`comparisons verifications`).
+
+**Usage**:
+
+```console
+$ compose-api comparisons verify [OPTIONS] COMPARISON_ID
+```
+
+**Arguments**:
+
+* `COMPARISON_ID`: The comparison id.  [required]
+
+**Options**:
+
+* `--simulator TEXT`: A simulator, name or name:version; repeat. Default: the service's.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api comparisons verifications`
+
+A comparison's verifications, oldest first: their state, and whether BioSimulators' simulators agree.
+
+**Usage**:
+
+```console
+$ compose-api comparisons verifications [OPTIONS] COMPARISON_ID
 ```
 
 **Arguments**:
@@ -1413,6 +1455,7 @@ $ compose-api suites [OPTIONS] COMMAND [ARGS]...
 * `runs`: A suite's runs, newest first.
 * `show`: One suite run: per source, whether the...
 * `run`: Run every source of the suite on its...
+* `verify`: Queue a check against biosim's /verify for...
 
 ### `compose-api suites list`
 
@@ -1484,6 +1527,27 @@ $ compose-api suites run [OPTIONS] NAME
 
 **Options**:
 
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api suites verify`
+
+Queue a check against biosim's /verify for a suite run's finished comparisons.
+
+**Usage**:
+
+```console
+$ compose-api suites verify [OPTIONS] NAME NUMBER
+```
+
+**Arguments**:
+
+* `NAME`: The suite, e.g. biomodels-ode-sample.  [required]
+* `NUMBER`: The run's number.  [required]
+
+**Options**:
+
+* `--all`: Every finished comparison, not only those that differ or lack agreeing references.
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 

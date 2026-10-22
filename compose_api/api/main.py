@@ -19,6 +19,7 @@ from compose_api.config import get_settings
 from compose_api.dependencies import (
     get_job_monitor,
     get_required_database_service,
+    get_submission_worker,
     init_standalone,
     shutdown_standalone,
 )
@@ -88,6 +89,9 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     if not job_monitor:
         raise RuntimeError("JobMonitor is not initialized. Please check your configuration.")
     await job_monitor.start_polling(interval_seconds=5)  # configurable interval
+    worker = get_submission_worker()
+    if worker is not None:
+        worker.start()  # resumes whatever a previous process left queued or in hand
 
     # the backfill and verification of simulators' images (docs/plan-environment-builds.md, phase 2)
     verifying = asyncio.create_task(

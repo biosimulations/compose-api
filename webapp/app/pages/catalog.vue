@@ -94,11 +94,10 @@ const columns: TableColumn<Entry>[] = [
       <UAlert v-if="error" color="error" variant="subtle" icon="i-lucide-circle-alert" :description="error" />
       <div class="flex flex-wrap items-center gap-2">
         <UInput v-model="filter" placeholder="Filter by name or module" icon="i-lucide-search" class="w-72" />
-        <USelect
+        <AnySelect
           v-model="level"
           :items="LEVELS.map(l => ({ label: `${l} (${counts[l] ?? 0})`, value: l }))"
           placeholder="Any level"
-          clearable
           class="w-48"
         />
         <span class="text-sm text-muted">{{ shown.length }} of {{ entries.length }} entries</span>

@@ -8,10 +8,11 @@ from dataclasses import dataclass, field
 from typing import override
 
 from pbest.utils.input_types import ContainerizationFileRepr
-from sqlalchemy import ColumnElement, Result, Row, Select, Subquery, and_, func, select, text
+from sqlalchemy import ColumnElement, Result, Row, ScalarSelect, Select, Subquery, and_, case, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import aliased
 
-from compose_api.db.tables.hpc_tables import JobStatusDB, JobTypeDB, ORMHpcRun
+from compose_api.db.tables.hpc_tables import JobStatusDB, JobTypeDB, ORMHpcRun, ORMSubmission
 from compose_api.db.tables.simulator_tables import (
     ORMDownloadedContainers,
     ORMEnvironmentImage,
@@ -33,6 +34,8 @@ from compose_api.simulation.models import (
     SimulationRequest,
     SimulationResults,
     SimulatorVersion,
+    SubmissionSpec,
+    SubmissionState,
     SubmittedSimulation,
     Visibility,
 )
@@ -116,7 +119,10 @@ class SimulatorDatabaseService(ABC):
         simulator_version: SimulatorVersion,
         owner_sub: str | None = None,
         visibility: Visibility = Visibility.PUBLIC,
+        submission: SubmissionSpec | None = None,
     ) -> Simulation:
+        """Record the simulation; with ``submission``, also its queued ``requested`` submission (one transaction), whose
+        request is ``sim_request`` as given (its paths the staged files)."""
         pass
 
     @abstractmethod
@@ -462,6 +468,7 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
         simulator_version: SimulatorVersion,
         owner_sub: str | None = None,
         visibility: Visibility = Visibility.PUBLIC,
+        submission: SubmissionSpec | None = None,
     ) -> Simulation:
         async with self.async_session_maker() as session, session.begin():
             orm_simulation = ORMSimulation(
@@ -475,6 +482,18 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
             )
             session.add(orm_simulation)
             await session.flush()  # Ensure the ORM object is inserted and has an ID
+            if submission is not None:
+                session.add(
+                    ORMSubmission(
+                        simulation_id=orm_simulation.id,
+                        state=SubmissionState.REQUESTED.value,
+                        queue=submission.queue,
+                        priority=submission.priority,
+                        requested_by=submission.requested_by,
+                        request=sim_request.model_dump(mode="json"),
+                        staged_on_store=submission.staged_on_store,
+                    )
+                )
 
             simulation = Simulation(
                 database_id=orm_simulation.id, sim_request=sim_request, simulator_version=simulator_version
@@ -604,6 +623,8 @@ class SimulationRow:
     simulation: ORMSimulation
     simulator: ORMSimulator
     run: ORMHpcRun | None
+    submission: ORMSubmission | None = None
+    position: int | None = None  # its place among queued runs, while `requested`
 
 
 def _latest_runs() -> Subquery:
@@ -615,13 +636,34 @@ def _latest_runs() -> Subquery:
     )
 
 
-def _simulation_rows() -> Select[tuple[ORMSimulation, ORMSimulator, ORMHpcRun]]:
-    latest = _latest_runs()
+def _queue_position() -> ScalarSelect[int]:
+    """How many queued runs are ahead of this one, plus one: those the worker would claim first (higher priority, or
+    as high and older), while this one is `requested`."""
+    ahead = aliased(ORMSubmission)
+    mine = ORMSubmission
     return (
-        select(ORMSimulation, ORMSimulator, ORMHpcRun)
+        select(func.count() + 1)
+        .where(
+            ahead.state == SubmissionState.REQUESTED.value,
+            or_(
+                ahead.priority > mine.priority,
+                and_(ahead.priority == mine.priority, ahead.created_at < mine.created_at),
+            ),
+        )
+        .correlate(mine)
+        .scalar_subquery()
+    )
+
+
+def _simulation_rows() -> Select[tuple[ORMSimulation, ORMSimulator, ORMHpcRun, ORMSubmission, int]]:
+    latest = _latest_runs()
+    position = case((ORMSubmission.state == SubmissionState.REQUESTED.value, _queue_position()), else_=None)
+    return (
+        select(ORMSimulation, ORMSimulator, ORMHpcRun, ORMSubmission, position)
         .join(ORMSimulator, ORMSimulator.id == ORMSimulation.simulator_id)
         .outerjoin(latest, latest.c.simulation_id == ORMSimulation.id)
         .outerjoin(ORMHpcRun, ORMHpcRun.id == latest.c.hpcrun_id)
+        .outerjoin(ORMSubmission, ORMSubmission.simulation_id == ORMSimulation.id)
     )
 
 
@@ -647,7 +689,7 @@ async def _page_simulations(
     async with session_maker() as session:
         total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
         result = await session.execute(stmt.order_by(ORMSimulation.id.desc()).limit(query.limit).offset(query.offset))
-        rows = [SimulationRow(sim, simulator, run) for sim, simulator, run in result.all()]
+        rows = [SimulationRow(*row) for row in result.all()]
     return rows, int(total)
 
 
