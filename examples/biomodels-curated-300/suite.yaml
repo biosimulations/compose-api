@@ -1,5 +1,5 @@
-# A regression and reproducibility suite (docs/plan-sedml.md, phase 6): the first 300 curated SBML models in EBI
-# BioModels (BIOMD0000000001 upward), each run on every solver and compared. Generated on 2026-10-22 by
+# A regression and reproducibility suite (docs/plan-sedml.md, phase 6): the first 300 curated SBML
+# models in EBI BioModels (BIOMD0000000001 upward), each run on every solver and compared. Generated on 2026-10-22 by
 # scripts/biomodels_suite.py; regenerate rather than edit the sources. Every curated SBML entry is included, whether or
 # not it translates: the first run's failures are its findings, and known disagreements become `expected` entries.
 # Its runs are queued behind interactive ones, at most half of submission_max_active_jobs at a time

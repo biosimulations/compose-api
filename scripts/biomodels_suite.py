@@ -1,4 +1,4 @@
-"""Write a suite of the first N curated BioModels entries (docs/plan-sedml.md, phase 6; docs/plan-durable-submission.md).
+"""Write a suite of the first N curated BioModels entries (docs/plan-sedml.md, phase 6).
 
     uv run python scripts/biomodels_suite.py --count 300 --name biomodels-curated-300
 
@@ -15,8 +15,8 @@ from pathlib import Path
 
 from compose_api.sedml import sources
 
-HEADER = """# A regression and reproducibility suite (docs/plan-sedml.md, phase 6): the first {count} curated SBML models in EBI
-# BioModels (BIOMD0000000001 upward), each run on every solver and compared. Generated on {date} by
+HEADER = """# A regression and reproducibility suite (docs/plan-sedml.md, phase 6): the first {count} curated SBML
+# models in EBI BioModels (BIOMD0000000001 upward), each run on every solver and compared. Generated on {date} by
 # scripts/biomodels_suite.py; regenerate rather than edit the sources. Every curated SBML entry is included, whether or
 # not it translates: the first run's failures are its findings, and known disagreements become `expected` entries.
 # Its runs are queued behind interactive ones, at most half of submission_max_active_jobs at a time
