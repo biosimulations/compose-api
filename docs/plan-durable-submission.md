@@ -1,209 +1,212 @@
-# Durable submission: a queue that survives API restarts
+# Durable submission: runs queued as `requested`, dispatched by a worker, ready for fair scheduling
 
 **Status (2026-10-11): proposed.** This follows #256 (0.7.9), which made a lost submission *fail* with a reason. This
-plan makes it *resume* instead. It covers the rest of #238. One PR per step, each merged on green with a merge commit.
-Deploying is a separate go from Jim.
+plan makes it *resume* instead. It covers the rest of #238. **(2026-10-22: revised against `main` and accepted; see
+[Revisions](#revisions-2026-10-22). Steps 1–4 are this round, one PR each, merged with a merge commit. Each needs a
+release to deploy.)**
 
 | Step | What | State |
 |---|---|---|
-| 0 | This document | proposed |
-| 1 | Stage the input on the shared store in the request; a `submission` row per simulation | — |
-| 2 | Submission worker: claim, lease, step, retry; drives `sbatch` idempotently | — |
-| 3 | Container fetch and build as SLURM jobs that the worker waits on through the monitor | — |
-| 4 | Surface the submission state (API, CLI, UI); retire #256's heartbeat | — |
+| 1 | This document, revised | **this PR** |
+| 2 | Staging, the `submission` table, and the worker (Q1, Q2) | next |
+| 3 | Scheduling and caps (Q3); resumable suite runs and the batch profile for SED-ML runs (Q4) | — |
+| 4 | Surface the submission (API, CLI, UI); retire #256's heartbeat and stale check | — |
+| 5 | Then the 300-model BioModels suite | — |
+| later | Registry `/build` endpoints through the queue; pulls as Kubernetes Jobs (former D4); per-owner fairness | — |
 
 ## Context
 
-A simulation gets to SLURM in two stages (see the answer on #238 and `compose_api/simulation/handlers.py`):
+A simulation reaches SLURM in two stages (`compose_api/simulation/handlers.py`):
 
-1. **API-side, in memory.** `POST /simulation/run` records the simulation, then starts a FastAPI background task in
-   the same process. The task:
-   - fetches the container image over SSH (`singularity pull` on the submit host);
-   - or, if that fails, builds it as a SLURM job and waits up to about 30 min through in-memory queues
-     (`JobMonitor.internal_listeners`);
-   - then runs `sbatch` and records the `HpcRun`.
+1. **API-side, in memory.** `POST /simulation/run` records the simulation and queues a FastAPI background task in
+   the same process. The upload sits in a pod-local temporary file (`common/gateway/utils.py`). The task:
+   - makes the image ready (`ensure_image`): a synchronous `singularity pull` over SSH, or a Kubernetes build Job that
+     it waits on through the database;
+   - then copies the input with `scp`, runs `sbatch`, and records the `HpcRun`.
+2. **SLURM-side, durable.** After `sbatch`, SLURM queues the job. The monitor rebuilds its view from Postgres on every
+   pass, so a restart loses nothing here.
 
-   The uploaded file sits in a temporary directory on the pod.
-2. **SLURM-side, durable.** After `sbatch`, SLURM queues the job (`PENDING` until a node is free). The monitor rebuilds
-   its view from Postgres on every pass, so a restart loses nothing.
-
-Everything in stage 1 is lost when the process stops: the task, the uploaded file, and the build wait. Each step has no
-queue and no retry, so it either succeeds once or the submission ends.
+Everything in stage 1 is lost when the process stops: the task, the uploaded file, and its place in line.
 - **Before 0.7.9,** such a simulation stayed `submitting` forever. 51 production simulations did.
-- **Since #256,** it fails with "resubmit". That is honest, but the user still has to resubmit, and every deploy
-  during a first run of a new image costs that run.
+- **Since #256,** it fails with "resubmit". That is honest, but the user has to resubmit, and every deploy during a
+  first run of a new image costs that run.
+
+**Bulk submissions make it worse (2026-10-22).**
+- A suite run (`sedml/suite_runs.py`) fetches and translates every source first. Only then does it dispatch all of its
+  simulations, one after another, from one in-memory `BackgroundTasks`.
+- #256's stale check fails any simulation that has had no dispatch heartbeat for 300 s. A simulation that has not
+  started yet has none, so its creation time counts (`hpc_db.list_stale_submissions`).
+- That is fine for a 20-model suite. With 300 models on two solvers, most of the 600 simulations would be failed as
+  "abandoned" while still waiting for their turn.
+- The suite's own loop is an untracked `asyncio.Task`, and the suite run is marked `submitted` before anything has been
+  dispatched.
 
 ## Goal
 
-- **Every accepted submission either reaches SLURM exactly once, or ends FAILED with a reason.** This holds across API
-  restarts, deploys and replicas, with no manual resubmission.
-- **No duplicate SLURM jobs,** even when the API dies between `sbatch` and recording its job id.
-- **No long work held by a process.** Anything that takes minutes runs as a SLURM job. The API only takes short,
-  idempotent steps it can repeat.
+- **Every accepted run is a durable `requested` row from the moment the request returns.** It either reaches SLURM
+  exactly once, or ends FAILED with a reason. This holds across API restarts, deploys and replicas, with no manual
+  resubmission.
+- **No duplicate SLURM jobs,** even when the API dies between `sbatch` and recording the job id.
+- **One worker decides what is dispatched next,** under caps and in priority order. This is where fair scheduling
+  goes later.
+- **Suite runs resume** from the source they had reached.
+
+## Decisions (Jim, 2026-10-22)
+
+- **`requested` is additive.** The public simulation `status` is unchanged: `submitting` until there is a run, then the
+  run's status. pbest and the published clients need nothing. A new `submission` field on the simulation carries
+  `requested`, `preparing` and `submitting`, and the queue position. The UI shows "requested (#N in queue)".
+- **Steps 1–4 this round,** before the 300-model suite.
 
 ## Design
 
-### D1. Stage the input durably before answering
+### Q1. Stage the input, then record a `submission` row in state `requested`
 
-- The request writes the upload into the experiment directory on the shared store. The API pod already mounts it at
-  `/projects/CRBM`; the ingester reads `events/` and datasets from there. Today the file stays in a pod-local temp
-  directory until the background task copies it with `scp`.
-- Path helpers go in `hpc_utils.py`, next to `get_slurm_sim_input_file_path`: the internal (mounted) view of the same
-  file.
-- The response is sent only once the file is on the store and the `submission` row is committed (D2). A request that
-  fails before that has created nothing.
-- **Why the store,** compared with the alternatives:
-  - It is where the job reads the file anyway.
-  - Uploads are at most a few MB, so a synchronous write adds little latency.
-  - Postgres `bytea` would duplicate the file and grow the database.
-  - A synchronous `scp` in the request would put SSH in the request path.
+- **The request writes the input into the experiment directory on the shared store** before answering.
+  - The API pod already mounts the store, at the same path the jobs use in production (`kustomize/base/api.yaml`).
+  - The helper goes in `hpc_utils.py`, next to `get_internal_experiment_dir`.
+  - SED-ML runs also stage `source.omex` there, instead of in a `mkdtemp` directory that is never removed.
+- **In the same transaction as `insert_simulation`**, the request inserts the `submission` row and kicks the worker.
+  It no longer schedules a background task.
+- **The table** (`db/tables/hpc_tables.py`; `create_all` creates it. One idempotent revision adds its indexes and the
+  backfill):
 
-### D2. A `submission` table: one row per simulation, a small state machine
+  | Column | Meaning |
+  |---|---|
+  | `simulation_id` (PK, FK) | one submission per simulation |
+  | `state` | `requested`, `preparing`, `submitting`, `submitted`, `failed` |
+  | `queue` | `interactive` by default; a suite run's simulations use `suite:<name>` |
+  | `priority` | integer, default 0; suite runs use −10 |
+  | `requested_by` | the caller's subject when signed in. Recorded for fairness, not ownership (observability step 5 is separate) |
+  | `attempts`, `next_attempt_at`, `last_error` | retry bookkeeping (Q2) |
+  | `lease_owner`, `lease_expires_at` | which worker holds the row, until when |
+  | `created_at`, `updated_at` | |
 
-```
-accepted ──► fetching ──► (building) ──► submitting ──► submitted
-    │            │             │              │
-    └────────────┴─────────────┴──────────────┴──► failed (reason)
-```
+- **Backfill:** every existing simulation with no run gets a `failed` row. #256 has already failed them.
+- **Failures surface as today,** through the FAILED `HpcRun` with `slurmjobid = null` that #256 introduced
+  (`hpc_db.fail_submission`).
 
-| Column | Meaning |
-|---|---|
-| `simulation_id` (PK, FK) | one submission per simulation |
-| `state` | `accepted`, `fetching`, `building`, `submitting`, `submitted`, `failed` |
-| `attempts`, `next_attempt_at` | retry bookkeeping (D5) |
-| `lease_owner`, `lease_expires_at` | which worker holds it, until when (D3) |
-| `build_hpcrun_id` | the container build this submission waits on (D4), if any |
-| `last_error` | the most recent failure, kept across retries |
-| `created_at`, `updated_at` | |
+### Q2. The worker: claim, lease, step
 
-- **Public status is unchanged:**
-  - `submitting` while there is no `HpcRun` and the state is not `failed`;
-  - `failed`, with the reason, through the same FAILED `HpcRun` that #256 introduced (`slurmjobid = null`);
-  - after `sbatch`, the existing `HpcRun` as today.
+- `simulation/submission_worker.py` is started in the API's lifespan, next to `verify_images_periodically`, and
+  stopped on shutdown. The request path wakes it through an `asyncio.Event`; otherwise it polls every 5 s.
+- **Claim.** `SELECT … FOR UPDATE SKIP LOCKED` over the due rows, ordered by the scheduling policy (Q3). It sets
+  `lease_owner` (the pod name plus a uuid) and `lease_expires_at` (about 2 min), and renews the lease while it works.
+- **A lost worker is just an expired lease.** The next pass, on any replica, claims the row again and resumes from its
+  `state`. This replaces #256's heartbeat and stale check, which step 4 removes.
+- **Each step is short and commits its own state change.**
 
-  So pbest and the published clients need nothing new.
-- **Migration:** an alembic revision creates the table (idempotent).
-- **Backfill:** every existing simulation with no run gets a `failed` row. They have already been failed by #256, so
-  this changes nothing.
+  | From | To | What |
+  |---|---|---|
+  | `requested` | `preparing` | claimed for dispatch, within the caps (Q3) |
+  | `preparing` | `submitting` | `ensure_image`, unchanged. It already finds a recorded image (`environment_image`) and joins an in-flight build, so rows on the same hash wait on one image |
+  | `submitting` | `submitted` | idempotent `sbatch` (below), then the `HpcRun` and the state, in one transaction |
 
-### D3. The submission worker: claim, lease, step
+- **Idempotent `sbatch`.** The SLURM job name is the simulation's `experiment_id`. Before submitting, the step looks
+  the job up: `squeue --name=<experiment_id>`, then `sacct --name -X` for a finished one. If it finds a job, it adopts
+  it instead of submitting again. The experiment directory is made with `mkdir -p`, and the input is already staged,
+  so `submit_job` no longer copies it.
+- **Retries.**
+  - **Transient errors** are retried with backoff (30 s, 1, 2, 4, 8 min), up to `submission_max_attempts` (default 6),
+    recording `last_error`. Transient means SSH, a busy scheduler, or the file system.
+  - **Permanent errors** fail at once: a missing staged input, an invalid partition or QoS, a failed build.
+  - **`submission_timeout_seconds`** stays an overall deadline from `created_at`.
 
-- A `SubmissionWorker` runs in the API process, on the job monitor's loop or as a sibling task started in the lifespan.
-  On each pass it claims due rows:
+### Q3. Scheduling: the seam for fair scheduling
 
-  ```sql
-  SELECT simulation_id FROM submission
-  WHERE state IN ('accepted','fetching','building','submitting')
-    AND next_attempt_at <= now()
-    AND (lease_expires_at IS NULL OR lease_expires_at < now())
-  ORDER BY created_at
-  FOR UPDATE SKIP LOCKED
-  LIMIT :batch
-  ```
-- It sets `lease_owner` (pod name plus a uuid) and `lease_expires_at = now() + lease` (e.g. 2 min), then commits.
-  While working, it renews the lease.
-- **A lost worker is just an expired lease.** The next pass on any replica claims the row again and resumes from its
-  `state`. This replaces #256's heartbeat and stale check: an expired lease resumes the submission instead of failing
-  it.
-- **Each step is short and moves the state forward in its own transaction.** Long work never runs inside a step:
-  it is a SLURM job the step starts or checks (D4). The request handler also kicks the worker (an `asyncio.Event`),
-  so a submission starts at once rather than on the next pass.
-- **Shutdown:** on SIGTERM the worker stops claiming and lets its leases expire. The new pod picks the rows up.
+- **A policy object chooses which claimed rows to dispatch:** `SubmissionPolicy.select(candidates, active)` in
+  `simulation/scheduling.py`.
+  - The first policy is priority, then age, under caps.
+  - Round-robin across queues, or fair share per requester, can replace it later without a schema change: the
+    `queue`, `priority` and `requested_by` columns exist from Q1.
+- **Caps, counted from the database:**
 
-### D4. Container fetch and build become SLURM jobs
+  | Setting | Caps | Default |
+  |---|---|---|
+  | `submission_max_active_jobs` | simulation runs on SLURM that have not finished | 200; set it below the `vcell-services` QoS limits once they are checked |
+  | `submission_max_preparing` | concurrent image fetches and builds | 4 |
+  | `submission_queue_share` | the fraction of the active cap one non-interactive queue may use | 0.5, so interactive runs are never starved |
 
-- Today `singularity pull` runs synchronously over SSH: minutes, held by the API process. If the API dies mid-pull,
-  the remote command may be killed with the SSH channel. Also, a build waits through in-memory queues and gives up
-  after about 30 minutes even if the build later succeeds.
-- **`fetching`:** if the `.sif` exists (`test -s`), skip to `submitting`. Otherwise submit a small **pull job**: the
-  same `test -s || pull to tmp && mv` script, run as `sbatch` on the build partition. Record it as a
-  `BUILD_CONTAINER` `HpcRun` and move to `building`.
-- **`building`:** the monitor already polls that `HpcRun`. When it completes, move to `submitting`.
-  - If the pull fails, fall back to a build job, as today.
-  - If the build fails, mark the submission `failed` with the build log's tail.
+- **The effect:** a 600-run suite drains at a steady rate behind interactive work, instead of 600 `sbatch` calls in a
+  burst.
 
-  There is no in-memory wait and no 30-minute cap; the build's own SLURM time limit governs.
-- **Deduplication across submissions:** the per-hash advisory lock stays, but it is held only for the short step of
-  *finding or creating* the hash's pull/build `HpcRun`. Submissions on the same hash all point
-  `build_hpcrun_id` at that one run.
+### Q4. Suite runs that resume
 
-### D5. Idempotent `sbatch`
-
-- The SLURM job name is already the `experiment_id`, which is unique per simulation. Before calling `sbatch`, the step
-  in `submitting` looks the job up by name: `squeue --name=<experiment_id> --noheader -o %i`, then
-  `sacct --name=... -X` for a job that has already finished.
-- If it finds one, it **adopts** that job id instead of submitting again. That covers a worker that died between
-  `sbatch` and the insert.
-- Otherwise it runs `sbatch`. In the same transaction as the move to `submitted`, it inserts the `HpcRun`, sets the
-  state, and clears the lease.
-- **Test:** `tests/common/test_slurm_conformance.py` gains the `--name` output shape on both backends.
-
-### D6. Retries, the deadline and failure reasons
-
-- **Transient errors are retried** with exponential backoff (30 s, 1, 2, 4, 8 min), up to `submission_max_attempts`
-  (default 6). Each attempt records `last_error`. Transient means an SSH connection error, `sbatch` exiting non-zero
-  with a scheduler-busy message, or an NFS error writing the script.
-- **Permanent errors fail at once:** a missing staged input, an invalid partition or QoS, or a container build that
-  failed.
-- **`submission_timeout_seconds`** stays as an overall deadline from `created_at`, as in #256. A submission still not
-  submitted by then fails with "did not reach SLURM within …".
-- Failure reasons go to the FAILED `HpcRun`'s `error_message`, so every existing consumer shows them.
-
-### D7. Backpressure (optional, step 2)
-
-- `submission_max_in_flight` (default unlimited) caps how many submissions are in `fetching` or `building` at once.
-- Claimed rows past the cap get `next_attempt_at` pushed out.
-- This replaces today's behaviour, where 50 simultaneous first runs each start a task and all block on the same
-  advisory lock.
+- **The `suite_run` row records its progress:** `sources` (the list, JSONB) and `next_source`. One idempotent revision.
+- **Each source is idempotent.** A source whose comparisons already exist for `(collection, suite_run, source)` is
+  skipped. Otherwise: fetch → translate → `service.submit` (which enqueues `requested` rows) → `next_source += 1`.
+- **The worker also claims suite runs in `submitting`** (with `SKIP LOCKED` and a lease) and continues from
+  `next_source`. A suite run becomes `submitted` only after its last source.
+- **Queue and priority.** A suite run's simulations use `queue = suite:<name>` and priority −10.
+- **The batch resource profile.** SED-ML runs (ODE models, seconds of work) use 1 CPU and 1 GB. Today
+  `sedml/service.py` hard-codes the interactive profile (2 CPUs, 8 GB).
 
 ## Steps
 
-1. **Staging and the table.**
-   - D1 and D2.
-   - The request handler stages the file and inserts the `submission` row; it still starts today's background task
-     unchanged.
-   - Migration and backfill.
-   - Tests: the staged file exists before the response; a failed write creates nothing.
-2. **The worker.**
-   - D3, D5, D6, D7.
-   - The handler stops starting a background task; it inserts the row and kicks the worker.
-   - Fetch and build still use today's `_download_or_build_container`, inside a step with lease renewal: a pull
-     interrupted mid-way is repeated, which is safe because it is idempotent.
-   - #256's stale check becomes lease expiry.
+1. **This document, revised.**
+2. **Staging, table and worker** (Q1, Q2).
+   - The request path enqueues and the worker dispatches.
+   - #256's stale check stays as a safety net until step 4.
    - Tests:
      - claim with `SKIP LOCKED` across two workers;
-     - resume after an expired lease in every state;
-     - `sbatch` adoption by job name against the SLURM test cluster (`slurm` marker);
-     - retry, then permanent failure.
-3. **Fetch and build as SLURM jobs.**
-   - D4.
-   - Removes the in-memory build wait (`internal_listeners` for builds) and the 30-minute cap.
-   - Tests: a pull job and a build job on the test cluster (`test_container_lifecycle.py` already builds there), and a
-     restart while `building` resumes when the build completes.
+     - resume from every state after an expired lease;
+     - retry, then permanent failure;
+     - `sbatch` adoption by job name on the SLURM test cluster (`slurm` marker);
+     - the `--name` output shapes in `tests/common/test_slurm_conformance.py`.
+3. **Scheduling and suites** (Q3, Q4).
+   - Tests:
+     - the caps hold;
+     - interactive runs go ahead of suite runs;
+     - a resumed suite run neither repeats nor skips a source.
 4. **Surface and retire.**
-   - `SimulationDetail` gains `submission: {state, attempts, last_error}`; the CLI shows it; the UI shows the state
-     while `submitting`.
-   - Remove `simulation.dispatch_heartbeat_at` and `supervise_dispatch` once no code path uses them (a revision drops
-     the column).
+   - `submission: {state, queue, position, attempts, last_error}` on `SimulationSummary` and `SimulationDetail`.
+   - The CLI and the UI show it.
+   - `make clients` regenerates the spec and the client.
+   - Remove `supervise_dispatch`, `fail_stale_submissions` and `simulation.dispatch_heartbeat_at`, with a revision that
+     drops the column.
+5. **The 300-model suite:** a generator script, and `examples/biomodels-curated-300/suite.yaml`. It runs once the QoS
+   limits are known.
 
 ## Verification
 
-- **Kill test** (step 2, staging or production):
-  1. Submit a first run of a new simulator image.
-  2. `kubectl rollout restart deploy/api` during the pull.
-  3. The run must reach `completed` with no second SLURM job: check `sacct --name=<experiment_id>` for exactly one
-     job.
-- **Loki:** no `Submission abandoned` lines after step 2. Resumed submissions log `claimed … resuming from <state>`.
-- **Deploy during a busy period:** every run either completes or fails with a specific reason, never "abandoned".
+- **Kill test** (after step 2, on production, deliberately):
+  1. Start a 20-model suite run.
+  2. `kubectl rollout restart deploy/api` while it is submitting.
+  3. Every run must complete, and `sacct --name=<experiment_id>` must show exactly one job per run.
+- **Loki:**
+  - no `Submission abandoned` lines after step 2;
+  - resumed work logs `claimed … resuming from <state>`.
+- **The 300-model suite:**
+  - the count of active jobs stays at or under the cap;
+  - an interactive run submitted mid-suite starts at once;
+  - the suite page shows `requested (#N)` draining.
+
+## Revisions (2026-10-22)
+
+The 2026-10-11 draft predates environment-builds phases 1–4. Against `main`:
+
+1. **Builds are Kubernetes Jobs in production** (`BUILD_BACKEND=k8s`). They are waited on by polling the database
+   (`builds.wait_for_run`), so any process can join one.
+   - The in-memory listeners and the 30-minute cap the draft wanted to remove apply only to the SLURM build backend.
+   - The draft's D4 ("pull and build as SLURM jobs") is therefore narrowed to *pulls* as Kubernetes Jobs, and deferred
+     to "later".
+2. **Image readiness is the `environment_image` record plus a file check through the mount**, not an SSH `test -s`.
+   The worker calls `ensure_image` unchanged.
+3. **Deduplication:** joining an in-flight build exists already. The advisory lock still spans the whole pull or
+   build, which is acceptable for now because Q3 caps concurrent preparation.
+4. **The draft's `accepted` state is named `requested`** (Jim). The draft's `fetching` and `building` collapse into
+   `preparing`, because `ensure_image` owns both.
+5. **New in this revision:**
+   - scheduling (Q3): the queue, priority and requester columns, and caps;
+   - resumable suite runs and the batch profile (Q4);
+   - the request-time staging of SED-ML archives.
+6. **Still open:** the registry's `/build` endpoints also run `ensure_image` as in-process background tasks, which a
+   restart loses. They move onto the queue later.
 
 ## Open questions
 
-1. **Pull on a compute node versus the submit host.** Step 3 assumes compute nodes can reach the registry, which the
-   build job already needs. Confirm with the HPC admins that the build partition is right for pulls too.
-2. **Staged-input retention.** The experiment directory already keeps the input. Nothing new to clean up unless a
-   submission fails before its directory is used; such a directory then holds only the input.
-3. **Replicas.** Production runs one API replica. The design does not depend on it, but the conformance and resume
-   tests should run two workers against one database to prove it.
-4. **Batch submissions** (pbest `batch_submission=True`) arrive as many requests at once. D7's cap and FIFO order
-   should keep them from starving single runs. Is per-owner fairness needed once owners are stamped (observability
-   step 5)?
+1. **The `vcell-services` QoS limits** (`sacctmgr show qos vcell-services`). They set `submission_max_active_jobs`.
+2. **Replicas.** The production overlay runs one API replica; the base sets three. The worker is written for several,
+   and step 2's claim test runs two workers against one database.
+3. **Fairness per requester:** owners are not stamped yet (observability step 5). `requested_by` keeps the subject for
+   when a fair-share policy needs it.
