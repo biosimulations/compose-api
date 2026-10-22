@@ -9,7 +9,9 @@ It runs on whichever backends are selected, so running with both
 (``--slurm-backend container --slurm-backend cluster``) compares them.
 """
 
+import asyncio
 import tempfile
+import time
 import uuid
 from pathlib import Path
 
@@ -107,3 +109,29 @@ async def test_sacct_emits_the_fields_the_parser_indexes(
     # The parser must survive its own backend's output.
     parsed = await slurm_service.get_job_status_sacct(job_ids=[job_id])
     assert [job.job_id for job in parsed] == [job_id]
+
+
+@pytest.mark.slurm
+@pytest.mark.asyncio
+async def test_a_job_is_found_by_its_name_while_queued_and_after_it_finished(
+    slurm_backend: SlurmBackend, ssh_service: SSHService, slurm_service: SlurmService, slurm_template_hello_1s: str
+) -> None:
+    """The submission worker adopts a job an earlier attempt submitted by looking it up by name
+    (``SlurmService.find_job_by_name``): ``squeue --name`` while it is queued or running, ``sacct --name`` after."""
+    name = f"conformance-{uuid.uuid4().hex[:12]}"
+    remote_dir = _namespace_path() / "htclogs"
+    with tempfile.TemporaryDirectory() as tmpdir:
+        local = Path(tmpdir) / f"{name}.sbatch"
+        local.write_text(slurm_template_hello_1s.replace("--job-name=my_test_job", f"--job-name={name}"))
+        job_id = await slurm_service._submit_canary_job(
+            local_sbatch_file=local, remote_sbatch_file=remote_dir / local.name
+        )
+    assert await slurm_service.find_job_by_name(name) == job_id
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        _rc, queued, _err = await ssh_service.run_command(f"squeue --noheader --name={name} --format=%i")
+        if not queued.strip():
+            break
+        await asyncio.sleep(2)
+    assert await slurm_service.find_job_by_name(name) == job_id, "a finished job is found through sacct"
+    assert await slurm_service.find_job_by_name(f"no-such-job-{uuid.uuid4().hex[:8]}") is None

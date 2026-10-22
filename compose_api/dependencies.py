@@ -1,5 +1,5 @@
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
@@ -17,6 +17,9 @@ from compose_api.simulation.data_service import DataService, DataServiceHpc
 from compose_api.simulation.hpc_utils import get_internal_experiment_dir
 from compose_api.simulation.job_monitor import JobMonitor
 from tests.fixtures.mocks import TestDataService
+
+if TYPE_CHECKING:
+    from compose_api.simulation.submission_worker import SubmissionWorker
 
 logger = logging.getLogger(__name__)
 setup_logging(logger)
@@ -138,6 +141,20 @@ def get_async_engine(url: str, enable_ssl: bool = True, **engine_params: Any) ->
     return create_async_engine(url, **engine_params)
 
 
+# -- the submission worker (docs/plan-durable-submission.md): takes queued runs to SLURM -- #
+
+global_submission_worker: "SubmissionWorker | None" = None
+
+
+def set_submission_worker(worker: "SubmissionWorker | None") -> None:
+    global global_submission_worker
+    global_submission_worker = worker
+
+
+def get_submission_worker() -> "SubmissionWorker | None":
+    return global_submission_worker
+
+
 async def init_standalone(enable_ssl: bool = True) -> None:
     _settings = get_settings()
 
@@ -195,6 +212,10 @@ async def init_standalone(enable_ssl: bool = True) -> None:
         job_monitor.register_backend("k8s", K8sPoller())  # container builds as Kubernetes Jobs
     set_job_monitor(job_monitor)
 
+    from compose_api.simulation.submission_worker import SubmissionWorker  # late: it imports the simulation modules
+
+    set_submission_worker(SubmissionWorker(database, get_required_simulation_service(), job_monitor))
+
 
 async def shutdown_standalone() -> None:
     mongodb_service = get_database_service()
@@ -208,6 +229,11 @@ async def shutdown_standalone() -> None:
     set_simulation_service(None)
     set_database_service(None)
     set_data_service(None)
+
+    worker = get_submission_worker()
+    if worker:
+        await worker.close()
+        set_submission_worker(None)
 
     job_monitor = get_job_monitor()
     if job_monitor:

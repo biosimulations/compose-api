@@ -3,7 +3,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import override
 
-from sqlalchemy import Result, and_, func, select, update
+from sqlalchemy import ColumnElement, Result, and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import InstrumentedAttribute
 
@@ -13,13 +13,18 @@ from compose_api.db.tables.hpc_tables import (
     JobStatusDB,
     JobTypeDB,
     ORMHpcRun,
+    ORMSubmission,
     ORMWorkerEvent,
 )
 from compose_api.db.tables.simulator_tables import ORMSimulation
 from compose_api.observability.identity import trace_id_from_correlation
 from compose_api.simulation.models import (
+    ACTIVE_SUBMISSION_STATES,
     HpcRun,
     JobType,
+    SimulationRequest,
+    Submission,
+    SubmissionState,
     WorkerEvent,
 )
 
@@ -60,6 +65,42 @@ class HPCDatabaseService(ABC):
     @abstractmethod
     async def touch_submission(self, simulation_id: int) -> None:
         """Record that the task submitting ``simulation_id`` is still alive (its dispatch heartbeat)."""
+        pass
+
+    # -- the durable submission queue (docs/plan-durable-submission.md) -- #
+
+    @abstractmethod
+    async def claim_submissions(
+        self, owner: str, lease_seconds: int, limit: int, exclude: frozenset[int] = frozenset()
+    ) -> list[Submission]:
+        """Lease up to ``limit`` due submissions to ``owner``, highest priority then oldest first. A row another worker
+        holds (a live lease, or locked by its claim right now) is skipped, never waited on."""
+
+    @abstractmethod
+    async def renew_submission_lease(self, simulation_id: int, owner: str, lease_seconds: int) -> bool:
+        """Extend ``owner``'s lease; False when it no longer holds the row (it expired and another worker took it)."""
+
+    @abstractmethod
+    async def set_submission_state(self, simulation_id: int, owner: str, state: SubmissionState) -> bool:
+        """Move the submission ``owner`` holds to ``state``; False when it no longer holds it."""
+
+    @abstractmethod
+    async def retry_submission(self, simulation_id: int, owner: str, error: str, delay_seconds: int) -> None:
+        """Count a failed attempt, keep its error, and release the row until ``delay_seconds`` from now."""
+
+    @abstractmethod
+    async def release_submission(self, simulation_id: int, owner: str) -> None:
+        """Give the row back at once (a worker shutting down), so another can claim it without waiting out the lease."""
+
+    @abstractmethod
+    async def complete_submission(
+        self, simulation_id: int, owner: str, slurmjobid: int, correlation_id: str
+    ) -> HpcRun | None:
+        """Record the SLURM job: the run and the move to ``submitted``, in one transaction. None (and nothing written)
+        when ``owner`` no longer holds the row."""
+
+    @abstractmethod
+    async def get_submission(self, simulation_id: int) -> Submission | None:
         pass
 
     @abstractmethod
@@ -162,26 +203,124 @@ class HPCORMExecutor(HPCDatabaseService):
         external_id: str | None = None,
     ) -> HpcRun:
         async with self.async_session_maker() as session, session.begin():
-            simulation_key = ref_id if job_type == JobType.SIMULATION else None
-            simulator_key = ref_id if job_type == JobType.BUILD_CONTAINER else None
-            if simulator_key is None and simulation_key is None:
-                raise ValueError(f"Simulation key and simulation key is None, with job type {job_type}")
-
-            orm_hpc_run = ORMHpcRun(
-                slurmjobid=slurmjobid,
-                backend=backend,
-                external_id=external_id if external_id is not None else (str(slurmjobid) if slurmjobid else None),
-                job_type=JobTypeDB.from_job_type(job_type),
-                status=JobStatusDB.RUNNING,
-                simulation_id=simulation_key,
-                simulator_id=simulator_key,
-                start_time=datetime.datetime.now(),
-                correlation_id=correlation_id,
-                trace_id=trace_id_from_correlation(correlation_id),
-            )
+            orm_hpc_run = _new_hpcrun(slurmjobid, job_type, ref_id, correlation_id, backend, external_id)
             session.add(orm_hpc_run)
             await session.flush()
             return orm_hpc_run.to_hpc_run()
+
+    @override
+    async def claim_submissions(
+        self, owner: str, lease_seconds: int, limit: int, exclude: frozenset[int] = frozenset()
+    ) -> list[Submission]:
+        now = func.localtimestamp()
+        due = (
+            select(ORMSubmission.simulation_id)
+            .where(
+                ORMSubmission.state.in_([s.value for s in ACTIVE_SUBMISSION_STATES]),
+                ORMSubmission.next_attempt_at <= now,
+                or_(ORMSubmission.lease_expires_at.is_(None), ORMSubmission.lease_expires_at < now),
+            )
+            .order_by(ORMSubmission.priority.desc(), ORMSubmission.created_at, ORMSubmission.simulation_id)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        if exclude:
+            due = due.where(ORMSubmission.simulation_id.not_in(exclude))
+        async with self.async_session_maker() as session, session.begin():
+            ids = list((await session.execute(due)).scalars().all())
+            if not ids:
+                return []
+            await session.execute(
+                update(ORMSubmission)
+                .where(ORMSubmission.simulation_id.in_(ids))
+                .values(lease_owner=owner, lease_expires_at=_seconds_from_now(lease_seconds), updated_at=now)
+            )
+            rows = await session.execute(
+                select(ORMSubmission, ORMSimulation.experiment_id, ORMSimulation.simulator_id)
+                .join(ORMSimulation, ORMSimulation.id == ORMSubmission.simulation_id)
+                .where(ORMSubmission.simulation_id.in_(ids))
+            )
+            by_id = {row[0].simulation_id: _submission(*row) for row in rows.all()}
+            return [by_id[i] for i in ids if i in by_id]
+
+    @override
+    async def renew_submission_lease(self, simulation_id: int, owner: str, lease_seconds: int) -> bool:
+        return await self._update_held(simulation_id, owner, lease_expires_at=_seconds_from_now(lease_seconds))
+
+    @override
+    async def set_submission_state(self, simulation_id: int, owner: str, state: SubmissionState) -> bool:
+        return await self._update_held(simulation_id, owner, state=state.value)
+
+    @override
+    async def retry_submission(self, simulation_id: int, owner: str, error: str, delay_seconds: int) -> None:
+        await self._update_held(
+            simulation_id,
+            owner,
+            attempts=ORMSubmission.attempts + 1,
+            last_error=error,
+            next_attempt_at=_seconds_from_now(delay_seconds),
+            lease_owner=None,
+            lease_expires_at=None,
+        )
+
+    @override
+    async def release_submission(self, simulation_id: int, owner: str) -> None:
+        await self._update_held(simulation_id, owner, lease_owner=None, lease_expires_at=None)
+
+    async def _update_held(self, simulation_id: int, owner: str, **values: object) -> bool:
+        async with self.async_session_maker() as session, session.begin():
+            result = await session.execute(
+                update(ORMSubmission)
+                .where(ORMSubmission.simulation_id == simulation_id, ORMSubmission.lease_owner == owner)
+                .values(updated_at=func.localtimestamp(), **values)
+            )
+            return bool(result.rowcount)  # type: ignore[attr-defined]
+
+    @override
+    async def complete_submission(
+        self, simulation_id: int, owner: str, slurmjobid: int, correlation_id: str
+    ) -> HpcRun | None:
+        async with self.async_session_maker() as session, session.begin():
+            held = await session.execute(
+                select(ORMSubmission.simulation_id)
+                .where(ORMSubmission.simulation_id == simulation_id, ORMSubmission.lease_owner == owner)
+                .with_for_update()
+            )
+            if held.first() is None:
+                return None
+            orm_hpc_run = _new_hpcrun(
+                slurmjobid=slurmjobid,
+                job_type=JobType.SIMULATION,
+                ref_id=simulation_id,
+                correlation_id=correlation_id,
+                backend="slurm",
+                external_id=None,
+            )
+            session.add(orm_hpc_run)
+            await session.execute(
+                update(ORMSubmission)
+                .where(ORMSubmission.simulation_id == simulation_id)
+                .values(
+                    state=SubmissionState.SUBMITTED.value,
+                    lease_owner=None,
+                    lease_expires_at=None,
+                    updated_at=func.localtimestamp(),
+                )
+            )
+            await session.flush()
+            return orm_hpc_run.to_hpc_run()
+
+    @override
+    async def get_submission(self, simulation_id: int) -> Submission | None:
+        async with self.async_session_maker() as session:
+            row = (
+                await session.execute(
+                    select(ORMSubmission, ORMSimulation.experiment_id, ORMSimulation.simulator_id)
+                    .join(ORMSimulation, ORMSimulation.id == ORMSubmission.simulation_id)
+                    .where(ORMSubmission.simulation_id == simulation_id)
+                )
+            ).first()
+            return None if row is None else _submission(*row)
 
     @override
     async def touch_submission(self, simulation_id: int) -> None:
@@ -203,7 +342,16 @@ class HPCORMExecutor(HPCDatabaseService):
         # cutoff is too.
         last_seen = func.coalesce(ORMSimulation.dispatch_heartbeat_at, ORMSimulation.created_at)
         cutoff = func.localtimestamp() - func.make_interval(0, 0, 0, 0, 0, 0, stale_seconds)
-        stmt = select(ORMSimulation.id).where(~has_run, last_seen < cutoff).order_by(ORMSimulation.id)
+        # A queued run belongs to the submission worker, which resumes it after a restart instead (its lease)
+        queued = (
+            select(ORMSubmission.simulation_id)
+            .where(
+                ORMSubmission.simulation_id == ORMSimulation.id,
+                ORMSubmission.state.in_([s.value for s in ACTIVE_SUBMISSION_STATES]),
+            )
+            .exists()
+        )
+        stmt = select(ORMSimulation.id).where(~has_run, ~queued, last_seen < cutoff).order_by(ORMSimulation.id)
         async with self.async_session_maker() as session:
             return list((await session.execute(stmt)).scalars().all())
 
@@ -219,6 +367,17 @@ class HPCORMExecutor(HPCDatabaseService):
             )
             if existing.first() is not None:
                 return None
+            await session.execute(
+                update(ORMSubmission)
+                .where(ORMSubmission.simulation_id == simulation_id)
+                .values(
+                    state=SubmissionState.FAILED.value,
+                    last_error=reason,
+                    lease_owner=None,
+                    lease_expires_at=None,
+                    updated_at=func.localtimestamp(),
+                )
+            )
             now = datetime.datetime.now()
             orm_hpc_run = ORMHpcRun(
                 slurmjobid=None,
@@ -354,3 +513,51 @@ class HPCORMExecutor(HPCDatabaseService):
     @override
     async def close(self) -> None:
         pass
+
+
+def _new_hpcrun(
+    slurmjobid: int | None,
+    job_type: JobType,
+    ref_id: int,
+    correlation_id: str,
+    backend: str = "slurm",
+    external_id: str | None = None,
+) -> ORMHpcRun:
+    simulation_key = ref_id if job_type == JobType.SIMULATION else None
+    simulator_key = ref_id if job_type == JobType.BUILD_CONTAINER else None
+    if simulator_key is None and simulation_key is None:
+        raise ValueError(f"Simulation key and simulation key is None, with job type {job_type}")
+    return ORMHpcRun(
+        slurmjobid=slurmjobid,
+        backend=backend,
+        external_id=external_id if external_id is not None else (str(slurmjobid) if slurmjobid else None),
+        job_type=JobTypeDB.from_job_type(job_type),
+        status=JobStatusDB.RUNNING,
+        simulation_id=simulation_key,
+        simulator_id=simulator_key,
+        start_time=datetime.datetime.now(),
+        correlation_id=correlation_id,
+        trace_id=trace_id_from_correlation(correlation_id),
+    )
+
+
+def _seconds_from_now(seconds: int) -> ColumnElement[datetime.datetime]:
+    # localtimestamp, as created_at and the heartbeat are: TIMESTAMP WITHOUT TIME ZONE in the session's zone
+    return func.localtimestamp() + func.make_interval(0, 0, 0, 0, 0, 0, seconds)
+
+
+def _submission(row: ORMSubmission, experiment_id: str, simulator_id: int) -> Submission:
+    return Submission(
+        simulation_id=row.simulation_id,
+        experiment_id=experiment_id,
+        simulator_id=simulator_id,
+        state=SubmissionState(row.state),
+        queue=row.queue,
+        priority=row.priority,
+        requested_by=row.requested_by,
+        request=SimulationRequest.model_validate(row.request),
+        staged_on_store=row.staged_on_store,
+        attempts=row.attempts,
+        last_error=row.last_error,
+        created_at=row.created_at,
+    )

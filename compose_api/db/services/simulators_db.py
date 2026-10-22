@@ -11,7 +11,7 @@ from pbest.utils.input_types import ContainerizationFileRepr
 from sqlalchemy import ColumnElement, Result, Row, Select, Subquery, and_, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from compose_api.db.tables.hpc_tables import JobStatusDB, JobTypeDB, ORMHpcRun
+from compose_api.db.tables.hpc_tables import JobStatusDB, JobTypeDB, ORMHpcRun, ORMSubmission
 from compose_api.db.tables.simulator_tables import (
     ORMDownloadedContainers,
     ORMEnvironmentImage,
@@ -33,6 +33,8 @@ from compose_api.simulation.models import (
     SimulationRequest,
     SimulationResults,
     SimulatorVersion,
+    SubmissionSpec,
+    SubmissionState,
     SubmittedSimulation,
     Visibility,
 )
@@ -116,7 +118,10 @@ class SimulatorDatabaseService(ABC):
         simulator_version: SimulatorVersion,
         owner_sub: str | None = None,
         visibility: Visibility = Visibility.PUBLIC,
+        submission: SubmissionSpec | None = None,
     ) -> Simulation:
+        """Record the simulation; with ``submission``, also its queued ``requested`` submission (one transaction), whose
+        request is ``sim_request`` as given (its paths the staged files)."""
         pass
 
     @abstractmethod
@@ -462,6 +467,7 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
         simulator_version: SimulatorVersion,
         owner_sub: str | None = None,
         visibility: Visibility = Visibility.PUBLIC,
+        submission: SubmissionSpec | None = None,
     ) -> Simulation:
         async with self.async_session_maker() as session, session.begin():
             orm_simulation = ORMSimulation(
@@ -475,6 +481,18 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
             )
             session.add(orm_simulation)
             await session.flush()  # Ensure the ORM object is inserted and has an ID
+            if submission is not None:
+                session.add(
+                    ORMSubmission(
+                        simulation_id=orm_simulation.id,
+                        state=SubmissionState.REQUESTED.value,
+                        queue=submission.queue,
+                        priority=submission.priority,
+                        requested_by=submission.requested_by,
+                        request=sim_request.model_dump(mode="json"),
+                        staged_on_store=submission.staged_on_store,
+                    )
+                )
 
             simulation = Simulation(
                 database_id=orm_simulation.id, sim_request=sim_request, simulator_version=simulator_version

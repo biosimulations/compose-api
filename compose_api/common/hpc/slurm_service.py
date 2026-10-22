@@ -1,4 +1,5 @@
 import logging
+import shlex
 from pathlib import Path
 
 from compose_api.common.hpc.models import SlurmJob
@@ -65,12 +66,31 @@ class SlurmService:
         self,
         local_sbatch_file: Path,
         remote_sbatch_file: Path,
-        local_input_file: Path,
-        remote_input_file: Path,
+        local_input_file: Path | None,
+        remote_input_file: Path | None,
     ) -> int:
+        """Upload the script (and the input, unless it is already in place on the cluster) and sbatch it."""
         await self.ssh_service.scp_upload(local_file=local_sbatch_file, remote_path=remote_sbatch_file)
-        await self.ssh_service.scp_upload(local_file=local_input_file, remote_path=remote_input_file)
+        if local_input_file is not None and remote_input_file is not None:
+            await self.ssh_service.scp_upload(local_file=local_input_file, remote_path=remote_input_file)
         return await self._execute_sbatch_command(sbatch_file=remote_sbatch_file)
+
+    async def find_job_by_name(self, job_name: str) -> int | None:
+        """The newest job named ``job_name``, queued or running (squeue) or already finished (sacct, last 30 days); None
+        when there is none. A run's job is named by its experiment id, so this finds a job an earlier attempt submitted
+        before it could record it (docs/plan-durable-submission.md, Q2)."""
+        name = shlex.quote(job_name)
+        for command in (
+            f"squeue --noheader --name={name} --format=%i",
+            f"sacct --noheader --allocations --parsable2 --name={name} --format=JobID --starttime=now-30days",
+        ):
+            return_code, stdout, stderr = await self.ssh_service.run_command(command=command)
+            if return_code != 0:
+                raise RuntimeError(f"{command.split()[0]} could not look up job {job_name}: {stderr[:200]}")
+            ids = [int(token) for token in stdout.split() if token.strip().isdigit()]
+            if ids:
+                return max(ids)
+        return None
 
     async def submit_build_job(
         self,
