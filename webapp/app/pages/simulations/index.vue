@@ -100,7 +100,7 @@ const columns: TableColumn<SimulationSummary>[] = [
     header: 'ID',
     cell: ({ row }) => h(NuxtLink, { to: `/simulations/${row.original.simulation_id}`, class: 'font-mono text-primary' }, () => `#${row.original.simulation_id}`)
   },
-  { accessorKey: 'status', header: 'Status', cell: ({ row }) => h(StatusBadge, { status: row.original.status }) },
+  { accessorKey: 'status', header: 'Status', cell: ({ row }) => h(StatusBadge, { status: row.original.status, submission: row.original.submission }) },
   {
     accessorKey: 'simulator',
     header: 'Simulator',

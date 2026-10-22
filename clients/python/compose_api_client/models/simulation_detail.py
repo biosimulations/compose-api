@@ -11,6 +11,7 @@ from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
     from ..models.simulation_detail_labels import SimulationDetailLabels
+    from ..models.submission_info import SubmissionInfo
 
 
 T = TypeVar("T", bound="SimulationDetail")
@@ -38,6 +39,7 @@ class SimulationDetail:
         labels (SimulationDetailLabels | Unset):
         tags (list[str] | Unset):
         description (None | str | Unset):
+        submission (None | SubmissionInfo | Unset):
         event_count (int | Unset):  Default: 0.
         dataset_count (int | Unset):  Default: 0.
     """
@@ -59,11 +61,14 @@ class SimulationDetail:
     labels: SimulationDetailLabels | Unset = UNSET
     tags: list[str] | Unset = UNSET
     description: None | str | Unset = UNSET
+    submission: None | SubmissionInfo | Unset = UNSET
     event_count: int | Unset = 0
     dataset_count: int | Unset = 0
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        from ..models.submission_info import SubmissionInfo  # noqa: PLC0415
+
         simulation_id = self.simulation_id
 
         experiment_id = self.experiment_id
@@ -140,6 +145,14 @@ class SimulationDetail:
         else:
             description = self.description
 
+        submission: dict[str, Any] | None | Unset
+        if isinstance(self.submission, Unset):
+            submission = UNSET
+        elif isinstance(self.submission, SubmissionInfo):
+            submission = self.submission.to_dict()
+        else:
+            submission = self.submission
+
         event_count = self.event_count
 
         dataset_count = self.dataset_count
@@ -177,6 +190,8 @@ class SimulationDetail:
             field_dict["tags"] = tags
         if description is not UNSET:
             field_dict["description"] = description
+        if submission is not UNSET:
+            field_dict["submission"] = submission
         if event_count is not UNSET:
             field_dict["event_count"] = event_count
         if dataset_count is not UNSET:
@@ -187,6 +202,7 @@ class SimulationDetail:
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.simulation_detail_labels import SimulationDetailLabels  # noqa: PLC0415
+        from ..models.submission_info import SubmissionInfo  # noqa: PLC0415
 
         d = dict(src_dict)
         simulation_id = d.pop("simulation_id")
@@ -296,6 +312,23 @@ class SimulationDetail:
 
         description = _parse_description(d.pop("description", UNSET))
 
+        def _parse_submission(data: object) -> None | SubmissionInfo | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, dict):
+                    raise TypeError()
+                submission_type_0 = SubmissionInfo.from_dict(data)
+
+                return submission_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(None | SubmissionInfo | Unset, data)
+
+        submission = _parse_submission(d.pop("submission", UNSET))
+
         event_count = d.pop("event_count", UNSET)
 
         dataset_count = d.pop("dataset_count", UNSET)
@@ -318,6 +351,7 @@ class SimulationDetail:
             labels=labels,
             tags=tags,
             description=description,
+            submission=submission,
             event_count=event_count,
             dataset_count=dataset_count,
         )

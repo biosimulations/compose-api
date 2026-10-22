@@ -65,11 +65,6 @@ class HPCDatabaseService(ABC):
     async def get_hpcrun_by_ref(self, ref_id: int, job_type: JobType) -> HpcRun | None:
         pass
 
-    @abstractmethod
-    async def touch_submission(self, simulation_id: int) -> None:
-        """Record that the task submitting ``simulation_id`` is still alive (its dispatch heartbeat)."""
-        pass
-
     # -- the durable submission queue (docs/plan-durable-submission.md) -- #
 
     @abstractmethod
@@ -376,15 +371,6 @@ class HPCORMExecutor(HPCDatabaseService):
                 )
             ).first()
             return None if row is None else _submission(*row)
-
-    @override
-    async def touch_submission(self, simulation_id: int) -> None:
-        async with self.async_session_maker() as session, session.begin():
-            await session.execute(
-                update(ORMSimulation)
-                .where(ORMSimulation.id == simulation_id)
-                .values(dispatch_heartbeat_at=func.localtimestamp())
-            )
 
     @override
     async def list_stale_submissions(self, stale_seconds: int) -> list[int]:

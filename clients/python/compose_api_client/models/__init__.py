@@ -91,6 +91,8 @@ from .simulation_summary_labels import SimulationSummaryLabels
 from .simulator_version import SimulatorVersion
 from .solver import Solver
 from .span_tree import SpanTree
+from .submission_info import SubmissionInfo
+from .submission_state import SubmissionState
 from .suite import Suite
 from .suite_run_info import SuiteRunInfo
 from .suite_run_row import SuiteRunRow
@@ -188,6 +190,8 @@ __all__ = (
     "SimulatorVersion",
     "Solver",
     "SpanTree",
+    "SubmissionInfo",
+    "SubmissionState",
     "Suite",
     "SuiteRunInfo",
     "SuiteRunRow",

@@ -107,7 +107,7 @@ const fields = computed(() => {
   <div>
     <PageHeader :title="`Simulation #${id}`" :description="sim?.experiment_id">
       <template #actions>
-        <StatusBadge v-if="sim" :status="sim.status" class="text-sm" />
+        <StatusBadge v-if="sim" :status="sim.status" :submission="sim.submission" class="text-sm" />
         <UButton
           icon="i-lucide-file-archive"
           label="results.zip"

@@ -16,7 +16,7 @@ from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.observability.datasets import ORIGIN_MANIFEST, ArtifactRecord
 from compose_api.observability.events import RunEvent
 from compose_api.simulation.hpc_utils import get_singularity_hash
-from compose_api.simulation.models import JobType, SimulationRequest, Visibility
+from compose_api.simulation.models import JobType, SimulationRequest, SubmissionSpec, Visibility
 from compose_api.simulation.prebuilt import prebuilt_definition
 from tests.api.test_authorization import ALICE
 
@@ -144,3 +144,36 @@ async def test_labels_and_tags_are_listed_and_filter(simulations: dict[str, int]
         assert await ids(tag=["demo", "other"]) == []
         assert (await http.get("/simulations", params={"label": "colour:red"})).status_code == 400
         assert (await http.get("/simulations", params={"label": "model"})).status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_a_queued_run_shows_its_submission_and_place_in_line(
+    database_service: DatabaseServiceSQL, simulation_request: SimulationRequest, simulations: dict[str, int]
+) -> None:
+    """docs/plan-durable-submission.md, step 4: `status` stays `submitting`; `submission` says where the run is."""
+    sim_db = database_service.get_simulator_db()
+    simulator = await sim_db.get_simulator_by_def_hash(get_singularity_hash(prebuilt_definition(IMAGE)))
+    assert simulator is not None
+
+    async def queued(name: str, **placement: object) -> int:
+        spec = SubmissionSpec(staged_on_store=False, **placement)  # type: ignore[arg-type]
+        sim = await sim_db.insert_simulation(simulation_request, f"exp-queued-{name}", simulator, submission=spec)
+        return sim.database_id
+
+    first = await queued("first")
+    second = await queued("second")
+    suite = await queued("suite", queue="suite:x", priority=-10)
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
+            detail = (await http.get(f"/simulations/{second}")).json()
+            assert detail["status"] == "submitting"
+            assert detail["submission"] == {
+                "state": "requested", "queue": "interactive", "position": 2, "attempts": 0, "last_error": None,
+            }  # fmt: skip
+            assert (await http.get(f"/simulations/{first}")).json()["submission"]["position"] == 1
+            assert (await http.get(f"/simulations/{suite}")).json()["submission"]["position"] == 3  # behind both
+            # recorded before the queue: no submission
+            assert (await http.get(f"/simulations/{simulations['completed']}")).json()["submission"] is None
+    finally:
+        for simulation_id in (first, second, suite):
+            await sim_db.delete_simulation(simulation_id)  # the fixture removes the simulator

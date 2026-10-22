@@ -950,8 +950,22 @@ def results(
 # -- finding simulations ------------------------------------------------------------------------------------------
 
 SIMULATION_COLUMNS = [
-    "simulation_id", "created_at", "simulator_id", "simulator", "status", "slurm_job_id", "end_time", "tags",
+    "simulation_id", "created_at", "simulator_id", "simulator", "status", "queued", "slurm_job_id", "end_time", "tags",
 ]  # fmt: skip
+
+
+def queued(row: dict[str, Any]) -> str:
+    """Where a run still `submitting` is on its way to SLURM: "requested #3", "preparing", "submitting (attempt 2)"."""
+    submission = row.get("submission") or {}
+    state = submission.get("state")
+    if row.get("status") != "submitting" or not state:
+        return ""
+    if state == "requested" and submission.get("position"):
+        return f"requested #{submission['position']}"
+    attempts = submission.get("attempts") or 0
+    return f"{state} (attempt {attempts + 1})" if attempts else str(state)
+
+
 _UNITS = {"m": 60, "h": 3600, "d": 86400, "w": 604800}
 
 
@@ -1015,7 +1029,7 @@ def simulations_list(
             limit=limit,
             offset=offset,
         )
-    rows = [sim.to_dict() for sim in page.simulations]
+    rows = [{**(row := sim.to_dict()), "queued": queued(row)} for sim in page.simulations]
     shown = f"{offset + 1}-{offset + len(rows)}" if rows else "0"
     emit(settings.output, rows, SIMULATION_COLUMNS, title=f"simulations {shown} of {page.total}")
 

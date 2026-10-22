@@ -336,6 +336,16 @@ class SimulationAccess(BaseModel):
     visibility: Visibility = Visibility.PUBLIC
 
 
+class SubmissionInfo(BaseModel):
+    """Where a run is on its way to SLURM (docs/plan-durable-submission.md): the detail behind `submitting`."""
+
+    state: SubmissionState
+    queue: str
+    position: int | None = None  # its place in line among queued runs (1 is next), while it is `requested`
+    attempts: int = 0
+    last_error: str | None = None
+
+
 class SimulationSummary(BaseModel):
     """One simulation as a listing shows it: what ran, where, and how it went (its latest SLURM job)."""
 
@@ -356,6 +366,7 @@ class SimulationSummary(BaseModel):
     labels: dict[str, str] = Field(default_factory=dict)  # written by the service: what the run is
     tags: list[str] = Field(default_factory=list)  # the submitter's
     description: str | None = None
+    submission: SubmissionInfo | None = None  # None for simulations recorded before the submission queue
 
 
 class SimulationDetail(SimulationSummary):
