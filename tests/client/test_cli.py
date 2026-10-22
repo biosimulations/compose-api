@@ -499,8 +499,8 @@ def test_parse_since() -> None:
 def test_every_command_takes_json(service: Callable[..., FakeService]) -> None:
     """--json, given after the command, overrides --output table: added to every command by ``handled``.
 
-    The four auth commands take it too, but hide it (``handled_hidden_json``): their help documents ``-o json`` alone
-    (jcschaff's review of #319), and a script that passes ``--json`` everywhere keeps working.
+    The four auth commands take it too, but hide it (``handled_hidden_json``): their help documents ``-o json`` alone,
+    and a script that passes ``--json`` everywhere keeps working.
     """
     from compose_api_client.cli.commands import app as cli_app
     from typer.main import get_command

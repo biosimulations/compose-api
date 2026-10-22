@@ -410,8 +410,8 @@ def handled(fn: F) -> F:
 
 def handled_hidden_json(fn: F) -> F:
     """``handled``, with ``--json`` accepted but left out of the help: the auth commands document ``-o json`` alone,
-    so their help doesn't offer two spellings of one option (jcschaff's review of #319), and a script that passes
-    ``--json`` to every command keeps working."""
+    so their help doesn't offer two spellings of one option, and a script that passes ``--json`` to every command
+    keeps working."""
     return _handled(fn, HIDDEN_JSON_OPTION)
 
 
