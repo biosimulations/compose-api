@@ -1,0 +1,2 @@
+# process-bigraph-lang, installed in its own environment (.pblang; settings.pblang_python): it needs bigraph-schema 1.6.
+process-bigraph-lang==0.3.1

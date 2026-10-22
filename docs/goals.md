@@ -1,6 +1,6 @@
 # Goals
 
-**Status:** draft, opened 2026-09-13, revised 2026-09-22; done-tests updated 2026-10-06; checked against the final Year 2 report 2026-10-07. This is the statement of who the system is for, what it must do, and what
+**Status:** draft, opened 2026-09-13, revised 2026-09-22; done-tests updated 2026-10-06; checked against the final Year 2 report 2026-10-07; status notes 2026-10-13. This is the statement of who the system is for, what it must do, and what
 "done" looks like. It changes rarely. It is written to be readable by the External Advisory Board, and it is the
 document the Year 3 progress report is checked against. How we get there is in [strategy.md](strategy.md).
 
@@ -63,7 +63,8 @@ tools, creating a growing catalog of interoperable components."*
 
 **G5. An adapter registry exists, with unit normalisation and concentration-to-count conversion available as
 processes a composite can wire in.** Adapters are a category of the same registry, on the same curation levels, and
-they require declared port types and units, which no registry stores today.
+they require declared port types and units. Port types are now stored per environment (2026-10-12,
+`compose_api/registry/manifests/`, [plan-authoring.md](plan-authoring.md)); units are not, in any registry.
 Trace: `A3.3e` (in-progress). Year 2 committed: *"development of an adapter registry will begin, targeting common
 translation challenges such as unit normalization and conversions between concentrations and counts."*
 
@@ -97,9 +98,9 @@ Each goal has an observable test. If the test cannot be run, the goal is not don
 | G3 | Pick any simulation from 2026. Its record names an image digest. Pulling that digest and re-running the composite reproduces the result to the tolerance the tests use. |
 | G4 | Each registered simulator has its own pinned environment spec and digest; adding one does not rebuild the others; the registry lists at least one particle-based and one spatial simulator beyond what exists today, at curation level *tested* or higher, and every result records the curation level of each component it used. |
 | G5 | A composite that wires a concentration-emitting process to a count-consuming process runs correctly through a registered adapter with declared port types and units, with no hand-written glue in the composite. |
-| G6 | The service rejects a composite naming an unregistered process address, or a component below *tested*, with a clear message; and the goals for the untrusted tier are written down with their trigger. **Met for the shared image, 2026-10-06:** released in 0.6.0 (#184; tests in `tests/registry/`, `tests/api/test_submission_rejection.py`); trigger recorded in strategy decision 3. **Open:** submissions to an owner-published image (#190) skip the check, including its unsafe forms. |
+| G6 | The service rejects a composite naming an unregistered process address, or a component below *tested*, with a clear message; and the goals for the untrusted tier are written down with their trigger. **Met for the shared image, 2026-10-06:** released in 0.6.0 (#184; tests in `tests/registry/`, `tests/api/test_submission_rejection.py`); trigger recorded in strategy decision 3. ~~**Open:** submissions to an owner-published image (#190) skip the check, including its unsafe forms.~~ *2026-10-13:* the unsafe forms are refused for those too; only the registry lookup is skipped. |
 | G7 | A composite submitted through either front door runs on the same backend, or the strategy document records a dated decision that they will stay separate and why. |
-| G8 | `uv.lock` here resolves the same `process-bigraph` minor version the workbench ecosystem resolves, and a scheduled check fails when it drifts more than one minor version. |
+| G8 | `uv.lock` here resolves the same `process-bigraph` minor version the workbench ecosystem resolves, and a scheduled check fails when it drifts more than one minor version. *2026-10-13:* not met: `uv.lock` resolves 1.0.5 (process-bigraph is at 1.9.1), and no workflow checks the drift; waits on strategy decision 1. |
 
 ---
 
@@ -112,7 +113,8 @@ names SED2 as TR&D3's largest 2026 effort; it is led outside this repository, so
 | Year 2 commitment (verbatim) | Goal | Evidence Year 3 must produce |
 |---|---|---|
 | *"further development and validation of the Composition API through real composite simulations with Collaborative Projects and HPC-scale use cases"* | G1, G2 | One real composite from **BioModels** (T.J. Sego's group, University of Florida), run end to end on HPC through the toolkit, with the collaborator's walkthrough; and, across the BioModels corpus, how many models run as composites locally, how many on HPC through this service, and how many agree. |
-| *"The process registry will be expanded to include additional simulators, including spatial and particle-based tools"* | G4 | ReaDDy (particle-based) is already in the service's image. At least one spatial simulator **developed and validated** in its wrapper repository, with one composite that uses it; **registered** here at *tested* or higher if digest identity has landed, otherwise a dated deviation saying so. Which ones, named in advance in the tracker. Every wrapper in the catalog also appears in the registry at its measured curation level, which is itself evidence of an expanding catalog. *2026-10-07:* `viva-pde-particle` (Smoldyn coupled to PDE solvers, spatial and particle-based) runs in production as a prebuilt simulator, and its Schaff et al. 2016 ensemble reproduced on HPC; it still needs a registry entry at *tested* or higher. |
+| *"The process registry will be expanded to include additional simulators, including spatial and particle-based tools"* | G4 | ReaDDy (particle-based) is already in the service's image. At least one spatial simulator **developed and validated** in its wrapper repository, with one composite that uses it; **registered** here at *tested* or higher if digest identity has landed, otherwise a dated deviation saying so. Which ones, named in advance in the tracker. Every wrapper in the catalog also appears in the registry at its measured curation level, which is itself evidence of an expanding catalog. *2026-10-07:* `viva-pde-particle` (Smoldyn coupled to PDE solvers, spatial and particle-based) runs in production as a prebuilt simulator, and its Schaff et al. 2016 ensemble reproduced on HPC; it still needs a registry entry at *tested* or higher. *2026-10-13:* it is now an entry in
+`manifest.yaml` at *tested*, in its own bundle (#270). |
 | *"development of an adapter registry will begin, targeting common translation challenges such as unit normalization and conversions between concentrations and counts"* | G5 | The adapter category exists in the registry with at least the two named adapters, seeded from existing code (`viva-basic-processes`' expression step, `spatio-flux`'s count/concentration conversion), and one composite uses one of them. |
 | *"The biggest project for TR&D 3, headed by Eran Agmon at UConn, is to roll out the first version of SED2."* The report also lists *"Enabled execution of SED2-style simulation experiments on the HPC"* among Year 2's results. | (none; evidence only) | One SED2 document executed through this service, run and recorded like any other composite, or a dated note in [strategy.md](strategy.md) saying why the service does not execute SED2 yet. |
 

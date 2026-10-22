@@ -4,14 +4,58 @@ errors go to stderr, so ``compose-api ... --output json | jq`` always sees clean
 from __future__ import annotations
 
 import json
+import logging
 import sys
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
+from contextlib import contextmanager
 from enum import StrEnum
-from typing import Any
+from typing import Any, Final
 
 from rich.console import Console
 from rich.table import Table
 from rich.tree import Tree
+
+MAX_FIELD_CHARS: Final = 500
+
+
+def printable(text: str, *, limit: int = MAX_FIELD_CHARS) -> str:
+    """`text` with control characters escaped, cut to `limit` characters."""
+    shown = text if text.isprintable() else text.encode("unicode_escape").decode("ascii")
+    return shown if len(shown) <= limit else f"{shown[: limit - 1]}…"
+
+
+def printable_lines(text: str) -> str:
+    """Like `printable`, but keeps line breaks: for the CLI's own multi-line messages."""
+    return "\n".join(printable(line, limit=10 * MAX_FIELD_CHARS) for line in text.split("\n"))
+
+
+def notify(message: str) -> None:
+    """Progress and instructions go to stderr, keeping stdout for results."""
+    print(message, file=sys.stderr)
+
+
+def emit_text(text: str) -> None:
+    print(text)
+
+
+def emit_json(document: Any) -> None:
+    """One JSON document on stdout. Non-ASCII is escaped, so the output is safe to show as well as to parse."""
+    print(json.dumps(document, ensure_ascii=True, default=str))
+
+
+@contextmanager
+def quiet_http_logging() -> Iterator[None]:
+    """httpx logs every request at INFO and httpcore traces at DEBUG; neither belongs in a command's output."""
+    loggers = [logging.getLogger(name) for name in ("httpx", "httpcore")]
+    levels = [logger.level for logger in loggers]
+    for logger in loggers:
+        logger.setLevel(logging.WARNING)
+    try:
+        yield
+    finally:
+        for logger, level in zip(loggers, levels, strict=True):
+            logger.setLevel(level)
+
 
 out = Console()
 err = Console(stderr=True)
@@ -74,7 +118,7 @@ def _cell(v: Any) -> str:
         return ""
     if isinstance(v, (dict, list)):
         return json.dumps(v, default=str)
-    return str(v)
+    return printable(str(v))
 
 
 def lines(items: Iterable[str]) -> None:
@@ -103,12 +147,14 @@ def span_tree(roots: list[dict[str, Any]]) -> None:
         span = node["span"]
         duration = span.get("duration_s")
         status = span.get("status") or "open"
-        label = f"[bold]{span['name']}[/bold]  {status}" + (f"  {duration:.3f} s" if duration is not None else "")
+        name_str = printable(str(span.get("name", "")))
+        status_str = printable(str(status))
+        label = f"[bold]{name_str}[/bold]  {status_str}" + (f"  {duration:.3f} s" if duration is not None else "")
         if span.get("error"):
-            label += f"  [red]{span['error']}[/red]"
+            label += f"  [red]{printable(str(span['error']))}[/red]"
         branch = parent.add(label)
         for event in node.get("events") or []:
-            branch.add(f"[dim]{event.get('ts', '')}[/dim]  {event.get('event', '')}")
+            branch.add(f"[dim]{printable(str(event.get('ts', '')))}[/dim]  {printable(str(event.get('event', '')))}")
         for child in node.get("children") or []:
             add(branch, child)
 

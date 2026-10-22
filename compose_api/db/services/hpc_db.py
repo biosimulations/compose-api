@@ -36,7 +36,15 @@ class HPCDatabaseService(ABC):
         pass
 
     @abstractmethod
-    async def insert_hpcrun(self, slurmjobid: int, job_type: JobType, ref_id: int, correlation_id: str) -> HpcRun:
+    async def insert_hpcrun(
+        self,
+        slurmjobid: int | None,
+        job_type: JobType,
+        ref_id: int,
+        correlation_id: str,
+        backend: str = "slurm",
+        external_id: str | None = None,
+    ) -> HpcRun:
         """
         :param slurmjobid: (`int`) slurm job id for the associated `job_type`.
         :param job_type: (`JobType`) job type to be run. Choose one of the following:
@@ -130,15 +138,29 @@ class HPCORMExecutor(HPCDatabaseService):
                 return ORMHpcRun.simulator_id
 
     async def _get_orm_hpcrun_by_ref(self, session: AsyncSession, ref_id: int, job_type: JobType) -> ORMHpcRun | None:
+        # the newest run of that type: a simulation's runs carry its simulator's id too, and a build may be retried
         reference = self._get_job_type_ref(job_type)
-        stmt1 = select(ORMHpcRun).where(reference == ref_id).limit(1)
+        stmt1 = (
+            select(ORMHpcRun)
+            .where(reference == ref_id, ORMHpcRun.job_type == JobTypeDB.from_job_type(job_type))
+            .order_by(ORMHpcRun.id.desc())
+            .limit(1)
+        )
         result1: Result[tuple[ORMHpcRun]] = await session.execute(stmt1)
         orm_hpc_job: ORMHpcRun | None = result1.scalars().one_or_none()
 
         return orm_hpc_job
 
     @override
-    async def insert_hpcrun(self, slurmjobid: int, job_type: JobType, ref_id: int, correlation_id: str) -> HpcRun:
+    async def insert_hpcrun(
+        self,
+        slurmjobid: int | None,
+        job_type: JobType,
+        ref_id: int,
+        correlation_id: str,
+        backend: str = "slurm",
+        external_id: str | None = None,
+    ) -> HpcRun:
         async with self.async_session_maker() as session, session.begin():
             simulation_key = ref_id if job_type == JobType.SIMULATION else None
             simulator_key = ref_id if job_type == JobType.BUILD_CONTAINER else None
@@ -147,6 +169,8 @@ class HPCORMExecutor(HPCDatabaseService):
 
             orm_hpc_run = ORMHpcRun(
                 slurmjobid=slurmjobid,
+                backend=backend,
+                external_id=external_id if external_id is not None else (str(slurmjobid) if slurmjobid else None),
                 job_type=JobTypeDB.from_job_type(job_type),
                 status=JobStatusDB.RUNNING,
                 simulation_id=simulation_key,

@@ -1,0 +1,369 @@
+{
+  "$schema": "https://biosimulations.github.io/process-bigraph-lang/schemas/pbg-interfaces-1.schema.json",
+  "schema_version": "pbg-interfaces/1",
+  "environment": {
+    "name": "registry_env",
+    "image": "ghcr.io/biosimulations/registry_env:f10645d9db96012af5b844c704f6b129",
+    "python": "3.12.15",
+    "process_bigraph": "1.0.5",
+    "bigraph_schema": "1.0.14",
+    "packages": {
+      "biosim-toolkit": "0.1.0",
+      "pb_multiscale_actin": "1.3.1",
+      "pbsim-common": "0.1.2"
+    },
+    "roots": [
+      "biosim_toolkit",
+      "pb_multiscale_actin",
+      "pbsim_common"
+    ],
+    "generated_by": "process_bigraph_lang/v2/describe_env.py"
+  },
+  "components": [
+    {
+      "name": "DataGenerators",
+      "kind": "step",
+      "address": "local:!biosim_toolkit.sedml.DataGenerators",
+      "module": "biosim_toolkit.sedml",
+      "config_schema": {
+        "generators": "map",
+        "constants": "map[float]",
+        "skip": "integer"
+      },
+      "inputs": {
+        "result": "numeric_result"
+      },
+      "outputs": {
+        "data": "overwrite[map[string,list[float]]]"
+      },
+      "dynamic_ports": false,
+      "description": "`generators` maps each SED-ML data generator to its terms (`variable`, `coefficient`); a variable is `time`, a\nresult column (an SBML id), or a key of `constants` (constant parameters and compartments). `skip` drops that\nmany leading points (those before the SED-ML output start)."
+    },
+    {
+      "name": "Plots",
+      "kind": "step",
+      "address": "local:!biosim_toolkit.sedml.Plots",
+      "module": "biosim_toolkit.sedml",
+      "config_schema": {
+        "output_dir": "string",
+        "plots": "map"
+      },
+      "inputs": {
+        "data": "overwrite[map[string,list[float]]]"
+      },
+      "outputs": {},
+      "dynamic_ports": false,
+      "description": "`plots` maps each SED-ML plot to `file` (relative to `output_dir`), `name`, `kind` (`plot2D`, `plot3D`),\n`curves` (`name`, `x`, `y`: data generators), `surfaces` (`name`, `x`, `y`, `z`) and log axes; each is written\nas a Plotly figure with its data."
+    },
+    {
+      "name": "Report",
+      "kind": "step",
+      "address": "local:!biosim_toolkit.sedml.Report",
+      "module": "biosim_toolkit.sedml",
+      "config_schema": {
+        "output_dir": "string",
+        "reports": "map"
+      },
+      "inputs": {
+        "data": "overwrite[map[string,list[float]]]"
+      },
+      "outputs": {},
+      "dynamic_ports": false,
+      "description": "`reports` maps each SED-ML report to `file` (relative to `output_dir`), `name` and `data_sets` (`label`,\n`data_generator`); each is written as a CSV whose header is the labels."
+    },
+    {
+      "name": "ReaddyActinMembrane",
+      "kind": "process",
+      "address": "local:!pb_multiscale_actin.processes.readdy_actin_membrane.ReaddyActinMembrane",
+      "module": "pb_multiscale_actin.processes.readdy_actin_membrane",
+      "config_schema": {
+        "name": "string",
+        "internal_timestep": "float{0.1}",
+        "box_size": "tuple[float,float,float]{150, 150, 150}",
+        "periodic_boundary": "boolean{true}",
+        "reaction_distance": "float{1.0}",
+        "n_cpu": "integer{4}",
+        "only_linear_actin_constraints": "boolean{true}",
+        "reactions": "boolean{true}",
+        "dimerize_rate": "float{1e-30}",
+        "dimerize_reverse_rate": "float{1.4e-9}",
+        "trimerize_rate": "float{2.1e-2}",
+        "trimerize_reverse_rate": "float{1.4e-9}",
+        "pointed_growth_ATP_rate": "float{2.4e-5}",
+        "pointed_growth_ADP_rate": "float{2.95e-6}",
+        "pointed_shrink_ATP_rate": "float{8.0e-10}",
+        "pointed_shrink_ADP_rate": "float{3.0e-10}",
+        "barbed_growth_ATP_rate": "float{1e30}",
+        "barbed_growth_ADP_rate": "float{7.0e-5}",
+        "nucleate_ATP_rate": "float{2.1e-2}",
+        "nucleate_ADP_rate": "float{7.0e-5}",
+        "barbed_shrink_ATP_rate": "float{1.4e-9}",
+        "barbed_shrink_ADP_rate": "float{8.0e-9}",
+        "arp_bind_ATP_rate": "float{2.1e-2}",
+        "arp_bind_ADP_rate": "float{7.0e-5}",
+        "arp_unbind_ATP_rate": "float{1.4e-9}",
+        "arp_unbind_ADP_rate": "float{8.0e-9}",
+        "barbed_growth_branch_ATP_rate": "float{2.1e-2}",
+        "barbed_growth_branch_ADP_rate": "float{7.0e-5}",
+        "debranching_ATP_rate": "float{1.4e-9}",
+        "debranching_ADP_rate": "float{7.0e-5}",
+        "cap_bind_rate": "float{2.1e-2}",
+        "cap_unbind_rate": "float{1.4e-9}",
+        "hydrolysis_actin_rate": "float{1e-30}",
+        "hydrolysis_arp_rate": "float{3.5e-5}",
+        "nucleotide_exchange_actin_rate": "float{1e-5}",
+        "nucleotide_exchange_arp_rate": "float{1e-5}",
+        "verbose": "boolean{false}",
+        "use_box_actin": "boolean{true}",
+        "use_box_arp": "boolean{false}",
+        "use_box_cap": "boolean{false}",
+        "obstacle_radius": "float{0.0}",
+        "obstacle_diff_coeff": "float{0.0}",
+        "use_box_obstacle": "boolean{false}",
+        "position_obstacle_stride": "integer{0}",
+        "displace_pointed_end_tangent": "boolean{false}",
+        "displace_pointed_end_radial": "boolean{false}",
+        "tangent_displacement_nm": "float{0.0}",
+        "radial_displacement_radius_nm": "float{0.0}",
+        "radial_displacement_angle_deg": "float{0.0}",
+        "longitudinal_bonds": "boolean{true}",
+        "displace_stride": "integer{1}",
+        "bonds_force_multiplier": "float{0.2}",
+        "angles_force_constant": "float{1000.0}",
+        "dihedrals_force_constant": "float{1000.0}",
+        "actin_constraints": "boolean{true}",
+        "actin_box_center_x": "float{12.0}",
+        "actin_box_center_y": "float{0.0}",
+        "actin_box_center_z": "float{0.0}",
+        "actin_box_size_x": "float{20.0}",
+        "actin_box_size_y": "float{50.0}",
+        "actin_box_size_z": "float{50.0}",
+        "actin_concentration": "float{500.0}",
+        "add_extra_box": "boolean{false}",
+        "barbed_binding_site": "boolean{true}",
+        "binding_site_reaction_distance": "float{3.0}",
+        "add_membrane": "boolean{true}",
+        "membrane_center_x": "float{25.0}",
+        "membrane_center_y": "float{0.0}",
+        "membrane_center_z": "float{0.0}",
+        "membrane_size_x": "float{0.0}",
+        "membrane_size_y": "float{100.0}",
+        "membrane_size_z": "float{100.0}",
+        "membrane_particle_radius": "float{2.5}",
+        "obstacle_controlled_position_x": "float{0.0}",
+        "obstacle_controlled_position_y": "float{0.0}",
+        "obstacle_controlled_position_z": "float{0.0}",
+        "random_seed": "integer",
+        "total_steps": "float",
+        "arp23_concentration": "integer",
+        "cap_concentration": "integer",
+        "n_fixed_monomers_barbed": "integer{0}",
+        "n_fixed_monomers_pointed": "integer{3}",
+        "tangent_displace_speed_um_s": "float",
+        "plot_actin_compression": "boolean",
+        "visualize_edges": "boolean",
+        "visualize_normals": "boolean",
+        "visualize_control_pts": "boolean"
+      },
+      "inputs": {
+        "topologies": "map[overwrite[topology]]",
+        "particles": "map[overwrite[particle]]"
+      },
+      "outputs": {
+        "topologies": "map[overwrite[topology]]",
+        "particles": "map[overwrite[particle]]"
+      },
+      "dynamic_ports": false,
+      "description": "This process runs ReaDDy models with coarse-grained particle\nactin filaments and membrane patches."
+    },
+    {
+      "name": "SimulariumEmitter",
+      "kind": "step",
+      "address": "local:!pb_multiscale_actin.processes.simularium_emitter.SimulariumEmitter",
+      "module": "pb_multiscale_actin.processes.simularium_emitter",
+      "config_schema": {
+        "emit": "schema",
+        "output_dir": "string"
+      },
+      "inputs": null,
+      "outputs": {},
+      "dynamic_ports": true
+    },
+    {
+      "name": "ComparisonTool",
+      "kind": "step",
+      "address": "local:!pbsim_common.comparison.ComparisonTool",
+      "module": "pbsim_common.comparison",
+      "config_schema": {
+        "ignore_nans": "boolean",
+        "columns_of_interest": "list[string]"
+      },
+      "inputs": {
+        "results": "numeric_results"
+      },
+      "outputs": {
+        "comparison_result": "map[map[map[float]]]"
+      },
+      "dynamic_ports": false
+    },
+    {
+      "name": "MSEComparison",
+      "kind": "step",
+      "address": "local:!pbsim_common.comparison.MSEComparison",
+      "module": "pbsim_common.comparison",
+      "config_schema": {
+        "ignore_nans": "boolean",
+        "columns_of_interest": "list[string]"
+      },
+      "inputs": {
+        "results": "numeric_results"
+      },
+      "outputs": {
+        "comparison_result": "map[map[map[float]]]"
+      },
+      "dynamic_ports": false
+    },
+    {
+      "name": "CopasiSteadyStateStep",
+      "kind": "step",
+      "address": "local:!pbsim_common.simulators.copasi_process.CopasiSteadyStateStep",
+      "module": "pbsim_common.simulators.copasi_process",
+      "config_schema": {
+        "model_source": "string",
+        "time": "float"
+      },
+      "inputs": {
+        "species_concentrations": "map[float]",
+        "counts": "map[float]"
+      },
+      "outputs": {
+        "results": "any"
+      },
+      "dynamic_ports": false
+    },
+    {
+      "name": "CopasiUTCProcess",
+      "kind": "process",
+      "address": "local:!pbsim_common.simulators.copasi_process.CopasiUTCProcess",
+      "module": "pbsim_common.simulators.copasi_process",
+      "config_schema": {
+        "model_source": "string",
+        "time": "float",
+        "intervals": "integer"
+      },
+      "inputs": {
+        "species_concentrations": "map[float]",
+        "species_counts": "map[float]"
+      },
+      "outputs": {
+        "species_concentrations": "map[float]",
+        "fluxes": "map[float]",
+        "time": "list[float]"
+      },
+      "dynamic_ports": false
+    },
+    {
+      "name": "CopasiUTCStep",
+      "kind": "step",
+      "address": "local:!pbsim_common.simulators.copasi_process.CopasiUTCStep",
+      "module": "pbsim_common.simulators.copasi_process",
+      "config_schema": {
+        "model_source": "string",
+        "time": "float",
+        "n_points": "integer",
+        "output_dir": "string"
+      },
+      "inputs": {
+        "species_concentrations": "map[float]",
+        "species_counts": "map[float]"
+      },
+      "outputs": {
+        "result": "numeric_result"
+      },
+      "dynamic_ports": false
+    },
+    {
+      "name": "TelluriumSteadyStateStep",
+      "kind": "step",
+      "address": "local:!pbsim_common.simulators.tellurium_process.TelluriumSteadyStateStep",
+      "module": "pbsim_common.simulators.tellurium_process",
+      "config_schema": {
+        "model_source": "string"
+      },
+      "inputs": {
+        "species_concentrations": "map[float]",
+        "species_counts": "map[float]"
+      },
+      "outputs": {
+        "result": "map[numeric_result]"
+      },
+      "dynamic_ports": false
+    },
+    {
+      "name": "TelluriumStep",
+      "kind": "step",
+      "address": "local:!pbsim_common.simulators.tellurium_process.TelluriumStep",
+      "module": "pbsim_common.simulators.tellurium_process",
+      "config_schema": {},
+      "inputs": {
+        "species_concentrations": "map[float]",
+        "species_counts": "map[float]"
+      },
+      "outputs": {},
+      "dynamic_ports": false
+    },
+    {
+      "name": "TelluriumUTCStep",
+      "kind": "step",
+      "address": "local:!pbsim_common.simulators.tellurium_process.TelluriumUTCStep",
+      "module": "pbsim_common.simulators.tellurium_process",
+      "config_schema": {
+        "model_source": "string",
+        "time": "float",
+        "n_points": "integer",
+        "output_dir": "string"
+      },
+      "inputs": {
+        "species_concentrations": "map[float]",
+        "species_counts": "map[float]"
+      },
+      "outputs": {
+        "result": "numeric_result"
+      },
+      "dynamic_ports": false
+    },
+    {
+      "name": "StatsTool",
+      "kind": "step",
+      "address": "local:!pbsim_common.stats.StatsTool",
+      "module": "pbsim_common.stats",
+      "config_schema": {
+        "ignore_nans": "boolean"
+      },
+      "inputs": {
+        "compute_store": "array"
+      },
+      "outputs": {
+        "stats_result": "array"
+      },
+      "dynamic_ports": false
+    },
+    {
+      "name": "SumOfSquaresTool",
+      "kind": "step",
+      "address": "local:!pbsim_common.stats.SumOfSquaresTool",
+      "module": "pbsim_common.stats",
+      "config_schema": {
+        "ignore_nans": "boolean"
+      },
+      "inputs": {
+        "compute_store": "array"
+      },
+      "outputs": {
+        "stats_result": "array"
+      },
+      "dynamic_ports": false
+    }
+  ],
+  "errors": []
+}

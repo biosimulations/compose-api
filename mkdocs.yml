@@ -18,14 +18,16 @@ exclude_docs: |
   strategy.md
   plan-*.md
   ecosystem-repos.md
+  trd3-*.md
   cip/
   grant/
+  cli-auth-vs-vcell.md
 
 nav:
   - Home: index.md
   - Authentication: authentication.md
   - Web UI: webapp.md
-  - Dataset viewers (plan): plan-viewers.md
+  - Command line: cli.md
   - Modules: modules.md
 plugins:
   - search

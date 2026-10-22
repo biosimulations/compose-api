@@ -189,6 +189,10 @@ async def init_standalone(enable_ssl: bool = True) -> None:
         slurm_service=slurm_service,
         event_ingester=event_ingester,
     )
+    if _settings.build_backend == "k8s":
+        from compose_api.simulation.build_k8s import K8sPoller
+
+        job_monitor.register_backend("k8s", K8sPoller())  # container builds as Kubernetes Jobs
     set_job_monitor(job_monitor)
 
 

@@ -259,7 +259,7 @@ def test_simulators_table_shows_the_base_image(service: Callable[..., FakeServic
 def test_run_prints_the_ids_and_sends_the_simulator(service: Callable[..., FakeService], tmp_path: Path) -> None:
     fake = service()
     doc = tmp_path / "experiment.omex"
-    doc.write_bytes(b"PK")
+    doc.write_bytes(_zip({"manifest.xml": b"<omexManifest/>"}))  # an .omex must be a ZIP
     r = invoke("run", str(doc), "--simulator", "viva-pde-particle")
     assert r.exit_code == 0 and json.loads(r.stdout)["simulation_database_id"] == 7
     assert fake.requests[0].url.params["simulator"] == "viva-pde-particle"
@@ -268,7 +268,7 @@ def test_run_prints_the_ids_and_sends_the_simulator(service: Callable[..., FakeS
 def test_run_wait_download_extract(service: Callable[..., FakeService], tmp_path: Path) -> None:
     service([404, "pending", "running", "completed"])
     doc = tmp_path / "experiment.omex"
-    doc.write_bytes(b"PK")
+    doc.write_bytes(_zip({"manifest.xml": b"<omexManifest/>"}))  # an .omex must be a ZIP
     out = tmp_path / "out"
     r = invoke("run", str(doc), "--wait", "--poll", "0", "--download", str(out), "--extract")
     assert r.exit_code == 0, r.output
@@ -280,16 +280,16 @@ def test_run_wait_download_extract(service: Callable[..., FakeService], tmp_path
 def test_a_failed_job_exits_1(service: Callable[..., FakeService], tmp_path: Path) -> None:
     service(["running", "failed"])
     doc = tmp_path / "x.omex"
-    doc.write_bytes(b"PK")
+    doc.write_bytes(_zip({"manifest.xml": b"<omexManifest/>"}))  # an .omex must be a ZIP
     r = invoke("run", str(doc), "--wait", "--poll", "0", "--download", str(tmp_path / "out"))
     assert r.exit_code == 1 and json.loads(r.stdout)["status"] == "failed"
     assert not (tmp_path / "out").exists()
 
 
-def test_wait_timeout_exits_5(service: Callable[..., FakeService]) -> None:
+def test_wait_timeout_exits_7(service: Callable[..., FakeService]) -> None:
     service(["running"])
     r = invoke("wait", "7", "--poll", "0.01", "--wait-timeout", "0.05")
-    assert r.exit_code == 5
+    assert r.exit_code == 7
 
 
 def test_status_one_and_several(service: Callable[..., FakeService]) -> None:
@@ -331,19 +331,20 @@ def test_errors_have_messages_and_exit_codes(monkeypatch: pytest.MonkeyPatch, tm
         monkeypatch.setattr(cli_module, "make_session", make)
 
     doc = tmp_path / "x.omex"
-    doc.write_bytes(b"PK")
+    doc.write_bytes(_zip({"manifest.xml": b"<omexManifest/>"}))  # an .omex must be a ZIP
     respond(400, {"detail": {"message": "invalid document", "violations": ["state.x: unknown address"]}})
     r = invoke("run", str(doc))
-    assert r.exit_code == 3 and "invalid document" in r.stderr and "state.x: unknown address" in r.stderr
+    assert r.exit_code == 1 and "invalid document" in r.stderr and "state.x: unknown address" in r.stderr
     respond(404, {"detail": "Simulation 7 not found"})
     r = invoke("results", "7")
-    assert r.exit_code == 4 and "Simulation 7 not found" in r.stderr
+    # The message names the operation and status; the server's own text is not echoed (docs/cli.md).
+    assert r.exit_code == 1 and "HTTP 404" in r.stderr and "Simulation 7 not found" not in r.stderr
     respond(500, {"detail": "boom"})
-    assert invoke("version").exit_code == 3
+    assert invoke("version").exit_code == 1
     assert invoke("run", str(tmp_path / "missing.omex")).exit_code == 2  # typer validates the path
 
 
-def test_unreachable_service_exits_3(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_unreachable_service_exits_5(monkeypatch: pytest.MonkeyPatch) -> None:
     def refuse(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("connection refused", request=request)
 
@@ -351,7 +352,7 @@ def test_unreachable_service_exits_3(monkeypatch: pytest.MonkeyPatch) -> None:
         cli_module, "make_session", lambda s: ComposeSession(s.url, transport=httpx.MockTransport(refuse))
     )
     r = invoke("health")
-    assert r.exit_code == 3 and "cannot reach" in r.stderr
+    assert r.exit_code == 5 and "cannot reach" in r.stderr
 
 
 def test_openapi_diff_reports_skew(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -366,6 +367,19 @@ def test_openapi_diff_reports_skew(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cli_module, "fetch_spec", lambda settings: bundled_spec())
     assert invoke("openapi", "--diff").exit_code == 0
     assert json.loads(invoke("openapi").stdout)["info"]["title"]
+
+
+def test_fetch_spec_uses_the_selected_profile_unless_url_is_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[str] = []
+
+    def fake_get(url: str, **_kwargs: Any) -> httpx.Response:
+        seen.append(url)
+        return httpx.Response(200, json=bundled_spec(), request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    cli_module.fetch_spec(Settings(profile="local"))
+    cli_module.fetch_spec(Settings(profile="local", url="https://custom.example/", url_explicit=True))
+    assert seen == ["https://api.compose-api-local/openapi.json", "https://custom.example/openapi.json"]
 
 
 def test_events_pages_through_and_prints_json_lines(service: Callable[..., FakeService]) -> None:
@@ -414,7 +428,7 @@ def test_datasets_list_show_and_get(service: Callable[..., FakeService], tmp_pat
     assert json.loads(invoke("datasets", "show", DATASET_ID).stdout)["media_type"] == "text/csv"
     got = json.loads(invoke("datasets", "get", DATASET_ID, "--out", str(tmp_path)).stdout)
     assert got["files"] == [str(tmp_path / "a.csv")] and (tmp_path / "a.csv").read_bytes() == b"a,b\n"
-    assert invoke("datasets", "show", "00000000-0000-0000-0000-000000000000").exit_code == 4
+    assert invoke("datasets", "show", "00000000-0000-0000-0000-000000000000").exit_code == 1
 
 
 def test_simulations_list_and_show(service: Callable[..., FakeService]) -> None:
@@ -457,3 +471,10 @@ def test_every_command_takes_json(service: Callable[..., FakeService]) -> None:
     r = runner.invoke(app, ["--output", "table", "simulations", "show", "4334", "--json"])
     assert r.exit_code == 0 and json.loads(r.stdout)["event_count"] == 21
     assert json.loads(runner.invoke(app, ["--output", "table", "version", "--json"]).stdout) == "0.6.0"
+
+
+def test_token_flag_is_rejected_without_echoing_value() -> None:
+    sentinel = "SECRET-SENTINEL-TOKEN-991"
+    r = runner.invoke(app, ["--token", sentinel, "health"])
+    assert r.exit_code == 2
+    assert sentinel not in r.stdout + r.stderr

@@ -1,3 +1,4 @@
+import asyncio
 import importlib
 import logging
 import os
@@ -17,9 +18,11 @@ from compose_api.common.gateway.models import ServerMode
 from compose_api.config import get_settings
 from compose_api.dependencies import (
     get_job_monitor,
+    get_required_database_service,
     init_standalone,
     shutdown_standalone,
 )
+from compose_api.simulation import images
 from compose_api.version import __version__
 
 logger = logging.getLogger(__name__)
@@ -56,6 +59,12 @@ APP_ROUTERS = [
     "results",
     "compute",
     "datasets",
+    "registry",
+    "sedml",
+    "comparisons",
+    "sources",
+    "suites",
+    "auth",
 ]  # for now, just referencing core
 assets_dir = Path(get_settings().assets_dir)
 ACTIVE_URL = ServerMode.detect(assets_dir / "dev" / "config" / ".dev_env")
@@ -80,9 +89,17 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
         raise RuntimeError("JobMonitor is not initialized. Please check your configuration.")
     await job_monitor.start_polling(interval_seconds=5)  # configurable interval
 
+    # the backfill and verification of simulators' images (docs/plan-environment-builds.md, phase 2)
+    verifying = asyncio.create_task(
+        images.verify_images_periodically(
+            get_required_database_service().get_simulator_db(), get_settings().image_verify_interval_seconds
+        )
+    )
+
     try:
         yield
     finally:
+        verifying.cancel()
         await job_monitor.close()
     await shutdown_standalone()
 
@@ -113,7 +130,7 @@ def _openapi_with_optional_bearer() -> dict[str, Any]:
         "bearerFormat": "JWT",
         "description": "Optional Auth0 access token for this API. Omit it to call anonymously.",
     }
-    # Document-level, not per operation: openapi-python-client 0.29 types any operation carrying a
+    # Default is document-level: openapi-python-client 0.29 types any operation carrying a
     # `security` entry as requiring AuthenticatedClient, even when that entry allows anonymous ({}).
     schema["security"] = [{}, {BEARER_SCHEME_NAME: []}]
     return schema

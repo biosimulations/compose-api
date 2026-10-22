@@ -34,9 +34,14 @@ async def simulations(
     simulator = simulator or await sim_db.insert_simulator(definition, packages_used=None)
     assert simulator.container_def.containerization_engine == ContainerizationEngine.APPTAINER
 
-    async def simulation(name: str, owner: str | None = None, visibility: Visibility = Visibility.PUBLIC) -> int:
+    async def simulation(
+        name: str,
+        owner: str | None = None,
+        visibility: Visibility = Visibility.PUBLIC,
+        labelled: dict[str, object] | None = None,
+    ) -> int:
         sim = await sim_db.insert_simulation(
-            sim_request=simulation_request,
+            sim_request=simulation_request.model_copy(update=labelled or {}),
             experiment_id=f"exp-list-{name}",
             simulator_version=simulator,
             owner_sub=owner,
@@ -46,7 +51,14 @@ async def simulations(
 
     ids = {
         "submitting": await simulation("submitting"),
-        "completed": await simulation("completed"),
+        "completed": await simulation(
+            "completed",
+            labelled={
+                "labels": {"source": "biomodels", "model": "BIOMD0000000012", "solver": "copasi"},
+                "tags": ["repressilator", "demo"],
+                "description": "Elowitz 2000 on COPASI",
+            },
+        ),
         "private": await simulation("private", ALICE.subject, Visibility.PRIVATE),
     }
     run = await hpc_db.insert_hpcrun(
@@ -109,3 +121,26 @@ async def test_the_owner_sees_their_private_simulation(simulations: dict[str, in
         assert simulations["private"] in listed
         detail = (await http.get(f"/simulations/{simulations['private']}")).json()
         assert detail["visibility"] == "private" and detail["status"] == "submitting"
+
+
+@pytest.mark.asyncio
+async def test_labels_and_tags_are_listed_and_filter(simulations: dict[str, int]) -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
+        detail = (await http.get(f"/simulations/{simulations['completed']}")).json()
+        assert detail["labels"] == {"source": "biomodels", "model": "BIOMD0000000012", "solver": "copasi"}
+        assert detail["tags"] == ["repressilator", "demo"] and detail["description"] == "Elowitz 2000 on COPASI"
+        plain = (await http.get(f"/simulations/{simulations['submitting']}")).json()
+        assert (plain["labels"], plain["tags"], plain["description"]) == ({}, [], None)
+
+        async def ids(**params: str | list[str]) -> list[int]:
+            page = (await http.get("/simulations", params=params)).json()
+            return [s["simulation_id"] for s in page["simulations"]]
+
+        assert await ids(label="model:BIOMD0000000012") == [simulations["completed"]]
+        assert await ids(label=["source:biomodels", "solver:copasi"]) == [simulations["completed"]]
+        assert await ids(label=["source:biomodels", "solver:tellurium"]) == []
+        assert await ids(tag="demo") == [simulations["completed"]]
+        assert await ids(tag=["demo", "repressilator"]) == [simulations["completed"]]
+        assert await ids(tag=["demo", "other"]) == []
+        assert (await http.get("/simulations", params={"label": "colour:red"})).status_code == 400
+        assert (await http.get("/simulations", params={"label": "model"})).status_code == 400

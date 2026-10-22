@@ -1,0 +1,35 @@
+# The API's service account, allowed to run container builds as Kubernetes Jobs in its own namespace
+# (compose_api/simulation/build_k8s.py, settings.build_backend=k8s): create and read the Job, read its pods and their
+# logs (the build log route), and its events (a pod the namespace refuses to admit fails the build at once).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: compose-api-builds
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: compose-api-builds
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs", "jobs/status"]
+    verbs: ["create", "get", "list", "delete"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events"]
+    verbs: ["get", "list"]
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: compose-api-builds
+subjects:
+  - kind: ServiceAccount
+    name: compose-api-builds
+roleRef:
+  kind: Role
+  name: compose-api-builds
+  apiGroup: rbac.authorization.k8s.io

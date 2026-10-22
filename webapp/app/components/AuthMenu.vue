@@ -1,14 +1,31 @@
 <script setup lang="ts">
+import type { DropdownMenuItem } from '@nuxt/ui'
+
 // After ../platform/frontend/app/components/AuthMenu.client.vue. Renders nothing unless the API publishes an
-// Auth0 configuration (see plugins/auth.client.ts).
-const { enabled, isAuthenticated, isLoading, user, error, login, logout } = useAuth()
+// Auth0 configuration (see plugins/webapp-config.client.ts).
+const { enabled, isAuthenticated, isLoading, user, principal, error, login, signup, logout } = useAuth()
+
+const items = computed<DropdownMenuItem[][]>(() => [
+  [
+    {
+      type: 'label',
+      label: user.value?.email || user.value?.name || 'Signed in',
+      // Roles as the API sees them (GET /auth/me), which is what it authorizes by.
+      description: principal.value ? `Roles: ${principal.value.roles.join(', ') || 'none'}` : undefined
+    }
+  ],
+  [{ label: 'Sign out', icon: 'i-lucide-log-out', onSelect: () => logout() }]
+])
 </script>
 
 <template>
-  <div v-if="enabled" class="flex items-center gap-2">
+  <div v-if="enabled" class="flex items-center gap-1">
     <USkeleton v-if="isLoading" class="h-8 w-20" />
-    <UButton v-else-if="!isAuthenticated" label="Sign in" variant="ghost" color="neutral" leading-icon="i-lucide-user" @click="login()" />
-    <UDropdownMenu v-else :items="[[{ label: 'Sign out', icon: 'i-lucide-log-out', onSelect: () => logout() }]]">
+    <template v-else-if="!isAuthenticated">
+      <UButton label="Sign in" variant="ghost" color="neutral" leading-icon="i-lucide-user" @click="login()" />
+      <UButton label="Create account" variant="ghost" color="neutral" class="hidden sm:inline-flex" @click="signup()" />
+    </template>
+    <UDropdownMenu v-else :items="items">
       <UButton
         :label="user?.name || user?.email || 'Account'"
         leading-icon="i-lucide-user-circle"

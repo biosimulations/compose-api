@@ -51,6 +51,9 @@ export interface paths {
          * Run a simulation
          * @description `simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);
          *     the job then runs in that image instead of the shared container. Omitted: the shared container.
+         *
+         *     The run is labelled `source=upload` and `environment=<simulator or registry_env>`; `tags` and `description` are
+         *     stored with it as given (compose_api/simulation/labels.py) and filter `GET /simulations`.
          */
         post: operations["run-simulation"];
         delete?: never;
@@ -161,6 +164,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/results/simulator/build/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The SLURM log of a simulator's newest container build (its last 200 KB) */
+        get: operations["get-simulator-build-log"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/results/simulation/events": {
         parameters: {
             query?: never;
@@ -219,7 +239,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get the list of simulators */
+        /**
+         * Get the list of simulators
+         * @deprecated
+         */
         get: operations["get-simulator-list"];
         put?: never;
         post?: never;
@@ -236,7 +259,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get the list of processes */
+        /**
+         * Get the list of processes
+         * @deprecated
+         */
         get: operations["get-processes-list"];
         put?: never;
         post?: never;
@@ -253,7 +279,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get the list of processes */
+        /**
+         * Get the list of processes
+         * @deprecated
+         */
         get: operations["get-steps-list"];
         put?: never;
         post?: never;
@@ -336,6 +365,482 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/registry/environments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The environments documents run in, with what their interface manifests hold */
+        get: operations["list-environments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/environments/{name}/manifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An environment's interface manifest (pbg-interfaces/1), each component with its registry entry */
+        get: operations["get-environment-manifest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/environments/{name}/headers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An environment's interfaces as .pblang header files (one per module), and each class's declaration */
+        get: operations["get-environment-headers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The catalog: every registry entry with its curation level, pin and evidence, and the environments that provide its classes */
+        get: operations["list-registry-entries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/solvers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The solvers SED-ML runs can use: each one's class, environment, KiSAO algorithms and what it returns */
+        get: operations["list-solvers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/environments/{name}/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether an environment's current image is built, with its image records and newest build run */
+        get: operations["get-environment-images"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/environments/{name}/build": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Make an environment's current image available: 200 if it is, 202 once its pull or build has started */
+        post: operations["build-environment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/simulators/{simulator_id}/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether a simulator's image is built, with its image records and newest build run */
+        get: operations["get-simulator-images"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/simulators/{simulator_id}/build": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Make a simulator's image available: 200 if it is, 202 once its pull or build has started */
+        post: operations["build-simulator"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sedml/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Translate a SED-ML archive without running it: its tasks, and what each solver would run or why not */
+        post: operations["preview-sedml"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sedml/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run each task of a SED-ML archive on several solvers, one run per solver, grouped by a comparison */
+        post: operations["run-sedml"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/comparisons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List comparisons, newest first */
+        get: operations["list-comparisons"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/comparisons/{comparison_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One comparison: its runs, and per report and data set each solver pair's score */
+        get: operations["get-comparison"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/comparisons/{comparison_id}/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One report's columns from each run and each reference, for overlays */
+        get: operations["get-comparison-series"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sources/biomodels/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search EBI BioModels (manually curated models unless curated=false) */
+        get: operations["search-biomodels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sources/biomodels/{model_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One BioModels entry: name, curation status, latest revision */
+        get: operations["get-biomodel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sources/biomodels/{model_id}/omex": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The entry's COMBINE archive (its latest revision) */
+        get: operations["get-biomodel-omex"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sources/biomodels/{model_id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run a BioModels entry's SED-ML on several solvers (as /sedml/run) */
+        post: operations["run-biomodel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sources/biosimulations/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** biosimulations.org projects whose id contains q */
+        get: operations["search-biosimulations-projects"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sources/biosimulations/{project_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One biosimulations.org project: its run and the simulator that ran it */
+        get: operations["get-biosimulations-project"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sources/biosimulations/{project_id}/omex": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The project's archive */
+        get: operations["get-biosimulations-omex"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sources/biosimulations/{project_id}/reference": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The project's original results: each report as {label: values} */
+        get: operations["get-biosimulations-reference"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sources/biosimulations/{project_id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run a project's SED-ML on several solvers, its original results as the reference */
+        post: operations["run-biosimulations-project"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/suites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The suites */
+        get: operations["list-suites"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/suites/{name}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A suite's runs, newest first */
+        get: operations["list-suite-runs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/suites/{name}/runs/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One suite run: per source, agreement, references, and drift from the baseline run */
+        get: operations["get-suite-run"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/suites/{name}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run every source of the suite on its solvers (submitted in the background) */
+        post: operations["run-suite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the authenticated caller's identity */
+        get: operations["get-current-principal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -407,6 +912,42 @@ export interface components {
             /** Database Id */
             database_id: number;
         };
+        /** BiomodelHit */
+        BiomodelHit: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Format */
+            format?: string | null;
+            /** Url */
+            url?: string | null;
+        };
+        /** BiomodelInfo */
+        BiomodelInfo: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Format */
+            format?: string | null;
+            /** Curation */
+            curation?: string | null;
+            /** Revision */
+            revision?: number | null;
+            /** Publication */
+            publication?: string | null;
+            /** Url */
+            url: string;
+        };
+        /** Body_preview-sedml */
+        "Body_preview-sedml": {
+            /**
+             * Archive
+             * Format: binary
+             */
+            archive: string;
+        };
         /** Body_run-copasi */
         "Body_run-copasi": {
             /**
@@ -414,6 +955,14 @@ export interface components {
              * Format: binary
              */
             sbml: string;
+        };
+        /** Body_run-sedml */
+        "Body_run-sedml": {
+            /**
+             * Archive
+             * Format: binary
+             */
+            archive: string;
         };
         /** Body_run-simulation */
         "Body_run-simulation": {
@@ -432,6 +981,113 @@ export interface components {
             sbml: string;
         };
         /**
+         * CatalogEntry
+         * @description A registry entry as the catalog shows it (docs/plan-sedml.md, "Concepts"): what it is, how far it is trusted,
+         *     and which of this deployment's environments provide its classes. Most `listed` entries are in none.
+         */
+        CatalogEntry: {
+            /** Id */
+            id: string;
+            /** Package */
+            package: string;
+            /** Source */
+            source: string;
+            /** Version */
+            version?: string | null;
+            /** Commit */
+            commit?: string | null;
+            level: components["schemas"]["CurationLevel"];
+            /** Module Roots */
+            module_roots: string[];
+            /** Bundles */
+            bundles?: string[];
+            /** Evidence */
+            evidence?: string[];
+            /** Reviewer */
+            reviewer?: string | null;
+            /** Environments */
+            environments?: components["schemas"]["EntryEnvironment"][];
+        };
+        /**
+         * Comparison
+         * @description One SED-ML task run on several solvers. `result` is filled once every member has finished: per report and
+         *     data set label, each solver pair's score and whether it is close.
+         */
+        Comparison: {
+            /** Comparison Id */
+            comparison_id: number;
+            /** Created At */
+            created_at?: string | null;
+            /** Name */
+            name: string;
+            /** Source */
+            source: string;
+            /** Sedml */
+            sedml: string;
+            /** Task */
+            task: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "running" | "complete" | "incomplete";
+            /** Settings */
+            settings: {
+                [key: string]: unknown;
+            };
+            /** Members */
+            members: components["schemas"]["ComparisonMember"][];
+            /** Result */
+            result?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Close
+             * @description every compared data set close, every member completed
+             */
+            close?: boolean | null;
+        };
+        /** ComparisonMember */
+        ComparisonMember: {
+            /** Solver */
+            solver: string;
+            /** Simulation Id */
+            simulation_id: number;
+            /** Status */
+            status?: string | null;
+        };
+        /** ComparisonPage */
+        ComparisonPage: {
+            /** Comparisons */
+            comparisons: components["schemas"]["Comparison"][];
+            /** Total */
+            total: number;
+            /** Next Offset */
+            next_offset?: number | null;
+        };
+        /**
+         * ComparisonSeries
+         * @description One report's columns from each member (by solver) and each reference (by origin), for overlays.
+         */
+        ComparisonSeries: {
+            /** Report */
+            report: string;
+            /** Labels */
+            labels: string[];
+            /** Solvers */
+            solvers: {
+                [key: string]: {
+                    [key: string]: (number | null)[];
+                };
+            };
+            /** References */
+            references: {
+                [key: string]: {
+                    [key: string]: (number | null)[];
+                };
+            };
+        };
+        /**
          * ContainerizationEngine
          * @enum {integer}
          */
@@ -441,6 +1097,27 @@ export interface components {
             /** Representation */
             representation: string;
             containerization_engine: components["schemas"]["ContainerizationEngine"];
+        };
+        /**
+         * CurationLevel
+         * @description The curation ladder, lowest first. Order matters: comparisons use the declaration order.
+         * @enum {string}
+         */
+        CurationLevel: "listed" | "installable" | "tested" | "validated" | "curated";
+        /** CurrentPrincipalResponse */
+        CurrentPrincipalResponse: {
+            /** Issuer */
+            issuer: string;
+            /** Subject */
+            subject: string;
+            /** Audience */
+            audience: string[];
+            /** Roles */
+            roles: string[];
+            /** Scopes */
+            scopes: string[];
+            /** Permissions */
+            permissions: string[];
         };
         /**
          * Dataset
@@ -490,10 +1167,142 @@ export interface components {
             /** Next Offset */
             next_offset?: number | null;
         };
+        /**
+         * Drift
+         * @description One solver's result against its own result in the suite's baseline run.
+         */
+        Drift: {
+            /** Close */
+            close: boolean | null;
+            /** Worst Label */
+            worst_label?: string | null;
+            /** Worst Score */
+            worst_score?: number | string | null;
+        };
+        /**
+         * EntryEnvironment
+         * @description An environment that provides some of a registry entry's classes, and how many.
+         */
+        EntryEnvironment: {
+            /** Name */
+            name: string;
+            /** Components */
+            components: number;
+        };
+        /**
+         * EntryRef
+         * @description The registry entry a component belongs to (by module root), and its curation level.
+         */
+        EntryRef: {
+            /** Id */
+            id: string;
+            level: components["schemas"]["CurationLevel"];
+        };
+        /** EnvironmentHeaders */
+        EnvironmentHeaders: {
+            /** Environment */
+            environment: string;
+            /** Modules */
+            modules: components["schemas"]["HeaderModule"][];
+            /**
+             * Components
+             * @description Each class's declaration, by address
+             */
+            components: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * EnvironmentImage
+         * @description A built or pulled image of a simulator's definition (docs/plan-environment-builds.md, E3).
+         *
+         *     Images are write-once (E4): one that turns out missing is marked unavailable, never replaced in place.
+         */
+        EnvironmentImage: {
+            /** Database Id */
+            database_id: number;
+            /** Simulator Id */
+            simulator_id: number;
+            kind: components["schemas"]["ImageKind"];
+            /** Location */
+            location: string;
+            /** Digest */
+            digest?: string | null;
+            /** Size Bytes */
+            size_bytes?: number | null;
+            /** Hpcrun Id */
+            hpcrun_id?: number | null;
+            /**
+             * Available
+             * @default true
+             */
+            available: boolean;
+            /** Created At */
+            created_at?: string | null;
+            /** Verified At */
+            verified_at?: string | null;
+        };
+        /** EnvironmentSummary */
+        EnvironmentSummary: {
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "shared" | "prebuilt";
+            /**
+             * Simulator
+             * @description The value of /simulation/run's `simulator` for this environment
+             */
+            simulator: string | null;
+            /**
+             * Image
+             * @description The image this deployment runs it in
+             */
+            image: string | null;
+            /**
+             * Manifest Image
+             * @description The image the manifest was read from
+             */
+            manifest_image: string | null;
+            /**
+             * Stale
+             * @description The manifest was read from another image than the one deployed
+             */
+            stale: boolean;
+            /** Process Bigraph */
+            process_bigraph?: string | null;
+            /** Components */
+            components: number;
+            /** Errors */
+            errors: number;
+            /** Entries */
+            entries: components["schemas"]["EntryRef"][];
+        };
+        /** ExpectedFailure */
+        ExpectedFailure: {
+            /** Source */
+            source: string;
+            /** Solver */
+            solver?: string | null;
+            /** Reason */
+            reason: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HeaderModule */
+        HeaderModule: {
+            /** Module */
+            module: string;
+            /**
+             * Text
+             * @description The module's header file (`module …;` and one declaration per class)
+             */
+            text: string;
         };
         /** HpcRun */
         HpcRun: {
@@ -501,6 +1310,13 @@ export interface components {
             database_id: number;
             /** Slurmjobid */
             slurmjobid: number | null;
+            /**
+             * Backend
+             * @default slurm
+             */
+            backend: string;
+            /** External Id */
+            external_id?: string | null;
             /** Correlation Id */
             correlation_id: string;
             job_type: components["schemas"]["JobType"];
@@ -519,6 +1335,99 @@ export interface components {
             trace_id?: string | null;
         };
         /**
+         * ImageKind
+         * @enum {string}
+         */
+        ImageKind: "sif" | "oci";
+        /**
+         * ImageState
+         * @enum {string}
+         */
+        ImageState: "available" | "building" | "failed" | "missing";
+        /**
+         * ImageStatus
+         * @description Whether a simulator's image is there to run from, and the records behind that answer.
+         */
+        ImageStatus: {
+            /** Simulator Id */
+            simulator_id: number;
+            /** Container Def Hash */
+            container_def_hash: string;
+            /**
+             * Environment
+             * @description The environment whose current definition this is
+             */
+            environment?: string | null;
+            state: components["schemas"]["ImageState"];
+            /** @description The available image runs use */
+            image?: components["schemas"]["EnvironmentImage"] | null;
+            /** @description The newest build run of the definition */
+            build?: components["schemas"]["HpcRun"] | null;
+            /**
+             * Images
+             * @description Every image recorded, newest first
+             */
+            images?: components["schemas"]["EnvironmentImage"][];
+        };
+        /**
+         * InterfaceComponent
+         * @description One step or process class, as `pbg-interfaces/1` describes it; unknown keys pass through.
+         */
+        InterfaceComponent: {
+            /** Name */
+            name: string;
+            /** Kind */
+            kind: string;
+            /** Address */
+            address: string;
+            /** Module */
+            module?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Config Schema */
+            config_schema?: {
+                [key: string]: unknown;
+            };
+            /** Inputs */
+            inputs?: {
+                [key: string]: unknown;
+            } | null;
+            /** Outputs */
+            outputs?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Dynamic Ports
+             * @default false
+             */
+            dynamic_ports: boolean;
+            registry_entry?: components["schemas"]["EntryRef"] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * InterfaceManifest
+         * @description An environment's interface manifest (`pbg-interfaces/1`), with each component's registry entry added.
+         */
+        InterfaceManifest: {
+            /** $Schema */
+            $schema?: string | null;
+            /** Schema Version */
+            schema_version: string;
+            /** Environment */
+            environment?: {
+                [key: string]: unknown;
+            } | null;
+            /** Components */
+            components: components["schemas"]["InterfaceComponent"][];
+            /** Errors */
+            errors?: {
+                [key: string]: string;
+            }[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * JobStatus
          * @enum {string}
          */
@@ -533,6 +1442,23 @@ export interface components {
          * @enum {string}
          */
         PackageType: "pypi" | "conda";
+        /** ProjectInfo */
+        ProjectInfo: {
+            /** Id */
+            id: string;
+            /** Run */
+            run: string;
+            /** Created */
+            created?: string | null;
+            /** Updated */
+            updated?: string | null;
+            /** Simulator */
+            simulator?: string | null;
+            /** Simulator Version */
+            simulator_version?: string | null;
+            /** Url */
+            url: string;
+        };
         /** RegisteredPackage */
         RegisteredPackage: {
             /** Database Id */
@@ -650,6 +1576,71 @@ export interface components {
             roots: components["schemas"]["SpanTree"][];
         };
         /**
+         * SedmlFinding
+         * @description A finding of the translation (process-bigraph-lang's `X4xx`) or of the checker on a solver's instance.
+         */
+        SedmlFinding: {
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "error" | "warning" | "info";
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Solver */
+            solver?: string | null;
+            /** Task */
+            task?: string | null;
+            /** Path */
+            path?: string | null;
+        };
+        /** SedmlPreview */
+        SedmlPreview: {
+            /** Source */
+            source: string;
+            /** Tasks */
+            tasks: components["schemas"]["SedmlTask"][];
+            /** Findings */
+            findings: components["schemas"]["SedmlFinding"][];
+        };
+        /** SedmlRunResult */
+        SedmlRunResult: {
+            /** Comparisons */
+            comparisons: components["schemas"]["Comparison"][];
+            /** Findings */
+            findings: components["schemas"]["SedmlFinding"][];
+        };
+        /**
+         * SedmlTask
+         * @description One SED-ML task: its translation's template text, the solvers that accept it, and its reports and plots.
+         */
+        SedmlTask: {
+            /** Sedml */
+            sedml: string;
+            /** Task */
+            task: string;
+            /** Name */
+            name: string;
+            /** Template */
+            template: string;
+            /**
+             * Solvers
+             * @description the solvers whose instance compiled
+             */
+            solvers: string[];
+            /**
+             * Refused
+             * @description the solvers refused by an error finding
+             */
+            refused?: string[];
+            /** Reports */
+            reports?: string[];
+            /** Plots */
+            plots?: string[];
+        };
+        /**
          * SimulationDetail
          * @description A simulation with what its run recorded.
          */
@@ -682,6 +1673,14 @@ export interface components {
             error_message?: string | null;
             /** Trace Id */
             trace_id?: string | null;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            };
+            /** Tags */
+            tags?: string[];
+            /** Description */
+            description?: string | null;
             /**
              * Event Count
              * @default 0
@@ -748,6 +1747,14 @@ export interface components {
             error_message?: string | null;
             /** Trace Id */
             trace_id?: string | null;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            };
+            /** Tags */
+            tags?: string[];
+            /** Description */
+            description?: string | null;
         };
         /** SimulatorVersion */
         SimulatorVersion: {
@@ -761,6 +1768,29 @@ export interface components {
             /** Created At */
             created_at?: string | null;
         };
+        /** Solver */
+        Solver: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Role
+             * @constant
+             */
+            role: "TimeCourseSolver";
+            /** Environment */
+            environment: string;
+            /** Address */
+            address: string;
+            /**
+             * Algorithms
+             * @description KiSAO terms it implements, its default first
+             */
+            algorithms: string[];
+            /** Provides */
+            provides?: string[];
+        };
         /**
          * SpanTree
          * @description A span with its own events (those whose ``span_id`` is the span's) and its children, by start time.
@@ -771,6 +1801,102 @@ export interface components {
             events?: components["schemas"]["RunEvent"][];
             /** Children */
             children?: components["schemas"]["SpanTree"][];
+        };
+        /** Suite */
+        Suite: {
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Sources */
+            sources: string[];
+            /** Solvers */
+            solvers?: string[] | null;
+            tolerances?: components["schemas"]["Tolerances"];
+            /**
+             * Baseline
+             * @description the accepted suite run that later runs are compared with
+             */
+            baseline?: number | null;
+            /** Expected */
+            expected?: components["schemas"]["ExpectedFailure"][];
+        };
+        /** SuiteRunInfo */
+        SuiteRunInfo: {
+            /** Number */
+            number: number;
+            /** Created At */
+            created_at: string | null;
+            /** Status */
+            status: string;
+        };
+        /** SuiteRunRow */
+        SuiteRunRow: {
+            /** Source */
+            source: string;
+            /** Task */
+            task?: string | null;
+            /** Comparison Id */
+            comparison_id?: number | null;
+            /** Status */
+            status: string;
+            /** Close */
+            close?: boolean | null;
+            /** Close To References */
+            close_to_references?: boolean | null;
+            /** Worst Label */
+            worst_label?: string | null;
+            /** Worst Score */
+            worst_score?: number | string | null;
+            /** Drift */
+            drift?: {
+                [key: string]: components["schemas"]["Drift"];
+            } | null;
+            /** Expected */
+            expected?: string | null;
+            /** Failure */
+            failure?: string | null;
+        };
+        /** SuiteRunView */
+        SuiteRunView: {
+            /** Suite */
+            suite: string;
+            /** Number */
+            number: number;
+            /** Created At */
+            created_at: string | null;
+            /** Status */
+            status: string;
+            /** Baseline */
+            baseline: number | null;
+            /** Rows */
+            rows: components["schemas"]["SuiteRunRow"][];
+            /** Summary */
+            summary: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * Tolerances
+         * @description The platform's closeness score: close when `max |a-b| / (atol + rtol*|b|) < 1`, with
+         *     `atol = max(abs_tol_min, max|a|*abs_tol_scale, max|b|*abs_tol_scale)` (docs/plan-sedml.md, D4).
+         */
+        Tolerances: {
+            /**
+             * Rel Tol
+             * @default 0.0001
+             */
+            rel_tol: number;
+            /**
+             * Abs Tol Min
+             * @default 0.001
+             */
+            abs_tol_min: number;
+            /**
+             * Abs Tol Scale
+             * @default 0.00001
+             */
+            abs_tol_scale: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -880,6 +2006,10 @@ export interface operations {
                 interval_time?: number;
                 batch_submission?: boolean;
                 simulator?: string | null;
+                /** @description Tags to find the run by later; at most 20, each up to 64 characters */
+                tags?: string[] | null;
+                /** @description What the run is for; up to 2000 characters */
+                description?: string | null;
             };
             header?: never;
             path?: never;
@@ -927,6 +2057,10 @@ export interface operations {
                 simulator?: string | null;
                 /** @description Only simulations created at or after this time */
                 since?: string | null;
+                /** @description Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, solver, model, project, sedml_task, comparison, collection, suite_run */
+                label?: string[] | null;
+                /** @description Only simulations with this tag; repeatable, all must match */
+                tag?: string[] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -1121,6 +2255,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HpcRun"];
+                };
+            };
+            /** @description The requested resource does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "get-simulator-build-log": {
+        parameters: {
+            query: {
+                simulator_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
                 };
             };
             /** @description The requested resource does not exist */
@@ -1492,6 +2664,1090 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    "list-environments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentSummary"][];
+                };
+            };
+        };
+    };
+    "get-environment-manifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterfaceManifest"];
+                };
+            };
+            /** @description No such environment here, or no manifest has been generated for it */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "get-environment-headers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentHeaders"];
+                };
+            };
+            /** @description No such environment here, or no manifest has been generated for it */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description process-bigraph-lang is not installed in this deployment */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "list-registry-entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogEntry"][];
+                };
+            };
+        };
+    };
+    "list-solvers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Solver"][];
+                };
+            };
+        };
+    };
+    "get-environment-images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageStatus"];
+                };
+            };
+            /** @description No such environment here */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "build-environment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageStatus"];
+                };
+            };
+            /** @description Its pull or build has started (or was already under way) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageStatus"];
+                };
+            };
+            /** @description No such environment here */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "get-simulator-images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                simulator_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageStatus"];
+                };
+            };
+            /** @description No such simulator */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "build-simulator": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                simulator_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageStatus"];
+                };
+            };
+            /** @description Its pull or build has started (or was already under way) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageStatus"];
+                };
+            };
+            /** @description No such simulator */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "preview-sedml": {
+        parameters: {
+            query?: {
+                /** @description Solvers to run (registry/solvers.yaml); all when omitted */
+                solvers?: string[] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview-sedml"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedmlPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "run-sedml": {
+        parameters: {
+            query?: {
+                /** @description Solvers to run (registry/solvers.yaml); all when omitted */
+                solvers?: string[] | null;
+                /** @description Only these SED-ML task ids; all when omitted */
+                task?: string[] | null;
+                /** @description Tags for every run */
+                tags?: string[] | null;
+                description?: string | null;
+                rel_tol?: number;
+                abs_tol_min?: number;
+                abs_tol_scale?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_run-sedml"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedmlRunResult"];
+                };
+            };
+            /** @description Not an archive, an unknown solver, a bad tag, or no task any solver accepted */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "list-comparisons": {
+        parameters: {
+            query?: {
+                /** @description Only this source, e.g. upload:x.omex or biomodels:BIOMD… */
+                source?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComparisonPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "get-comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comparison_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Comparison"];
+                };
+            };
+            /** @description No such comparison */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "get-comparison-series": {
+        parameters: {
+            query: {
+                report: string;
+            };
+            header?: never;
+            path: {
+                comparison_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComparisonSeries"];
+                };
+            };
+            /** @description No such comparison or report */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "search-biomodels": {
+        parameters: {
+            query: {
+                q: string;
+                limit?: number;
+                curated?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BiomodelHit"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The upstream service did not answer as expected */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "get-biomodel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BiomodelInfo"];
+                };
+            };
+            /** @description No such model or project upstream */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The upstream service did not answer as expected */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "get-biomodel-omex": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such model or project upstream */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The upstream service did not answer as expected */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "run-biomodel": {
+        parameters: {
+            query?: {
+                /** @description Solvers to run (registry/solvers.yaml); all when omitted */
+                solvers?: string[] | null;
+                /** @description Only these SED-ML task ids; all when omitted */
+                task?: string[] | null;
+                /** @description Tags for every run */
+                tags?: string[] | null;
+                description?: string | null;
+            };
+            header?: never;
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedmlRunResult"];
+                };
+            };
+            /** @description No such model or project upstream */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The upstream service did not answer as expected */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "search-biosimulations-projects": {
+        parameters: {
+            query?: {
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The upstream service did not answer as expected */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "get-biosimulations-project": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectInfo"];
+                };
+            };
+            /** @description No such model or project upstream */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The upstream service did not answer as expected */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "get-biosimulations-omex": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such model or project upstream */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The upstream service did not answer as expected */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "get-biosimulations-reference": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: {
+                            [key: string]: number[];
+                        };
+                    };
+                };
+            };
+            /** @description No such model or project upstream */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The upstream service did not answer as expected */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "run-biosimulations-project": {
+        parameters: {
+            query?: {
+                /** @description Solvers to run (registry/solvers.yaml); all when omitted */
+                solvers?: string[] | null;
+                /** @description Only these SED-ML task ids; all when omitted */
+                task?: string[] | null;
+                /** @description Tags for every run */
+                tags?: string[] | null;
+                description?: string | null;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedmlRunResult"];
+                };
+            };
+            /** @description No such model or project upstream */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The upstream service did not answer as expected */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "list-suites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suite"][];
+                };
+            };
+        };
+    };
+    "list-suite-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuiteRunInfo"][];
+                };
+            };
+            /** @description No such suite */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "get-suite-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuiteRunView"];
+                };
+            };
+            /** @description No such suite or run */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "run-suite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuiteRunInfo"];
+                };
+            };
+            /** @description No such suite */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "get-current-principal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentPrincipalResponse"];
+                };
+            };
+            /** @description Missing or invalid bearer credentials */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

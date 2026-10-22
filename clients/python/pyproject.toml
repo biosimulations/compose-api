@@ -1,7 +1,7 @@
 [project]
 name = "compose-api-client"
 # Released in lock-step with the service (docs/strategy.md, packaging): tag.sh bumps both.
-version = "0.7.8"
+version = "0.7.30"
 description = "Python client for compose-api: generated from its OpenAPI spec, plus a hand-written application layer"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -13,8 +13,30 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+auth = [
+    "authlib>=1.8.0,<2",
+    "joserfc>=1.7.5,<2",
+    "keyring>=25.7,<26",
+    "platformdirs>=4.5.1,<5",
+    "portalocker>=3.2,<5",
+    "pydantic>=2.11.5,<3",
+    "pyjwt[crypto]>=2.15.0,<3",
+    "pywin32>=311 ; sys_platform == 'win32'",
+]
+# [cli] lists [auth]'s dependencies itself rather than naming compose-api-client[auth]: the build flattens such a
+# self-reference anyway. tests/cli/test_packaging.py keeps the two lists in step.
 cli = [
-    "typer>=0.16.1",
+    "authlib>=1.8.0,<2",
+    "joserfc>=1.7.5,<2",
+    "keyring>=25.7,<26",
+    "platformdirs>=4.5.1,<5",
+    "portalocker>=3.2,<5",
+    "pydantic>=2.11.5,<3",
+    "pyjwt[crypto]>=2.15.0,<3",
+    "pywin32>=311 ; sys_platform == 'win32'",
+    # >=0.18: older releases do not enforce required arguments under Click 8.3 (a missing one crashed). <0.26: later
+    # releases vendor their own Click, so the click types this CLI checks for (Context, ClickException) never match.
+    "typer>=0.18,<0.26",
     "rich>=13.7",
     "click>=8.1",  # imported directly (click.Context), not only through typer
 ]

@@ -15,6 +15,8 @@ from compose_api.simulation import handlers
 from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import (
+    EnvironmentImage,
+    ImageKind,
     RemoteContainerImage,
     SimulationRequest,
     SimulatorVersion,
@@ -94,6 +96,16 @@ def _version(definition_text: str) -> SimulatorVersion:
     )
 
 
+class _NoImages:
+    """No image recorded yet; records what the pull leaves (the store is not mounted here, so records are trusted)."""
+
+    async def get_available_image(self, simulator_id: int, kind: ImageKind) -> None:
+        return None
+
+    async def record_image(self, simulator_id: int, kind: ImageKind, location: str, **_: object) -> EnvironmentImage:
+        return EnvironmentImage(database_id=1, simulator_id=simulator_id, kind=kind, location=location)
+
+
 @pytest.mark.asyncio
 async def test_a_prebuilt_simulator_is_pulled_from_its_own_image() -> None:
     service = _RecordingService()
@@ -103,6 +115,7 @@ async def test_a_prebuilt_simulator_is_pulled_from_its_own_image() -> None:
         hpc_db=cast(Any, None),
         job_monitor=cast(Any, None),
         random_string="abc1234",
+        simulator_db=cast(Any, _NoImages()),
     )
     assert [p.source_url for p in service.pulled] == [f"docker://{IMAGE}"]
 
@@ -119,6 +132,7 @@ async def test_the_shared_simulator_is_still_pulled_by_hash() -> None:
             hpc_db=cast(Any, None),
             job_monitor=cast(Any, None),
             random_string="abc1234",
+            simulator_db=cast(Any, _NoImages()),
         )
     assert [p.source_url for p in service.pulled] == [
         f"docker://ghcr.io/example/registry_env:{version.container_def_hash}"

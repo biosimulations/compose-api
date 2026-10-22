@@ -9,7 +9,8 @@ Dependencies are managed with `uv` (`requires-python` floor 3.13.2; the local ru
 ```bash
 make install                 # uv sync + install pre-commit hooks
 make run                     # uvicorn compose_api.api.main:app --reload on :8000
-make check                   # uv lock --locked, pre-commit (ruff lint+format), mypy --strict, deptry
+make check                   # uv lock --locked, pre-commit (ruff lint+format), mypy --strict (and the
+                             # hand-written client again as Python 3.11, its floor), deptry
                              # `git add` new files FIRST: pre-commit only sees tracked files,
                              # so an untracked file passes here and fails in CI
 make test                    # pytest with coverage
@@ -44,11 +45,11 @@ Web UI (`webapp/`, Nuxt 4 + Nuxt UI static SPA served by the API at `/ui`; [`doc
 `webapp/app/api/schema.d.ts` is generated from the spec (`make clients` regenerates it; CI fails when stale) — never
 hand-edit. Use standard libraries there (VueUse, openapi-fetch, PapaParse, Nuxt UI components) over ad hoc code.
 
-Command line: `uv run compose-api --help` (the `compose-api-client[cli]` extra; guide and reference in
-[`docs/cli.md`](docs/cli.md), `make cli-docs` regenerates the reference). Every API operation must be claimed by a
-command (`@claims` in `compose_api_client/cli/commands.py`); `tests/client/test_cli.py` fails otherwise, so a new
-endpoint needs a command in the same PR. Hand-written client code lives in `compose_api_client/ext/` and `cli/`,
-which `make clients` preserves.
+Command line: `uv run compose-api --help` (the `compose-api-client[cli]` extra, which includes the `[auth]`
+dependencies; guide and reference in [`docs/cli.md`](docs/cli.md), `make cli-docs` regenerates the reference). Every API
+operation must be claimed by a command (`@claims` in `compose_api_client/cli/commands.py`); `tests/client/test_cli.py`
+fails otherwise, so a new endpoint needs a command in the same PR. Hand-written client code lives in
+`compose_api_client/ext/`, `cli/`, `auth/`, and `profiles.py`, which `make clients` preserves.
 
 Generation is deterministic (`scripts/generate-api-client.sh`): the generator's post-hooks are off and the script
 formats with the locked ruff and this repo's settings, so the committed client is byte-for-byte what `make clients`
@@ -130,7 +131,7 @@ themselves when the service is `None`. Two consequences worth knowing:
 **Routers** are registered by name from `APP_ROUTERS` in `api/main.py` via `importlib`, and each module must expose a
 module-level `config = RouterConfig(router=APIRouter(), prefix=..., dependencies=[])`. Registration failures are logged
 and swallowed — an import error in a router silently drops its endpoints rather than failing startup. Prefixes:
-`/simulation` (submit), `/results` (status, results file, events, trace), `/core` (simulator/process/step catalogs),
+`/simulation` (submit), `/results` (status, results file, events, trace), `/core` (deprecated Postgres simulator/process/step lists),
 `/curated` (pre-baked copasi/tellurium runs), `/simulations` (listing), `/datasets` (a run's files). Every endpoint sets an explicit `operation_id` because those become the generated
 client's method names.
 
@@ -151,9 +152,10 @@ both API overlays load `config/compose-api-rke`; the local overlay overrides onl
 `behavior: merge` generator (`overlays/compose-api-local/auth0.env`); `config/compose-api-local` is used only by the
 migration job. Every principal carries `roles`: always `DEFAULT_ROLE` ("user", the tenant role owned by auth0-pulumi's
 biosim-platform stack) plus any names in the `ROLES_CLAIM` (`https://api.biosimulations.org/roles`) claim written by
-the tenant's post-login "BioSim Roles" Action. Anonymous is `principal is None`, so no role. The only role checked is
-`authorization.ADMIN_ROLE` ("admin"), which reads private simulations; none exist until submissions stamp an owner, so
-it changes nothing yet. Keep the role and claim names in step with auth0-pulumi.
+the tenant's post-login "BioSim Roles" Action. Anonymous is `principal is None`, so no role. Admin read-all bypass on
+private simulations is gated by `Settings.admin_role` (default `""`, which disables admin bypass so tenant-wide `admin`
+does not automatically read private simulations); none exist until submissions stamp an owner. Keep the role and claim
+names in step with auth0-pulumi.
 
 **HPC layer.** `SSHService` (asyncssh: `run_command`, `scp_upload`, `scp_download`) → `SlurmService`
 (`sbatch --parsable`, `squeue`, `sacct` parsing into `SlurmJob`) → `SimulationServiceHpc`, which writes sbatch scripts
@@ -168,11 +170,40 @@ decision 5): pinned entries, each with `module_roots`, a curation `level` and `e
 `registry.validation.validate_submission` before anything is recorded: it opens every composite document in the
 upload (nested bundle archives included) and refuses any process address that is not `local:<module>.<Class>` under
 a registered entry at level `tested` or higher in the `registry_env` bundle, with a 400 listing each address.
-Non-`local` protocols and the arbitrary-import `local:!` form are refused even under `address_policy=warn`. The
+Non-`local` protocols and the arbitrary-import `local:!` form are refused even under `address_policy=warn`, and
+for a prebuilt simulator (`?simulator=`), whose classes are not looked up (`validate_submission(..., registry=False)`). The
 container would otherwise run whatever it is sent, so this is the only check. Adding a simulator to what the service
 runs means a manifest entry *and* the library in `simulation/simulator_registry.json`. `registry/catalog.yaml` is
 generated (`uv run python -m compose_api.registry.catalog`, read-only against GitHub) and lists every vivarium-collective
 catalog wrapper at `listed`; never hand-edit it — raising an entry means adding it to `manifest.yaml`, which wins.
+
+**Environments and interface manifests.** `registry/environments.yaml` lists the environments documents run in
+(`registry_env`, and each prebuilt image by its simulator name) and how to enter each one's Python.
+`registry/manifests/<name>.json` is generated, never hand-edited: `uv run python -m compose_api.registry.generate`
+(Docker; CI's `registry-manifests.yml` opens a PR) runs process-bigraph-lang's standalone describe script, pinned in
+`environments.yaml`, inside each image over the module roots of the entries whose `bundles` name it. The format is the
+shared `pbg-interfaces/1`. `GET /registry/environments[/{name}/manifest]` serves them to the web app. A test fails when
+a committed manifest was read from another image than the one deployed (regenerate it) or lists an unregistered
+component. Plan: `docs/plan-authoring.md`. `GET /registry/entries` is the catalog (every entry, its level, the
+environments providing its classes); catalog = discovery and trust, environment = execution (`docs/plan-sedml.md`).
+
+**Labels, tags, description** (`simulation/labels.py`, `docs/plan-sedml.md`). The service writes `simulation.labels`
+under reserved keys only (`source`, `environment`, `solver`, `model`, ...); submitters give `tags` and a
+`description` at submission (runs are anonymous; nothing edits them). `GET /simulations?label=k:v&tag=t` filters by
+JSONB/array containment (GIN indexes). Add a key to `LABEL_KEYS` before writing it.
+
+**Solvers** (`registry/solvers.yaml`, `registry/solvers.py`): the classes a SED-ML run can fill the TimeCourseSolver role
+with, per environment, with their KiSAO algorithms; served at `GET /registry/solvers`. A solver's class must be in its
+environment's committed manifest at `tested` or above (`tests/registry/test_solvers.py`). The SED-ML adapter steps are
+biosim-toolkit's (`local:biosim_toolkit.sedml.*`, installed in registry_env).
+
+**SED-ML runs** (`compose_api/sedml/`, routers `sedml.py`, `comparisons.py`; `docs/plan-sedml.md`). process-bigraph-lang
+needs bigraph-schema 1.6, so it is NOT a dependency of this environment: `translator.py` runs its CLI with
+`settings.pblang_python` (`.pblang/`; `make pblang`, CI and the API image install `sedml/pblang-requirements.txt`).
+`/sedml/run` submits one run per task and solver (the original archive rides along as `source.omex`, the
+`sedml-omex` dataset) grouped by a `comparison`, computed from the members' report CSVs when all have finished.
+Tests needing the translator skip without `.pblang/`. Suites: `examples/<name>/suite.yaml` (`sedml/suites.py`, `sedml/suite_runs.py`, `/suites`),
+rerun monthly by `.github/workflows/sedml-suites.yml`; a baseline is accepted by a PR setting `baseline`.
 
 **Job tracking.** An `HpcRun` row links a SLURM job id, a `correlation_id`, and a `JobType`
 (`SIMULATION` / `BUILD_CONTAINER`). `JobMonitor` updates status two ways: a 5-second polling loop reconciling
@@ -191,7 +222,8 @@ parsing, span folding and Chrome Trace renderer are ported from viva-core.
 
 **Datasets (`observability/datasets.py`, `api/routers/datasets.py`).** Every `artifact.written` event becomes a
 `dataset` row (`DatasetsDatabaseService.register`, called by the ingester). The job script emits one per file under
-`output/` (kept now) and for `results.zip`, with size and sha256, and one for the SLURM log `job.out` (kind
+`output/` (kept now) and for `results.zip`, with size and sha256, one at job start for the submitted input `<experiment_id>.<suffix>` (kind `input`, with the request's file
+type, end time and batch flag; `python -m compose_api.observability.backfill_inputs` registers older runs'), and one for the SLURM log `job.out` (kind
 `log`, which simulation jobs now write in their experiment directory instead of `htclogs/`). A simulator's own event (any component but
 `compose_api.job`) wins over that manifest. Paths are relative to the experiment directory, and
 `resolve_content_path` keeps content reads inside it. A zarr store (`*.fenics` results bundle, `*.zarr`) is ONE
@@ -209,8 +241,9 @@ is Postgres.
 
 **Authorization.** Every route that reads something a simulation owns resolves it through
 `compose_api.authorization.readable_simulation` (or `readable_simulation_ids`), which applies `can_read`. Ownership
-(`simulation.owner_sub`, `visibility`) lives on the simulation only; runs, events and datasets inherit it. A simulation
-the caller may not read is a 404. The caller is `get_caller`, which returns the verified principal from
+(`simulation.owner_sub`, `visibility`) lives on the simulation only; runs, events and datasets inherit it, and a
+comparison is readable only when every member simulation is (`/comparisons`). A simulation the caller may not read is a
+404. The caller is `get_caller`, which returns the verified principal from
 `compose_api.authentication` (None when anonymous); tests override `get_caller` to pick one. Nothing stamps an owner
 at submit yet (plan-observability step 5), so every simulation is public. See `docs/plan-observability.md` (O7, O8).
 
@@ -242,9 +275,10 @@ This service is one side of a three-package loop. `../pbest` is checked out next
   `clients/python/compose_api_client/` and, only when `LIB_DIR` is set, the separate
   [compose-api-client](https://github.com/biosimulations/compose-api-client) repo (PyPI 0.2.x, what pbest uses). That
   package also carries a hand-written `utils/run_simulation_and_wait.py`; the script preserves it.
-- The production host is `compose.cam.uchc.edu` in all three places that must agree: the RKE ingress
-  (`kustomize/overlays/compose-api-rke/ingress.yaml`), `ServerMode.PROD` plus `APP_ORIGINS` here, and pbest's default
-  client base URL. Changing it means changing all three.
+- The production host is `compose.cam.uchc.edu` in all four places that must agree: the RKE ingress
+  (`kustomize/overlays/compose-api-rke/ingress.yaml`), `ServerMode.PROD` plus `APP_ORIGINS` here, pbest's default
+  client base URL, and the CLI's built-in `production` profile (`clients/python/compose_api_client/profiles.py`).
+  Changing it means changing all four.
 
 ## Conventions
 

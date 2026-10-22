@@ -23,6 +23,9 @@ from compose_api.simulation.models import (
 
 logger = logging.getLogger(__name__)
 
+# Deprecated (docs/plan-sedml.md, "Concepts"): these lists read Postgres tables nothing writes any more. The catalog is
+# GET /registry/entries; what an environment provides is GET /registry/environments/{name}/manifest.
+
 
 def get_server_url(dev: bool = True) -> ServerMode:
     return ServerMode.DEV if dev else ServerMode.PROD
@@ -37,6 +40,7 @@ config = RouterConfig(router=APIRouter(), prefix="/core", dependencies=[Depends(
     path="/simulator/list",
     response_model=RegisteredSimulators,
     operation_id="get-simulator-list",
+    deprecated=True,
     tags=["Compute"],
     dependencies=[Depends(get_database_service)],
     summary="Get the list of simulators",
@@ -49,6 +53,7 @@ async def get_simulator_list(principal: OptionalPrincipal) -> RegisteredSimulato
     path="/processes/list",
     response_model=list[BiGraphProcess],
     operation_id="get-processes-list",
+    deprecated=True,
     tags=["Compute"],
     dependencies=[Depends(get_database_service)],
     summary="Get the list of processes",
@@ -64,6 +69,7 @@ async def get_processes_list(principal: OptionalPrincipal) -> list[BiGraphProces
     path="/steps/list",
     response_model=list[BiGraphStep],
     operation_id="get-steps-list",
+    deprecated=True,
     tags=["Compute"],
     dependencies=[Depends(get_database_service)],
     summary="Get the list of processes",

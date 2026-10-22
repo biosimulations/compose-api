@@ -1,15 +1,15 @@
 # Viewers for spatial datasets: registered per dataset type, loaded lazily
 
-**Status (2026-10-10): plan agreed; F1 in progress.** One PR per step, merged on green with a merge commit. Merging to
+~~**Status (2026-10-10): plan agreed; F1 in progress.**~~ **Status (2026-10-13): F1, F2, B1 and B2 are merged and deployed; A1–A3 and `ZarrViewer` are later.** One PR per step, merged on green with a merge commit. Merging to
 `main` deploys through Flux (CLAUDE.md, "Deploys are GitOps").
 
 | Step | What | Repo | State |
 |---|---|---|---|
-| 0 | This document | compose-api | in review (with F1) |
-| F1 | Directory datasets (`*.fenics`, `*.zarr`) and `GET /datasets/{id}/files/{subpath}` | compose-api | in review |
-| F2 | Viewer registry; built-in viewers; shared bundle reader; `StatsViewer` | compose-api `webapp/` | in review |
-| B1 | Ad hoc `SpatialExport` step and the bundle's `web` extension; the compose runner writes and announces the bundle | viva-pde-particle | in review (viva-pde-particle#57) |
-| B2 | `BundleSurfaceViewer` (vtk.js) | compose-api `webapp/` | in review |
+| 0 | This document | compose-api | merged (#241) |
+| F1 | Directory datasets (`*.fenics`, `*.zarr`) and `GET /datasets/{id}/files/{subpath}` | compose-api | merged (#241, 0.7.5) |
+| F2 | Viewer registry; built-in viewers; shared bundle reader; `StatsViewer` | compose-api `webapp/` | merged (#242, 0.7.5) |
+| B1 | Ad hoc `SpatialExport` step and the bundle's `web` extension; the compose runner writes and announces the bundle | viva-pde-particle | merged (viva-pde-particle#57, 2026-10-10; #58 publishes `.zattrs` readable) |
+| B2 | `BundleSurfaceViewer` (vtk.js) | compose-api `webapp/` | merged (#244, 0.7.5) |
 | A1–A3 | Optional: VCell's vtk.wasm field viewer behind a `DataSource`, fed from the same bundles | vcell, compose-api | later |
 
 ## Context
@@ -68,9 +68,13 @@ requirement.
   `defineAsyncComponent` gives each viewer and its dependencies (vtk.js, zarrita, wasm) their own chunk, fetched on first
   open (the `PlotlyChart.vue` pattern).
 - Port today's previews into built-ins: `ImageViewer`, `TableViewer`, `TextViewer`.
+  (2026-10-13: the registry has since gained `CompositeViewer` for process-bigraph documents (#263) and
+  `PlotlyFigureViewer` for Plotly figure JSON (plan-sedml phase 5, #287).)
 - `DatasetPreview.vue` becomes `DatasetViewer.vue`: rank the matches and offer a viewer switch.
 - New page `/ui/datasets/[id]` for deep links. The table modal links to it.
 - `useApi.ts` gains `datasetFileUrl(id, sub)` and an auth-aware `fetch` for loaders (reuses `accessToken()`).
+  (2026-10-13: as built, `datasetFilesUrl(id)` returns the base URL and loaders append the sub-path; the fetch is
+  `authFetch`.)
 - `webapp/app/viewers/bundle/bundle.ts`: a shared zarrita reader for results bundles, used by every bundle viewer.
   - It reads the manifest, rows, `stats/`, `particles/` and `surface/`.
   - It polls the manifest while `status == "running"`.
@@ -107,7 +111,7 @@ requirement.
   - Controls: domain, variable, time slider (fetches one row), colormap and range (global from stats, or per frame), and
     live-run auto-advance.
   - Works in any WebGL2 browser.
-- **`StatsViewer`** for any `results-bundle`, with or without the extension: Plotly mean/total/min/max over time from
+- **`StatsViewer`** (built as `webapp/app/viewers/BundleStatsViewer.vue`) for any `results-bundle`, with or without the extension: Plotly mean/total/min/max over time from
   `stats/`.
 - Later, for viva-emitters zarr stores: `ZarrViewer`, a group tree plus a Plotly plot of a variable over time.
 

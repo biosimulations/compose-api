@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: compose-api
-  version: 0.7.8
+  version: 0.7.30
 paths:
   /curated/copasi:
     post:
@@ -100,7 +100,14 @@ paths:
         (settings.prebuilt_simulators);
 
         the job then runs in that image instead of the shared container. Omitted:
-        the shared container.'
+        the shared container.
+
+
+        The run is labelled `source=upload` and `environment=<simulator or registry_env>`;
+        `tags` and `description` are
+
+        stored with it as given (compose_api/simulation/labels.py) and filter `GET
+        /simulations`.'
       operationId: run-simulation
       parameters:
       - name: interval_time
@@ -125,6 +132,28 @@ paths:
           - type: string
           - type: 'null'
           title: Simulator
+      - name: tags
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Tags to find the run by later; at most 20, each up to 64 characters
+          title: Tags
+        description: Tags to find the run by later; at most 20, each up to 64 characters
+      - name: description
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: What the run is for; up to 2000 characters
+          title: Description
+        description: What the run is for; up to 2000 characters
       requestBody:
         required: true
         content:
@@ -203,6 +232,34 @@ paths:
           description: Only simulations created at or after this time
           title: Since
         description: Only simulations created at or after this time
+      - name: label
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: 'Only simulations with this label, as key:value; repeatable,
+            all must match. Keys: source, environment, solver, model, project, sedml_task,
+            comparison, collection, suite_run'
+          title: Label
+        description: 'Only simulations with this label, as key:value; repeatable,
+          all must match. Keys: source, environment, solver, model, project, sedml_task,
+          comparison, collection, suite_run'
+      - name: tag
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Only simulations with this tag; repeatable, all must match
+          title: Tag
+        description: Only simulations with this tag; repeatable, all must match
       - name: limit
         in: query
         required: false
@@ -377,6 +434,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /results/simulator/build/log:
+    get:
+      tags:
+      - Results
+      summary: The SLURM log of a simulator's newest container build (its last 200
+        KB)
+      operationId: get-simulator-build-log
+      parameters:
+      - name: simulator_id
+        in: query
+        required: true
+        schema:
+          type: integer
+          title: Simulator Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/plain:
+              schema:
+                type: string
+        '404':
+          description: The requested resource does not exist
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /results/simulation/events:
     get:
       tags:
@@ -526,6 +612,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RegisteredSimulators'
+      deprecated: true
   /core/processes/list:
     get:
       tags:
@@ -542,6 +629,7 @@ paths:
                   $ref: '#/components/schemas/BiGraphProcess'
                 type: array
                 title: Response Get-Processes-List
+      deprecated: true
   /core/steps/list:
     get:
       tags:
@@ -558,6 +646,7 @@ paths:
                   $ref: '#/components/schemas/BiGraphStep'
                 type: array
                 title: Response Get-Steps-List
+      deprecated: true
   /datasets:
     get:
       tags:
@@ -745,6 +834,1011 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /registry/environments:
+    get:
+      tags:
+      - Registry
+      summary: The environments documents run in, with what their interface manifests
+        hold
+      operationId: list-environments
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/EnvironmentSummary'
+                type: array
+                title: Response List-Environments
+  /registry/environments/{name}/manifest:
+    get:
+      tags:
+      - Registry
+      summary: An environment's interface manifest (pbg-interfaces/1), each component
+        with its registry entry
+      operationId: get-environment-manifest
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterfaceManifest'
+        '404':
+          description: No such environment here, or no manifest has been generated
+            for it
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /registry/environments/{name}/headers:
+    get:
+      tags:
+      - Registry
+      summary: An environment's interfaces as .pblang header files (one per module),
+        and each class's declaration
+      operationId: get-environment-headers
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvironmentHeaders'
+        '404':
+          description: No such environment here, or no manifest has been generated
+            for it
+        '503':
+          description: process-bigraph-lang is not installed in this deployment
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /registry/entries:
+    get:
+      tags:
+      - Registry
+      summary: 'The catalog: every registry entry with its curation level, pin and
+        evidence, and the environments that provide its classes'
+      operationId: list-registry-entries
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/CatalogEntry'
+                type: array
+                title: Response List-Registry-Entries
+  /registry/solvers:
+    get:
+      tags:
+      - Registry
+      summary: 'The solvers SED-ML runs can use: each one''s class, environment, KiSAO
+        algorithms and what it returns'
+      operationId: list-solvers
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Solver'
+                type: array
+                title: Response List-Solvers
+  /registry/environments/{name}/images:
+    get:
+      tags:
+      - Registry
+      summary: Whether an environment's current image is built, with its image records
+        and newest build run
+      operationId: get-environment-images
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageStatus'
+        '404':
+          description: No such environment here
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /registry/environments/{name}/build:
+    post:
+      tags:
+      - Registry
+      summary: 'Make an environment''s current image available: 200 if it is, 202
+        once its pull or build has started'
+      operationId: build-environment
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageStatus'
+        '202':
+          description: Its pull or build has started (or was already under way)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageStatus'
+        '404':
+          description: No such environment here
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /registry/simulators/{simulator_id}/images:
+    get:
+      tags:
+      - Registry
+      summary: Whether a simulator's image is built, with its image records and newest
+        build run
+      operationId: get-simulator-images
+      parameters:
+      - name: simulator_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Simulator Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageStatus'
+        '404':
+          description: No such simulator
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /registry/simulators/{simulator_id}/build:
+    post:
+      tags:
+      - Registry
+      summary: 'Make a simulator''s image available: 200 if it is, 202 once its pull
+        or build has started'
+      operationId: build-simulator
+      parameters:
+      - name: simulator_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Simulator Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageStatus'
+        '202':
+          description: Its pull or build has started (or was already under way)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageStatus'
+        '404':
+          description: No such simulator
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sedml/preview:
+    post:
+      tags:
+      - SED-ML
+      summary: 'Translate a SED-ML archive without running it: its tasks, and what
+        each solver would run or why not'
+      operationId: preview-sedml
+      parameters:
+      - name: solvers
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Solvers to run (registry/solvers.yaml); all when omitted
+          title: Solvers
+        description: Solvers to run (registry/solvers.yaml); all when omitted
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_preview-sedml'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SedmlPreview'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sedml/run:
+    post:
+      tags:
+      - SED-ML
+      summary: Run each task of a SED-ML archive on several solvers, one run per solver,
+        grouped by a comparison
+      operationId: run-sedml
+      parameters:
+      - name: solvers
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Solvers to run (registry/solvers.yaml); all when omitted
+          title: Solvers
+        description: Solvers to run (registry/solvers.yaml); all when omitted
+      - name: task
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Only these SED-ML task ids; all when omitted
+          title: Task
+        description: Only these SED-ML task ids; all when omitted
+      - name: tags
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Tags for every run
+          title: Tags
+        description: Tags for every run
+      - name: description
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+      - name: rel_tol
+        in: query
+        required: false
+        schema:
+          type: number
+          exclusiveMinimum: 0
+          default: 0.0001
+          title: Rel Tol
+      - name: abs_tol_min
+        in: query
+        required: false
+        schema:
+          type: number
+          minimum: 0
+          default: 0.001
+          title: Abs Tol Min
+      - name: abs_tol_scale
+        in: query
+        required: false
+        schema:
+          type: number
+          minimum: 0
+          default: 1.0e-05
+          title: Abs Tol Scale
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_run-sedml'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SedmlRunResult'
+        '400':
+          description: Not an archive, an unknown solver, a bad tag, or no task any
+            solver accepted
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /comparisons:
+    get:
+      tags:
+      - SED-ML
+      summary: List comparisons, newest first
+      operationId: list-comparisons
+      parameters:
+      - name: source
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: "Only this source, e.g. upload:x.omex or biomodels:BIOMD\u2026"
+          title: Source
+        description: "Only this source, e.g. upload:x.omex or biomodels:BIOMD\u2026"
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonPage'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /comparisons/{comparison_id}:
+    get:
+      tags:
+      - SED-ML
+      summary: 'One comparison: its runs, and per report and data set each solver
+        pair''s score'
+      operationId: get-comparison
+      parameters:
+      - name: comparison_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Comparison Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comparison'
+        '404':
+          description: No such comparison
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /comparisons/{comparison_id}/series:
+    get:
+      tags:
+      - SED-ML
+      summary: One report's columns from each run and each reference, for overlays
+      operationId: get-comparison-series
+      parameters:
+      - name: comparison_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Comparison Id
+      - name: report
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Report
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonSeries'
+        '404':
+          description: No such comparison or report
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sources/biomodels/search:
+    get:
+      tags:
+      - Sources
+      summary: Search EBI BioModels (manually curated models unless curated=false)
+      operationId: search-biomodels
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: curated
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: true
+          title: Curated
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BiomodelHit'
+                title: Response Search-Biomodels
+        '502':
+          description: The upstream service did not answer as expected
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sources/biomodels/{model_id}:
+    get:
+      tags:
+      - Sources
+      summary: 'One BioModels entry: name, curation status, latest revision'
+      operationId: get-biomodel
+      parameters:
+      - name: model_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Model Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BiomodelInfo'
+        '404':
+          description: No such model or project upstream
+        '502':
+          description: The upstream service did not answer as expected
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sources/biomodels/{model_id}/omex:
+    get:
+      tags:
+      - Sources
+      summary: The entry's COMBINE archive (its latest revision)
+      operationId: get-biomodel-omex
+      parameters:
+      - name: model_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Model Id
+      responses:
+        '200':
+          description: Successful Response
+        '404':
+          description: No such model or project upstream
+        '502':
+          description: The upstream service did not answer as expected
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sources/biomodels/{model_id}/run:
+    post:
+      tags:
+      - Sources
+      summary: Run a BioModels entry's SED-ML on several solvers (as /sedml/run)
+      operationId: run-biomodel
+      parameters:
+      - name: model_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Model Id
+      - name: solvers
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Solvers to run (registry/solvers.yaml); all when omitted
+          title: Solvers
+        description: Solvers to run (registry/solvers.yaml); all when omitted
+      - name: task
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Only these SED-ML task ids; all when omitted
+          title: Task
+        description: Only these SED-ML task ids; all when omitted
+      - name: tags
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Tags for every run
+          title: Tags
+        description: Tags for every run
+      - name: description
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SedmlRunResult'
+        '404':
+          description: No such model or project upstream
+        '502':
+          description: The upstream service did not answer as expected
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sources/biosimulations/projects:
+    get:
+      tags:
+      - Sources
+      summary: biosimulations.org projects whose id contains q
+      operationId: search-biosimulations-projects
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 200
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectInfo'
+                title: Response Search-Biosimulations-Projects
+        '502':
+          description: The upstream service did not answer as expected
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sources/biosimulations/{project_id}:
+    get:
+      tags:
+      - Sources
+      summary: 'One biosimulations.org project: its run and the simulator that ran
+        it'
+      operationId: get-biosimulations-project
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectInfo'
+        '404':
+          description: No such model or project upstream
+        '502':
+          description: The upstream service did not answer as expected
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sources/biosimulations/{project_id}/omex:
+    get:
+      tags:
+      - Sources
+      summary: The project's archive
+      operationId: get-biosimulations-omex
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+        '404':
+          description: No such model or project upstream
+        '502':
+          description: The upstream service did not answer as expected
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sources/biosimulations/{project_id}/reference:
+    get:
+      tags:
+      - Sources
+      summary: 'The project''s original results: each report as {label: values}'
+      operationId: get-biosimulations-reference
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+                  additionalProperties:
+                    type: array
+                    items:
+                      type: number
+                title: Response Get-Biosimulations-Reference
+        '404':
+          description: No such model or project upstream
+        '502':
+          description: The upstream service did not answer as expected
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /sources/biosimulations/{project_id}/run:
+    post:
+      tags:
+      - Sources
+      summary: Run a project's SED-ML on several solvers, its original results as
+        the reference
+      operationId: run-biosimulations-project
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Project Id
+      - name: solvers
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Solvers to run (registry/solvers.yaml); all when omitted
+          title: Solvers
+        description: Solvers to run (registry/solvers.yaml); all when omitted
+      - name: task
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Only these SED-ML task ids; all when omitted
+          title: Task
+        description: Only these SED-ML task ids; all when omitted
+      - name: tags
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: Tags for every run
+          title: Tags
+        description: Tags for every run
+      - name: description
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SedmlRunResult'
+        '404':
+          description: No such model or project upstream
+        '502':
+          description: The upstream service did not answer as expected
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /suites:
+    get:
+      tags:
+      - Suites
+      summary: The suites
+      operationId: list-suites
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Suite'
+                type: array
+                title: Response List-Suites
+  /suites/{name}/runs:
+    get:
+      tags:
+      - Suites
+      summary: A suite's runs, newest first
+      operationId: list-suite-runs
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SuiteRunInfo'
+                title: Response List-Suite-Runs
+        '404':
+          description: No such suite
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /suites/{name}/runs/{number}:
+    get:
+      tags:
+      - Suites
+      summary: 'One suite run: per source, agreement, references, and drift from the
+        baseline run'
+      operationId: get-suite-run
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Number
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiteRunView'
+        '404':
+          description: No such suite or run
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /suites/{name}/run:
+    post:
+      tags:
+      - Suites
+      summary: Run every source of the suite on its solvers (submitted in the background)
+      operationId: run-suite
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiteRunInfo'
+        '404':
+          description: No such suite
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /auth/me:
+    get:
+      tags:
+      - Authentication
+      summary: Get the authenticated caller's identity
+      operationId: get-current-principal
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentPrincipalResponse'
+        '401':
+          description: Missing or invalid bearer credentials
+      security:
+      - BearerAuth: []
   /health:
     get:
       tags:
@@ -839,6 +1933,76 @@ components:
       - outputs
       - database_id
       title: BiGraphStep
+    BiomodelHit:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        format:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Format
+        url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Url
+      type: object
+      required:
+      - id
+      - name
+      title: BiomodelHit
+    BiomodelInfo:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        format:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Format
+        curation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Curation
+        revision:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Revision
+        publication:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Publication
+        url:
+          type: string
+          title: Url
+      type: object
+      required:
+      - id
+      - name
+      - url
+      title: BiomodelInfo
+    Body_preview-sedml:
+      properties:
+        archive:
+          type: string
+          title: Archive
+          format: binary
+      type: object
+      required:
+      - archive
+      title: Body_preview-sedml
     Body_run-copasi:
       properties:
         sbml:
@@ -849,6 +2013,16 @@ components:
       required:
       - sbml
       title: Body_run-copasi
+    Body_run-sedml:
+      properties:
+        archive:
+          type: string
+          title: Archive
+          format: binary
+      type: object
+      required:
+      - archive
+      title: Body_run-sedml
     Body_run-simulation:
       properties:
         uploaded_file:
@@ -869,6 +2043,211 @@ components:
       required:
       - sbml
       title: Body_run-tellurium
+    CatalogEntry:
+      properties:
+        id:
+          type: string
+          title: Id
+        package:
+          type: string
+          title: Package
+        source:
+          type: string
+          title: Source
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+        commit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Commit
+        level:
+          $ref: '#/components/schemas/CurationLevel'
+        module_roots:
+          items:
+            type: string
+          type: array
+          title: Module Roots
+        bundles:
+          items:
+            type: string
+          type: array
+          title: Bundles
+        evidence:
+          items:
+            type: string
+          type: array
+          title: Evidence
+        reviewer:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reviewer
+        environments:
+          items:
+            $ref: '#/components/schemas/EntryEnvironment'
+          type: array
+          title: Environments
+      type: object
+      required:
+      - id
+      - package
+      - source
+      - level
+      - module_roots
+      title: CatalogEntry
+      description: 'A registry entry as the catalog shows it (docs/plan-sedml.md,
+        "Concepts"): what it is, how far it is trusted,
+
+        and which of this deployment''s environments provide its classes. Most `listed`
+        entries are in none.'
+    Comparison:
+      properties:
+        comparison_id:
+          type: integer
+          title: Comparison Id
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+        name:
+          type: string
+          title: Name
+        source:
+          type: string
+          title: Source
+        sedml:
+          type: string
+          title: Sedml
+        task:
+          type: string
+          title: Task
+        status:
+          type: string
+          enum:
+          - running
+          - complete
+          - incomplete
+          title: Status
+        settings:
+          additionalProperties: true
+          type: object
+          title: Settings
+        members:
+          items:
+            $ref: '#/components/schemas/ComparisonMember'
+          type: array
+          title: Members
+        result:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Result
+        close:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Close
+          description: every compared data set close, every member completed
+      type: object
+      required:
+      - comparison_id
+      - name
+      - source
+      - sedml
+      - task
+      - status
+      - settings
+      - members
+      title: Comparison
+      description: 'One SED-ML task run on several solvers. `result` is filled once
+        every member has finished: per report and
+
+        data set label, each solver pair''s score and whether it is close.'
+    ComparisonMember:
+      properties:
+        solver:
+          type: string
+          title: Solver
+        simulation_id:
+          type: integer
+          title: Simulation Id
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      type: object
+      required:
+      - solver
+      - simulation_id
+      title: ComparisonMember
+    ComparisonPage:
+      properties:
+        comparisons:
+          items:
+            $ref: '#/components/schemas/Comparison'
+          type: array
+          title: Comparisons
+        total:
+          type: integer
+          title: Total
+        next_offset:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Next Offset
+      type: object
+      required:
+      - comparisons
+      - total
+      title: ComparisonPage
+    ComparisonSeries:
+      properties:
+        report:
+          type: string
+          title: Report
+        labels:
+          items:
+            type: string
+          type: array
+          title: Labels
+        solvers:
+          additionalProperties:
+            additionalProperties:
+              items:
+                anyOf:
+                - type: number
+                - type: 'null'
+              type: array
+            type: object
+          type: object
+          title: Solvers
+        references:
+          additionalProperties:
+            additionalProperties:
+              items:
+                anyOf:
+                - type: number
+                - type: 'null'
+              type: array
+            type: object
+          type: object
+          title: References
+      type: object
+      required:
+      - report
+      - labels
+      - solvers
+      - references
+      title: ComparisonSeries
+      description: One report's columns from each member (by solver) and each reference
+        (by origin), for overlays.
     ContainerizationEngine:
       type: integer
       enum:
@@ -889,6 +2268,54 @@ components:
       - representation
       - containerization_engine
       title: ContainerizationFileRepr
+    CurationLevel:
+      type: string
+      enum:
+      - listed
+      - installable
+      - tested
+      - validated
+      - curated
+      title: CurationLevel
+      description: 'The curation ladder, lowest first. Order matters: comparisons
+        use the declaration order.'
+    CurrentPrincipalResponse:
+      properties:
+        issuer:
+          type: string
+          title: Issuer
+        subject:
+          type: string
+          title: Subject
+        audience:
+          items:
+            type: string
+          type: array
+          title: Audience
+        roles:
+          items:
+            type: string
+          type: array
+          title: Roles
+        scopes:
+          items:
+            type: string
+          type: array
+          title: Scopes
+        permissions:
+          items:
+            type: string
+          type: array
+          title: Permissions
+      type: object
+      required:
+      - issuer
+      - subject
+      - audience
+      - roles
+      - scopes
+      - permissions
+      title: CurrentPrincipalResponse
     Dataset:
       properties:
         id:
@@ -977,6 +2404,217 @@ components:
       - datasets
       - total
       title: DatasetPage
+    Drift:
+      properties:
+        close:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Close
+        worst_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Worst Label
+        worst_score:
+          anyOf:
+          - type: number
+          - type: string
+          - type: 'null'
+          title: Worst Score
+      type: object
+      required:
+      - close
+      title: Drift
+      description: One solver's result against its own result in the suite's baseline
+        run.
+    EntryEnvironment:
+      properties:
+        name:
+          type: string
+          title: Name
+        components:
+          type: integer
+          title: Components
+      type: object
+      required:
+      - name
+      - components
+      title: EntryEnvironment
+      description: An environment that provides some of a registry entry's classes,
+        and how many.
+    EntryRef:
+      properties:
+        id:
+          type: string
+          title: Id
+        level:
+          $ref: '#/components/schemas/CurationLevel'
+      type: object
+      required:
+      - id
+      - level
+      title: EntryRef
+      description: The registry entry a component belongs to (by module root), and
+        its curation level.
+    EnvironmentHeaders:
+      properties:
+        environment:
+          type: string
+          title: Environment
+        modules:
+          items:
+            $ref: '#/components/schemas/HeaderModule'
+          type: array
+          title: Modules
+        components:
+          additionalProperties:
+            type: string
+          type: object
+          title: Components
+          description: Each class's declaration, by address
+      type: object
+      required:
+      - environment
+      - modules
+      - components
+      title: EnvironmentHeaders
+    EnvironmentImage:
+      properties:
+        database_id:
+          type: integer
+          title: Database Id
+        simulator_id:
+          type: integer
+          title: Simulator Id
+        kind:
+          $ref: '#/components/schemas/ImageKind'
+        location:
+          type: string
+          title: Location
+        digest:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Digest
+        size_bytes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Size Bytes
+        hpcrun_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Hpcrun Id
+        available:
+          type: boolean
+          title: Available
+          default: true
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+        verified_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Verified At
+      type: object
+      required:
+      - database_id
+      - simulator_id
+      - kind
+      - location
+      title: EnvironmentImage
+      description: 'A built or pulled image of a simulator''s definition (docs/plan-environment-builds.md,
+        E3).
+
+
+        Images are write-once (E4): one that turns out missing is marked unavailable,
+        never replaced in place.'
+    EnvironmentSummary:
+      properties:
+        name:
+          type: string
+          title: Name
+        kind:
+          type: string
+          enum:
+          - shared
+          - prebuilt
+          title: Kind
+        simulator:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Simulator
+          description: The value of /simulation/run's `simulator` for this environment
+        image:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Image
+          description: The image this deployment runs it in
+        manifest_image:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Manifest Image
+          description: The image the manifest was read from
+        stale:
+          type: boolean
+          title: Stale
+          description: The manifest was read from another image than the one deployed
+        process_bigraph:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Process Bigraph
+        components:
+          type: integer
+          title: Components
+        errors:
+          type: integer
+          title: Errors
+        entries:
+          items:
+            $ref: '#/components/schemas/EntryRef'
+          type: array
+          title: Entries
+      type: object
+      required:
+      - name
+      - kind
+      - simulator
+      - image
+      - manifest_image
+      - stale
+      - components
+      - errors
+      - entries
+      title: EnvironmentSummary
+    ExpectedFailure:
+      properties:
+        source:
+          type: string
+          title: Source
+        solver:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Solver
+        reason:
+          type: string
+          title: Reason
+      type: object
+      required:
+      - source
+      - reason
+      title: ExpectedFailure
     HTTPValidationError:
       properties:
         detail:
@@ -986,6 +2624,21 @@ components:
           title: Detail
       type: object
       title: HTTPValidationError
+    HeaderModule:
+      properties:
+        module:
+          type: string
+          title: Module
+        text:
+          type: string
+          title: Text
+          description: "The module's header file (`module \u2026;` and one declaration\
+            \ per class)"
+      type: object
+      required:
+      - module
+      - text
+      title: HeaderModule
     HpcRun:
       properties:
         database_id:
@@ -996,6 +2649,15 @@ components:
           - type: integer
           - type: 'null'
           title: Slurmjobid
+        backend:
+          type: string
+          title: Backend
+          default: slurm
+        external_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: External Id
         correlation_id:
           type: string
           title: Correlation Id
@@ -1044,6 +2706,150 @@ components:
       - sim_id
       - simulator_id
       title: HpcRun
+    ImageKind:
+      type: string
+      enum:
+      - sif
+      - oci
+      title: ImageKind
+    ImageState:
+      type: string
+      enum:
+      - available
+      - building
+      - failed
+      - missing
+      title: ImageState
+    ImageStatus:
+      properties:
+        simulator_id:
+          type: integer
+          title: Simulator Id
+        container_def_hash:
+          type: string
+          title: Container Def Hash
+        environment:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Environment
+          description: The environment whose current definition this is
+        state:
+          $ref: '#/components/schemas/ImageState'
+        image:
+          anyOf:
+          - $ref: '#/components/schemas/EnvironmentImage'
+          - type: 'null'
+          description: The available image runs use
+        build:
+          anyOf:
+          - $ref: '#/components/schemas/HpcRun'
+          - type: 'null'
+          description: The newest build run of the definition
+        images:
+          items:
+            $ref: '#/components/schemas/EnvironmentImage'
+          type: array
+          title: Images
+          description: Every image recorded, newest first
+      type: object
+      required:
+      - simulator_id
+      - container_def_hash
+      - state
+      title: ImageStatus
+      description: Whether a simulator's image is there to run from, and the records
+        behind that answer.
+    InterfaceComponent:
+      properties:
+        name:
+          type: string
+          title: Name
+        kind:
+          type: string
+          title: Kind
+        address:
+          type: string
+          title: Address
+        module:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Module
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        config_schema:
+          additionalProperties: true
+          type: object
+          title: Config Schema
+        inputs:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Inputs
+        outputs:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Outputs
+        dynamic_ports:
+          type: boolean
+          title: Dynamic Ports
+          default: false
+        registry_entry:
+          anyOf:
+          - $ref: '#/components/schemas/EntryRef'
+          - type: 'null'
+      additionalProperties: true
+      type: object
+      required:
+      - name
+      - kind
+      - address
+      title: InterfaceComponent
+      description: One step or process class, as `pbg-interfaces/1` describes it;
+        unknown keys pass through.
+    InterfaceManifest:
+      properties:
+        $schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: $Schema
+        schema_version:
+          type: string
+          title: Schema Version
+        environment:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Environment
+        components:
+          items:
+            $ref: '#/components/schemas/InterfaceComponent'
+          type: array
+          title: Components
+        errors:
+          items:
+            additionalProperties:
+              type: string
+            type: object
+          type: array
+          title: Errors
+      additionalProperties: true
+      type: object
+      required:
+      - schema_version
+      - components
+      title: InterfaceManifest
+      description: An environment's interface manifest (`pbg-interfaces/1`), with
+        each component's registry entry added.
     JobStatus:
       type: string
       enum:
@@ -1071,6 +2877,43 @@ components:
       - pypi
       - conda
       title: PackageType
+    ProjectInfo:
+      properties:
+        id:
+          type: string
+          title: Id
+        run:
+          type: string
+          title: Run
+        created:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created
+        updated:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updated
+        simulator:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Simulator
+        simulator_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Simulator Version
+        url:
+          type: string
+          title: Url
+      type: object
+      required:
+      - id
+      - run
+      - url
+      title: ProjectInfo
     RegisteredPackage:
       properties:
         database_id:
@@ -1293,6 +3136,128 @@ components:
       - roots
       title: RunTraceTree
       description: A simulation's spans as a forest, each span carrying its own events.
+    SedmlFinding:
+      properties:
+        severity:
+          type: string
+          enum:
+          - error
+          - warning
+          - info
+          title: Severity
+        code:
+          type: string
+          title: Code
+        message:
+          type: string
+          title: Message
+        solver:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Solver
+        task:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task
+        path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Path
+      type: object
+      required:
+      - severity
+      - code
+      - message
+      title: SedmlFinding
+      description: A finding of the translation (process-bigraph-lang's `X4xx`) or
+        of the checker on a solver's instance.
+    SedmlPreview:
+      properties:
+        source:
+          type: string
+          title: Source
+        tasks:
+          items:
+            $ref: '#/components/schemas/SedmlTask'
+          type: array
+          title: Tasks
+        findings:
+          items:
+            $ref: '#/components/schemas/SedmlFinding'
+          type: array
+          title: Findings
+      type: object
+      required:
+      - source
+      - tasks
+      - findings
+      title: SedmlPreview
+    SedmlRunResult:
+      properties:
+        comparisons:
+          items:
+            $ref: '#/components/schemas/Comparison'
+          type: array
+          title: Comparisons
+        findings:
+          items:
+            $ref: '#/components/schemas/SedmlFinding'
+          type: array
+          title: Findings
+      type: object
+      required:
+      - comparisons
+      - findings
+      title: SedmlRunResult
+    SedmlTask:
+      properties:
+        sedml:
+          type: string
+          title: Sedml
+        task:
+          type: string
+          title: Task
+        name:
+          type: string
+          title: Name
+        template:
+          type: string
+          title: Template
+        solvers:
+          items:
+            type: string
+          type: array
+          title: Solvers
+          description: the solvers whose instance compiled
+        refused:
+          items:
+            type: string
+          type: array
+          title: Refused
+          description: the solvers refused by an error finding
+        reports:
+          items:
+            type: string
+          type: array
+          title: Reports
+        plots:
+          items:
+            type: string
+          type: array
+          title: Plots
+      type: object
+      required:
+      - sedml
+      - task
+      - name
+      - template
+      - solvers
+      title: SedmlTask
+      description: 'One SED-ML task: its translation''s template text, the solvers
+        that accept it, and its reports and plots.'
     SimulationDetail:
       properties:
         simulation_id:
@@ -1353,6 +3318,21 @@ components:
           - type: string
           - type: 'null'
           title: Trace Id
+        labels:
+          additionalProperties:
+            type: string
+          type: object
+          title: Labels
+        tags:
+          items:
+            type: string
+          type: array
+          title: Tags
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
         event_count:
           type: integer
           title: Event Count
@@ -1471,6 +3451,21 @@ components:
           - type: string
           - type: 'null'
           title: Trace Id
+        labels:
+          additionalProperties:
+            type: string
+          type: object
+          title: Labels
+        tags:
+          items:
+            type: string
+          type: array
+          title: Tags
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
       type: object
       required:
       - simulation_id
@@ -1511,6 +3506,47 @@ components:
       - packages
       - database_id
       title: SimulatorVersion
+    Solver:
+      properties:
+        id:
+          type: string
+          pattern: ^[a-z][a-z0-9_-]*$
+          title: Id
+        name:
+          type: string
+          title: Name
+        role:
+          type: string
+          const: TimeCourseSolver
+          title: Role
+        environment:
+          type: string
+          title: Environment
+        address:
+          type: string
+          pattern: ^local:[A-Za-z_][\w.]*\.[A-Za-z_]\w*$
+          title: Address
+        algorithms:
+          items:
+            type: string
+          type: array
+          minItems: 1
+          title: Algorithms
+          description: KiSAO terms it implements, its default first
+        provides:
+          items:
+            type: string
+          type: array
+          title: Provides
+      type: object
+      required:
+      - id
+      - name
+      - role
+      - environment
+      - address
+      - algorithms
+      title: Solver
     SpanTree:
       properties:
         span:
@@ -1531,6 +3567,192 @@ components:
       title: SpanTree
       description: A span with its own events (those whose ``span_id`` is the span's)
         and its children, by start time.
+    Suite:
+      properties:
+        name:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          title: Name
+        description:
+          type: string
+          title: Description
+        sources:
+          items:
+            type: string
+          type: array
+          minItems: 1
+          title: Sources
+        solvers:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Solvers
+        tolerances:
+          $ref: '#/components/schemas/Tolerances'
+        baseline:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Baseline
+          description: the accepted suite run that later runs are compared with
+        expected:
+          items:
+            $ref: '#/components/schemas/ExpectedFailure'
+          type: array
+          title: Expected
+      type: object
+      required:
+      - name
+      - description
+      - sources
+      title: Suite
+    SuiteRunInfo:
+      properties:
+        number:
+          type: integer
+          title: Number
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+        status:
+          type: string
+          title: Status
+      type: object
+      required:
+      - number
+      - created_at
+      - status
+      title: SuiteRunInfo
+    SuiteRunRow:
+      properties:
+        source:
+          type: string
+          title: Source
+        task:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task
+        comparison_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Comparison Id
+        status:
+          type: string
+          title: Status
+        close:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Close
+        close_to_references:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Close To References
+        worst_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Worst Label
+        worst_score:
+          anyOf:
+          - type: number
+          - type: string
+          - type: 'null'
+          title: Worst Score
+        drift:
+          anyOf:
+          - additionalProperties:
+              $ref: '#/components/schemas/Drift'
+            type: object
+          - type: 'null'
+          title: Drift
+        expected:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Expected
+        failure:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Failure
+      type: object
+      required:
+      - source
+      - status
+      title: SuiteRunRow
+    SuiteRunView:
+      properties:
+        suite:
+          type: string
+          title: Suite
+        number:
+          type: integer
+          title: Number
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+        status:
+          type: string
+          title: Status
+        baseline:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Baseline
+        rows:
+          items:
+            $ref: '#/components/schemas/SuiteRunRow'
+          type: array
+          title: Rows
+        summary:
+          additionalProperties:
+            type: integer
+          type: object
+          title: Summary
+      type: object
+      required:
+      - suite
+      - number
+      - created_at
+      - status
+      - baseline
+      - rows
+      - summary
+      title: SuiteRunView
+    Tolerances:
+      properties:
+        rel_tol:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Rel Tol
+          default: 0.0001
+        abs_tol_min:
+          type: number
+          minimum: 0.0
+          title: Abs Tol Min
+          default: 0.001
+        abs_tol_scale:
+          type: number
+          minimum: 0.0
+          title: Abs Tol Scale
+          default: 1.0e-05
+      type: object
+      title: Tolerances
+      description: 'The platform''s closeness score: close when `max |a-b| / (atol
+        + rtol*|b|) < 1`, with
+
+        `atol = max(abs_tol_min, max|a|*abs_tol_scale, max|b|*abs_tol_scale)` (docs/plan-sedml.md,
+        D4).'
     ValidationError:
       properties:
         loc:

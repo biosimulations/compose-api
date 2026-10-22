@@ -18,6 +18,7 @@ from pbest.utils.input_types import (
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService
 from compose_api.db.services.hpc_db import HPCDatabaseService
+from compose_api.db.services.simulators_db import SimulatorDatabaseService
 from compose_api.dependencies import (
     get_database_service,
     get_required_database_service,
@@ -25,8 +26,11 @@ from compose_api.dependencies import (
     get_required_simulation_service,
 )
 from compose_api.observability.api_events import record_api_event
+from compose_api.registry.manifest import SERVICE_BUNDLE
+from compose_api.simulation import builds, images
 from compose_api.simulation.hpc_utils import get_correlation_id, get_experiment_id, get_singularity_hash
 from compose_api.simulation.job_monitor import JobMonitor
+from compose_api.simulation.labels import labels
 from compose_api.simulation.models import (
     HpcRun,
     JobStatus,
@@ -139,7 +143,10 @@ async def run_curated_pbif(
         if omex.filename is None:
             raise HTTPException(500, "Can't create omex file.")
         simulator_request = SimulationRequest(
-            request_file_path=Path(omex.filename), simulation_file_type=SimulationFileType.OMEX, is_batch=False
+            request_file_path=Path(omex.filename),
+            simulation_file_type=SimulationFileType.OMEX,
+            is_batch=False,
+            labels=labels(source="curated", solver=simulator_name.lower(), environment=SERVICE_BUNDLE),
         )
 
         try:
@@ -212,25 +219,15 @@ async def _dispatch_job(
 ) -> None:
     simulator_version = simulation.simulator_version
     hpc_db = database_service.get_hpc_db()
-    simulator_db = database_service.get_simulator_db()
     random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
 
-    # Check, then fetch under the hash's lock and check again: submissions that arrive while the image
-    # is fetched wait for it instead of fetching it over the file the first one's jobs are mounting.
-    if await simulator_db.get_downloaded_simulator(simulator_id=simulator_version.database_id) is None:
-        async with simulator_db.container_lock(simulator_version.container_def_hash):
-            if await simulator_db.get_downloaded_simulator(simulator_id=simulator_version.database_id) is None:
-                logger.info(
-                    f"Simulator {simulator_version.database_id} is being downloaded from "
-                    f"{RemoteContainerImage.from_container_version(simulator_version)}."
-                )
-                await _download_or_build_container(
-                    simulation_service_slurm=simulation_service_slurm,
-                    simulator_version=simulator_version,
-                    hpc_db=hpc_db,
-                    job_monitor=job_monitor,
-                    random_string=random_string_7_hex,
-                )
+    await ensure_image(
+        simulator_version,
+        database_service=database_service,
+        simulation_service_slurm=simulation_service_slurm,
+        job_monitor=job_monitor,
+        random_string=random_string_7_hex,
+    )
 
     # Minted before submission so the job can carry the run's trace context (docs/plan-observability.md O1).
     correlation_id = get_correlation_id(random_string=random_string_7_hex, job_type=JobType.SIMULATION)
@@ -259,41 +256,116 @@ async def _dispatch_job(
     )
 
 
+#: One build at a time per container definition: runs submitted together with a new definition (a SED-ML comparison's
+#: solvers) wait for the first one's build instead of starting their own (they would share its files on the cluster).
+_build_locks: dict[str, asyncio.Lock] = {}
+
+
+async def ensure_image(
+    simulator_version: SimulatorVersion,
+    *,
+    database_service: DatabaseService,
+    simulation_service_slurm: SimulationService,
+    job_monitor: JobMonitor,
+    random_string: str,
+) -> None:
+    """Make the simulator's image available: a run's preprocess, and a build invoked on its own (E5).
+
+    Check, then fetch under the hash's lock (held in Postgres, so across API processes; _download_or_build_container
+    checks again): submissions that arrive while the image is fetched wait for it instead of fetching it over the file
+    the first one's jobs mount.
+    """
+    simulator_db = database_service.get_simulator_db()
+    if await _image_ready(simulator_db, simulator_version):
+        return
+    async with simulator_db.container_lock(simulator_version.container_def_hash):
+        await _download_or_build_container(
+            simulation_service_slurm=simulation_service_slurm,
+            simulator_version=simulator_version,
+            hpc_db=database_service.get_hpc_db(),
+            job_monitor=job_monitor,
+            random_string=random_string,
+            simulator_db=simulator_db,
+        )
+
+
+async def _image_ready(simulator_db: SimulatorDatabaseService, simulator_version: SimulatorVersion) -> bool:
+    """Whether the simulator's image is there to run from: an available SIF (docs/plan-environment-builds.md, E3), or
+    for a Docker engine a recorded pull."""
+    if images.tracked():
+        return await images.available_sif(simulator_db, simulator_version) is not None
+    return await simulator_db.get_downloaded_simulator(simulator_id=simulator_version.database_id) is not None
+
+
 async def _download_or_build_container(
     simulation_service_slurm: SimulationService,
     simulator_version: SimulatorVersion,
     hpc_db: HPCDatabaseService,
     job_monitor: JobMonitor,
     random_string: str,
+    simulator_db: SimulatorDatabaseService,
 ) -> None:
-    download_succeeded = False
-    # a prebuilt simulator is pulled from its own image; any other from the shared repository by hash
-    prebuilt = prebuilt_image_of(simulator_version.container_def)
-    try:
-        await simulation_service_slurm.download_container(
-            RemoteContainerImage.from_container_version(
-                simulator_version, source_url=f"docker://{prebuilt}" if prebuilt else None
-            )
+    lock = _build_locks.setdefault(simulator_version.container_def_hash, asyncio.Lock())
+    async with lock:
+        # another run may have fetched it while this one waited; a failed build left nothing, so it is tried again
+        if await _image_ready(simulator_db, simulator_version):
+            return
+        logger.info(
+            f"Simulator {simulator_version.database_id} is being downloaded from "
+            f"{RemoteContainerImage.from_container_version(simulator_version)}."
         )
-        download_succeeded = True
-    except Exception as e:
-        logger.exception("Failed to download simulator slurm container, will attempt to build container.", exc_info=e)
-
-    if download_succeeded:
-        return
-    built_simulator = await hpc_db.get_hpcrun_id_by_simulator_id(simulator_id=simulator_version.database_id)
-    if built_simulator is None:
+        download_succeeded = False
+        # a prebuilt simulator is pulled from its own image; any other from the shared repository by hash
+        prebuilt = prebuilt_image_of(simulator_version.container_def)
         try:
-            await _build_container_and_wait(
-                simulation_service_slurm=simulation_service_slurm,
-                simulator_version=simulator_version,
-                hpc_db=hpc_db,
-                job_monitor=job_monitor,
-                random_prefix=random_string,
+            await simulation_service_slurm.download_container(
+                RemoteContainerImage.from_container_version(
+                    simulator_version, source_url=f"docker://{prebuilt}" if prebuilt else None
+                )
             )
+            download_succeeded = True
         except Exception as e:
-            logger.exception("Failed to build simulator container, will attempt to build container.", exc_info=e)
+            logger.exception(
+                "Failed to download simulator slurm container, will attempt to build container.", exc_info=e
+            )
+
+        if download_succeeded:
+            if images.tracked() and await images.record_sif(simulator_db, simulator_version) is None:
+                raise RuntimeError(
+                    f"The pull for simulator {simulator_version.database_id} left no image at "
+                    f"{images.sif_location(simulator_version)}"
+                )
+            return
+        # a build of this definition that has not finished (started by another API process, or before a restart)
+        # is joined: its run's status is in the database, whichever backend it runs on
+        in_flight = await hpc_db.get_hpcrun_by_ref(
+            ref_id=simulator_version.database_id, job_type=JobType.BUILD_CONTAINER
+        )
+        try:
+            if in_flight is not None and in_flight.status not in builds.FINISHED:
+                logger.info(f"Joining build run {in_flight.database_id} of simulator {simulator_version.database_id}")
+                build: HpcRun | None = await builds.wait_for_run(in_flight, hpc_db)
+            elif get_settings().build_backend == "k8s":
+                from compose_api.simulation.build_k8s import build_and_wait
+
+                build = await build_and_wait(simulator_version, hpc_db, random_string)
+            else:
+                build = await _build_container_and_wait(
+                    simulation_service_slurm=simulation_service_slurm,
+                    simulator_version=simulator_version,
+                    hpc_db=hpc_db,
+                    job_monitor=job_monitor,
+                    random_prefix=random_string,
+                )
+        except Exception as e:
+            logger.exception("Failed to build simulator container", exc_info=e)
             raise e
+        build_id = build.database_id if build is not None else None
+        if images.tracked() and await images.record_sif(simulator_db, simulator_version, hpcrun_id=build_id) is None:
+            raise RuntimeError(
+                f"The build of simulator {simulator_version.database_id} (run {build_id}) completed without writing "
+                f"{images.sif_location(simulator_version)}"
+            )
 
 
 async def _build_container_and_wait(
@@ -302,7 +374,7 @@ async def _build_container_and_wait(
     hpc_db: HPCDatabaseService,
     job_monitor: JobMonitor,
     random_prefix: str,
-) -> None:
+) -> HpcRun | None:
     hpc_run = await simulation_service_slurm.build_container(
         simulator_version=simulator_version, random_str=random_prefix
     )
@@ -334,3 +406,4 @@ async def _build_container_and_wait(
                 f"Building container for simulator {simulator_version} took to long, job at status of {current_status}."
             )
     job_monitor.internal_unsubscribe(slurmjobid)
+    return hpc_run

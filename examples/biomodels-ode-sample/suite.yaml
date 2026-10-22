@@ -1,0 +1,50 @@
+# A regression and reproducibility suite (docs/plan-sedml.md, phase 6): curated ODE models from EBI BioModels, each
+# run on every solver and compared. Chosen on 2026-10-13 from BIOMD0000000001-60: each translates on both solvers
+# (process-bigraph-lang 0.3.1); reaction rates and rule-defined parameters in their auto-generated reports are left out
+# (X404), so the reports hold species, constants and time.
+name: biomodels-ode-sample
+description: Twenty curated ODE models from EBI BioModels, each run on COPASI and Tellurium and compared.
+solvers: [copasi, tellurium]
+tolerances: {rel_tol: 1.0e-4, abs_tol_min: 1.0e-3, abs_tol_scale: 1.0e-5}
+# the accepted suite run each new run's results are compared with, solver by solver
+baseline: 1  # 2026-10-13, compose-api 0.7.21: the first run on the cluster
+# known disagreements, shown as expected rather than failed: {source, solver?, reason} (run 1's findings, 2026-10-13)
+expected:
+  - source: biomodels:BIOMD0000000001
+    solver: tellurium
+    reason: "Tellurium disagrees with COPASI on this event model; COPASI matches both original results (Edelstein project, suite run 1). Suspected: the Tellurium step's write-back of state each update undoes the events (pbsim-common 0.1.2)"
+  - source: biomodels:BIOMD0000000007
+    solver: tellurium
+    reason: "the Tellurium step writes every species back into RoadRunner each update, which refuses one defined by an assignment rule (MPF; pbsim-common 0.1.2, tellurium_process.set_road_runner_incoming_values)"
+  - source: biomodels:BIOMD0000000009
+    solver: tellurium
+    reason: "the Tellurium step writes every species back into RoadRunner each update, which refuses one defined by an assignment rule (KK_PP_norm; pbsim-common 0.1.2, tellurium_process.set_road_runner_incoming_values)"
+  - source: biomodels:BIOMD0000000016
+    solver: tellurium
+    reason: "the Tellurium step writes every species back into RoadRunner each update, which refuses one defined by an assignment rule (Pt; pbsim-common 0.1.2, tellurium_process.set_road_runner_incoming_values)"
+  - source: biomodels:BIOMD0000000020
+    solver: copasi
+    reason: "the model has no species (parameters with rate rules only), and the COPASI step's interpret_sbml takes the missing species table as None (pbsim-common 0.1.2, copasi_process.py:90)"
+  - source: biomodels:BIOMD0000000043
+    reason: "COPASI and Tellurium differ on Rho (score 6.5, suite run 1); no reference says which is right. Not yet investigated"
+sources:
+  - biomodels:BIOMD0000000001  # Edelstein1996 - EPSP ACh event
+  - biomodels:BIOMD0000000003  # Goldbeter1991 - Min Mit Oscil
+  - biomodels:BIOMD0000000006  # Tyson1991 - Cell Cycle 2 var
+  - biomodels:BIOMD0000000007  # Novak1997 - Cell Cycle
+  - biomodels:BIOMD0000000009  # Huang1996 - Ultrasensitivity in MAPK cascade
+  - biomodels:BIOMD0000000012  # Elowitz2000 - Repressilator
+  - biomodels:BIOMD0000000013  # Poolman2004_CalvinCycle
+  - biomodels:BIOMD0000000015  # Curto1998 - purine metabolism
+  - biomodels:BIOMD0000000016  # Goldbeter1995_CircClock
+  - biomodels:BIOMD0000000019  # Schoeberl2002 - EGF MAPK
+  - biomodels:BIOMD0000000020  # hodgkin-huxley squid-axon 1952
+  - biomodels:BIOMD0000000021  # Leloup1999_CircClock
+  - biomodels:BIOMD0000000023  # Rohwer2001_Sucrose
+  - biomodels:BIOMD0000000026  # Markevich2004_MAPK_orderedElementary
+  - biomodels:BIOMD0000000032  # Kofahl2004_PheromonePathway
+  - biomodels:BIOMD0000000035  # Vilar2002_Oscillator
+  - biomodels:BIOMD0000000040  # Field1974_Oregonator
+  - biomodels:BIOMD0000000043  # Borghans1997 - Calcium Oscillation - Model 1
+  - biomodels:BIOMD0000000051  # Chassagnole2002_Carbon_Metabolism
+  - biomodels:BIOMD0000000055  # Locke2005 - Circadian Clock

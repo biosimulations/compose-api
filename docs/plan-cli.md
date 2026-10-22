@@ -1,6 +1,9 @@
 # CLI: a `compose-api` command line on a generated httpx client
 
-**Status (2026-10-07): A, B1, B2 and C merged (#205–#208), with D's docs; what remains is the 0.7.0 release (and publishing `compose-api-client` to PyPI), each on Jim's go, and the open questions below.** Three PRs, each merged on green with a merge
+**Status (2026-10-07): A, B1, B2 and C merged (#205–#208), with D's docs; what remains is the 0.7.0 release (and publishing `compose-api-client` to PyPI), each on Jim's go, and the open questions below.**
+**(2026-10-13: D is done. The workflow merged in #210, and `compose-api-client` 0.7.6 is on PyPI, published by a
+`workflow_dispatch` run on 2026-10-10. No GitHub release has been made since 0.5.0, so the on-release trigger has never
+fired. The spec now has 49 operations, each with a command; `--json` on every command came in #221.)** Three PRs, each merged on green with a merge
 commit. Publishing to PyPI and deploying are separate goes from Jim.
 
 | Step | What | State |
@@ -9,7 +12,7 @@ commit. Publishing to PyPI and deploying are separate goes from Jim.
 | B1 | `compose-api-client` as a workspace package at `clients/python`, brought in with its history (C6) | **done** #206 |
 | B2 | The hand-written application layer, `compose_api_client.ext` | **done** #207 |
 | C | The `compose-api` CLI on `ext` and the generated client; a spec-coverage test | **done** #208 |
-| D | Docs (`docs/cli.md`, `CLAUDE.md`) done in #208; PyPI trusted-publisher workflow; release with 0.7.0 | workflow **in review**; PyPI publisher to add; release pending |
+| D | Docs (`docs/cli.md`, `CLAUDE.md`) done in #208; PyPI trusted-publisher workflow; release with 0.7.0 | **done**: workflow #210; trusted publisher added; 0.7.6 published 2026-10-10 |
 
 ## Context
 
@@ -174,7 +177,7 @@ verbs: `run`, `status` with several IDs, `results`, `simulators`, `processes`, `
 
 | Piece | What |
 |---|---|
-| `ComposeSession(base_url=… \| client=…, timeout, retries)` / `AsyncComposeSession` | Context managers that own a `Client`. `ComposeSession.in_process(app)` builds the `ASGITransport` client tests use; `AuthenticatedClient` when a token is given (reserved for #192's Auth0). |
+| `ComposeSession(base_url=… \| client=…, tokens=, timeout)` / `AsyncComposeSession` | Context managers that own per-attempt guarded clients (`TokenSource` / `AsyncTokenSource`, `_DestinationGuard`, `trust_env=False`, `follow_redirects=False`, 1-renewal read replay on 401). |
 | `submit(file, simulator=, interval=, batch=)`, `submit_curated(engine, sbml, …)` | The `SimulationExperiment` |
 | `status(id)` → `JobState` | `.status`, `.terminal`, `.ok`, `.slurm_job`. A 404 means `SUBMITTING`, not an error, until a deadline. |
 | `wait(id, poll=, timeout=, on_update=)`, `build_status(id)`, `wait_build(id)` | The final `HpcRun` |
@@ -215,7 +218,7 @@ generalise viva-pde-particle's `compose_client.EnsembleRun` once this ships on P
 | `--url` | `COMPOSE_API_URL` | `https://compose.cam.uchc.edu` |
 | `--timeout` | `COMPOSE_API_TIMEOUT` | 300 s |
 | `--output {table,json,yaml}` | `COMPOSE_API_OUTPUT` | `table` on a TTY, `json` when piped |
-| `--token` | `COMPOSE_API_TOKEN` | none (reserved for #192) |
+| `--profile` | `COMPOSE_API_CLI_PROFILE` | `production` (`--token` CLI flag removed in 0.8.0; `COMPOSE_API_TOKEN` is env-only for automation) |
 | `--verbose` / `--quiet` | | `--verbose` logs the HTTP exchanges |
 
 **Commands.** Each operationId belongs to exactly one command:
@@ -302,7 +305,10 @@ Other details:
   - It runs when a GitHub **release** is published (the same go that deploys the docs and archives to Zenodo), or by
     hand with a tag.
   - It checks that the client's version is the tag, builds, and smoke-tests the wheel on Python 3.11 (it must import,
-    run `compose-api --help`, and pull in no FastAPI).
+    run `compose-api --help`, pull in no FastAPI, and pass `scripts/client-smoke.py`, which prepares private session
+    state and closes the sign-in listener: the code `--help` never reaches whose behaviour depends on the Python
+    version). `cli-platforms.yml` runs the same script on 3.11 on Linux, macOS and Windows for every client change,
+    and `make check` types the hand-written client a second time as Python 3.11.
   - It then uploads from the `pypi` environment, which accepts deployments only from tags and `main`. Add required
     reviewers there for a manual gate.
 - **The PyPI side**, once, by an owner of the existing project (0.1.0–0.2.0 were uploaded with a personal token from
@@ -311,7 +317,9 @@ Other details:
   `pypi`.
 - **The first publishable release is 0.7.0.** Tag 0.6.0 predates `clients/python`.
 - **PyPI goes from 0.2.0 straight to 0.7.0**, because the client now versions with the service. pbest keeps its
-  `==0.2.0` pin until it is bumped (the four-step release in CLAUDE.md).
+  `==0.2.0` pin until it is bumped (the four-step release in CLAUDE.md). (2026-10-13: pbest#55 bumped it to
+  `==0.7.6` on 2026-10-10, but pbest has not released since 0.6.3, so compose-api's `pbest==0.6.3` pin and its
+  `override-dependencies` entry for the client stay.)
 
 ## Verification
 
@@ -338,7 +346,9 @@ Other details:
 
 ## Non-goals
 
-- Auth: `--token` is reserved; #192 decides the flow.
+- Auth: decided in 0.8.0 (`compose-api auth login|signup|status|logout` with OS keyring storage and PKCE/device
+  flows; `--token` flag removed, `COMPOSE_API_TOKEN` env-only for automation). This supersedes the alternative
+  design in #310 (a stored token file, `--token` kept).
 - A TUI or GUI (atlantis has both; not needed here).
 - Folding atlantis's `compose` group into this CLI. viva-api could later delegate to `compose-api-client`, which is
   viva-api's decision.
@@ -348,12 +358,14 @@ Other details:
 
 1. **The batch-status endpoint:** keep the GET-with-body, or add a query-string form (`?ids=1&ids=2`) beside it? The
    addition would be non-breaking, the replacement would break pbest. Proposed: add the query form in 0.7.0 and keep
-   the body form until pbest moves.
-2. **The command name:** `compose-api` (proposed: names the service), or `compose`, which is shorter but generic and
+   the body form until pbest moves. (2026-10-13: still open; only the body form exists, `routers/results.py`.)
+2. ~~**The command name:**~~ *Settled: `compose-api`, as shipped in #208.* `compose-api` (proposed: names the service), or `compose`, which is shorter but generic and
    collides with `docker compose` muscle memory?
-3. **When the 0.2.x external repository stops being written:** at strategy phase 5 (proposed), or as soon as pbest pins
+3. **When the 0.2.x external repository stops being written:** (2026-10-13: still open; it waits on a pbest release
+   that carries the 0.7.6 pin.) at strategy phase 5 (proposed), or as soon as pbest pins
    a release from this repository (0.7.0 or later; the client now versions with the service)?
-4. **Prebuilt simulators can't be discovered through the API.** *(Found building C.)* `simulators list` returns
+4. ~~**Prebuilt simulators can't be discovered through the API.**~~ *Answered (2026-10-13): `GET /registry/environments`
+   (`compose-api environments list`) names them, and `simulations list --simulator NAME` filters by one.* *(Found building C.)* `simulators list` returns
    container definitions, with no names. The names `run --simulator` accepts (`PREBUILT_SIMULATORS`, for example
    `viva-pde-particle`) exist only in the deployment config. Proposed: a `GET /core/simulator/prebuilt`
    (name → image digest), and a `compose-api simulators prebuilt` command for it.

@@ -10,19 +10,49 @@ serves it at **`/ui`** on the same host, and `/` redirects there.
 | Page | API operations |
 |---|---|
 | `/ui/` dashboard: counts by status, recent runs | `list-simulations`, `/version` |
-| `/ui/simulations`: paged and filterable by status, simulator and date; download `results.zip` | `list-simulations`, `get-simulation-results-file` |
+| `/ui/simulations`: paged and filterable by status, simulator, date, labels (`key:value`) and tags; label and tag chips filter the list; download `results.zip` | `list-simulations`, `get-simulation-results-file` |
 | `/ui/simulations/new`: upload a `.pbg`, `.omex` or `.sbml`, or a curated COPASI/Tellurium time course from SBML. Registry rejections are listed address by address | `run-simulation`, `run-copasi`, `run-tellurium` |
 | `/ui/simulations/{id}`: status (polled until terminal), SLURM and container-build details, live event log, span tree and Chrome trace (for Perfetto), datasets with inline previews (images, CSV/TSV plotted with Plotly, JSON, text) | `get-simulation`, `get-simulation-status`, `get-simulator-build-status`, `get-simulation-events`, `get-simulation-trace`, `get-simulation-trace-chrome`, `list-datasets`, `get-dataset-content`, `get-simulation-results-file` |
 | `/ui/datasets`: every run's files | `list-datasets`, `get-dataset-content` |
-| `/ui/catalog`: processes, steps, simulator versions | `get-processes-list`, `get-steps-list`, `get-simulator-list` |
+| `/ui/datasets/{id}`: one dataset full width in its viewers (a results bundle file by file) | `get-dataset`, `get-dataset-content`, `get-dataset-file` |
+| `/ui/composites/new`: write a composite in `.pblang`, checked as you type, and run it (below) | `list-environments`, `get-environment-manifest`, `run-simulation` |
+| `/ui/sedml`: a SED-ML archive (upload, BioModels, biosimulations.org) previewed and run on several solvers ([plan-sedml.md](plan-sedml.md)) | `preview-sedml`, `run-sedml`, `search-biomodels`, `get-biomodel-omex`, `run-biomodel`, `search-biosimulations-projects`, `get-biosimulations-omex`, `run-biosimulations-project`, `list-solvers` |
+| `/ui/comparisons`, `/ui/comparisons/{id}`: a task's runs, scores per report and data set, overlays of data sets and SED-ML plots | `list-comparisons`, `get-comparison`, `get-comparison-series`, `list-datasets`, `get-dataset-content` |
+| `/ui/suites`, `/ui/suites/{name}`: regression and reproducibility suites, their runs, agreement, references and drift from the baseline per model | `list-suites`, `list-suite-runs`, `get-suite-run`, `run-suite` |
+| `/ui/environments`: where composites run; `/ui/environments/{name}`: its image, versions, registry entries, and every class it provides with its config and ports (`#Name` opens on one) | `list-environments`, `get-environment-manifest` |
+| `/ui/catalog`: every registry entry with its curation level, pin and evidence, and the environments that run its classes ([plan-sedml.md](plan-sedml.md), "Concepts") | `list-registry-entries` |
 
 **Viewers are registered per dataset type** (`webapp/app/viewers/registry.ts`, [plan](plan-viewers.md)). Each one
 declares which datasets it fits (by kind, media type and attributes) and is an async component, so a viewer and its
 libraries download only when first opened. `/ui/datasets/<id>` opens a dataset full width; the table's preview shows
-the same viewers. Built in: image, table (plotted when numeric), text, and for results bundles (`*.fenics`) a
+the same viewers. Built in: composite (below), image, table (plotted when numeric), text, a Plotly figure (`application/vnd.plotly.v1+json`,
+SED-ML plots), and for results bundles (`*.fenics`) a
 statistics view and a **3D view** (vtk.js) read chunk by chunk with zarrita from `/datasets/{id}/files/`. The 3D view
 draws the bundle's web extension (a precomputed surface per domain, viva-pde-particle `docs/web-bundle.md`) coloured by
 one variable, fetches one row per frame, shows particles, and follows a running simulation.
+
+**The submitted composite** (the `input` dataset: a `.pbg` document, or an OMEX archive holding one or more, found
+as the service finds them at submission: `.pbg` and `.json` members, nested `.omex` archives at most three deep; with
+several, a picker chooses one) opens in the composite viewer
+(`webapp/app/viewers/CompositeViewer.vue`): the document is decompiled in the browser into `.pblang` text by
+[process-bigraph-lang](https://github.com/biosimulations/process-bigraph-lang) (the npm package of its `dsl/`), checked, and shown read-only in Monaco with
+the checker's findings as markers and as a list. The **Document** tab shows the process-bigraph JSON that was submitted
+and run, re-indented only (every token as submitted: `100.0` stays a float), with a download; the **Graph** tab draws
+the wiring (`viewers/composite/layout.ts`, stores left, processes and steps right, a link per wired port, nested
+composites below). The checker resolves addresses against interface manifests: one per environment documents run in,
+generated in CI inside each image and served by the API at `GET /registry/environments` and
+`GET /registry/environments/{name}/manifest` (same origin; in development, from whatever `NUXT_PUBLIC_API_BASE` points
+at). The viewer uses the manifest of the environment the run used (a prebuilt run is matched by its image's
+repository, whatever its digest). Hovering a class's name in the text, or its `address` in the document, shows the
+class's interface from that manifest (`viewers/composite/interfaces.ts`), linked to its environment's page; the
+"checked against" badge links there too.
+
+**Writing a composite** (`/ui/composites/new`, or "Edit a copy" from the viewer) opens `.pblang` text in an editable
+Monaco with process-bigraph-lang's language server running in a web worker (`viewers/composite/languageClient.ts`):
+findings appear as you type, hover shows a process's interface, and completion offers processes, ports, config keys
+and stores, all from the manifest of the environment picked above the editor. **Run** compiles the text in the
+browser (addresses in the `local:module.Class` form the service accepts; sidecar files compiled back in) and submits
+the document as a `.pbg` to `/simulation/run` in that environment.
 
 `get-simulations-status-batch` is not used: it is a GET with a JSON body, which browsers cannot send. The list page
 re-fetches while any row is still running.
@@ -53,11 +83,30 @@ three of these at `GET /webapp/config`:
 
 Rules for the token:
 
-- Only API requests carry it.
+- Only API requests carry it: a request gets the token only when its destination is the API's own origin and path
+  (`app/utils/apiAuth.ts`, after the platform's `isPlatformApiRequest`), never another host or a lookalike.
 - When the API rejects it (401), the UI drops it, carries on anonymously, and shows a banner. It does not retry.
+- When the session can no longer be renewed (the refresh token expired or was revoked), the UI signs the person out
+  locally and says so, with a button to sign in again.
 - Downloads by a signed-in user are fetched with the token, because a plain link cannot carry the header.
+- After sign-in the UI asks `GET /auth/me` who the caller is, once. A token the API rejects shows up at once, and the
+  account menu lists the roles the API sees.
+- "Create account" opens Auth0's sign-up page. Signing in returns to the page the person started from.
+
+The token is kept in the browser's local storage, with rotating refresh tokens, as the platform frontend does
+(decision D1 in [plan-webapp-login](plan-webapp-login.md)). Because script injection could read it, every `/ui`
+response carries these security headers:
+
+- A `Content-Security-Policy` that allows scripts only from this origin, plus the hashes of the build's inline
+  scripts, which the API computes from the files it serves. Connections are allowed only to this origin and the Auth0
+  tenant. The page cannot be framed. It is **report-only** until `WEBAPP_CSP_ENFORCE=true`. Browsers post violations
+  to `POST /webapp/csp-report`, which the API logs as `CSP violation report`.
+- `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`.
 
 Today a token changes nothing a caller can read, because every simulation is public.
+
+(2026-10-13: production publishes no `AUTH0_SPA_CLIENT_ID` yet, so the UI offers no login. It needs the SPA
+application created in the tenant, through auth0-pulumi, and its id set in `kustomize/config/compose-api-rke/api.env`.)
 
 ## Development
 

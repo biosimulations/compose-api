@@ -31,7 +31,26 @@ A4.1.particle-pde): its TR&D3 activities are quoted against these rows in
 (ReaDDy "initiated" by March 2026, delivered by August), the next-step column says which period each belongs to. No
 status was changed.
 
-## Roll-up (2026-09-09, statuses verified against GitHub; CP-BM added 2026-10-07)
+**Refreshed 2026-10-13 for the Year 3 progress outline** ([trd3-y3-progress-outline.md](../../../trd3-y3-progress-outline.md)):
+evidence from compose-api 0.7.11–0.7.25 and process-bigraph-lang 0.1.0–0.3.1 added to A1.1, A1.3.verify, A1.4, A2.2,
+A2.spec, A3.3a, A3.3e, A4.1.particle-pde and CP-BM. Two statuses changed, both marked `?` until a person confirms
+them: A3.3a and A4.1.particle-pde, `in-progress` → `delivered?`.
+
+## Roll-up (2026-10-13; previous roll-up 2026-09-09, CP-BM added 2026-10-07)
+
+| Status | Rows | of which `?` (inferred, unconfirmed) |
+|---|---|---|
+| delivered | 9 | 2 |
+| in-spirit | 6 | 0 |
+| in-progress | 23 | 1 |
+| deviated | 1 | 0 |
+| not-started | 6 | 0 |
+| blocked-external | 1 | 0 |
+| unknown (`?` only, needs a person) | 5 | 5 |
+| **total** | **51** | **8** |
+
+<details><summary>Roll-up of 2026-09-09</summary>
+
 
 | Status | Rows | of which `?` (inferred, unconfirmed) |
 |---|---|---|
@@ -44,12 +63,14 @@ status was changed.
 | unknown (`?` only, needs a person) | 5 | 5 |
 | **total** | **51** | **6** |
 
+</details>
+
 The six remaining `?` cannot be settled from code: A3.x.steer, and the five community/collaboration rows
 (A4.3.imag, A4.3.combine, CP1, CP7, CP10). A GitHub search cannot disprove an unrecorded collaboration, so those
 need email, subaward, or progress-report evidence.
 
 **Overdue or due now (Y1–Y2 promises not yet `delivered`/`in-spirit`):** A2.spec (Y1) · A3.2.engines (Y1) ·
-A3.3a (Y1) · A3.3e (begin Y1) · A4.1.ode-ssa (Y2) · A4.1.fba-bool (Y2) · A1.4 (Y2–3) · A1.2.cytosim,
+A3.3e (begin Y1) · A4.1.ode-ssa (Y2) · A4.1.fba-bool (Y2) · A1.4 (Y2–3) · A1.2.cytosim,
 A1.2.cahn, A1.2.springsalad (Y1–3).
 
 **Not started anywhere:** A1.2.cytosim · A3.2.engines · A4.1.ode-ssa · A4.1.fba-bool · A4.3.syncell · CP6.
@@ -69,7 +90,7 @@ to `viva-fenics` wiring closes A4.1.ode-pde.
 
 | Id | Commitment | Kind | Promised | Status | Evidence | Next |
 |---|---|---|---|---|---|---|
-| A1.1 | Many more published simulations in a publish/browse/search database; deposit tooling for developers and model repositories | infra + collab (TR&D2 curation) | Y1–5 | in-progress | `biosimulations/biosimulations` v9.65.4 · `biosimulations-bigg` 0.0.5 · `biosimulations-modeldb` 0.0.4 · `biosimulations-runutils` 0.1.0 · `biomodels-qc` 0.0.3 · `biomodels-regression` · `vivarium-collective/biomodels-comparison` (892 BioModels, multi-simulator) | Record current project count vs. the "500 + 1000 expected" baseline; confirm whether TR&D2 semantic search is wired in |
+| A1.1 | Many more published simulations in a publish/browse/search database; deposit tooling for developers and model repositories | infra + collab (TR&D2 curation) | Y1–5 | in-progress | `biosimulations/biosimulations` v9.65.4 · `biosimulations-bigg` 0.0.5 · `biosimulations-modeldb` 0.0.4 · `biosimulations-runutils` 0.1.0 · `biomodels-qc` 0.0.3 · `biomodels-regression` · `vivarium-collective/biomodels-comparison` (892 BioModels, multi-simulator) | Record current project count vs. the "500 + 1000 expected" baseline; confirm whether TR&D2 semantic search is wired in · *2026-10-13:* published SED-ML simulations now run on this service by source id (`biomodels:<id>`, `biosimulations:<project>`) on two solvers, grouped in comparisons against each other and the original results; regression suites of BioModels and biosimulations.org projects rerun monthly ([plan-sedml.md](../../../plan-sedml.md); #283–#289, #298, #301) |
 | A1.1.sed | "Revisit SED-ML as proposed to develop the next generation of the simulation description language" | standard | Y1–5 | in-progress | `biosimulations/sed` (Aug 2026, "new SED standard") · `biosimulators/bscose` (SED2 builder) · `vivarium-collective/sed2` (2023) | Decide whether SED2 goes to COMBINE as a proposal; link to A2.2 · *2026-10-07:* the Year 2 report calls SED2 TR&D3's biggest 2026 project and lists *"Enabled execution of SED2-style simulation experiments on the HPC"* under the Compose-API kernel; nothing in compose-api documents or tests that yet. Year 3 evidence: one SED2 document run through compose-api, or a dated note why not ([goals.md §4](../../../goals.md)). |
 
 <details><summary>Grant wording</summary>
@@ -114,7 +135,7 @@ and Mem3DG (one at a time, years 1-3)."
 
 | Id | Commitment | Kind | Promised | Status | Evidence | Next |
 |---|---|---|---|---|---|---|
-| A1.3.verify | Verification side: check simulations across simulators, link each study to a report | infra | Y3–4 | in-progress | `biosimulations/platform` = "Biological Simulation Verification Service (BSVS)", `biosim.biosimulations.org`, frontend-v0.2.2 (Sep 2026) · `biosimulators/bsvs` client · `biomodels-comparison` · `viva-uq` (PCE + Sobol UQ) | Define what the BSVS report covers vs. the grant's "credibility report" · *2026-10-07:* the Year 2 report's Activity 1 is this Verification API (`biosim-server`, `biosim-client`), used to verify hundreds of BioModels. |
+| A1.3.verify | Verification side: check simulations across simulators, link each study to a report | infra | Y3–4 | in-progress | `biosimulations/platform` = "Biological Simulation Verification Service (BSVS)", `biosim.biosimulations.org`, frontend-v0.2.2 (Sep 2026) · `biosimulators/bsvs` client · `biomodels-comparison` · `viva-uq` (PCE + Sobol UQ) | Define what the BSVS report covers vs. the grant's "credibility report" · *2026-10-07:* the Year 2 report's Activity 1 is this Verification API (`biosim-server`, `biosim-client`), used to verify hundreds of BioModels. · *2026-10-13:* this repository adds the verification side for SED-ML runs: the platform's score per report and variable, solver against solver and against the original results, with a comparison page and suites whose drift against a baseline is checked (Ciliberto 2003 matches its original results, worst score 0.019; the suites found three solver-step defects, recorded as expected failures). |
 | A1.3.cred | Credibility side: drag-and-drop model → report from TR&D1 Aim 3 libraries (IMAG ten rules, biophysical soundness, validation tests) | infra + collab (TR&D1) | Y3–4 | blocked-external | no TR&D1 credibility library integration found in any org | Ask TR&D1 what library exists; BSVS is the natural host |
 
 <details><summary>Grant wording</summary>
@@ -131,7 +152,7 @@ libraries developed by TR&D1 (years 3-4)."
 
 | Id | Commitment | Kind | Promised | Status | Evidence | Next |
 |---|---|---|---|---|---|---|
-| A1.4 | Web page to build composite simulations from the Aim 2 standard with Aim 3 tools; composite results stored alongside single-simulator runs | infra | Y2–3 | in-progress | `vivarium-collective/vivarium-workbench` v0.3.56 (Sep 2026) · `viva-catalog` ecosystem ledger · `vivarium-guide` · backend `viva-api` (sms.cam.uchc.edu) and this repo (compose.cam.uchc.edu) | Decide whether the workbench *is* the portal or feeds `biosimulations/platform`; see [D2](DEVIATIONS.md#d2) |
+| A1.4 | Web page to build composite simulations from the Aim 2 standard with Aim 3 tools; composite results stored alongside single-simulator runs | infra | Y2–3 | in-progress | `vivarium-collective/vivarium-workbench` v0.3.56 (Sep 2026) · `viva-catalog` ecosystem ledger · `vivarium-guide` · backend `viva-api` (sms.cam.uchc.edu) and this repo (compose.cam.uchc.edu) | Decide whether the workbench *is* the portal or feeds `biosimulations/platform`; see [D2](DEVIATIONS.md#d2) · *2026-10-13:* this repository's web app (`/ui`) writes a composite in `.pblang`, checks it as you type against the environment's interface manifest and runs it (#263, #270–#272, #280); results land as datasets of the same run records as single-simulator runs |
 | A1.4.onboard | "Simplify the onboarding of new Biosimulators and automatically include the process interface" | infra | Y2–3 | in-spirit | `viva-template` scaffold + `viva-superpowers` / `pbg-superpowers` skills generate a wrapped Process; `viva-catalog` auto-discovers repos by GitHub topic | Not automatic from `biosimulators_utils`; see D3 |
 
 <details><summary>Grant wording</summary>
@@ -156,8 +177,8 @@ item; see [D1](DEVIATIONS.md#d1).
 | A2.1a | Process interface: typed ports, queryable for ports/types/parameters/initial state/update, RPC-capable | standard | Y1 | in-spirit | process-bigraph paper arXiv:2512.23754 · `process-bigraph` v1.8.4 `Process`/`Step` API · `bigraph-schema` 1.6.0 typed ports incl. unit dimensions · RPC forms: `rest-process` (`/list-types`, `/list-processes`, …), `python-process`, `docker-process`, `julia-process`, `cpp-process` | Write it down (D1); TR&D1 variable abstraction and TR&D2 annotations on ports not evidenced |
 | A2.1b | Composite specification: wires from ports to shared states; adapters as processes | standard | Y1 | in-spirit | process-bigraph composite document (`processes`, `inputs`/`outputs` wires, `state`) · `process-bigraph-lang` DSL (Feb 2026) | Same |
 | A2.1c | Orchestration methods: multi-timestep scheduler and DAG workflow of steps; event-driven restructuring | standard | Y1 | in-spirit | process-bigraph interval-based update scheduling and dependency-triggered `Step`s; runtime add/remove of processes `?` | Confirm event-driven restructuring |
-| A2.2 | Exchange format (JSON/XML) for process interfaces and composites; integrated into community standards | standard | Y1, grows | in-spirit | JSON `.pbg` documents; `.pbif` (`bsander`); OMEX packaging in `pbest`; `bscose`/`sed` for SED2 | COMBINE engagement not evidenced (see A4.3) |
-| A2.spec | *Implied:* a versioned, human-readable CIP specification | standard | Y1 | in-progress | arXiv:2512.23754 · `process-bigraph/docs/architecture.md`, `docs/concepts/composites-and-templates.md`, `docs/distributed_lifecycles.md` · `bigraph-schema/doc/method_api_spec.md`, `doc/composite_algebra.md`, `doc/address_portability_and_discovery.md` · `vivarium-guide` | Consolidate into one versioned `CIP-spec`; this closes A2.1a–c and A2.2 |
+| A2.2 | Exchange format (JSON/XML) for process interfaces and composites; integrated into community standards | standard | Y1, grows | in-spirit | JSON `.pbg` documents; `.pbif` (`bsander`); OMEX packaging in `pbest`; `bscose`/`sed` for SED2 | COMBINE engagement not evidenced (see A4.3) · *2026-10-13:* interface manifests have a shared, versioned format with a JSON Schema (`pbg-interfaces/1`, process-bigraph-lang #56), produced inside each environment's image and served at `/registry/environments/{name}/manifest` (#270) |
+| A2.spec | *Implied:* a versioned, human-readable CIP specification | standard | Y1 | in-progress | arXiv:2512.23754 · `process-bigraph/docs/architecture.md`, `docs/concepts/composites-and-templates.md`, `docs/distributed_lifecycles.md` · `bigraph-schema/doc/method_api_spec.md`, `doc/composite_algebra.md`, `doc/address_portability_and_discovery.md` · `vivarium-guide` | Consolidate into one versioned `CIP-spec`; this closes A2.1a–c and A2.2 · *2026-10-13:* `process-bigraph-lang/docs/v2/design.md` defines `.pblang`, a textual, checkable projection of the composite document (interfaces, wiring, templates with open sites, units), a candidate human-readable half of the spec |
 
 <details><summary>Grant wording</summary>
 
@@ -192,11 +213,11 @@ XML and JSON-based formats for declaring a composite simulator with the CIP (yea
 
 | Id | Commitment | Kind | Promised | Status | Evidence | Next |
 |---|---|---|---|---|---|---|
-| A3.3a | Static composite checker with suggestions | infra | Y1 | in-progress | `bigraph-schema` validation · `process-bigraph-lang` LSP diagnostics · `bsander` (resolves abstract/missing components) · `viva-template` `lint-workspace.py` | No single checker that reads a composite and returns suggestions; decide whether the LSP is it |
+| A3.3a | Static composite checker with suggestions | infra | Y1 | delivered? | *2026-10-13:* `process-bigraph-lang` v2 checker (process-bigraph-lang #47–#56, releases 0.1.0–0.3.1): coded diagnostics with fixes (unknown ports, wire-type mismatches, missing config, writer conflicts, units, template sites), in the CLI, the language server and the browser; compose-api checks each run's composite against its environment's manifest (#271, #272) · earlier: `bigraph-schema` validation · `process-bigraph-lang` LSP diagnostics · `bsander` (resolves abstract/missing components) · `viva-template` `lint-workspace.py` | Confirm `delivered`: the checker reads a composite and returns coded findings; suggestions are hover/completion, not automatic repair |
 | A3.3b | Python scripting API for building, inspecting, running, evaluating composites; export to exchange format | infra | Y2–3 | delivered | `vivarium-interface` (Jun 2026) · `pbest` `CompositeBuilder` incl. parameter scans · `viva-superpowers` / `pbg-superpowers` | — |
 | A3.3c | In-line visualization of composites | infra | Y2 | delivered | `bigraph-viz` (Jul 2026) · bigraph-loom renderer (`vivarium-guide`) · workbench composite views | — |
 | A3.3d | Annotation-based semi-automated composition (units, UniProt, adapter insertion) with TR&D2 | infra + collab (TR&D2) | unspecified | in-progress | unit-dimension types in `bigraph-schema` (visible in `rest-process /list-types`) · `viva-compiler` | Ontology/UniProt matching not evidenced; needs TR&D2 input |
-| A3.3e | Adapter registry: registry of type/unit converters; checker suggests adapters | infra + standard | begin Y1 | in-progress | adapters exist but are not a registry category: `viva-simularium` (generic output adapters) · `viva-basic-processes` (MathExpression, Clock, Intervention) · registries: `viva-catalog` ecosystem index, `biosimulations/registry` · *2026-10-06:* this repo's registry manifest exists (`compose_api/registry/`, curation ladder, every catalog wrapper at *listed*), with an adapter category planned (strategy decision 5) · `bigraph-schema` 1.7.0 adds process contracts and `find_candidates` (contract subsumption), the engine half of "checker suggests adapters" | Add the `adapter` category to this repo's manifest with declared port types; seed counts↔concentrations, current↔molar flow |
+| A3.3e | Adapter registry: registry of type/unit converters; checker suggests adapters | infra + standard | begin Y1 | in-progress | adapters exist but are not a registry category: `viva-simularium` (generic output adapters) · `viva-basic-processes` (MathExpression, Clock, Intervention) · registries: `viva-catalog` ecosystem index, `biosimulations/registry` · *2026-10-06:* this repo's registry manifest exists (`compose_api/registry/`, curation ladder, every catalog wrapper at *listed*), with an adapter category planned (strategy decision 5) · `bigraph-schema` 1.7.0 adds process contracts and `find_candidates` (contract subsumption), the engine half of "checker suggests adapters" | Add the `adapter` category to this repo's manifest with declared port types; seed counts↔concentrations, current↔molar flow · *2026-10-13:* no adapter registry yet. `.pblang` declares `adapter` interfaces, and `biosim-toolkit` ships SED-ML adapter steps (data generators, reports, plots) registered in `registry_env`; neither is the unit/count adapter the Year 2 report names (goal G5) |
 
 ### Task 3.4 Methods for composite deployment
 
@@ -228,7 +249,7 @@ types (begin year 1, and gradually add more adapters)."
 | A4.1.ode-ssa | ODE/SSA hybrid (high-count species deterministic, low-count stochastic) | infra + science | **Y2** | not-started | `bio-bundles` has Vilar ODE/SSA *fixtures* only; no composite found | Build from `viva-tellurium` + `viva-copasi` SSA + a counts↔concentrations adapter (also seeds A3.3e) |
 | A4.1.ode-fba | ODE/FBA (fluxes constrain FBA) | infra + science | **Y2** | delivered | `spatio-flux` (spatial dFBA) · `cdFBA` · `CRM-FBA` · `viva-comets` · `bio-bundles/dfba` | Publish one as the canonical template in `viva-template` |
 | A4.1.fba-bool | FBA/Boolean (Boolean network gates FBA reactions) | infra + science | **Y2** | not-started | none | Needs a Boolean process (BoolNet/GINsim were cycle-1 Biosimulators) |
-| A4.1.particle-pde | Particle-based/PDE (Smoldyn + VCell PDE coupling) | infra + science | Y1–5 | in-progress | `viva-smoldyn` and `viva-vcell-fvsolver` exist separately; `viva-membrane-actin-composite` couples particles to mechanics · *2026-10-06:* `vivarium-collective/viva-pde-particle` (Sept–Oct 2026) couples a PDE process (finite volume, FEniCSx, VCell-FV geometry) to Smoldyn as process-bigraph co-simulation, benchmarks it against the hybrid solver embedded in `vcell-fvsolver`, and reproduces Schaff et al. 2016 Tests 1–5 (studies C1–C3); it runs on this service from its own image (#190) | Confirm ref [4] is Schaff et al. 2016 and, if the C1–C3 studies are accepted as the reproduction, mark `delivered` · *2026-10-07:* `viva-pde-particle` runs in production as a prebuilt simulator (compose-api 0.7.x); its full single-channel ensemble (Tests 3–5, 138 SLURM jobs) ran on mantis and reproduced the local metrics exactly. Year 3 evidence for G4 as well. |
+| A4.1.particle-pde | Particle-based/PDE (Smoldyn + VCell PDE coupling) | infra + science | Y1–5 | delivered? | `viva-smoldyn` and `viva-vcell-fvsolver` exist separately; `viva-membrane-actin-composite` couples particles to mechanics · *2026-10-06:* `vivarium-collective/viva-pde-particle` (Sept–Oct 2026) couples a PDE process (finite volume, FEniCSx, VCell-FV geometry) to Smoldyn as process-bigraph co-simulation, benchmarks it against the hybrid solver embedded in `vcell-fvsolver`, and reproduces Schaff et al. 2016 Tests 1–5 (studies C1–C3); it runs on this service from its own image (#190) | Confirm ref [4] is Schaff et al. 2016 and, if the C1–C3 studies are accepted as the reproduction, mark `delivered` · *2026-10-07:* `viva-pde-particle` runs in production as a prebuilt simulator (compose-api 0.7.x); its full single-channel ensemble (Tests 3–5, 138 SLURM jobs) ran on mantis and reproduced the local metrics exactly. Year 3 evidence for G4 as well. · *2026-10-13:* marked `delivered?` on that evidence; confirm. |
 | A4.1.ode-pde | ODE/PDE region variables on membranes/volumes | infra + science | Y1–5 | in-progress | `viva-fenics` couples a reaction process to real dolfinx PDEs via shared stores in `composites/reaction_diffusion.py` (Fisher–KPP) and `composites/turing_patterns.py`, both unit-tested; its studies are still `planned`. The reaction side is hand-written, not a wrapped ODE simulator | Wire `viva-tellurium`/`viva-copasi` to fenics or fvsolver; no simulator-to-simulator ODE/PDE composite exists |
 | A4.1.rbm-ode | RBM/ODE (NFSim observables feed ODEs) | infra + science | Y1–5 | in-progress | `viva-nfsim` (Jul 2026) · `viva-composite-nfsim-caspule` couples NFSim to MD instead of ODE | Add the ODE pairing |
 | A4.1.compartment | Compartment models with permeability, volume/shape, motility (with CP6) | science + collab (CP6) | Y1–5 | in-progress | `viva-autopoiesis` covers all three properties at toy fidelity: `processes_spatial.py::SpatialContainment` (permeability-gated transport), `Boundary` (volume derived from membrane lipids), `Chemotaxis` (motility); five completed studies including adversarial probes | CP6 involvement: none found, this is solo work. Raise fidelity beyond the self-described "toy metabolism" |
@@ -267,7 +288,7 @@ simulators will require more advanced tooling, which will only be available a fe
 | CP7 | SASCO (stress-adapted cancer organelles) | protocol for reaction-diffusion + regulation | condensate reaction methods | ? | none found | User to fill |
 | CP9 | Digital twins for synthetic biology | protocol + ensemble/inference processes | inference process interface | in-progress | `viva-uq` · `viva-torch` surrogates · `viva-ketchup` parameter estimation · `FBAKineticsPrototype` · `pbest` parameter scans | Name the "ensemble of simulations" process |
 | CP10 | Cell-free expression / NIST | interface, tools, models | experimental protocols | ? | none found | User to fill |
-| CP-BM | BioModels (T.J. Sego, University of Florida, the database's new maintainers; with Eran Agmon). *Not a numbered CP in the grant; added 2026-10-07.* | process-bigraph composites of every BioModels model, run locally and on the Center's services (this repository) | the BioModels corpus (1,000+ curated models) as a reproducibility and regression benchmark | in-progress | `vivarium-collective/viva-biomodels` (Oct 2026; BioModels regression workspace) · `biomodels-comparison` (892 models across simulators) · `biosimulations/biomodels-regression` (Aug 2026) · TR&D1's BioModels curation (Year 2 report; PLoS Comp Bio) | Goal G1's Collaborating Project: Sego's group runs a BioModels composite locally and submits it unchanged to compose-api, following the walkthrough themselves; report corpus-wide local/HPC agreement for Year 3 |
+| CP-BM | BioModels (T.J. Sego, University of Florida, the database's new maintainers; with Eran Agmon). *Not a numbered CP in the grant; added 2026-10-07.* | process-bigraph composites of every BioModels model, run locally and on the Center's services (this repository) | the BioModels corpus (1,000+ curated models) as a reproducibility and regression benchmark | in-progress | `vivarium-collective/viva-biomodels` (Oct 2026; BioModels regression workspace) · `biomodels-comparison` (892 models across simulators) · `biosimulations/biomodels-regression` (Aug 2026) · TR&D1's BioModels curation (Year 2 report; PLoS Comp Bio) | Goal G1's Collaborating Project: Sego's group runs a BioModels composite locally and submits it unchanged to compose-api, following the walkthrough themselves; report corpus-wide local/HPC agreement for Year 3 · *2026-10-13:* BioModels entries run on this service by id on COPASI and Tellurium; the `biomodels-ode-sample` suite (20 models) agrees on 14; of the other 6, five are traced to defects in the solver steps (pbsim-common 0.1.2), not the models, and one (BIOMD0000000043) is not yet investigated |
 
 ---
 

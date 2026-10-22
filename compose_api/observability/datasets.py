@@ -60,6 +60,9 @@ _KINDS = {
 _MEDIA_TYPES = {
     ".out": "text/plain",
     ".pber": "application/x-ndjson",
+    # A submitted process-bigraph document is JSON (the web UI's text viewer shows it); a COMBINE archive is a zip.
+    ".pbg": "application/json",
+    ".omex": "application/zip",
     ".parquet": "application/vnd.apache.parquet",
     ".npy": "application/x-npy",
     ".fenics": "application/vnd.vcell.results-bundle+zarr",
@@ -126,8 +129,13 @@ def normalize_path(uri: str) -> str | None:
     return normal
 
 
-#: Every kind :func:`infer_kind` can give; the web UI's kind filter lists these (``GET /webapp/config``).
-DATASET_KINDS = sorted({*_KINDS.values(), "file"})
+#: The kind of the file a simulation was submitted with, announced by the job script (``announce_input``).
+INPUT_KIND = "input"
+
+#: Every kind :func:`infer_kind` can give, and the input's; the web UI's kind filter lists them (``/webapp/config``).
+#: A SED-ML run's original archive, announced beside its input (``announce_source``; docs/plan-sedml.md, D6).
+SEDML_SOURCE_KIND = "sedml-omex"
+DATASET_KINDS = sorted({*_KINDS.values(), "file", INPUT_KIND, SEDML_SOURCE_KIND})
 
 
 def infer_kind(path: str) -> str:

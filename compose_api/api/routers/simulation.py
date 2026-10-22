@@ -1,19 +1,29 @@
 import logging
+from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, UploadFile
 
 from compose_api.authentication import OptionalPrincipal, describe_caller, get_optional_principal
 from compose_api.common.gateway.models import RouterConfig
-from compose_api.common.gateway.utils import get_simulation_request_from_uploaded_file
+from compose_api.common.gateway.utils import get_simulation_request_from_uploaded_file, wrap_document_in_omex
 from compose_api.config import get_settings
 from compose_api.dependencies import (
     get_database_service,
     get_job_monitor,
     get_simulation_service,
 )
+from compose_api.registry.manifest import SERVICE_BUNDLE
 from compose_api.registry.validation import AddressPolicy, SubmissionRejectedError, validate_submission
 from compose_api.simulation.handlers import (
     run_simulation,
+)
+from compose_api.simulation.labels import (
+    MAX_DESCRIPTION,
+    MAX_TAGS,
+    LabelError,
+    clean_description,
+    clean_tags,
+    labels,
 )
 from compose_api.simulation.models import (
     SimulationExperiment,
@@ -34,6 +44,24 @@ REJECTED_RESPONSE = {
 }
 
 
+def _checked_options(
+    simulator: str | None, interval_time: float, tags: list[str] | None, description: str | None
+) -> tuple[list[str], str | None]:
+    """The request's own parameters, checked before its file is read: a 400 for any the service does not accept."""
+    try:
+        run_tags, run_description = clean_tags(tags), clean_description(description)
+    except LabelError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    if simulator is not None:
+        try:
+            prebuilt_image(simulator)
+        except UnknownSimulatorError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+    if interval_time < 0 or interval_time > 1000:
+        raise HTTPException(status_code=400, detail="Invalid interval time, it has to be between 0 and 1000")
+    return run_tags, run_description
+
+
 @config.router.post(
     path="/run",
     operation_id="run-simulation",
@@ -50,40 +78,50 @@ async def submit_simulation(
     interval_time: float = 1.0,
     batch_submission: bool = False,
     simulator: str | None = None,
+    tags: Annotated[
+        list[str] | None,
+        Query(description=f"Tags to find the run by later; at most {MAX_TAGS}, each up to 64 characters"),
+    ] = None,
+    description: Annotated[
+        str | None, Query(description=f"What the run is for; up to {MAX_DESCRIPTION} characters")
+    ] = None,
 ) -> SimulationExperiment:
     """`simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);
-    the job then runs in that image instead of the shared container. Omitted: the shared container."""
+    the job then runs in that image instead of the shared container. Omitted: the shared container.
+
+    The run is labelled `source=upload` and `environment=<simulator or registry_env>`; `tags` and `description` are
+    stored with it as given (compose_api/simulation/labels.py) and filter `GET /simulations`."""
     logger.info("Simulation submission from %s", describe_caller(principal))
-    if simulator is not None:
-        try:
-            prebuilt_image(simulator)
-        except UnknownSimulatorError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
-    if interval_time < 0 or interval_time > 1000:
-        raise HTTPException(status_code=400, detail="Invalid interval time, it has to be between 0 and 1000")
+    run_tags, run_description = _checked_options(simulator, interval_time, tags, description)
 
     simulation_request = await get_simulation_request_from_uploaded_file(
         uploaded_file=uploaded_file, batch_submission=batch_submission
     )
     simulation_request.end_time_point = interval_time
     simulation_request.simulator = simulator
+    simulation_request.labels = labels(source="upload", environment=simulator or SERVICE_BUNDLE)
+    simulation_request.tags = run_tags
+    simulation_request.description = run_description
     # Checked before anything is recorded or submitted: the container resolves addresses itself, and will import
     # whatever module it is told to, so this is the only point a submission is checked. A prebuilt simulator's
-    # image brings its own processes, which this registry does not describe, so its documents are not checked here:
-    # the deployment vouches for the image by listing it (settings.prebuilt_simulators).
-    if simulator is None:
-        try:
-            validate_submission(
-                simulation_request.request_file_path,
-                simulation_request.simulation_file_type,
-                AddressPolicy(get_settings().address_policy),
-            )
-        except SubmissionRejectedError as e:
-            simulation_request.request_file_path.unlink(missing_ok=True)
-            raise HTTPException(
-                status_code=400,
-                detail={"message": e.message, "violations": [v.model_dump() for v in e.violations]},
-            ) from e
+    # image brings its own processes, which this registry does not describe, so its classes are not looked up (the
+    # deployment vouches for the image by listing it in settings.prebuilt_simulators); the unsafe forms, `local:!`
+    # and any other protocol, are refused for it all the same.
+    try:
+        validate_submission(
+            simulation_request.request_file_path,
+            simulation_request.simulation_file_type,
+            AddressPolicy(get_settings().address_policy),
+            registry=simulator is None,
+        )
+    except SubmissionRejectedError as e:
+        simulation_request.request_file_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=400,
+            detail={"message": e.message, "violations": [v.model_dump() for v in e.violations]},
+        ) from e
+
+    simulation_request = wrap_document_in_omex(simulation_request)
 
     sim_service = get_simulation_service()
     if sim_service is None:

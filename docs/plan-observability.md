@@ -1,6 +1,8 @@
 # Observability: run traces from process-bigraph events, and datasets a run advertises
 
-**Status (2026-10-07): steps 0–4 and 1b merged (#212–#216, viva-pde-particle#49) and deployed in 0.7.0/0.7.1, plus a simulation listing (#220); follow-ups for open questions 2 and 5 in review; step 5 waits on #192.** One PR per step, each merged on green with a merge commit.
+**Status (2026-10-07): steps 0–4 and 1b merged (#212–#216, viva-pde-particle#49) and deployed in 0.7.0/0.7.1, plus a simulation listing (#220); follow-ups for open questions 2 and 5 in review; step 5 waits on #192.** **(2026-10-13: step 4b merged as #225;
+#192 merged on 2026-10-08, so step 5 is unblocked and still open; the `worker_event` table has not been dropped.)**
+One PR per step, each merged on green with a merge commit.
 Deploying is a separate go from Jim.
 
 | Step | What | State |
@@ -11,8 +13,8 @@ Deploying is a separate go from Jim.
 | 2 | Events: job-script activation (O2), API and job-script events (O3), the file-tailing ingester (O4), events and trace routes, `ext`, CLI | **done** #214 |
 | 3 | Datasets: job-script manifest and `artifact.written` registrar (O5), store-relative content (O6), dataset routes, `ext`, CLI | **done** #215 |
 | 4 | Producer side in viva-pde-particle: `artifact.written` per result file, inside a `task` span | **done** viva-pde-particle#49; live once its image is rebuilt and the prebuilt pin bumped |
-| 4b | Follow-ups from the first production runs: per-process engine event files (open question 2; process-bigraph#229), the SLURM log as a dataset (open question 5) | **in review** |
-| 5 | Auth hookup after #192: stamp the owner at submit, a real `can_read` policy, visibility | blocked on #192 |
+| 4b | Follow-ups from the first production runs: per-process engine event files (open question 2; process-bigraph#229), the SLURM log as a dataset (open question 5) | **done** #225 (process-bigraph#229 merged) |
+| 5 | Auth hookup after #192: stamp the owner at submit, a real `can_read` policy, visibility | **open** (2026-10-13): #192 merged 2026-10-08. `can_read` already allows owner, public or admin (`authorization.py`); nothing stamps `owner_sub` at submit and there is no visibility `PATCH` |
 
 ## Context
 
@@ -41,7 +43,8 @@ checks. This plan builds both features so that the permission check is already i
   (`job_monitor.py:36-60`, `db/tables/hpc_tables.py:94`). But the simulation's `correlation_id` is minted *after*
   `sbatch` (`handlers.py:192`) and never passed to the container, so no job can emit a matching event. NATS is off by
   default, and the events route in `routers/results.py` is commented out.
-- **No artifacts, and failures leave nothing.** The job script (`simulation_service.py:93-124`) runs under `set -e`,
+- **No artifacts, and failures leave nothing.** The job script (`simulation_service.py:93-124`; since moved to
+  `compose_api/simulation/job_script.py`) runs under `set -e`,
   zips `output/` into `results.zip`, then deletes `output/`. A failed run stops before the zip, and the only trace is
   the SLURM `.out` in `htclogs/`, which no endpoint serves.
 - **The store is mounted.** The API pod reads results straight from the shared filesystem
@@ -114,6 +117,8 @@ dataset row is never overwritten by a lower-precedence feeder.
 | `GET /datasets?simulation_id&kind&q&limit&offset` | `DatasetPage` | `compose-api datasets list [--sim ID] [--kind]` |
 | `GET /datasets/{uuid}` | `Dataset` | `compose-api datasets show UUID` |
 | `GET /datasets/{uuid}/content` | the file, streamed, with `Range` support | `compose-api datasets get UUID [-o FILE]` |
+| `GET /datasets/{uuid}/files/{subpath}` | one file inside a directory dataset (2026-10-10, plan-viewers F1) | `compose-api datasets file UUID SUBPATH` |
+| `GET /simulations` | a page of simulations (2026-10-07, #220) | `compose-api simulations list` |
 
 `compose_api_client.ext` gains `events(id, after=)`, `iter_events(id, follow=)`, `trace(id)`, `datasets(...)` and
 `download_dataset(uuid, dest)`. There is no ingest endpoint: jobs never call the API.
@@ -133,7 +138,8 @@ dataset row is never overwritten by a lower-precedence feeder.
   `updated_at`; `UNIQUE(simulation_id, path)`.
 
 Startup runs `upgrade_db` again (`dependencies.py:165`), so columns land with the deploy, and the k8s migration Job
-moves from `poetry run` to `uv run`.
+moves from `poetry run` to `uv run`. (2026-10-13: as built, startup calls `create_db` (`dependencies.py:175`), which
+stamps an untracked database and then calls `upgrade_db`; the migration Job runs `/app/.venv/bin/alembic upgrade head`.)
 
 ### Step 1: identity and the authorization seam
 - O1: mint the correlation id before submission; the new `hpcrun` columns; the Alembic revision; `upgrade_db` at
@@ -141,7 +147,8 @@ moves from `poetry run` to `uv run`.
 - O7/O8: the `simulation` columns, `readable_simulation` and `can_read`, applied to the existing status and results
   routes. Tests with the allow-all policy and with a test policy that denies (fails closed).
 - *(Moved to step 1b, because it removes a k8s deployment and a public NodePort.)* Remove the NATS subscriber and
-  settings. Leave the `worker_event` table one release, then drop it.
+  settings. Leave the `worker_event` table one release, then drop it. (2026-10-13: not dropped yet, at 0.7.26; the
+  table, its ORM class and the `HPCDatabaseService` methods remain.)
 - *(Found building it.)* Startup ran `create_all` and a blind `stamp head`, which would have marked a database that
   alembic never tracked as already migrated, skipping the new columns. `create_db` now stamps an untracked database
   that already has tables at the pre-tracking baseline (`eb3903fb35a7`), then upgrades. Revisions are idempotent.
@@ -201,6 +208,15 @@ moves from `poetry run` to `uv run`.
 - **Listings apply the policy in SQL** (`authorization.readable_clause`), so a page never holds rows the caller can't
   see and `total` counts only readable ones.
 
+*(Added since, 2026-10-13.)*
+- **Directory datasets** (`*.fenics` results bundles, `*.zarr`, kind `results-bundle`) and
+  `GET /datasets/{id}/files/{subpath}` ([plan-viewers.md](plan-viewers.md) F1, #241).
+- **The submitted input is a dataset** of kind `input`: the job script's `announce_input` emits it at job start, with the
+  request's file type, end time and batch flag (#259); `python -m compose_api.observability.backfill_inputs`
+  registered earlier runs'. The job script makes it and `output/` readable to the API's user (#250, #261).
+- **Submissions that never reach SLURM fail** with a reason instead of staying "submitting": a dispatch heartbeat
+  and the job monitor's stale check (`submission_stale_seconds`, `submission_timeout_seconds`; #256, issue #238).
+
 ### Step 4: a producer that emits (viva-pde-particle)
 The ensemble entry point (`viva_pde_particle.benchmarks.fokker_planck:trial_rho`, run through
 `compose_client.EnsembleRun`) emits `artifact.written` for each result file and runs inside a `task` span. This proves
@@ -219,7 +235,8 @@ Stamp `owner_sub` from the principal at `POST /simulation/run`; `can_read` becom
   - the content route rejects `..` and symlinks out of the experiment directory;
   - the authorization seam fails closed under a denying policy.
 - **`tests-slurm` in CI.** An end-to-end run whose job script writes `events/job.jsonl` and `artifacts.jsonl`, and the
-  API ingests both.
+  API ingests both. (As built there is no `artifacts.jsonl`: the manifest is `artifact.written` events in
+  `events/job.jsonl`; see step 3.)
 - **Live, after deploy, with viva-pde-particle:**
   1. `compose-api run x.omex --simulator viva-pde-particle --wait`
   2. `compose-api events ID` shows `dispatch.*`, `slurm.*`, `job.start`/`job.end`, and the engine's
@@ -264,8 +281,14 @@ Stamp `owner_sub` from the principal at `POST /simulation/run`; `can_read` becom
    SLURM writes after the trap). `compose-api datasets get` reads it. Container builds still log to `htclogs/`.
 6. **Port or depend on viva-core?** Proposed: port the pure functions now, and depend on viva-core once it is
    published as its own package with a stable event and dataset API.
-7. **Which role reads everything?** *Decided 2026-10-07: settle it with #192.* `admin` stays a placeholder in
-   `compose_api/authorization.py` until the Auth0 tenant's role name is known.
+7. ~~**Which role reads everything?**~~ *Decided 2026-10-07: settle it with #192.* `admin` stays a placeholder in
+   `compose_api/authorization.py` until the Auth0 tenant's role name is known. *Answered 2026-10-08 (#192): the
+   tenant's roles arrive in the `https://api.biosimulations.org/roles` claim, and `ADMIN_ROLE = "admin"` is the
+   tenant role, kept in step with auth0-pulumi.* *Revised 2026-10-13 (Gate G1), approved by the maintainer
+   2026-10-15 in the CLI PR (#319):* the bypass is `Settings.admin_role`, default empty, so the shared BioSim tenant
+   `admin` role no longer reads every private simulation unless a deployment configures it; set `ADMIN_ROLE` once a
+   compose-specific admin role is provisioned in auth0-pulumi, alongside owner stamping. `ADMIN_ROLE=user` is
+   refused at startup, because every verified caller holds `user`.
 8. ~~**Before the step-1 deploy**~~ *Done 2026-10-07 (prod was at `eb3903fb35a7`; migrated to `c41f0b7a9d20` on
    the 0.7.0 deploy).* check the production database's `alembic_version` (expected `eb3903fb35a7`, or no
    table at all). Either is handled, but a different value means someone migrated by hand.

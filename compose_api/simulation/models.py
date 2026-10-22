@@ -74,6 +74,8 @@ class JobStatus(StrEnum):
 class HpcRun(BaseModel):
     database_id: int
     slurmjobid: int | None  # Slurm job ID; None for a submission that failed before reaching SLURM
+    backend: str = "slurm"  # where the job runs: slurm, k8s (docs/plan-environment-builds.md, E1)
+    external_id: str | None = None  # its id there: the SLURM job id, or the Kubernetes Job's name
     correlation_id: str  # to correlate with the WorkerEvent, if applicable ("N/A" if not applicable)
     job_type: JobType
     sim_id: int | None
@@ -171,6 +173,29 @@ class DownloadedContainerImage(RemoteContainerImage):
     downloaded_at: datetime.datetime | None = None
 
 
+class ImageKind(StrEnum):
+    SIF = "sif"  # a SIF file on the shared filesystem, which the cluster's jobs run from
+    OCI = "oci"  # an image in a registry (docs/plan-environment-builds.md, phase 5)
+
+
+class EnvironmentImage(BaseModel):
+    """A built or pulled image of a simulator's definition (docs/plan-environment-builds.md, E3).
+
+    Images are write-once (E4): one that turns out missing is marked unavailable, never replaced in place.
+    """
+
+    database_id: int
+    simulator_id: int
+    kind: ImageKind
+    location: str  # a path on the shared filesystem (sif), or a registry reference (oci)
+    digest: str | None = None  # "sha256:<hex>" of the file, or the registry's manifest digest
+    size_bytes: int | None = None
+    hpcrun_id: int | None = None  # the build that produced it; None when adopted or pulled
+    available: bool = True
+    created_at: datetime.datetime | None = None
+    verified_at: datetime.datetime | None = None
+
+
 class SimulatorVersion(Simulator):
     database_id: int  # Unique identifier for the simulator version
     created_at: datetime.datetime | None = None
@@ -218,6 +243,13 @@ class SimulationRequest(BaseModel):
     is_batch: bool
     # A prebuilt simulator by name (settings.prebuilt_simulators); None runs the shared container.
     simulator: str | None = None
+    # Stored on the simulation (compose_api/simulation/labels.py): the service's labels, the submitter's tags and text.
+    labels: dict[str, str] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
+    description: str | None = None
+    # A SED-ML run's original archive (docs/plan-sedml.md, D6): uploaded beside the input as `source.omex` and
+    # announced as a `sedml-omex` dataset; the input is the process-bigraph archive translated from it.
+    source_file_path: Path | None = None
 
 
 class SimulationResults(BaseModel):
@@ -278,6 +310,9 @@ class SimulationSummary(BaseModel):
     exit_code: int | None = None
     error_message: str | None = None
     trace_id: str | None = None
+    labels: dict[str, str] = Field(default_factory=dict)  # written by the service: what the run is
+    tags: list[str] = Field(default_factory=list)  # the submitter's
+    description: str | None = None
 
 
 class SimulationDetail(SimulationSummary):

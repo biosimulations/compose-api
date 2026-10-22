@@ -40,11 +40,19 @@ exit "${FAKE_EXIT:-0}"
 """
 
 
-def _run(tmp_path: Path, exit_code: int, bundle: bool = False) -> tuple[subprocess.CompletedProcess[str], Path]:
+INPUT = b"PK\x03\x04 a COMBINE archive"
+
+
+def _run(
+    tmp_path: Path, exit_code: int, bundle: bool = False, staged_input: bool = True
+) -> tuple[subprocess.CompletedProcess[str], Path]:
     if shutil.which("zip") is None:
         pytest.skip("zip is not installed")
     experiment = tmp_path / "experiment-x"
     experiment.mkdir()
+    if staged_input:
+        (experiment / "x.omex").write_bytes(INPUT)  # where submit_simulation_job copies the request's file
+        (experiment / "x.omex").chmod(0o600)  # as uploaded: scp keeps the mode of the API's NamedTemporaryFile
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     fake = bin_dir / "singularity"
@@ -87,6 +95,7 @@ def test_a_successful_job_records_its_span_and_passes_the_trace_on(tmp_path: Pat
     assert [e.event for e in job] == [
         "span.start",
         "job.start",
+        "artifact.written",  # the input, before the simulator runs
         "artifact.written",
         "artifact.written",
         "artifact.written",
@@ -94,15 +103,24 @@ def test_a_successful_job_records_its_span_and_passes_the_trace_on(tmp_path: Pat
         "span.end",
     ]
     assert all(e.span_id == job_span_id(CORRELATION) and e.source == "job-4242" for e in job)
-    assert [e.seq for e in job] == list(range(1, 8))  # the manifest loop must not run in a subshell
+    assert [e.seq for e in job] == list(range(1, 9))  # the manifest loop must not run in a subshell
     artifacts = {e.payload["uri"]: e.payload for e in job if e.event == "artifact.written"}
-    assert set(artifacts) == {"output/out.txt", "results.zip", "job.out"}
+    assert set(artifacts) == {"x.omex", "output/out.txt", "results.zip", "job.out"}
     assert artifacts["job.out"] == {"uri": "job.out", "kind": "log", "name": "SLURM log"}
+    assert artifacts["x.omex"] == {
+        "uri": "x.omex",
+        "kind": "input",
+        "name": "Simulation input",
+        "bytes": len(INPUT),
+        "sha256": hashlib.sha256(INPUT).hexdigest(),
+        "attributes": {"file_type": "omex", "end_time": 1.0, "batch": False},
+    }
+    assert (experiment / "x.omex").stat().st_mode & 0o044 == 0o044  # readable by the API
     out = experiment / "output" / "out.txt"
     assert out.exists()  # output/ is kept: its files are datasets
     assert artifacts["output/out.txt"]["bytes"] == out.stat().st_size
     assert artifacts["output/out.txt"]["sha256"] == hashlib.sha256(out.read_bytes()).hexdigest()
-    assert job[5].payload == {"exit_code": 0, "wall_s": job[5].payload["wall_s"]}
+    assert job[6].payload == {"exit_code": 0, "wall_s": job[6].payload["wall_s"]}
     spans: dict[str, RunSpan] = {}
     apply_span_events(spans, job)
     assert spans[job_span_id(CORRELATION)].status == "ok"
@@ -119,15 +137,22 @@ def test_a_zarr_store_is_announced_as_one_dataset(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     job = _read(experiment / "events" / "job.jsonl")
     artifacts = {e.payload["uri"]: e.payload for e in job if e.event == "artifact.written"}
-    assert set(artifacts) == {"output/out.txt", "output/run.fenics", "results.zip", "job.out"}
+    assert set(artifacts) == {"x.omex", "output/out.txt", "output/run.fenics", "results.zip", "job.out"}
     bundle = artifacts["output/run.fenics"]
     assert "sha256" not in bundle
     assert bundle["bytes"] >= len("{}\n") + len("abcd")  # du counts blocks where -b is missing
     assert (experiment / "output" / "run.fenics" / ".zattrs").stat().st_mode & 0o044 == 0o044  # readable by the API
 
 
+def test_a_job_without_its_input_announces_none(tmp_path: Path) -> None:
+    result, experiment = _run(tmp_path, 0, staged_input=False)
+    assert result.returncode == 0, result.stderr
+    artifacts = [e.payload for e in _read(experiment / "events" / "job.jsonl") if e.event == "artifact.written"]
+    assert all(a.get("kind") != "input" for a in artifacts)
+
+
 def test_a_failed_job_records_its_exit_code(tmp_path: Path) -> None:
-    result, experiment = _run(tmp_path, 3)
+    result, experiment = _run(tmp_path, 3, staged_input=False)
     assert result.returncode == 3
     job = _read(experiment / "events" / "job.jsonl")
     # What the run wrote before failing is still announced; there is no archive.

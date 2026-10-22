@@ -25,6 +25,14 @@ script run under bash with a fake `singularity`. The SLURM end-to-end check now 
 datasets. CI also builds the production image on every pull request (#219), after the 0.7.0 tag's build had failed
 on a Dockerfile no test exercised. F3 is still open.
 
+**And since (2026-10-13).** **345 tests** collected, 22 of them marked `slurm` and 9 `cluster_only`. The
+NATS path is retired (#216), so `tests/common/test_nats.py`, and with it F7's race, is gone. F14's client-side
+preflight exists: `publish-client.yml` installs the built wheel into a Python 3.11 venv, checks that FastAPI is
+absent and runs `compose-api --help` and `scripts/client-smoke.py` before uploading. F8's locator is replaced by an injected `SSHProvider`
+(`simulation_service.py:59`, `data_service.py:23`), and F9's `@lru_cache` is now at `config.py:147`, with
+`override_settings` at `:176`. Still open: F3 (`main` is unprotected; ruleset 8163803 is `disabled`), the 90% target
+in `codecov.yaml`, and F12's leftovers (`tests/simulation/dont_test_sedml.py`, `tox.ini`).
+
 **Scope.** This repository (`compose-api`) and `pbest` are the subjects. The other repositories in the loop are
 included as context and as sources of practice worth copying or avoiding: `platform`, `sms-api`, `biosim-client`,
 `compose-server`, `process-bigraph`, `bigraph-schema`, `spatio-flux`, `pbg-vcell-fvsolver`, `vivarium-workbench`,
@@ -349,7 +357,8 @@ conservation to 2%, and no CI to run them.
 Both were observed on **docs-only** pull requests during a single afternoon, which is the point: neither could
 possibly have been caused by the change under review.
 
-**A race, in `tests/common/test_nats.py::test_sync_producer_with_async_subscriber`** (PR #161):
+**A race, in `tests/common/test_nats.py::test_sync_producer_with_async_subscriber`** (PR #161; 2026-10-13: the test
+was deleted with the NATS path in #216):
 
 ```
 AssertionError: assert b'hello world 5' == b'hello world 9'
@@ -382,6 +391,8 @@ Any fix for F1 that adds more containers — the SLURM cluster in A4 pulls about
 than narrowing it, so a registry mirror or a pull-retry belongs in that work rather than after it.
 
 ### F8. The SSH dependency is located, not injected
+
+*(2026-10-13, as built: services now take an `SSHProvider`; the line references below are from 2026-09-11.)*
 
 **First, what is not wrong.** `get_ssh_service()` (`compose_api/common/ssh/ssh_service.py:111`) returns a fresh
 `SSHService` on every call, and that is deliberate and correct. `SSHService` is a **stateless value object**: it
@@ -427,6 +438,8 @@ Evidence someone hit this: `tests/fixtures/slurm_fixtures.py:37` contains a comm
 The fix is F.b below, and it is small.
 
 ### F9. Settings have no override seam, and the obvious one does not compose
+
+*(2026-10-13, as built: `override_settings` in `compose_api/config.py`; `@lru_cache` is now at `config.py:147`.)*
 
 Services sit behind a mutable module-level singleton with a setter. Settings sit behind `@lru_cache`
 (`compose_api/config.py:90`), which has a getter and no setter. Same intent, only one has a seam.
@@ -581,7 +594,8 @@ Size S. The action is two things: drop the dead override here, and add a wheel-i
 client repository, not to this one.
 
 **Update 2026-09-22:** the dead override is removed. `uv lock` was unchanged by the removal, which confirms it was
-inert. The client-side preflight remains open, and moves into this repository when the client does (strategy
+inert. ~~The client-side preflight remains open,~~ (2026-10-13: done; the client moved here in #206 and
+`publish-client.yml` (#210) smoke-tests the wheel without FastAPI before publishing.) The client-side preflight remained open, and moves into this repository when the client does (strategy
 decision 1).
 
 ## Part 3. Candidate actions
