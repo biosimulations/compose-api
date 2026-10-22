@@ -82,6 +82,17 @@ Everything in stage 1 is lost when the process stops: the task, the uploaded fil
   | `lease_owner`, `lease_expires_at` | which worker holds the row, until when |
   | `created_at`, `updated_at` | |
 
+- **The row also keeps what dispatch needs from the request.** Today that exists only in memory: the file type, end
+  time, batch flag, prebuilt simulator, and the staged input and source paths. They are kept as `request` (JSONB), so
+  the worker can rebuild the job after a restart.
+- **Staging and file ownership.**
+  - The API (uid 16997) writes the staged files world-readable under `<namespace>/staging/<experiment_id>/`, not into
+    the experiment directory. The experiment directory stays the SLURM service user's, made by that user with
+    `mkdir -p`, so the job can write its outputs and events there.
+  - At dispatch, the worker copies the staged files into the experiment directory over SSH, a copy on the cluster
+    itself rather than a transfer.
+  - Where the store is not mounted (development, tests), staging falls back to a local directory
+    (`submission_staging_dir`), and the worker uploads from it with `scp` as today.
 - **Backfill:** every existing simulation with no run gets a `failed` row. #256 has already failed them.
 - **Failures surface as today,** through the FAILED `HpcRun` with `slurmjobid = null` that #256 introduced
   (`hpc_db.fail_submission`).
