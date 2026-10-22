@@ -1,0 +1,312 @@
+# A regression and reproducibility suite (docs/plan-sedml.md, phase 6): the first 300 curated SBML models in EBI
+# BioModels (BIOMD0000000001 upward), each run on every solver and compared. Generated on 2026-10-22 by
+# scripts/biomodels_suite.py; regenerate rather than edit the sources. Every curated SBML entry is included, whether or
+# not it translates: the first run's failures are its findings, and known disagreements become `expected` entries.
+# Its runs are queued behind interactive ones, at most half of submission_max_active_jobs at a time
+# (docs/plan-durable-submission.md, Q3).
+name: biomodels-curated-300
+description: The first 300 curated SBML models in EBI BioModels, each run on COPASI and Tellurium and compared.
+solvers: [copasi, tellurium]
+tolerances: {rel_tol: 1.0e-4, abs_tol_min: 1.0e-3, abs_tol_scale: 1.0e-5}
+expected: []
+sources:
+  - biomodels:BIOMD0000000001  # Edelstein1996 - EPSP ACh event
+  - biomodels:BIOMD0000000002  # Edelstein1996 - EPSP ACh species
+  - biomodels:BIOMD0000000003  # Goldbeter1991 - Min Mit Oscil
+  - biomodels:BIOMD0000000004  # Goldbeter1991 - Min Mit Oscil, Expl Inact
+  - biomodels:BIOMD0000000005  # Tyson1991 - Cell Cycle 6 var
+  - biomodels:BIOMD0000000006  # Tyson1991 - Cell Cycle 2 var
+  - biomodels:BIOMD0000000007  # Novak1997 - Cell Cycle
+  - biomodels:BIOMD0000000008  # Gardner1998 - Cell Cycle Goldbeter
+  - biomodels:BIOMD0000000009  # Huang1996 - Ultrasensitivity in MAPK cascade
+  - biomodels:BIOMD0000000010  # Kholodenko2000 - Ultrasensitivity and negative feedback bring oscillations in MAPK cascade
+  - biomodels:BIOMD0000000011  # Levchenko2000_MAPK_noScaffold
+  - biomodels:BIOMD0000000012  # Elowitz2000 - Repressilator
+  - biomodels:BIOMD0000000013  # Poolman2004_CalvinCycle
+  - biomodels:BIOMD0000000014  # Levchenko2000_MAPK_Scaffold
+  - biomodels:BIOMD0000000015  # Curto1998 - purine metabolism
+  - biomodels:BIOMD0000000016  # Goldbeter1995_CircClock
+  - biomodels:BIOMD0000000017  # Hoefnagel2002_PyruvateBranches
+  - biomodels:BIOMD0000000018  # Morrison1989 - Folate Cycle
+  - biomodels:BIOMD0000000019  # Schoeberl2002 - EGF MAPK
+  - biomodels:BIOMD0000000020  # hodgkin-huxley squid-axon 1952
+  - biomodels:BIOMD0000000021  # Leloup1999_CircClock
+  - biomodels:BIOMD0000000022  # Ueda2001_CircClock
+  - biomodels:BIOMD0000000023  # Rohwer2001_Sucrose
+  - biomodels:BIOMD0000000024  # Scheper1999_CircClock
+  - biomodels:BIOMD0000000025  # Smolen2002_CircClock
+  - biomodels:BIOMD0000000026  # Markevich2004_MAPK_orderedElementary
+  - biomodels:BIOMD0000000027  # Markevich2004 - MAPK double phosphorylation,  ordered Michaelis-Menton
+  - biomodels:BIOMD0000000028  # Markevich2004_MAPK_phosphoRandomElementary
+  - biomodels:BIOMD0000000029  # Markevich2004_MAPK_phosphoRandomMM
+  - biomodels:BIOMD0000000030  # Markevich2004_MAPK_AllRandomElementary
+  - biomodels:BIOMD0000000031  # Markevich2004_MAPK_orderedMM2kinases
+  - biomodels:BIOMD0000000032  # Kofahl2004_PheromonePathway
+  - biomodels:BIOMD0000000033  # Brown2004 - NGF and EGF signaling
+  - biomodels:BIOMD0000000034  # Smolen2004_CircClock
+  - biomodels:BIOMD0000000035  # Vilar2002_Oscillator
+  - biomodels:BIOMD0000000036  # Tyson1999_CircClock
+  - biomodels:BIOMD0000000037  # Marwan2003 - Genetics, regulatory hierarchy between genes
+  - biomodels:BIOMD0000000038  # Rohwer2000_Phosphotransferase_System
+  - biomodels:BIOMD0000000039  # Marhl2000_CaOscillations
+  - biomodels:BIOMD0000000040  # Field1974_Oregonator
+  - biomodels:BIOMD0000000041  # Kongas2007 - Creatine Kinase in energy metabolic signaling in muscle
+  - biomodels:BIOMD0000000042  # Nielsen1998_Glycolysis
+  - biomodels:BIOMD0000000043  # Borghans1997 - Calcium Oscillation - Model 1
+  - biomodels:BIOMD0000000044  # Borghans1997 - Calcium Oscillation - Model 2
+  - biomodels:BIOMD0000000045  # Borghans1997 - Calcium Oscillation - Model 3
+  - biomodels:BIOMD0000000046  # Olsen2003_peroxidase
+  - biomodels:BIOMD0000000047  # Oxhamre2005_Ca_oscillation
+  - biomodels:BIOMD0000000048  # Kholodenko1999 - EGFR signaling
+  - biomodels:BIOMD0000000049  # Sasagawa2005_MAPK
+  - biomodels:BIOMD0000000050  # Martins2003_AmadoriDegradation
+  - biomodels:BIOMD0000000051  # Chassagnole2002_Carbon_Metabolism
+  - biomodels:BIOMD0000000052  # Brands2002 - Monosaccharide-casein systems
+  - biomodels:BIOMD0000000053  # Ferreira2003_CML_generation2
+  - biomodels:BIOMD0000000054  # Ataullahkhanov1996_Adenylate
+  - biomodels:BIOMD0000000055  # Locke2005 - Circadian Clock
+  - biomodels:BIOMD0000000056  # Chen2004 - Cell Cycle Regulation
+  - biomodels:BIOMD0000000057  # Sneyd2002_IP3_Receptor
+  - biomodels:BIOMD0000000058  # Bindschadler2001_coupled_Ca_oscillators
+  - biomodels:BIOMD0000000059  # Fridlyand2003_Calcium_flux
+  - biomodels:BIOMD0000000060  # Keizer1996_Ryanodine_receptor_adaptation
+  - biomodels:BIOMD0000000061  # Hynne2001_Glycolysis
+  - biomodels:BIOMD0000000062  # Bhartiya2003_Tryptophan_operon
+  - biomodels:BIOMD0000000063  # Galazzo1990_FermentationPathwayKinetics
+  - biomodels:BIOMD0000000064  # Teusink2000_Glycolysis
+  - biomodels:BIOMD0000000065  # Yildirim2003_Lac_Operon
+  - biomodels:BIOMD0000000066  # Chassagnole2001_Threonine Synthesis
+  - biomodels:BIOMD0000000067  # Fung2005_Metabolic_Oscillator
+  - biomodels:BIOMD0000000068  # Curien2003_MetThr_synthesis
+  - biomodels:BIOMD0000000069  # Fuss2006_MitoticActivation
+  - biomodels:BIOMD0000000070  # Holzhutter2004_Erythrocyte_Metabolism
+  - biomodels:BIOMD0000000071  # Bakker2001_Glycolysis
+  - biomodels:BIOMD0000000072  # Yi2003_GproteinCycle
+  - biomodels:BIOMD0000000073  # Leloup2003_CircClock_DD
+  - biomodels:BIOMD0000000074  # Leloup2003_CircClock_DD_REV-ERBalpha
+  - biomodels:BIOMD0000000075  # Xu2003 - Phosphoinositide turnover
+  - biomodels:BIOMD0000000076  # Cronwright2002_Glycerol_Synthesis
+  - biomodels:BIOMD0000000077  # Blum2000_LHsecretion_1
+  - biomodels:BIOMD0000000078  # Leloup2003_CircClock_LD
+  - biomodels:BIOMD0000000079  # Goldbeter2006_weightCycling
+  - biomodels:BIOMD0000000080  # Thomsen1989_AdenylateCyclase
+  - biomodels:BIOMD0000000081  # Suh2004_KCNQ_Regulation
+  - biomodels:BIOMD0000000082  # Thomsen1988_AdenylateCyclase_Inhibition
+  - biomodels:BIOMD0000000083  # Leloup2003_CircClock_LD_REV-ERBalpha
+  - biomodels:BIOMD0000000084  # Hornberg2005_ERKcascade
+  - biomodels:BIOMD0000000085  # Maurya2005_GTPaseCycle_reducedOrder
+  - biomodels:BIOMD0000000086  # Bornheimer2004_GTPaseCycle
+  - biomodels:BIOMD0000000087  # Proctor2006_telomere
+  - biomodels:BIOMD0000000088  # Maeda2006_MyosinPhosphorylation
+  - biomodels:BIOMD0000000089  # Locke2006_CircClock_LL
+  - biomodels:BIOMD0000000090  # Wolf2001_Respiratory_Oscillations
+  - biomodels:BIOMD0000000091  # Proctor2005 - Actions of chaperones and their role in ageing
+  - biomodels:BIOMD0000000092  # Fuentes2005_ZymogenActivation
+  - biomodels:BIOMD0000000093  # Yamada2003_JAK_STAT_pathway
+  - biomodels:BIOMD0000000094  # Yamada2003_JAK_STAT_SOCS1_knockout
+  - biomodels:BIOMD0000000095  # Zeilinger2006_PRR7-PRR9-Y
+  - biomodels:BIOMD0000000096  # Zeilinger2006_PRR7-PRR9light-Y
+  - biomodels:BIOMD0000000097  # Zeilinger2006_PRR7-PRR9light-Yprime
+  - biomodels:BIOMD0000000098  # Goldbeter1990_CalciumSpike_CICR
+  - biomodels:BIOMD0000000099  # Laub1998_SpontaneousOscillations
+  - biomodels:BIOMD0000000100  # Rozi2003_GlycogenPhosphorylase_Activation
+  - biomodels:BIOMD0000000101  # Vilar2006_TGFbeta
+  - biomodels:BIOMD0000000102  # Legewie2006_apoptosis_WT
+  - biomodels:BIOMD0000000103  # Legewie2006_apoptosis_NC
+  - biomodels:BIOMD0000000104  # Klipp2002_MetabolicOptimization_linearPathway(n=2)
+  - biomodels:BIOMD0000000105  # Proctor2007 - Age related decline of proteolysis, ubiquitin-proteome system
+  - biomodels:BIOMD0000000106  # Yang2007_ArachidonicAcid
+  - biomodels:BIOMD0000000107  # Novak1993 - Cell cycle M-phase control
+  - biomodels:BIOMD0000000108  # Kowald2006_SOD
+  - biomodels:BIOMD0000000109  # Haberichter2007_cellcycle
+  - biomodels:BIOMD0000000110  # Qu2003_CellCycle
+  - biomodels:BIOMD0000000111  # Novak2001_FissionYeast_CellCycle
+  - biomodels:BIOMD0000000112  # Clarke2006_Smad_signalling
+  - biomodels:BIOMD0000000113  # Dupont1992_Ca_dpt_protein_phospho
+  - biomodels:BIOMD0000000114  # Somogyi1990_CaOscillations
+  - biomodels:BIOMD0000000115  # Somogyi1990_CaOscillations_SingleCaSpike
+  - biomodels:BIOMD0000000116  # McClean2007_CrossTalk
+  - biomodels:BIOMD0000000117  # Dupont1991_CaOscillation
+  - biomodels:BIOMD0000000118  # Golomb2006_SomaticBursting
+  - biomodels:BIOMD0000000119  # Golomb2006_SomaticBursting_nonzero[Ca]
+  - biomodels:BIOMD0000000120  # Chan2004_TCell_receptor_activation
+  - biomodels:BIOMD0000000121  # Clancy2001_Kchannel
+  - biomodels:BIOMD0000000122  # Fisher2006_Ca_Oscillation_dpdnt_NFAT_dynamics
+  - biomodels:BIOMD0000000123  # Fisher2006_NFAT_Activation
+  - biomodels:BIOMD0000000124  # Wu2006_K+Channel
+  - biomodels:BIOMD0000000125  # Komarova2005_TheoreticalFramework_BasicArchitecture
+  - biomodels:BIOMD0000000126  # Clancy2002_CardiacSodiumChannel_WT
+  - biomodels:BIOMD0000000127  # Izhikevich2003_SpikingNeuron
+  - biomodels:BIOMD0000000128  # Bertram2006_Endothelin
+  - biomodels:BIOMD0000000129  # Izhikevich2004_SpikingNeurons_inhibitionInducedSpiking
+  - biomodels:BIOMD0000000130  # Izhikevich2004_SpikingNeurons_integrator
+  - biomodels:BIOMD0000000131  # Izhikevich2004_SpikingNeurons_reboundBurst
+  - biomodels:BIOMD0000000132  # Izhikevich2004_SpikingNeurons_reboundSpike
+  - biomodels:BIOMD0000000133  # Izhikevich2004_SpikingNeurons_resonator
+  - biomodels:BIOMD0000000134  # Izhikevich2004_SpikingNeurons_SpikeLatency
+  - biomodels:BIOMD0000000135  # Izhikevich2004_SpikingNeurons_subthresholdOscillations
+  - biomodels:BIOMD0000000136  # Izhikevich2004_SpikingNeurons_thresholdVariability
+  - biomodels:BIOMD0000000137  # Sedaghat2002_InsulinSignalling_noFeedback
+  - biomodels:BIOMD0000000138  # Tabak2007_dopamine
+  - biomodels:BIOMD0000000139  # Hoffmann2002_KnockOut_IkBNFkB_Signaling
+  - biomodels:BIOMD0000000140  # Hoffmann2002_WT_IkBNFkB_Signaling
+  - biomodels:BIOMD0000000141  # Izhikevich2004_SpikingNeurons_Class1Excitable
+  - biomodels:BIOMD0000000142  # Izhikevich2004_SpikingNeurons_Class2Excitable
+  - biomodels:BIOMD0000000143  # Olsen2003_neutrophil_oscillatory_metabolism
+  - biomodels:BIOMD0000000144  # Calzone2007_CellCycle
+  - biomodels:BIOMD0000000145  # Wang2007 - ATP induced intracellular Calcium Oscillation
+  - biomodels:BIOMD0000000146  # Hatakeyama2003_MAPK
+  - biomodels:BIOMD0000000147  # ODea2007_IkappaB
+  - biomodels:BIOMD0000000148  # Komarova2003_BoneRemodeling
+  - biomodels:BIOMD0000000149  # Kim2007 - Crosstalk between Wnt and ERK pathways
+  - biomodels:BIOMD0000000150  # Morris2002_CellCycle_CDK2Cyclin
+  - biomodels:BIOMD0000000151  # Singh2006_IL6_Signal_Transduction
+  - biomodels:BIOMD0000000152  # Fernandez2006_ModelA
+  - biomodels:BIOMD0000000153  # Fernandez2006_ModelB
+  - biomodels:BIOMD0000000154  # Zatorsky2006_p53_Model3
+  - biomodels:BIOMD0000000155  # Zatorsky2006_p53_Model6
+  - biomodels:BIOMD0000000156  # Zatorsky2006_p53_Model5
+  - biomodels:BIOMD0000000157  # Zatorsky2006_p53_Model4
+  - biomodels:BIOMD0000000158  # Zatorsky2006_p53_Model2
+  - biomodels:BIOMD0000000159  # Zatorsky2006_p53_Model1
+  - biomodels:BIOMD0000000160  # Xie2007_CircClock
+  - biomodels:BIOMD0000000161  # Eungdamrong2007_Ras_Activation
+  - biomodels:BIOMD0000000162  # Hernjak2005_Calcium_Signaling
+  - biomodels:BIOMD0000000163  # Zi2007_TGFbeta_signaling
+  - biomodels:BIOMD0000000164  # SmithAE2002_RanTransport
+  - biomodels:BIOMD0000000165  # Saucerman2006_PKA
+  - biomodels:BIOMD0000000166  # Zhu2007_TF_modulated_by_Calcium
+  - biomodels:BIOMD0000000167  # Mayya2005_STATmodule
+  - biomodels:BIOMD0000000168  # Obeyesekere1999_CellCycle
+  - biomodels:BIOMD0000000169  # Aguda1999_CellCycle
+  - biomodels:BIOMD0000000170  # Weimann2004_CircadianOscillator
+  - biomodels:BIOMD0000000171  # Leloup1998_CircClock_LD
+  - biomodels:BIOMD0000000172  # Pritchard2002_glycolysis
+  - biomodels:BIOMD0000000173  # Schmierer_2008_Smad_Tgfb
+  - biomodels:BIOMD0000000174  # Del_Conte_Zerial2008_Rab5_Rab7_cut_out_switch
+  - biomodels:BIOMD0000000175  # Birtwistle2007_ErbB_Signalling
+  - biomodels:BIOMD0000000176  # Conant2007_WGD_glycolysis_2A3AB
+  - biomodels:BIOMD0000000177  # Conant2007_glycolysis_2C
+  - biomodels:BIOMD0000000178  # Lebeda2008 - BoTN Paralysis (4 step model)
+  - biomodels:BIOMD0000000179  # Kim2007_CellularMemory_AsymmetricModel
+  - biomodels:BIOMD0000000180  # Kim2007_CellularMemory_SymmetricModel
+  - biomodels:BIOMD0000000181  # Sriram2007_CellCycle
+  - biomodels:BIOMD0000000182  # Neves2008 - Role of cell shape and size in controlling intracellular signalling
+  - biomodels:BIOMD0000000183  # Stefan2008 - calmodulin allostery
+  - biomodels:BIOMD0000000184  # Lavrentovich2008_Ca_Oscillations
+  - biomodels:BIOMD0000000185  # Locke2008_Circadian_Clock
+  - biomodels:BIOMD0000000186  # Ibrahim2008 - Mitotic Spindle Assembly Checkpoint - Dissociation variant
+  - biomodels:BIOMD0000000187  # Ibrahim2008 - Mitotic Spindle Assembly Checkpoint - Convey variant
+  - biomodels:BIOMD0000000188  # Proctor2008 - p53/Mdm2 circuit - p53 stabilisation by ATM
+  - biomodels:BIOMD0000000189  # Proctor2008 - p53/Mdm2 circuit - p53 stablisation by p14ARF
+  - biomodels:BIOMD0000000190  # Rodriguez-Caso2006_Polyamine_Metabolism
+  - biomodels:BIOMD0000000191  # Montañez2008_Arginine_catabolism
+  - biomodels:BIOMD0000000192  # Görlich2003_RanGTP_gradient
+  - biomodels:BIOMD0000000193  # Ibrahim2008_MCC_assembly_model_KDM
+  - biomodels:BIOMD0000000194  # Ibrahim2008_Cdc20_Sequestring_Template_Model
+  - biomodels:BIOMD0000000195  # Tyson2001_Cell_Cycle_Regulation
+  - biomodels:BIOMD0000000196  # Srividhya2006_CellCycle
+  - biomodels:BIOMD0000000197  # Bartholome2007_MDCKII
+  - biomodels:BIOMD0000000198  # Stone1996 - activation of soluble guanylate cyclase by nitric oxide
+  - biomodels:BIOMD0000000199  # Santolini2001_nNOS_Mechanism_Regulation
+  - biomodels:BIOMD0000000200  # Bray1995_chemotaxis_receptorlinkedcomplex
+  - biomodels:BIOMD0000000201  # Goldbeter2008_Somite_Segmentation_Clock_Notch_Wnt_FGF
+  - biomodels:BIOMD0000000202  # ChenXF2008_CICR
+  - biomodels:BIOMD0000000203  # Chickarmane2006 - Stem cell switch reversible
+  - biomodels:BIOMD0000000204  # Chickarmane2006 - Stem cell switch irreversible
+  - biomodels:BIOMD0000000205  # Ung2008_EGFR_Endocytosis
+  - biomodels:BIOMD0000000206  # Wolf2000_Glycolytic_Oscillations
+  - biomodels:BIOMD0000000207  # Romond1999_CellCycle
+  - biomodels:BIOMD0000000208  # Deineko2003_CellCycle
+  - biomodels:BIOMD0000000209  # Chickarmane2008 - Stem cell lineage determination
+  - biomodels:BIOMD0000000210  # Chickarmane2008 - Stem cell lineage - NANOG GATA-6 switch
+  - biomodels:BIOMD0000000211  # Albert2005_Glycolysis
+  - biomodels:BIOMD0000000212  # Curien2009_Aspartate_Metabolism
+  - biomodels:BIOMD0000000213  # Nijhout2004_Folate_Cycle
+  - biomodels:BIOMD0000000214  # Akman2008_Circadian_Clock_Model2
+  - biomodels:BIOMD0000000215  # Schulz2009_Th1_differentiation
+  - biomodels:BIOMD0000000216  # Hong2009_CircadianClock
+  - biomodels:BIOMD0000000217  # Bruggeman2005_AmmoniumAssimilation
+  - biomodels:BIOMD0000000218  # Singh2006_TCA_mtu_model2
+  - biomodels:BIOMD0000000219  # Singh2006_TCA_mtu_model1
+  - biomodels:BIOMD0000000220  # Albeck2008_extrinsic_apoptosis
+  - biomodels:BIOMD0000000221  # Singh2006_TCA_Ecoli_acetate
+  - biomodels:BIOMD0000000222  # Singh2006_TCA_Ecoli_glucose
+  - biomodels:BIOMD0000000223  # Borisov2009_EGF_Insulin_Crosstalk
+  - biomodels:BIOMD0000000224  # Meyer1991_CalciumSpike_ICC
+  - biomodels:BIOMD0000000225  # Westermark2003_Pancreatic_GlycOsc_basic
+  - biomodels:BIOMD0000000226  # Radulescu2008_NFkB_hierarchy_M_14_25_28_Lipniacky
+  - biomodels:BIOMD0000000227  # Radulescu2008_NFkB_hierarchy_M_39_65_90
+  - biomodels:BIOMD0000000228  # Swat2004_Mammalian_G1_S_Transition
+  - biomodels:BIOMD0000000229  # Ma2002_cAMP_oscillations
+  - biomodels:BIOMD0000000230  # Ihekwaba2004_NFkB_Sensitivity
+  - biomodels:BIOMD0000000231  # Valero2006_Adenine_TernaryCycle
+  - biomodels:BIOMD0000000232  # Nazaret2009_TCA_RC_ATP
+  - biomodels:BIOMD0000000233  # Wilhelm2009_BistableReaction
+  - biomodels:BIOMD0000000234  # Tham2008 - PDmodel, Tumour shrinkage by gemcitabine and carboplatin
+  - biomodels:BIOMD0000000235  # Kuhn2009_EndoMesodermNetwork
+  - biomodels:BIOMD0000000236  # Westermark2003_Pancreatic_GlycOsc_extended
+  - biomodels:BIOMD0000000237  # Schaber2006_Pheromone_Starvation_Crosstalk
+  - biomodels:BIOMD0000000238  # Overgaard2007_PDmodel_IL21
+  - biomodels:BIOMD0000000239  # Jiang2007 - GSIS system, Pancreatic Beta Cells
+  - biomodels:BIOMD0000000240  # Veening2008_DegU_Regulation
+  - biomodels:BIOMD0000000241  # Shi1993_Caffeine_pressor_tolerance
+  - biomodels:BIOMD0000000242  # Bai2003_G1phaseRegulation
+  - biomodels:BIOMD0000000243  # Neumann2010_CD95Stimulation_NFkB_Apoptosis
+  - biomodels:BIOMD0000000244  # Kotte2010_Ecoli_Metabolic_Adaption
+  - biomodels:BIOMD0000000245  # Lei2001_Yeast_Aerobic_Metabolism
+  - biomodels:BIOMD0000000246  # Vasalou2010_Pacemaker_Neuron_SCN
+  - biomodels:BIOMD0000000247  # Ralser2007_Carbohydrate_Rerouting_ROS
+  - biomodels:BIOMD0000000248  # Lai2007_O2_Transport_Metabolism
+  - biomodels:BIOMD0000000249  # Restif2006 - Whooping cough
+  - biomodels:BIOMD0000000250  # Nakakuki2010_CellFateDecision_Mechanistic
+  - biomodels:BIOMD0000000251  # Nakakuki2010_CellFateDecision_Core
+  - biomodels:BIOMD0000000252  # Hunziker2010_p53_StressSpecificResponse
+  - biomodels:BIOMD0000000253  # Teusink1998_Glycolysis_TurboDesign
+  - biomodels:BIOMD0000000254  # Bier2000_GlycolyticOscillation
+  - biomodels:BIOMD0000000255  # Chen2009 - ErbB Signaling
+  - biomodels:BIOMD0000000256  # Rehm2006_Caspase
+  - biomodels:BIOMD0000000257  # Piedrafita2010_MR_System
+  - biomodels:BIOMD0000000258  # Ortega2006 - bistability from double phosphorylation in signal transduction
+  - biomodels:BIOMD0000000259  # Tiago2010_FeMetabolism_FeDeficient
+  - biomodels:BIOMD0000000260  # Tiago2010_FeMetabolism_FeAdequate
+  - biomodels:BIOMD0000000261  # Tiago2010_FeMetabolism_FeLoaded
+  - biomodels:BIOMD0000000262  # Fujita2010_Akt_Signalling_EGF
+  - biomodels:BIOMD0000000263  # Fujita2010_Akt_Signalling_NGF
+  - biomodels:BIOMD0000000264  # Fujita2010_Akt_Signalling_EGFRinhib
+  - biomodels:BIOMD0000000265  # Conradie2010_RPControl_CellCycle
+  - biomodels:BIOMD0000000266  # Voit2003 - Trehalose Cycle
+  - biomodels:BIOMD0000000267  # Lebeda2008 - BoNT paralysis (3 step model)
+  - biomodels:BIOMD0000000268  # Reed2008_Glutathione_Metabolism
+  - biomodels:BIOMD0000000269  # Liu2010_Hormonal_Crosstalk_Arabidopsis
+  - biomodels:BIOMD0000000270  # Schilling2009 - ERK distributive
+  - biomodels:BIOMD0000000271  # Becker2010_EpoR_CoreModel
+  - biomodels:BIOMD0000000272  # Becker2010_EpoR_AuxiliaryModel
+  - biomodels:BIOMD0000000273  # Pokhilko2010_CircClock
+  - biomodels:BIOMD0000000274  # Rattanakul2003_BoneFormationModel
+  - biomodels:BIOMD0000000275  # Goldbeter2007_Somitogenesis_Switch
+  - biomodels:BIOMD0000000276  # Shrestha2010_HypoCalcemia_PTHresponse
+  - biomodels:BIOMD0000000277  # Shrestha2010_HyperCalcemia_PTHresponse
+  - biomodels:BIOMD0000000278  # Lemaire2004 - Role of RANK/RANKL/OPG pathway in bone remodelling process
+  - biomodels:BIOMD0000000279  # Komarova2005_PTHaction_OsteoclastOsteoblastCoupling
+  - biomodels:BIOMD0000000280  # Morris1981_MuscleFibre_Voltage_reduced
+  - biomodels:BIOMD0000000281  # Chance1960_Glycolysis_Respiration
+  - biomodels:BIOMD0000000282  # Chance1952_Catalase_Mechanism
+  - biomodels:BIOMD0000000283  # Chance1943_Peroxidase_ES_Kinetics
+  - biomodels:BIOMD0000000284  # Hofmeyer1986_SeqFb_Proc_AA_Synthesis
+  - biomodels:BIOMD0000000285  # Tang2010_PolyGlutamate
+  - biomodels:BIOMD0000000286  # Proctor2010 - a link between GSK3 and p53 in Alzheimer's Disease
+  - biomodels:BIOMD0000000287  # Passos2010_DNAdamage_CellularSenescence
+  - biomodels:BIOMD0000000288  # Wang2009 - PI3K Ras Crosstalk
+  - biomodels:BIOMD0000000289  # Alexander2010_Tcell_Regulation_Sys1
+  - biomodels:BIOMD0000000290  # Alexander2010_Tcell_Regulation_Sys2
+  - biomodels:BIOMD0000000291  # Nikolaev2005_AlbuminBilirubinAdsorption
+  - biomodels:BIOMD0000000292  # Rovers1995_Photsynthetic_Oscillations
+  - biomodels:BIOMD0000000293  # Proctor2010 - UCHL1 Protein Aggregation
+  - biomodels:BIOMD0000000294  # Restif2007 - Vaccination invasion
+  - biomodels:BIOMD0000000295  # Akman2008_Circadian_Clock_Model1
+  - biomodels:BIOMD0000000296  # Balagaddé2008_E_coli_Predator_Prey
+  - biomodels:BIOMD0000000297  # Ciliberto2003_Morphogenesis_Checkpoint
+  - biomodels:BIOMD0000000298  # Leloup1999_CircadianRhythms_Drosophila
+  - biomodels:BIOMD0000000299  # Leloup1999_CircadianRhythms_Neurospora
+  - biomodels:BIOMD0000000300  # Schmierer2010_FIH_Ankyrins
