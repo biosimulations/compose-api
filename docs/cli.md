@@ -83,9 +83,11 @@ browser, since they forward the callback port. VS Code or WSL environment marker
 browser, an unknown command or a fallback list in `$BROWSER` gets the device code. An unrecognized helper can still be
 chosen explicitly with `--method browser`. A Codespace still gets
 the device code, because one opened in a web browser cannot receive the callback. Whenever `auto` picks anything but
-your desktop's browser, the command says why and how to choose another way. `browser` opens the system browser (or
-`$BROWSER`); `url` prints the sign-in link instead of opening anything; `device` is RFC 8628, for signing in on another
-device. The same option works with `--ephemeral-auth` before any command.
+your desktop's browser, the command says why and how to choose another way. `browser` opens the system browser, or
+`$BROWSER` without a display. A text browser there (`w3m`, `lynx`, `links`, `elinks`, `www-browser`) would take over
+the terminal, so it counts as none and the command says to use `url` or `device`. `url` prints the sign-in link instead
+of opening anything; `device` is RFC 8628, for signing in on another device. The same option works with
+`--ephemeral-auth` before any command.
 
 The session is one record in your operating system's credential store (macOS Keychain, Linux Secret Service or
 Windows Credential Manager), under `compose-api.cli.v1.<digest>`. Plaintext and unknown keyring backends are refused;

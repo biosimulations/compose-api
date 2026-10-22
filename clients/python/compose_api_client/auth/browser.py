@@ -31,6 +31,8 @@ from compose_api_client.ext.errors import AuthError, CliError, InteractionError,
 from compose_api_client.profiles import requested_scopes
 
 BrowserLauncher: TypeAlias = Callable[[str], bool]
+# webbrowser's text browsers (`webbrowser.register_standard_browsers`): they would run in, and take over, this terminal.
+CONSOLE_BROWSERS = frozenset({"www-browser", "links", "elinks", "lynx", "w3m"})
 
 
 def _has_display() -> bool:
@@ -66,6 +68,19 @@ def _callback_forwarder() -> str | None:
     if os.environ.get("WSL_DISTRO_NAME") and (browser == "wslview" or (path.is_absolute() and path.name == "wslview")):
         return "WSL"
     return None
+
+
+def _console_browser() -> bool:
+    """Whether any entry of `$BROWSER` runs one of webbrowser's text browsers, as a server's dotfiles often set it
+    (`BROWSER=w3m`, `/usr/bin/lynx %s`)."""
+    for entry in os.environ.get("BROWSER", "").split(os.pathsep):
+        try:
+            command = shlex.split(entry)
+        except ValueError:
+            continue
+        if command and PurePosixPath(command[0]).name in CONSOLE_BROWSERS:
+            return True
+    return False
 
 
 def auto_method(callback_port: int) -> tuple[SignInMethod, str | None]:
@@ -107,13 +122,18 @@ def auto_method(callback_port: int) -> tuple[SignInMethod, str | None]:
 
 
 def open_system_browser(url: str) -> bool:
-    """Hand the URL to the desktop's browser, or to `$BROWSER` on a host without one; False when there is neither."""
+    """Hand the URL to the desktop's browser, or to `$BROWSER` on a host without one; False when there is neither.
+
+    Without a display, a `$BROWSER` that names a text browser counts as none: it would take over this terminal, and
+    the sign-in would not go on until it exited. `auto` never gets here with one, since it trusts only VS Code's and
+    WSL's handlers (`_callback_forwarder`); an explicit `--method browser` does.
+    """
     try:
         if _has_display():
             return webbrowser.open(url, new=1)
-        if os.environ.get("BROWSER"):
-            # A handler such as VS Code Remote-SSH's or wslview, and only that: webbrowser's other choices without a
-            # display are text browsers, which would take over this terminal.
+        if os.environ.get("BROWSER") and not _console_browser():
+            # $BROWSER alone, such as VS Code Remote-SSH's helper or wslview: webbrowser's other choices without a
+            # display are text browsers too.
             return webbrowser.get().open(url, new=1)
     except webbrowser.Error:
         return False

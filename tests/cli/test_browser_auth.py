@@ -9,6 +9,7 @@ import webbrowser
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import NoReturn
 from urllib.parse import parse_qsl, urlsplit
 
 import httpx
@@ -448,6 +449,55 @@ async def test_auto_with_a_text_browser_uses_device_without_launching_it(
     assert grant.identity.subject == fake_tenant.subject
     assert opened == [] and fake_tenant.authorize_requests == []
     assert len(fake_tenant.forms(FakeTenant.DEVICE)) == 1
+
+
+@pytest.mark.asyncio
+async def test_an_explicit_browser_method_never_launches_a_text_browser(
+    monkeypatch: pytest.MonkeyPatch, fake_tenant: FakeTenant
+) -> None:
+    """`--method browser` over SSH with `BROWSER=w3m` stops with the other ways to sign in, instead of running w3m in
+    this terminal and saying to continue in a browser window only after it exits."""
+    _environment(monkeypatch, BROWSER="w3m", SSH_CONNECTION=SSH)
+    monkeypatch.setattr("sys.platform", "linux")
+    monkeypatch.setattr(webbrowser, "_tryorder", [])
+    monkeypatch.setattr(webbrowser, "_browsers", {})
+    controller = webbrowser.GenericBrowser("w3m")
+    webbrowser.register("w3m", None, controller, preferred=True)
+
+    def open_text_browser(url: str, new: int = 0, autoraise: bool = True) -> bool:
+        raise AssertionError("w3m would run in this terminal")
+
+    monkeypatch.setattr(controller, "open", open_text_browser)
+    settings = cli_settings()
+    messages: list[str] = []
+    with pytest.raises(InteractionError, match=r"no browser could be opened.*--method url.*--method device"):
+        await sign_in(
+            settings,
+            _request(),
+            notify=messages.append,
+            launcher=open_system_browser,
+            transport=fake_tenant.transport,
+        )
+    assert messages == [] and fake_tenant.authorize_requests == []
+    assert _port_is_free(settings.callback_port)
+
+
+@pytest.mark.parametrize(
+    "browser",
+    ["w3m", "/usr/bin/lynx", "/usr/bin/lynx %s", "www-browser", f"/vscode/bin/helpers/browser.sh{os.pathsep}elinks"],
+)
+def test_a_text_browser_in_browser_env_is_never_launched(monkeypatch: pytest.MonkeyPatch, browser: str) -> None:
+    """Without a display, a text browser from a server's dotfiles is no handler: alone, by path, as a command line or
+    anywhere in a fallback list."""
+    _environment(monkeypatch, BROWSER=browser)
+    monkeypatch.setattr("sys.platform", "linux")
+
+    def launch(*args: object, **kwargs: object) -> NoReturn:
+        raise AssertionError("a text browser would take over this terminal")
+
+    monkeypatch.setattr(webbrowser, "get", launch)
+    monkeypatch.setattr(webbrowser, "open", launch)
+    assert open_system_browser("https://tenant.example/authorize") is False
 
 
 @pytest.mark.parametrize(
