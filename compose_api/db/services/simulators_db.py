@@ -145,6 +145,11 @@ class SimulatorDatabaseService(ABC):
         pass
 
     @abstractmethod
+    async def get_simulation_statuses(self, simulation_ids: list[int]) -> dict[int, str]:
+        """Each simulation's status, as a comparison member shows it: its latest run's job status, or `submitting`
+        while it has none. Simulations that do not exist are left out."""
+
+    @abstractmethod
     async def get_simulations_experiment_id(self, simulation_id: int) -> str:
         pass
 
@@ -540,6 +545,21 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
         async with self.async_session_maker() as session:
             result = await session.execute(select(ORMSimulation).where(ORMSimulation.id.in_(simulation_ids)))
             return [orm_simulation.to_simulation_access() for orm_simulation in result.scalars().all()]
+
+    @override
+    async def get_simulation_statuses(self, simulation_ids: list[int]) -> dict[int, str]:
+        if not simulation_ids:
+            return {}
+        latest = _latest_runs()
+        stmt = (
+            select(ORMSimulation.id, ORMHpcRun)
+            .outerjoin(latest, latest.c.simulation_id == ORMSimulation.id)
+            .outerjoin(ORMHpcRun, ORMHpcRun.id == latest.c.hpcrun_id)
+            .where(ORMSimulation.id.in_(simulation_ids))
+        )
+        async with self.async_session_maker() as session:
+            rows = (await session.execute(stmt)).tuples().all()
+        return {sid: run.status.to_job_status().value if run is not None else "submitting" for sid, run in rows}
 
     @override
     async def get_simulations_experiment_id(self, simulation_id: int) -> str:

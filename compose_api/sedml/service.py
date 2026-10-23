@@ -169,16 +169,22 @@ async def recompute(comparison_id: int) -> None:
     await db.get_comparisons_db().set_result(comparison_id, row.comparison.status, result)
 
 
-async def comparison_view(row: ComparisonRow) -> Comparison:
-    """The comparison with its members' states; computed and stored once every member has finished."""
+async def member_statuses(rows: Iterable[ComparisonRow]) -> dict[int, str]:
+    """Every member's status across ``rows``, in one query (a suite run has hundreds of members)."""
+    ids = sorted({m.simulation_id for row in rows for m in row.members})
+    return await get_required_database_service().get_simulator_db().get_simulation_statuses(ids)
+
+
+async def comparison_view(row: ComparisonRow, statuses: Mapping[int, str] | None = None) -> Comparison:
+    """The comparison with its members' states; computed and stored once every member has finished. ``statuses``
+    (from `member_statuses`) saves a query per member when viewing many comparisons."""
     db = get_required_database_service()
-    members: list[ComparisonMember] = []
-    for m in row.members:
-        sim = await db.get_simulator_db().get_simulation_row(m.simulation_id)
-        status = None
-        if sim is not None:
-            status = sim.run.status.to_job_status().value if sim.run is not None else "submitting"
-        members.append(ComparisonMember(solver=m.solver, simulation_id=m.simulation_id, status=status))
+    if statuses is None:
+        statuses = await member_statuses([row])
+    members = [
+        ComparisonMember(solver=m.solver, simulation_id=m.simulation_id, status=statuses.get(m.simulation_id))
+        for m in row.members
+    ]
     c = row.comparison
     status, result = c.status, c.result
     if status == "running" and members and all(m.status in TERMINAL for m in members):

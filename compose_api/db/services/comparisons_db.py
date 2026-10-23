@@ -103,7 +103,8 @@ class ComparisonsDatabaseService(ABC):
 
     @abstractmethod
     async def suite_comparisons(self, collection: str, number: int) -> list[ComparisonRow]:
-        """One suite run's comparisons, with members and references."""
+        """One suite run's comparisons, with their members but not their references (as `page`: a suite run's
+        references are full series, hundreds of them; `get` reads one comparison's)."""
 
     @abstractmethod
     async def add_member(self, comparison_id: int, simulation_id: int, solver: str) -> None: ...
@@ -285,16 +286,25 @@ class ComparisonsORMExecutor(ComparisonsDatabaseService):
     @override
     async def suite_comparisons(self, collection: str, number: int) -> list[ComparisonRow]:
         async with self.session_maker() as session:
-            ids = list(
+            found = list(
                 (
                     await session.execute(
-                        select(ORMComparison.id)
+                        select(ORMComparison)
                         .where(ORMComparison.collection == collection, ORMComparison.suite_run == number)
                         .order_by(ORMComparison.id)
                     )
                 ).scalars()
             )
-        return [row for i in ids if (row := await self.get(i)) is not None]
+            members: dict[int, list[ORMComparisonMember]] = {c.id: [] for c in found}
+            if members:
+                rows = await session.execute(
+                    select(ORMComparisonMember)
+                    .where(ORMComparisonMember.comparison_id.in_(list(members)))
+                    .order_by(ORMComparisonMember.id)
+                )
+                for m in rows.scalars():
+                    members[m.comparison_id].append(m)
+        return [ComparisonRow(c, members[c.id]) for c in found]
 
     @override
     async def add_member(self, comparison_id: int, simulation_id: int, solver: str) -> None:

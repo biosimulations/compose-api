@@ -45,8 +45,9 @@ async def list_comparisons(
         .page(limit, offset, source, readable=readable_clause(caller))
     )
     following = offset + len(rows)
+    statuses = await service.member_statuses(rows)
     return ComparisonPage(
-        comparisons=[await service.comparison_view(r) for r in rows],
+        comparisons=[await service.comparison_view(r, statuses) for r in rows],
         total=total,
         next_offset=following if following < total else None,
     )
