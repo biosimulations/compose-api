@@ -17,6 +17,7 @@ exclude_docs: |
   goals.md
   strategy.md
   plan-*.md
+  environments/
   ecosystem-repos.md
   trd3-*.md
   cip/
