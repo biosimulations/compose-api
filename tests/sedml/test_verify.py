@@ -522,3 +522,26 @@ async def test_asking_again_resumes_a_verification_biosim_was_still_working_on(
     # a workflow biosim itself failed is not resumed: asking again submits a new one
     fresh = await client.post(f"/comparisons/{comparison_id}/verify", json={"simulators": ["amici", "copasi"]})
     assert fresh.status_code == 201 and fresh.json()["verification_id"] != biosim_failed
+
+
+@pytest.mark.asyncio
+async def test_member_statuses_come_from_one_query_and_match_the_per_member_view(
+    database_service: DatabaseServiceSQL, simulation_request: SimulationRequest, simulator: SimulatorVersion,
+    mount: Path,
+) -> None:  # fmt: skip
+    """The suite run view reads every member's status at once (it took ~20 s for a 300-source run, a query per
+    member); a finished member is its run's status and one with no run yet is `submitting`, as before."""
+    from compose_api.sedml import service
+
+    args = (database_service, simulation_request, simulator, mount)
+    done = await _finished_comparison(*args, "ST1", {"copasi": [1.0], "tellurium": [1.0]})
+    waiting = await _finished_comparison(*args, "ST2", {"copasi": [1.0]}, finished=False)
+    db = database_service.get_comparisons_db()
+    rows = [r for r in [await db.get(done), await db.get(waiting)] if r is not None]
+    statuses = await service.member_statuses(rows)
+    assert sorted(statuses.values()) == ["completed", "completed", "submitting"]
+    for row in rows:
+        batched = await service.comparison_view(row, statuses)
+        alone = await service.comparison_view(row)
+        assert [m.status for m in batched.members] == [m.status for m in alone.members]
+    assert await database_service.get_simulator_db().get_simulation_statuses([]) == {}

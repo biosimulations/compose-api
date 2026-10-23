@@ -46,7 +46,11 @@ class Suite(BaseModel):
         return sources
 
     def expected_for(self, source: str, solver: str | None = None) -> ExpectedFailure | None:
-        return next((e for e in self.expected if e.source == source and e.solver in (None, solver)), None)
+        """The expected entry for ``source``: for one ``solver``, an entry naming it or none; for the whole source
+        (a suite row is one comparison across every solver), any entry for it."""
+        return next(
+            (e for e in self.expected if e.source == source and (solver is None or e.solver in (None, solver))), None
+        )
 
 
 @functools.cache

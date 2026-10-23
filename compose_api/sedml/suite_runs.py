@@ -156,8 +156,10 @@ async def view(suite: Suite, number: int) -> SuiteRunView | None:
         baseline = {
             (r.comparison.source, r.comparison.task): r for r in await db.suite_comparisons(suite.name, suite.baseline)
         }
-    for row in await db.suite_comparisons(suite.name, number):
-        c = await service.comparison_view(row)
+    found = await db.suite_comparisons(suite.name, number)
+    statuses = await service.member_statuses(found)
+    for row in found:
+        c = await service.comparison_view(row, statuses)
         result = c.result or {}
         worst = _worst(result)
         entry = SuiteRunRow(
@@ -208,8 +210,10 @@ async def verify(suite: Suite, number: int, which: str) -> SuiteVerifyResult | N
     if not any(r.number == number for r in await db.suite_runs(suite.name)):
         return None
     result = SuiteVerifyResult(queued=[], already=[], running=0)
-    for row in await db.suite_comparisons(suite.name, number):
-        c = await service.comparison_view(row)
+    found = await db.suite_comparisons(suite.name, number)
+    statuses = await service.member_statuses(found)
+    for row in found:
+        c = await service.comparison_view(row, statuses)
         if c.status == "running":
             result.running += 1
             continue

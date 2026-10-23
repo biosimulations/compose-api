@@ -11,7 +11,7 @@ import pytest
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.sedml import suites
-from compose_api.sedml.suites import Suite, load_suites
+from compose_api.sedml.suites import ExpectedFailure, Suite, load_suites
 from compose_api.simulation.models import JobType
 from compose_api.simulation.submission_worker import SubmissionWorker
 from tests.sedml.conftest import PROJECT, needs_translator
@@ -25,6 +25,19 @@ def test_the_seed_suites_parse() -> None:
     assert all(s.startswith("biosimulations:") for s in found["biosimulations-reference"].sources)
     with pytest.raises(ValueError):
         Suite(name="x", description="", sources=["github:nope"])
+
+
+def test_an_expected_entry_for_one_solver_marks_the_sources_comparison() -> None:
+    """A suite row is a comparison across every solver: an entry naming one solver applies to it (run 2 of
+    biomodels-curated-300 showed its seven solver-limit models as failures while they were expected)."""
+    suite = Suite(
+        name="x", description="", sources=["biomodels:A1", "biomodels:B2"],
+        expected=[ExpectedFailure(source="biomodels:A1", solver="tellurium", reason="delay equations")],
+    )  # fmt: skip
+    assert suite.expected_for("biomodels:A1") is not None
+    assert suite.expected_for("biomodels:A1", "tellurium") is not None
+    assert suite.expected_for("biomodels:A1", "copasi") is None
+    assert suite.expected_for("biomodels:B2") is None
 
 
 async def _finish(database_service: DatabaseServiceSQL, runs: list[Any], tmp_path: Path, scale: float = 1.0) -> None:
