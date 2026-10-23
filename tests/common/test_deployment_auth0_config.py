@@ -40,8 +40,8 @@ def _local_auth0_env() -> Path:
 @pytest.mark.parametrize("env_file", [PRODUCTION_ENV, _local_auth0_env()], ids=["rke", "local"])
 def test_auth0_values_are_well_formed(env_file: Path) -> None:
     values = _read_env(env_file)
-    domain, audience = values["AUTH0_DOMAIN"], values["AUTH0_AUDIENCE"]
-    for value in (domain, audience):
+    domain, audience, spa_client_id = values["AUTH0_DOMAIN"], values["AUTH0_AUDIENCE"], values["AUTH0_SPA_CLIENT_ID"]
+    for value in (domain, audience, spa_client_id):
         assert value and value == value.strip(), f"{env_file.name}: empty or padded value"
         assert "#" not in value and "<" not in value, f"{env_file.name}: comment or placeholder left in {value!r}"
     assert not domain.startswith(("http://", "https://")) and not domain.endswith("/"), "AUTH0_DOMAIN is a bare host"
@@ -51,6 +51,13 @@ def test_local_cluster_does_not_share_the_production_audience() -> None:
     production = _read_env(PRODUCTION_ENV)["AUTH0_AUDIENCE"]
     local = _read_env(_local_auth0_env())["AUTH0_AUDIENCE"]
     assert local != production, "a development token must never be accepted by production"
+
+
+def test_local_cluster_publishes_its_own_spa_client() -> None:
+    production = _read_env(PRODUCTION_ENV)["AUTH0_SPA_CLIENT_ID"]
+    local = _read_env(_local_auth0_env())["AUTH0_SPA_CLIENT_ID"]
+    # The overlay inherits api.env, so without its own value it would offer the production SPA with the local audience.
+    assert local != production, "each cluster needs the SPA whose callback and audience are its own"
 
 
 def _render_overlay(overlay: Path) -> list[dict[str, object]]:
@@ -92,6 +99,8 @@ def test_rendered_overlays_merge_auth0_without_dropping_shared_config() -> None:
     assert local["AUTH0_DOMAIN"] == local_env["AUTH0_DOMAIN"]
     assert local["AUTH0_AUDIENCE"] == local_env["AUTH0_AUDIENCE"]
     assert local["AUTH0_AUDIENCE"] != production["AUTH0_AUDIENCE"]
+    assert production["AUTH0_SPA_CLIENT_ID"] == production_env["AUTH0_SPA_CLIENT_ID"]
+    assert local["AUTH0_SPA_CLIENT_ID"] == local_env["AUTH0_SPA_CLIENT_ID"]
     assert local["INTERNAL_MOUNT_DIR"] == production_env["INTERNAL_MOUNT_DIR"]
     # The Auth0 keys share api.env with the prebuilt simulators; both clusters must keep that setting too.
     assert production["PREBUILT_SIMULATORS"] == production_env["PREBUILT_SIMULATORS"]

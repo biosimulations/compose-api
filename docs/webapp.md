@@ -105,8 +105,10 @@ response carries these security headers:
 
 Today a token changes nothing a caller can read, because every simulation is public.
 
-(2026-10-13: production publishes no `AUTH0_SPA_CLIENT_ID` yet, so the UI offers no login. It needs the SPA
-application created in the tenant, through auth0-pulumi, and its id set in `kustomize/config/compose-api-rke/api.env`.)
+(2026-10-23: the SPA applications exist, created by auth0-pulumi (UCHHPC/auth0-pulumi#5):
+`p7uif3ex4LijqPwSOJsPBnhCdClnxSMM` for production, whose callbacks also include the dev server's, and
+`fEbf0F5Orb6FD4TySB8yWSZTj5hhBNJV` for the local cluster. Their ids are set in
+`kustomize/config/compose-api-rke/api.env` and `kustomize/overlays/compose-api-local/auth0.env`.)
 
 ## Development
 
@@ -118,6 +120,9 @@ COMPOSE_API_URL=https://compose.cam.uchc.edu make webapp-dev   # against product
 make webapp-check         # lint, typecheck, API types current
 make webapp-build         # static build; `make run` then serves it at http://localhost:8000/ui/
 ```
+
+To sign in from the dev server against `make run`, set `AUTH0_AUDIENCE` and `AUTH0_SPA_CLIENT_ID` in `.dev_env` as
+`.dev_env_TEMPLATE` describes: the production SPA is the only one whose callbacks include `http://localhost:4200/ui/`.
 
 `npm audit` reports advisories in build-time tooling (the Nitro dev server and its dependencies). None of it ships:
 the image serves only the generated static files.
