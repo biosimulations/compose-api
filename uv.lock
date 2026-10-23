@@ -764,7 +764,7 @@ requires-dist = [
     { name = "kubernetes", specifier = ">=31" },
     { name = "nbformat", specifier = ">=5.10.4,<6" },
     { name = "numpy", specifier = ">=2.3.1,<3" },
-    { name = "pbest", specifier = "==0.6.3" },
+    { name = "pbest", git = "https://github.com/biosimulations/pbest?rev=9aed20cb652ae2fe76cbdc3933e7a45e798d6642" },
     { name = "polars-lts-cpu", extras = ["pyarrow"], specifier = ">=1.31.0,<2" },
     { name = "pydantic", specifier = ">=2.11.5,<3" },
     { name = "pydantic-settings", specifier = ">=2.9.1,<3" },
@@ -2832,8 +2832,8 @@ wheels = [
 
 [[package]]
 name = "pbest"
-version = "0.6.3"
-source = { registry = "https://pypi.org/simple" }
+version = "0.6.4"
+source = { git = "https://github.com/biosimulations/pbest?rev=9aed20cb652ae2fe76cbdc3933e7a45e798d6642#9aed20cb652ae2fe76cbdc3933e7a45e798d6642" }
 dependencies = [
     { name = "bigraph-schema" },
     { name = "compose-api-client", extra = ["auth", "cli"] },
@@ -2844,15 +2844,11 @@ dependencies = [
     { name = "pydantic" },
     { name = "spython" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7f/24/ef6cc5e03f496f5e0e7b1f1d7b15e8d41b27bc34ea22b150c17e3fc021e6/pbest-0.6.3.tar.gz", hash = "sha256:305710334f40a19a3b9c1122149661dd0624c675e646d30ffcac026c88cf4e12", size = 224259, upload-time = "2026-05-15T16:30:53.229Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e6/cb/4e28c572ac4a2ac9760e434795f246bd20dac3c12c2c43b748172f44f641/pbest-0.6.3-py3-none-any.whl", hash = "sha256:fc69c2f44bbd048d708a4fbdae3cf9c1360822f3e28105c837a646c31d0c6cb1", size = 26916, upload-time = "2026-05-15T16:30:54.498Z" },
-]
 
 [[package]]
 name = "pbsim-common"
-version = "0.1.2"
-source = { registry = "https://pypi.org/simple" }
+version = "0.1.3.dev0"
+source = { git = "https://github.com/biosimulations/pbsim_common?rev=584c385b4a0366ecac7fb841fc8a7427e6fec8b1#584c385b4a0366ecac7fb841fc8a7427e6fec8b1" }
 dependencies = [
     { name = "bigraph-schema" },
     { name = "copasi-basico" },
@@ -2862,10 +2858,6 @@ dependencies = [
     { name = "process-bigraph" },
     { name = "python-copasi" },
     { name = "tellurium" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/d3/72/f7214c3350105b5085402edd22d3f21b90e6469b165c25da5d7f2e90cfcd/pbsim_common-0.1.2.tar.gz", hash = "sha256:b498cd352c039d970b20127ff24345aa39491f6d70d708e02cc5e5bfe140dc50", size = 180060, upload-time = "2026-02-27T19:08:04.011Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ac/46/4cc68db4658f8c1697d8993cca92c1f2c6c90a50d0d4d4d08fef4134a67d/pbsim_common-0.1.2-py3-none-any.whl", hash = "sha256:53f721ba7df82eca4227597a47fce6091a1dc62e8210c9eed5870fe4816c8030", size = 10139, upload-time = "2026-02-27T19:08:05.086Z" },
 ]
 
 [[package]]

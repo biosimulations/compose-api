@@ -8,25 +8,13 @@ solvers: [copasi, tellurium]
 tolerances: {rel_tol: 1.0e-4, abs_tol_min: 1.0e-3, abs_tol_scale: 1.0e-5}
 # the accepted suite run each new run's results are compared with, solver by solver
 baseline: 1  # 2026-10-13, compose-api 0.7.21: the first run on the cluster
-# known disagreements, shown as expected rather than failed: {source, solver?, reason} (run 1's findings, 2026-10-13)
+# known disagreements, shown as expected rather than failed: {source, solver?, reason} (run 1's findings, 2026-10-13;
+# revised 2026-10-23)
 expected:
-  - source: biomodels:BIOMD0000000001
-    solver: tellurium
-    reason: "Tellurium disagrees with COPASI on this event model; COPASI matches both original results (Edelstein project, suite run 1). Suspected: the Tellurium step's write-back of state each update undoes the events (pbsim-common 0.1.2)"
-  - source: biomodels:BIOMD0000000007
-    solver: tellurium
-    reason: "the Tellurium step writes every species back into RoadRunner each update, which refuses one defined by an assignment rule (MPF; pbsim-common 0.1.2, tellurium_process.set_road_runner_incoming_values)"
-  - source: biomodels:BIOMD0000000009
-    solver: tellurium
-    reason: "the Tellurium step writes every species back into RoadRunner each update, which refuses one defined by an assignment rule (KK_PP_norm; pbsim-common 0.1.2, tellurium_process.set_road_runner_incoming_values)"
-  - source: biomodels:BIOMD0000000016
-    solver: tellurium
-    reason: "the Tellurium step writes every species back into RoadRunner each update, which refuses one defined by an assignment rule (Pt; pbsim-common 0.1.2, tellurium_process.set_road_runner_incoming_values)"
-  - source: biomodels:BIOMD0000000020
-    solver: copasi
-    reason: "the model has no species (parameters with rate rules only), and the COPASI step's interpret_sbml takes the missing species table as None (pbsim-common 0.1.2, copasi_process.py:90)"
+  # pbsim-common 0.1.3.dev0 (pbsim_common#18) fixes run 1's other entries: BIOMD 1 (concentrations set as amounts in a
+  # 1e-16 compartment), 7, 9, 16 (assignment-rule species set back) and 20 (no species)
   - source: biomodels:BIOMD0000000043
-    reason: "COPASI and Tellurium differ on Rho (score 6.5, suite run 1); no reference says which is right. Not yet investigated"
+    reason: "an oscillator (Borghans 1997 calcium) that needs a tighter integrator tolerance than the solvers' default (relative 1e-6): at that default COPASI and RoadRunner each miss the converged run by a score of 1.3-8 on Y, Z and Rho, in different directions; at 1e-12 they agree exactly and at 1e-8 both are within 0.06. The SED-ML sets no tolerance (KISAO:0000694). Investigated 2026-10-23"
 sources:
   - biomodels:BIOMD0000000001  # Edelstein1996 - EPSP ACh event
   - biomodels:BIOMD0000000003  # Goldbeter1991 - Min Mit Oscil
