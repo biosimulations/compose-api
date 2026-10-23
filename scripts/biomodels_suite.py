@@ -25,9 +25,20 @@ name: {name}
 description: The first {count} curated SBML models in EBI BioModels, each run on COPASI and Tellurium and compared.
 solvers: [copasi, tellurium]
 tolerances: {{rel_tol: 1.0e-4, abs_tol_min: 1.0e-3, abs_tol_scale: 1.0e-5}}
-expected: []
-sources:
+{expected}sources:
 """
+
+
+def _expected_block(path: Path) -> str:
+    """The suite's `expected` entries, kept from the file being regenerated: they are findings, not generated."""
+    if not path.exists():
+        return "expected: []\n"
+    lines = path.read_text().splitlines(keepends=True)
+    start = next((i for i, line in enumerate(lines) if line.startswith("expected:")), None)
+    if start is None:
+        return "expected: []\n"
+    end = next((i for i in range(start + 1, len(lines)) if lines[i][:1] not in (" ", "#", "\n")), len(lines))
+    return "".join(lines[start:end])
 
 
 async def curated(model_number: int, gate: asyncio.Semaphore) -> sources.BiomodelInfo | None:
@@ -54,7 +65,9 @@ async def main(count: int, name: str, start: int) -> None:
     lines = [f"  - biomodels:{info.id}  # {info.name.replace('#', '')[:90]}" for info in found]
     path = Path("examples") / name / "suite.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
-    header = HEADER.format(count=count, name=name, date=datetime.date.today().isoformat())
+    header = HEADER.format(
+        count=count, name=name, date=datetime.date.today().isoformat(), expected=_expected_block(path)
+    )
     path.write_text(header + "\n".join(lines) + "\n")
     print(f"{path}: {len(found)} models, {found[0].id} to {found[-1].id} (checked up to BIOMD{number - 1:010d})")
 

@@ -3,14 +3,14 @@
   "schema_version": "pbg-interfaces/1",
   "environment": {
     "name": "registry_env",
-    "image": "ghcr.io/biosimulations/registry_env:f10645d9db96012af5b844c704f6b129",
+    "image": "ghcr.io/biosimulations/registry_env:a5750a9e09912fad5bb45502c58b546c",
     "python": "3.12.15",
     "process_bigraph": "1.0.5",
     "bigraph_schema": "1.0.14",
     "packages": {
       "biosim-toolkit": "0.1.0",
       "pb_multiscale_actin": "1.3.1",
-      "pbsim-common": "0.1.2"
+      "pbsim-common": "0.1.3.dev0"
     },
     "roots": [
       "biosim_toolkit",
