@@ -82,6 +82,8 @@ async def test_a_suite_run_and_its_drift_from_the_baseline(
         name="test-suite",
         description="two sources",
         sources=["biomodels:BIOMD0000000012", f"biosimulations:{PROJECT}", "biomodels:BIOMD9999999999"],
+        # named, as suite.yaml files name theirs, so the counts below do not move when a solver is registered
+        solvers=["copasi", "tellurium"],
         expected=[],
     )
     monkeypatch.setattr(suites, "load_suites", lambda: {"test-suite": test_suite})

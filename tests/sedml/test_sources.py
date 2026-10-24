@@ -69,7 +69,7 @@ async def test_running_a_project_compares_its_solvers_and_its_original_results(
     runs = submitted["runs"]
     assert {r[0].labels["project"] for r in runs} == {PROJECT}
 
-    # both solvers reproduce the original results exactly: the reference's own columns as their reports
+    # every solver (all three, none being named) reproduces the original results exactly: the reference's own columns as their reports
     reference = (await client.get(f"/sources/biosimulations/{PROJECT}/reference")).json()["simulation_1.sedml/report"]
     labels = comparison["settings"]["reports"]["report"]["labels"]
     rows = [",".join(json.dumps(label) for label in labels)] + [
@@ -100,7 +100,7 @@ async def test_running_a_project_compares_its_solvers_and_its_original_results(
     series = (
         await client.get(f"/comparisons/{comparison['comparison_id']}/series", params={"report": "report"})
     ).json()
-    assert sorted(series["solvers"]) == ["copasi", "tellurium"] and list(series["references"]) == [
+    assert sorted(series["solvers"]) == ["copasi", "tellurium", "vcell"] and list(series["references"]) == [
         "biosimulations:tellurium"
     ]
     assert series["solvers"]["copasi"]["Clb2"] == series["references"]["biosimulations:tellurium"]["Clb2"]

@@ -14,6 +14,7 @@ def test_pinned_registry_parses_into_pypi_and_conda() -> None:
         "tellurium",
         "pb_multiscale_actin",
         "biosim-toolkit",  # the SED-ML adapter steps (docs/plan-sedml.md, phase 2)
+        "pyvcell[native,ode]",  # VCell's ODE solver for pbsim-common's VCellUTCStep (docs/plan-vcell-ode.md)
     ]
     assert [d.dependency_name for d in deps.conda_dependencies] == ["readdy"]
     assert all(d.version for d in deps.pypi_dependencies + deps.conda_dependencies)
