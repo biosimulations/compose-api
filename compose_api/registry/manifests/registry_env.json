@@ -3,14 +3,14 @@
   "schema_version": "pbg-interfaces/1",
   "environment": {
     "name": "registry_env",
-    "image": "ghcr.io/biosimulations/registry_env:a5750a9e09912fad5bb45502c58b546c",
+    "image": "ghcr.io/biosimulations/registry_env:0f31dda063001f72dab1f6a0c6b284f2",
     "python": "3.12.15",
     "process_bigraph": "1.0.5",
     "bigraph_schema": "1.0.14",
     "packages": {
       "biosim-toolkit": "0.1.0",
       "pb_multiscale_actin": "1.3.1",
-      "pbsim-common": "0.1.3.dev0"
+      "pbsim-common": "0.1.3.dev1"
     },
     "roots": [
       "biosim_toolkit",
@@ -317,6 +317,26 @@
       "kind": "step",
       "address": "local:!pbsim_common.simulators.tellurium_process.TelluriumUTCStep",
       "module": "pbsim_common.simulators.tellurium_process",
+      "config_schema": {
+        "model_source": "string",
+        "time": "float",
+        "n_points": "integer",
+        "output_dir": "string"
+      },
+      "inputs": {
+        "species_concentrations": "map[float]",
+        "species_counts": "map[float]"
+      },
+      "outputs": {
+        "result": "numeric_result"
+      },
+      "dynamic_ports": false
+    },
+    {
+      "name": "VCellUTCStep",
+      "kind": "step",
+      "address": "local:!pbsim_common.simulators.vcell_process.VCellUTCStep",
+      "module": "pbsim_common.simulators.vcell_process",
       "config_schema": {
         "model_source": "string",
         "time": "float",

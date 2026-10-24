@@ -50,5 +50,5 @@ async def test_route_lists_the_solvers() -> None:
     app.include_router(registry_router.config.router, prefix=registry_router.config.prefix)
     async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as c:
         listing = (await c.get("/registry/solvers")).json()
-    assert [s["id"] for s in listing] == ["copasi", "tellurium"]
+    assert [s["id"] for s in listing] == ["copasi", "tellurium", "vcell"]
     assert listing[1]["algorithms"] == ["KISAO:0000019"] and listing[1]["environment"] == "registry_env"

@@ -1,7 +1,7 @@
 """The gate for biosim-toolkit at level `tested` (registry/manifest.yaml): a SED-ML task translated by
 process-bigraph-lang (`sedml translate`, the Ciliberto 2003 project) run inside the built registry_env image, once on
-each generic solver. The generic step solves; biosim-toolkit's steps write the SED-ML report and plots; the two
-solvers agree (docs/plan-sedml.md, phase 2). The archives are
+each generic solver. The generic step solves; biosim-toolkit's steps write the SED-ML report and plots; COPASI,
+Tellurium and VCell agree (docs/plan-sedml.md, phase 2; docs/plan-vcell-ode.md). The archives are
 tests/fixtures/resources/sedml/Ciliberto2003.<solver>.omex, regenerated with process-bigraph-lang's
 `sedml translate ... -o dir/` when the translation changes."""
 
@@ -48,7 +48,7 @@ def _score(a: list[float], b: list[float]) -> float:
 @pytest.mark.slurm
 @pytest.mark.cluster_only
 @pytest.mark.asyncio
-async def test_sedml_task_on_copasi_and_tellurium(
+async def test_sedml_task_on_copasi_tellurium_and_vcell(
     in_memory_api_client: Client,
     database_service: DatabaseServiceSQL,
     simulation_service_slurm: SimulationServiceHpc,
@@ -57,7 +57,7 @@ async def test_sedml_task_on_copasi_and_tellurium(
     simulator: Simulator,
 ) -> None:
     reports = {}
-    for solver in ("copasi", "tellurium"):
+    for solver in ("copasi", "tellurium", "vcell"):
         with open(os.path.join(FIXTURES, f"Ciliberto2003.{solver}.omex"), "rb") as f:
             sim_experiment = await run_simulation.asyncio(
                 client=in_memory_api_client,
@@ -69,9 +69,10 @@ async def test_sedml_task_on_copasi_and_tellurium(
         )
         reports[solver] = _report(results.content)
         assert len(reports[solver]) == 21 and len(reports[solver]["Time (min)"]) == 201
-    far = {
-        label: s
-        for label in reports["copasi"]
-        if (s := _score(reports["copasi"][label], reports["tellurium"][label])) >= 1
-    }
-    assert not far, f"COPASI and Tellurium disagree: {far}"
+    for other in ("tellurium", "vcell"):
+        far = {
+            label: s
+            for label in reports["copasi"]
+            if (s := _score(reports["copasi"][label], reports[other][label])) >= 1
+        }
+        assert not far, f"COPASI and {other} disagree: {far}"
