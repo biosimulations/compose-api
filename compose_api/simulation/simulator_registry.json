@@ -29,6 +29,12 @@
       "url": "https://pypi.org/project/biosim-toolkit/",
       "package_registry": "pypi",
       "version": "0.1.0"
+    },
+    {
+      "name": "pyvcell[native,ode]",
+      "url": "https://pypi.org/project/pyvcell/",
+      "package_registry": "pypi",
+      "version": "0.5.1"
     }
   ]
 }
