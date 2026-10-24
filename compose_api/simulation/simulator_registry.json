@@ -34,7 +34,7 @@
       "name": "pyvcell[native,ode]",
       "url": "https://pypi.org/project/pyvcell/",
       "package_registry": "pypi",
-      "version": "0.5.1"
+      "version": "0.5.2"
     }
   ]
 }
