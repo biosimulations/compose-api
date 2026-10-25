@@ -1,13 +1,13 @@
 # Environment versions: locked, built and chosen through the API
 
-**Status (2026-10-25): step 1 merged (#369); step 2 in review (#370).** One PR per step, merged with a merge commit; each PR updates the table below. A
+**Status (2026-10-25): steps 1–2 merged (#369, #370); step 3 in review.** One PR per step, merged with a merge commit; each PR updates the table below. A
 merge deploys nothing by itself: the next release's image ships it (CLAUDE.md, "Deploys are GitOps").
 
 | Step | What | State |
 |---|---|---|
 | 1 | This document | merged (#369) |
-| 2 | `environment` and `environment_version` tables; today's two environments seeded as version 1 and made the defaults; one function chooses a run's version. No change in behavior | in review (#370) |
-| 3 | A shared version is a **lock**: compiled by the API with uv, its hash the identity; the definition installs from it | |
+| 2 | `environment` and `environment_version` tables; today's two environments seeded as version 1 and made the defaults; one function chooses a run's version. No change in behavior | merged (#370) |
+| 3 | A shared version is a **lock**: compiled by the API with uv, its hash the identity; the definition installs from it | in review |
 | 4 | Creating versions through the API (refresh, prebuilt registration), with the lock diff, the installed packages and the interfaces recorded; the admin role | |
 | 5 | Choosing them: `environment_version` on runs, required on suite runs; recorded on every simulation and suite run | |
 | 6 | Retire the hard-coding: `PREBUILT_SIMULATORS`, `shared_image()`, the committed interface manifests | |
@@ -128,6 +128,16 @@ suite_run            + environment_versions  {environment: version}
    strategy decision 1 absorbs pbest): base image, micromamba with the conda pins, then `uv pip sync` of the lock
    into the runtime environment. `compose_api/environments/lock.py` compiles; `definition.py` renders. Nothing
    changes until a version is created.
+   *As built:* `uv pip compile` for Python 3.12 on `x86_64-manylinux_2_28`, over the PyPI libraries plus
+   `pbest @ git+…@<tag>` (one resolution, where the image used to make two), with `--exclude-newer`. The lock is
+   written into the definition (a heredoc), so the simulator's hash changes exactly when the lock does. The
+   definition installs with `uv pip install --no-deps`, not `uv pip sync`: sync would remove the conda packages.
+   Conda comes first (`micromamba create … python=3.12 readdy=2.0.13`), then the lock, so the lock decides every
+   PyPI package; readdy's conda build for 3.12 needs `numpy>=2.3.2,<3`, which the lock meets (2.5.4 on
+   2026-10-25). The runscript is pbest's, unchanged (runtime contract 1, tested). On 2026-10-25 the registry spec
+   locks 125 packages in about 1.5 s, `libvcell==0.0.24` among them, and a cross-platform dry run
+   (`uv pip install --dry-run --python-platform x86_64-manylinux_2_28`) finds a distribution for each. Preview with
+   `uv run python -m compose_api.environments.lock [--resolved-at …] [--definition]`.
 4. **Creating versions.** The routes and the admin role. The build Job's privileged container also runs
    `pip freeze`, `micromamba list` and the describe script with `apptainer exec` against the new SIF, and the copy
    container moves `<hash>.installed.txt` and `<hash>.interfaces.json` beside it; recording the image stores them
