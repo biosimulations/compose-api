@@ -22,8 +22,8 @@ HEADER = """# A regression and reproducibility suite (docs/plan-sedml.md, phase 
 # Its runs are queued behind interactive ones, at most half of submission_max_active_jobs at a time
 # (docs/plan-durable-submission.md, Q3).
 name: {name}
-description: The first {count} curated SBML models in EBI BioModels, each run on COPASI and Tellurium and compared.
-solvers: [copasi, tellurium]
+description: The first {count} curated SBML models in BioModels, each run on COPASI, Tellurium and VCell and compared.
+solvers: [copasi, tellurium, vcell]
 tolerances: {{rel_tol: 1.0e-4, abs_tol_min: 1.0e-3, abs_tol_scale: 1.0e-5}}
 {expected}sources:
 """

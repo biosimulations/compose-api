@@ -5,8 +5,8 @@
 # Its runs are queued behind interactive ones, at most half of submission_max_active_jobs at a time
 # (docs/plan-durable-submission.md, Q3).
 name: biomodels-curated-300
-description: The first 300 curated SBML models in EBI BioModels, each run on COPASI and Tellurium and compared.
-solvers: [copasi, tellurium]
+description: The first 300 curated SBML models in BioModels, each run on COPASI, Tellurium and VCell and compared.
+solvers: [copasi, tellurium, vcell]
 tolerances: {rel_tol: 1.0e-4, abs_tol_min: 1.0e-3, abs_tol_scale: 1.0e-5}
 # known disagreements and solver limits, shown as expected rather than failed: {source, solver?, reason} (run 1's
 # findings, 2026-10-22, after pbsim-common 0.1.3.dev0 fixed the adapter bugs behind 62 of its failed runs)
