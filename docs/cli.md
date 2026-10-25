@@ -368,6 +368,7 @@ $ compose-api run [OPTIONS] DOCUMENT
 * `--batch / --no-batch`: Submit as a batch job (smaller partition, 1 CPU).  [default: no-batch]
 * `-t, --tag TEXT`: A tag to find the run by later (repeatable).
 * `--description TEXT`: What the run is for.
+* `--environment-version INTEGER RANGE`: The version of the environment to run in (registry_env@3 is 3); omitted: its default.  [x&gt;=1]
 * `-w, --wait`: Wait for the job to finish; exit 1 unless it completed.
 * `-d, --download PATH`: With --wait: save the results archive into this directory.
 * `--extract / --no-extract`: With --download: unpack the archive instead of saving the zip.  [default: no-extract]
@@ -1265,6 +1266,7 @@ $ compose-api sedml run [OPTIONS] ARCHIVE
 * `--task TEXT`: A SED-ML task id (repeatable); all when omitted.
 * `-t, --tag TEXT`: A tag for every run (repeatable).
 * `--description TEXT`: What the runs are for.
+* `--environment-version TEXT`: An environment version to run in: environment@number (registry_env@2) or environment@default (repeatable); an environment not named runs at its default.
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
@@ -1486,6 +1488,7 @@ $ compose-api biomodels run [OPTIONS] MODEL_ID
 
 * `-s, --solver TEXT`: A solver id (repeatable); all when omitted.
 * `-t, --tag TEXT`: A tag for every run (repeatable).
+* `--environment-version TEXT`: An environment version to run in: environment@number (registry_env@2) or environment@default (repeatable); an environment not named runs at its default.
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
@@ -1607,6 +1610,7 @@ $ compose-api biosimulations run [OPTIONS] PROJECT_ID
 
 * `-s, --solver TEXT`: A solver id (repeatable); all when omitted.
 * `-t, --tag TEXT`: A tag for every run (repeatable).
+* `--environment-version TEXT`: An environment version to run in: environment@number (registry_env@2) or environment@default (repeatable); an environment not named runs at its default.
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
@@ -1688,7 +1692,7 @@ $ compose-api suites show [OPTIONS] NAME NUMBER
 
 ### `compose-api suites run`
 
-Run every source of the suite on its solvers; prints the new run's number.
+Run every source of the suite on its solvers; prints the new run's number and the versions it runs in.
 
 **Usage**:
 
@@ -1702,6 +1706,7 @@ $ compose-api suites run [OPTIONS] NAME
 
 **Options**:
 
+* `--environment-version TEXT`: Required (repeatable): the environment versions the suite runs in, environment@number (registry_env@2), environment@default, or default (every environment at its default). The run records them as numbers.  [required]
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 

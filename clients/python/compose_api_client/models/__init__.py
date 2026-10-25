@@ -107,9 +107,11 @@ from .submission_info import SubmissionInfo
 from .submission_state import SubmissionState
 from .suite import Suite
 from .suite_run_info import SuiteRunInfo
+from .suite_run_info_environment_versions import SuiteRunInfoEnvironmentVersions
 from .suite_run_row import SuiteRunRow
 from .suite_run_row_drift_type_0 import SuiteRunRowDriftType0
 from .suite_run_view import SuiteRunView
+from .suite_run_view_environment_versions import SuiteRunViewEnvironmentVersions
 from .suite_run_view_summary import SuiteRunViewSummary
 from .suite_verify import SuiteVerify
 from .suite_verify_result import SuiteVerifyResult
@@ -226,9 +228,11 @@ __all__ = (
     "SubmissionState",
     "Suite",
     "SuiteRunInfo",
+    "SuiteRunInfoEnvironmentVersions",
     "SuiteRunRow",
     "SuiteRunRowDriftType0",
     "SuiteRunView",
+    "SuiteRunViewEnvironmentVersions",
     "SuiteRunViewSummary",
     "SuiteVerify",
     "SuiteVerifyResult",

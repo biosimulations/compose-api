@@ -942,6 +942,12 @@ def run(
         list[str] | None, typer.Option("--tag", "-t", help="A tag to find the run by later (repeatable).")
     ] = None,
     description: Annotated[str | None, typer.Option(help="What the run is for.")] = None,
+    environment_version: Annotated[
+        int | None,
+        typer.Option(
+            min=1, help="The version of the environment to run in (registry_env@3 is 3); omitted: its default."
+        ),
+    ] = None,
     wait: Wait = False,
     download: Download = None,
     extract: Extract = False,
@@ -953,7 +959,13 @@ def run(
     _omex_archive(document)  # before any sign-in or upload
     with make_session(settings) as s:
         sim = s.submit(
-            document, simulator=simulator, interval=interval, batch=batch, tags=tag or (), description=description
+            document,
+            simulator=simulator,
+            interval=interval,
+            batch=batch,
+            tags=tag or (),
+            description=description,
+            environment_version=environment_version,
         )
         if not wait:
             emit(settings.output, sim)
@@ -1590,6 +1602,14 @@ Archive = Annotated[
 SolverOption = Annotated[
     list[str] | None, typer.Option("--solver", "-s", help="A solver id (repeatable); all when omitted.")
 ]
+VersionsOption = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--environment-version",
+        help="An environment version to run in: environment@number (registry_env@2) or environment@default"
+        " (repeatable); an environment not named runs at its default.",
+    ),
+]
 
 
 def _listed(value: object) -> list[str]:
@@ -1633,11 +1653,19 @@ def sedml_run(
     task: Annotated[list[str] | None, typer.Option(help="A SED-ML task id (repeatable); all when omitted.")] = None,
     tag: Annotated[list[str] | None, typer.Option("--tag", "-t", help="A tag for every run (repeatable).")] = None,
     description: Annotated[str | None, typer.Option(help="What the runs are for.")] = None,
+    environment_version: VersionsOption = None,
 ) -> None:
     """Run each task once per solver; prints each task's comparison and its runs."""
     settings = _settings(ctx)
     with make_session(settings) as s:
-        result = s.sedml_run(archive, solvers=solver or (), tasks=task or (), tags=tag or (), description=description)
+        result = s.sedml_run(
+            archive,
+            solvers=solver or (),
+            tasks=task or (),
+            tags=tag or (),
+            description=description,
+            environment_versions=environment_version or (),
+        )
     if settings.output is Output.JSON:
         emit(Output.JSON, result.to_dict())
         return
@@ -1804,11 +1832,14 @@ def biomodels_run(
     model_id: Annotated[str, typer.Argument(help="e.g. BIOMD0000000012")],
     solver: SolverOption = None,
     tag: Annotated[list[str] | None, typer.Option("--tag", "-t", help="A tag for every run (repeatable).")] = None,
+    environment_version: VersionsOption = None,
 ) -> None:
     """Run the entry's SED-ML once per solver; prints each task's comparison and its runs."""
     settings = _settings(ctx)
     with make_session(settings) as s:
-        result = s.run_biomodel(model_id, solvers=solver or (), tags=tag or ())
+        result = s.run_biomodel(
+            model_id, solvers=solver or (), tags=tag or (), environment_versions=environment_version or ()
+        )
     emit(settings.output, _run_rows(result) if settings.output is not Output.JSON else result.to_dict(),
          ["comparison", "task", "solver", "simulation"])  # fmt: skip
 
@@ -1876,11 +1907,14 @@ def biosimulations_run(
     project_id: Annotated[str, typer.Argument(help="The project id.")],
     solver: SolverOption = None,
     tag: Annotated[list[str] | None, typer.Option("--tag", "-t", help="A tag for every run (repeatable).")] = None,
+    environment_version: VersionsOption = None,
 ) -> None:
     """Run the project's SED-ML once per solver, its original results as the reference."""
     settings = _settings(ctx)
     with make_session(settings) as s:
-        result = s.run_biosimulations_project(project_id, solvers=solver or (), tags=tag or ())
+        result = s.run_biosimulations_project(
+            project_id, solvers=solver or (), tags=tag or (), environment_versions=environment_version or ()
+        )
     emit(settings.output, _run_rows(result) if settings.output is not Output.JSON else result.to_dict(),
          ["comparison", "task", "solver", "simulation"])  # fmt: skip
 
@@ -1978,11 +2012,23 @@ def suites_show(
 @suites_app.command("run")
 @claims("suites run", "run-suite")
 @handled
-def suites_run(ctx: typer.Context, name: SuiteName) -> None:
-    """Run every source of the suite on its solvers; prints the new run's number."""
+def suites_run(
+    ctx: typer.Context,
+    name: SuiteName,
+    environment_version: Annotated[
+        list[str],
+        typer.Option(
+            "--environment-version",
+            help="Required (repeatable): the environment versions the suite runs in, environment@number"
+            " (registry_env@2), environment@default, or default (every environment at its default). The run"
+            " records them as numbers.",
+        ),
+    ],
+) -> None:
+    """Run every source of the suite on its solvers; prints the new run's number and the versions it runs in."""
     settings = _settings(ctx)
     with make_session(settings) as s:
-        emit(settings.output, s.run_suite(name).to_dict())
+        emit(settings.output, s.run_suite(name, environment_versions=environment_version).to_dict())
 
 
 @suites_app.command("verify")

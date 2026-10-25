@@ -332,6 +332,8 @@ class SimulationRequest(BaseModel):
     is_batch: bool
     # A prebuilt simulator by name (settings.prebuilt_simulators); None runs the shared container.
     simulator: str | None = None
+    # The version of that environment to run in (docs/plan-environment-versions.md, step 5); None: its default.
+    environment_version: int | None = None
     # Stored on the simulation (compose_api/simulation/labels.py): the service's labels, the submitter's tags and text.
     labels: dict[str, str] = Field(default_factory=dict)
     tags: list[str] = Field(default_factory=list)

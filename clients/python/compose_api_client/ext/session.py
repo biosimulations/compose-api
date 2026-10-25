@@ -686,9 +686,11 @@ class ComposeSession:
         batch: bool = False,
         tags: Sequence[str] = (),
         description: str | None = None,
+        environment_version: int | None = None,
     ) -> SimulationExperiment:
-        """Submit an ``.omex`` (or ``.pbg``). ``simulator`` names a prebuilt simulator image; ``tags`` and
-        ``description`` are stored with the run and filter ``simulations()``."""
+        """Submit an ``.omex`` (or ``.pbg``). ``simulator`` names a prebuilt simulator image; ``environment_version``
+        a version of that environment (its default when omitted); ``tags`` and ``description`` are stored with the run
+        and filter ``simulations()``."""
         op = Operation("POST", "/simulation/run", replayable=False)
         r, _ = self._send(
             op,
@@ -700,6 +702,7 @@ class ComposeSession:
                 simulator=simulator if simulator is not None else UNSET,
                 tags=list(tags) if tags else UNSET,
                 description=description if description is not None else UNSET,
+                environment_version=environment_version if environment_version is not None else UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -825,8 +828,10 @@ class ComposeSession:
         tasks: Sequence[str] = (),
         tags: Sequence[str] = (),
         description: str | None = None,
+        environment_versions: Sequence[str] = (),
     ) -> SedmlRunResult:
-        """Run each task of a SED-ML archive once per solver; one comparison per task."""
+        """Run each task of a SED-ML archive once per solver; one comparison per task. ``environment_versions``:
+        ``environment@number`` or ``environment@default``; an environment not named runs at its default."""
         op = Operation("POST", "/sedml/run", replayable=False)
         r, _ = self._send(
             op,
@@ -837,6 +842,7 @@ class ComposeSession:
                 task=list(tasks) if tasks else UNSET,
                 tags=list(tags) if tags else UNSET,
                 description=description if description is not None else UNSET,
+                environment_version=list(environment_versions) if environment_versions else UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -859,7 +865,14 @@ class ComposeSession:
         _raise_for(r, op)
         return r.content
 
-    def run_biomodel(self, model_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()) -> SedmlRunResult:
+    def run_biomodel(
+        self,
+        model_id: str,
+        *,
+        solvers: Sequence[str] = (),
+        tags: Sequence[str] = (),
+        environment_versions: Sequence[str] = (),
+    ) -> SedmlRunResult:
         op = Operation("POST", f"/sources/biomodels/{model_id}/run", replayable=False)
         r, _ = self._send(
             op,
@@ -868,6 +881,7 @@ class ComposeSession:
                 client=c,
                 solvers=list(solvers) if solvers else UNSET,
                 tags=list(tags) if tags else UNSET,
+                environment_version=list(environment_versions) if environment_versions else UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -897,7 +911,12 @@ class ComposeSession:
         return data
 
     def run_biosimulations_project(
-        self, project_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()
+        self,
+        project_id: str,
+        *,
+        solvers: Sequence[str] = (),
+        tags: Sequence[str] = (),
+        environment_versions: Sequence[str] = (),
     ) -> SedmlRunResult:
         op = Operation("POST", f"/sources/biosimulations/{project_id}/run", replayable=False)
         r, _ = self._send(
@@ -907,6 +926,7 @@ class ComposeSession:
                 client=c,
                 solvers=list(solvers) if solvers else UNSET,
                 tags=list(tags) if tags else UNSET,
+                environment_version=list(environment_versions) if environment_versions else UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -929,10 +949,13 @@ class ComposeSession:
         r, _ = self._send(op, lambda c: get_suite_run.sync_detailed(name, number, client=c))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
-    def run_suite(self, name: str) -> SuiteRunInfo:
-        """Run every source of the suite (submitted in the background); the new run's number."""
+    def run_suite(self, name: str, *, environment_versions: Sequence[str]) -> SuiteRunInfo:
+        """Run every source of the suite (submitted in the background) in the environment versions named:
+        ``environment@number``, ``environment@default``, or ``default`` (each at its default); the new run's number."""
         op = Operation("POST", f"/suites/{name}/run", replayable=False)
-        r, _ = self._send(op, lambda c: run_suite.sync_detailed(name, client=c))
+        r, _ = self._send(
+            op, lambda c: run_suite.sync_detailed(name, client=c, environment_version=list(environment_versions))
+        )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def comparisons(self, *, source: str | None = None, limit: int = 25, offset: int = 0) -> ComparisonPage:
@@ -1492,6 +1515,7 @@ class AsyncComposeSession:
         batch: bool = False,
         tags: Sequence[str] = (),
         description: str | None = None,
+        environment_version: int | None = None,
     ) -> SimulationExperiment:
         op = Operation("POST", "/simulation/run", replayable=False)
         r, _ = await self._send(
@@ -1504,6 +1528,7 @@ class AsyncComposeSession:
                 simulator=simulator if simulator is not None else UNSET,
                 tags=list(tags) if tags else UNSET,
                 description=description if description is not None else UNSET,
+                environment_version=environment_version if environment_version is not None else UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -1633,8 +1658,10 @@ class AsyncComposeSession:
         tasks: Sequence[str] = (),
         tags: Sequence[str] = (),
         description: str | None = None,
+        environment_versions: Sequence[str] = (),
     ) -> SedmlRunResult:
-        """Run each task of a SED-ML archive once per solver; one comparison per task."""
+        """Run each task of a SED-ML archive once per solver; one comparison per task. ``environment_versions``:
+        ``environment@number`` or ``environment@default``; an environment not named runs at its default."""
         op = Operation("POST", "/sedml/run", replayable=False)
         r, _ = await self._send(
             op,
@@ -1645,6 +1672,7 @@ class AsyncComposeSession:
                 task=list(tasks) if tasks else UNSET,
                 tags=list(tags) if tags else UNSET,
                 description=description if description is not None else UNSET,
+                environment_version=list(environment_versions) if environment_versions else UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -1670,7 +1698,12 @@ class AsyncComposeSession:
         return r.content
 
     async def run_biomodel(
-        self, model_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()
+        self,
+        model_id: str,
+        *,
+        solvers: Sequence[str] = (),
+        tags: Sequence[str] = (),
+        environment_versions: Sequence[str] = (),
     ) -> SedmlRunResult:
         op = Operation("POST", f"/sources/biomodels/{model_id}/run", replayable=False)
         r, _ = await self._send(
@@ -1680,6 +1713,7 @@ class AsyncComposeSession:
                 client=c,
                 solvers=list(solvers) if solvers else UNSET,
                 tags=list(tags) if tags else UNSET,
+                environment_version=list(environment_versions) if environment_versions else UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -1713,7 +1747,12 @@ class AsyncComposeSession:
         return data
 
     async def run_biosimulations_project(
-        self, project_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()
+        self,
+        project_id: str,
+        *,
+        solvers: Sequence[str] = (),
+        tags: Sequence[str] = (),
+        environment_versions: Sequence[str] = (),
     ) -> SedmlRunResult:
         op = Operation("POST", f"/sources/biosimulations/{project_id}/run", replayable=False)
         r, _ = await self._send(
@@ -1723,6 +1762,7 @@ class AsyncComposeSession:
                 client=c,
                 solvers=list(solvers) if solvers else UNSET,
                 tags=list(tags) if tags else UNSET,
+                environment_version=list(environment_versions) if environment_versions else UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -1745,10 +1785,13 @@ class AsyncComposeSession:
         r, _ = await self._send(op, lambda c: get_suite_run.asyncio_detailed(name, number, client=c))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
-    async def run_suite(self, name: str) -> SuiteRunInfo:
-        """Run every source of the suite (submitted in the background); the new run's number."""
+    async def run_suite(self, name: str, *, environment_versions: Sequence[str]) -> SuiteRunInfo:
+        """Run every source of the suite (submitted in the background) in the environment versions named:
+        ``environment@number``, ``environment@default``, or ``default`` (each at its default); the new run's number."""
         op = Operation("POST", f"/suites/{name}/run", replayable=False)
-        r, _ = await self._send(op, lambda c: run_suite.asyncio_detailed(name, client=c))
+        r, _ = await self._send(
+            op, lambda c: run_suite.asyncio_detailed(name, client=c, environment_version=list(environment_versions))
+        )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def comparisons(self, *, source: str | None = None, limit: int = 25, offset: int = 0) -> ComparisonPage:

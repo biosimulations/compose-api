@@ -1,4 +1,8 @@
-"""Which environment version a run uses (docs/plan-environment-versions.md, step 2).
+"""Which environment version a run uses (docs/plan-environment-versions.md, steps 2 and 5).
+
+A run may name its version (step 5): ``registry_env@3``, or ``registry_env@default``, which is resolved to the
+default's number when the run is recorded, so what is stored is always a number. A suite run must name one for every
+environment its solvers use (``default`` names them all at their defaults).
 
 Until versions are created through the API (step 4), the deployment decides, as it decided the image before: the
 shared environment runs the definition generated from the pinned library list (``simulator_registry.json``), a
@@ -15,7 +19,7 @@ from pbest.utils.input_types import ContainerizationEngine, ContainerizationFile
 
 from compose_api.registry.environments import load_environments
 from compose_api.simulation.hpc_utils import get_singularity_hash
-from compose_api.simulation.models import EnvironmentVersion, SimulatorVersion
+from compose_api.simulation.models import EnvironmentVersion, SimulatorVersion, VersionState
 from compose_api.simulation.prebuilt import prebuilt_definition, prebuilt_image
 from compose_api.simulation.simulator_registry import registry_dependencies, registry_libraries
 
@@ -37,11 +41,43 @@ def deployed_definition(simulator: str | None) -> tuple[ContainerizationFileRepr
     return prebuilt_definition(image), image
 
 
-async def version_for(
-    database_service: "DatabaseService", simulator: str | None
+class VersionUnavailableError(LookupError):
+    """A run names a version that does not exist, or that cannot run (failed, retired)."""
+
+
+#: the states a run may use: a version still building is waited for, like any image
+RUNNABLE = frozenset({VersionState.READY, VersionState.BUILDING})
+
+
+def environment_of(simulator: str | None) -> str:
+    """The environment a run of ``simulator`` (a prebuilt simulator's name, or None) runs in."""
+    return simulator if simulator is not None else shared_environment()
+
+
+async def chosen_version(
+    database_service: "DatabaseService", environment: str, number: int
 ) -> tuple[EnvironmentVersion, SimulatorVersion]:
-    """The version a run of ``simulator`` uses (None: the shared environment), and its simulator row: the default an
-    administrator chose, or else the deployment's own definition, both created the first time it is seen."""
+    """``environment@number`` and its simulator, if a run may use it; `VersionUnavailableError` otherwise."""
+    version = await database_service.get_environments_db().get_by_number(environment, number)
+    if version is None:
+        raise VersionUnavailableError(f"there is no version {environment}@{number}")
+    if version.state not in RUNNABLE:
+        raise VersionUnavailableError(f"{version.label} is {version.state}: runs cannot use it")
+    simulator = await database_service.get_simulator_db().get_simulator(version.simulator_id)
+    if simulator is None:
+        raise VersionUnavailableError(f"{version.label}'s simulator {version.simulator_id} is gone")
+    plain = version.model_dump(exclude={"lock", "installed", "interfaces"})
+    return EnvironmentVersion.model_validate(plain), simulator
+
+
+async def version_for(
+    database_service: "DatabaseService", simulator: str | None, number: int | None = None
+) -> tuple[EnvironmentVersion, SimulatorVersion]:
+    """The version a run of ``simulator`` uses (None: the shared environment), and its simulator row: ``number`` when
+    the run names one; otherwise the default an administrator chose, or else the deployment's own definition, both
+    created the first time it is seen."""
+    if number is not None:
+        return await chosen_version(database_service, environment_of(simulator), number)
     definition, image = deployed_definition(simulator)
     simulator_db = database_service.get_simulator_db()
     found = await simulator_db.get_simulator_by_def_hash(get_singularity_hash(definition))
@@ -65,3 +101,56 @@ async def version_for(
             raise LookupError(f"{version.label}'s simulator {version.simulator_id} is gone")
         simulator_version = chosen
     return version, simulator_version
+
+
+DEFAULT = "default"
+
+
+def parse_version_refs(refs: list[str] | None) -> tuple[bool, dict[str, int | None]]:
+    """``environment@number`` / ``environment@default`` references, and the bare ``default`` (every environment at its
+    default): whether that was given, and each named environment's number (None: its default). `ValueError` for a
+    malformed or repeated one."""
+    every, named = False, {}
+    for ref in refs or []:
+        text = ref.strip()
+        if text == DEFAULT:
+            every = True
+            continue
+        environment, at, number = text.rpartition("@")
+        if not at or not environment or not (number == DEFAULT or number.isdigit()):
+            raise ValueError(f"{ref!r} is not environment@number, environment@default or default")
+        if environment in named:
+            raise ValueError(f"{environment} is named twice")
+        named[environment] = None if number == DEFAULT else int(number)
+    return every, named
+
+
+async def resolve_versions(
+    database_service: "DatabaseService", refs: list[str] | None, environments: set[str], *, require_all: bool
+) -> dict[str, int]:
+    """The version number each of ``environments`` runs at, from ``refs``: a default resolved to its number now.
+    With ``require_all``, every environment must be named (or ``default`` given); otherwise one not named is left out
+    (its runs get the default when they are recorded). `VersionUnavailableError` for a version runs cannot use, an
+    environment the runs do not use, or one missing under ``require_all``; `ValueError` for a malformed reference."""
+    every, named = parse_version_refs(refs)
+    unused = sorted(set(named) - environments)
+    if unused:
+        raise VersionUnavailableError(
+            f"these runs do not use {', '.join(unused)}; they use {', '.join(sorted(environments))}"
+        )
+    missing = sorted(environments - set(named))
+    if require_all and missing and not every:
+        raise VersionUnavailableError(
+            f"name a version of {', '.join(missing)} (environment@number, environment@default, or default)"
+        )
+    resolved: dict[str, int] = {}
+    shared = shared_environment()
+    for environment in sorted(environments):
+        number = named.get(environment)
+        if number is not None:
+            await chosen_version(database_service, environment, number)
+            resolved[environment] = number
+        elif environment in named or every:
+            version, _ = await version_for(database_service, None if environment == shared else environment)
+            resolved[environment] = version.number
+    return resolved

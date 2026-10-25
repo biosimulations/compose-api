@@ -19,6 +19,7 @@ def _get_kwargs(
     simulator: None | str | Unset = UNSET,
     tags: list[str] | None | Unset = UNSET,
     description: None | str | Unset = UNSET,
+    environment_version: int | None | Unset = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
 
@@ -51,6 +52,13 @@ def _get_kwargs(
     else:
         json_description = description
     params["description"] = json_description
+
+    json_environment_version: int | None | Unset
+    if isinstance(environment_version, Unset):
+        json_environment_version = UNSET
+    else:
+        json_environment_version = environment_version
+    params["environment_version"] = json_environment_version
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -111,11 +119,15 @@ def sync_detailed(
     simulator: None | str | Unset = UNSET,
     tags: list[str] | None | Unset = UNSET,
     description: None | str | Unset = UNSET,
+    environment_version: int | None | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError | SimulationExperiment]:
     """Run a simulation
 
      `simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);
     the job then runs in that image instead of the shared container. Omitted: the shared container.
+    `environment_version` picks a version of that environment (docs/plan-environment-versions.md); the
+    run is labelled
+    `environment_version=<environment>@<number>` either way.
 
     The run is labelled `source=upload` and `environment=<simulator or registry_env>`; `tags` and
     `description` are
@@ -128,6 +140,9 @@ def sync_detailed(
         tags (list[str] | None | Unset): Tags to find the run by later; at most 20, each up to 64
             characters
         description (None | str | Unset): What the run is for; up to 2000 characters
+        environment_version (int | None | Unset): The version of the environment to run in
+            (registry_env@3 is 3, or of the prebuilt simulator named); omitted: its default. GET
+            /registry/environments/{name}/versions lists them
         body (BodyRunSimulation):
 
     Raises:
@@ -145,6 +160,7 @@ def sync_detailed(
         simulator=simulator,
         tags=tags,
         description=description,
+        environment_version=environment_version,
     )
 
     response = client.get_httpx_client().request(
@@ -163,11 +179,15 @@ def sync(
     simulator: None | str | Unset = UNSET,
     tags: list[str] | None | Unset = UNSET,
     description: None | str | Unset = UNSET,
+    environment_version: int | None | Unset = UNSET,
 ) -> Any | HTTPValidationError | SimulationExperiment | None:
     """Run a simulation
 
      `simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);
     the job then runs in that image instead of the shared container. Omitted: the shared container.
+    `environment_version` picks a version of that environment (docs/plan-environment-versions.md); the
+    run is labelled
+    `environment_version=<environment>@<number>` either way.
 
     The run is labelled `source=upload` and `environment=<simulator or registry_env>`; `tags` and
     `description` are
@@ -180,6 +200,9 @@ def sync(
         tags (list[str] | None | Unset): Tags to find the run by later; at most 20, each up to 64
             characters
         description (None | str | Unset): What the run is for; up to 2000 characters
+        environment_version (int | None | Unset): The version of the environment to run in
+            (registry_env@3 is 3, or of the prebuilt simulator named); omitted: its default. GET
+            /registry/environments/{name}/versions lists them
         body (BodyRunSimulation):
 
     Raises:
@@ -198,6 +221,7 @@ def sync(
         simulator=simulator,
         tags=tags,
         description=description,
+        environment_version=environment_version,
     ).parsed
 
 
@@ -210,11 +234,15 @@ async def asyncio_detailed(
     simulator: None | str | Unset = UNSET,
     tags: list[str] | None | Unset = UNSET,
     description: None | str | Unset = UNSET,
+    environment_version: int | None | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError | SimulationExperiment]:
     """Run a simulation
 
      `simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);
     the job then runs in that image instead of the shared container. Omitted: the shared container.
+    `environment_version` picks a version of that environment (docs/plan-environment-versions.md); the
+    run is labelled
+    `environment_version=<environment>@<number>` either way.
 
     The run is labelled `source=upload` and `environment=<simulator or registry_env>`; `tags` and
     `description` are
@@ -227,6 +255,9 @@ async def asyncio_detailed(
         tags (list[str] | None | Unset): Tags to find the run by later; at most 20, each up to 64
             characters
         description (None | str | Unset): What the run is for; up to 2000 characters
+        environment_version (int | None | Unset): The version of the environment to run in
+            (registry_env@3 is 3, or of the prebuilt simulator named); omitted: its default. GET
+            /registry/environments/{name}/versions lists them
         body (BodyRunSimulation):
 
     Raises:
@@ -244,6 +275,7 @@ async def asyncio_detailed(
         simulator=simulator,
         tags=tags,
         description=description,
+        environment_version=environment_version,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -260,11 +292,15 @@ async def asyncio(
     simulator: None | str | Unset = UNSET,
     tags: list[str] | None | Unset = UNSET,
     description: None | str | Unset = UNSET,
+    environment_version: int | None | Unset = UNSET,
 ) -> Any | HTTPValidationError | SimulationExperiment | None:
     """Run a simulation
 
      `simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);
     the job then runs in that image instead of the shared container. Omitted: the shared container.
+    `environment_version` picks a version of that environment (docs/plan-environment-versions.md); the
+    run is labelled
+    `environment_version=<environment>@<number>` either way.
 
     The run is labelled `source=upload` and `environment=<simulator or registry_env>`; `tags` and
     `description` are
@@ -277,6 +313,9 @@ async def asyncio(
         tags (list[str] | None | Unset): Tags to find the run by later; at most 20, each up to 64
             characters
         description (None | str | Unset): What the run is for; up to 2000 characters
+        environment_version (int | None | Unset): The version of the environment to run in
+            (registry_env@3 is 3, or of the prebuilt simulator named); omitted: its default. GET
+            /registry/environments/{name}/versions lists them
         body (BodyRunSimulation):
 
     Raises:
@@ -296,5 +335,6 @@ async def asyncio(
             simulator=simulator,
             tags=tags,
             description=description,
+            environment_version=environment_version,
         )
     ).parsed

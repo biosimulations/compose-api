@@ -2,16 +2,21 @@
 (`examples/<name>/suite.yaml`) run on every solver, compared with each other, with references, and with the suite's
 accepted baseline run."""
 
+import logging
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from compose_api.authentication import OptionalPrincipal, get_optional_principal
+from compose_api.authentication import OptionalPrincipal, describe_caller, get_optional_principal
 from compose_api.common.gateway.models import RouterConfig
+from compose_api.dependencies import get_required_database_service
+from compose_api.environments.versions import VersionUnavailableError, resolve_versions
 from compose_api.sedml import suite_runs
 from compose_api.sedml.models import SuiteVerifyResult
 from compose_api.sedml.suite_runs import SuiteRunInfo, SuiteRunView
 from compose_api.sedml.suites import Suite, load_suites, suite
+
+logger = logging.getLogger(__name__)
 
 config = RouterConfig(router=APIRouter(), prefix="/suites", dependencies=[Depends(get_optional_principal)])
 
@@ -50,13 +55,36 @@ async def get_suite_run(name: str, number: int, principal: OptionalPrincipal) ->
 
 @config.router.post(
     "/{name}/run", response_model=SuiteRunInfo, operation_id="run-suite", tags=["Suites"],
-    summary="Run every source of the suite on its solvers (submitted in the background)",
-    responses={404: {"description": "No such suite"}},
+    summary="Run every source of the suite on its solvers, in the environment versions named (in the background)",
+    responses={
+        400: {"description": "A version not named, malformed, or that runs cannot use"},
+        404: {"description": "No such suite"},
+    },
 )  # fmt: skip
-async def run_suite(name: str, principal: OptionalPrincipal) -> SuiteRunInfo:
+async def run_suite(
+    name: str,
+    principal: OptionalPrincipal,
+    environment_version: Annotated[
+        list[str],
+        Query(
+            min_length=1,
+            description="The environment versions the suite runs in, required: environment@number (registry_env@2),"
+            " environment@default, or default (every environment at its default). Stored with the run as numbers",
+        ),
+    ],
+) -> SuiteRunInfo:
+    """Every environment the suite's solvers use must be named (docs/plan-environment-versions.md, step 5): a suite
+    run records exactly what it ran in, and is independent of the service release that started it."""
     s = _suite(name)
-    number = await suite_runs.start(s)
-    return SuiteRunInfo(number=number, created_at=None, status="submitting")
+    try:
+        versions = await resolve_versions(
+            get_required_database_service(), environment_version, suite_runs.suite_environments(s), require_all=True
+        )
+    except (VersionUnavailableError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    number = await suite_runs.start(s, versions)
+    logger.info(f"suite {name} run {number} started by {describe_caller(principal)} on {versions}")
+    return SuiteRunInfo(number=number, created_at=None, status="submitting", environment_versions=versions)
 
 
 @config.router.post(

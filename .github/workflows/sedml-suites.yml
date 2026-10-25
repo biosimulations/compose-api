@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       API: https://compose.cam.uchc.edu
+      SUITE_ENVIRONMENT_VERSIONS: ${{ vars.SUITE_ENVIRONMENT_VERSIONS }}
     steps:
       - uses: actions/checkout@v4
       - name: Run the suites on the deployed service
@@ -34,7 +35,11 @@ jobs:
           fi
           for suite in $suites; do
             echo "::group::$suite"
-            curl -fsS -X POST "$API/suites/$suite/run" | tee "run-$suite.json"
+            # the environment versions to run in (docs/plan-environment-versions.md): the repository variable
+            # SUITE_ENVIRONMENT_VERSIONS (space-separated environment@number), or every environment at its default
+            query=""
+            for ref in ${SUITE_ENVIRONMENT_VERSIONS:-default}; do query="$query&environment_version=$ref"; done
+            curl -fsS -X POST "$API/suites/$suite/run?${query#&}" | tee "run-$suite.json"
             echo
             echo "::endgroup::"
             number=$(python3 -c "import json; print(json.load(open('run-$suite.json'))['number'])")

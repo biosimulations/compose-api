@@ -12,6 +12,7 @@ import re
 LABEL_KEYS: dict[str, str] = {
     "source": "where the document came from: upload, curated, biomodels, biosimulations",
     "environment": "the environment it ran in: registry_env, or a prebuilt simulator's name",
+    "environment_version": "the version of that environment it ran in, e.g. registry_env@2",
     "solver": "the solver a SED-ML or curated run used (registry/solvers.yaml)",
     "model": "the BioModels entry, e.g. BIOMD0000000012",
     "project": "the biosimulations.org project",

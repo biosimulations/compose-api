@@ -151,7 +151,7 @@
           "Simulation"
         ],
         "summary": "Run a simulation",
-        "description": "`simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);\nthe job then runs in that image instead of the shared container. Omitted: the shared container.\n\nThe run is labelled `source=upload` and `environment=<simulator or registry_env>`; `tags` and `description` are\nstored with it as given (compose_api/simulation/labels.py) and filter `GET /simulations`.",
+        "description": "`simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);\nthe job then runs in that image instead of the shared container. Omitted: the shared container.\n`environment_version` picks a version of that environment (docs/plan-environment-versions.md); the run is labelled\n`environment_version=<environment>@<number>` either way.\n\nThe run is labelled `source=upload` and `environment=<simulator or registry_env>`; `tags` and `description` are\nstored with it as given (compose_api/simulation/labels.py) and filter `GET /simulations`.",
         "operationId": "run-simulation",
         "parameters": [
           {
@@ -228,6 +228,25 @@
               "title": "Description"
             },
             "description": "What the run is for; up to 2000 characters"
+          },
+          {
+            "name": "environment_version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The version of the environment to run in (registry_env@3 is 3, or of the prebuilt simulator named); omitted: its default. GET /registry/environments/{name}/versions lists them",
+              "title": "Environment Version"
+            },
+            "description": "The version of the environment to run in (registry_env@3 is 3, or of the prebuilt simulator named); omitted: its default. GET /registry/environments/{name}/versions lists them"
           }
         ],
         "requestBody": {
@@ -360,10 +379,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, solver, model, project, sedml_task, comparison, collection, suite_run",
+              "description": "Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, environment_version, solver, model, project, sedml_task, comparison, collection, suite_run",
               "title": "Label"
             },
-            "description": "Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, solver, model, project, sedml_task, comparison, collection, suite_run"
+            "description": "Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, environment_version, solver, model, project, sedml_task, comparison, collection, suite_run"
           },
           {
             "name": "tag",
@@ -2297,6 +2316,27 @@
               "default": 1e-05,
               "title": "Abs Tol Scale"
             }
+          },
+          {
+            "name": "environment_version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Environment versions to run in: environment@number (registry_env@2) or environment@default, repeatable; an environment not named runs at its default",
+              "title": "Environment Version"
+            },
+            "description": "Environment versions to run in: environment@number (registry_env@2) or environment@default, repeatable; an environment not named runs at its default"
           }
         ],
         "requestBody": {
@@ -2887,6 +2927,27 @@
               ],
               "title": "Description"
             }
+          },
+          {
+            "name": "environment_version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Environment versions to run in: environment@number (registry_env@2) or environment@default, repeatable; an environment not named runs at its default",
+              "title": "Environment Version"
+            },
+            "description": "Environment versions to run in: environment@number (registry_env@2) or environment@default, repeatable; an environment not named runs at its default"
           }
         ],
         "responses": {
@@ -3224,6 +3285,27 @@
               ],
               "title": "Description"
             }
+          },
+          {
+            "name": "environment_version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Environment versions to run in: environment@number (registry_env@2) or environment@default, repeatable; an environment not named runs at its default",
+              "title": "Environment Version"
+            },
+            "description": "Environment versions to run in: environment@number (registry_env@2) or environment@default, repeatable; an environment not named runs at its default"
           }
         ],
         "responses": {
@@ -3389,7 +3471,8 @@
         "tags": [
           "Suites"
         ],
-        "summary": "Run every source of the suite on its solvers (submitted in the background)",
+        "summary": "Run every source of the suite on its solvers, in the environment versions named (in the background)",
+        "description": "Every environment the suite's solvers use must be named (docs/plan-environment-versions.md, step 5): a suite\nrun records exactly what it ran in, and is independent of the service release that started it.",
         "operationId": "run-suite",
         "parameters": [
           {
@@ -3400,6 +3483,21 @@
               "type": "string",
               "title": "Name"
             }
+          },
+          {
+            "name": "environment_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "description": "The environment versions the suite runs in, required: environment@number (registry_env@2), environment@default, or default (every environment at its default). Stored with the run as numbers",
+              "title": "Environment Version"
+            },
+            "description": "The environment versions the suite runs in, required: environment@number (registry_env@2), environment@default, or default (every environment at its default). Stored with the run as numbers"
           }
         ],
         "responses": {
@@ -3412,6 +3510,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "A version not named, malformed, or that runs cannot use"
           },
           "404": {
             "description": "No such suite"
@@ -6961,6 +7062,14 @@
           "status": {
             "type": "string",
             "title": "Status"
+          },
+          "environment_versions": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Environment Versions",
+            "description": "The environment versions its runs use, {environment: number}; empty for runs started before suites named them (theirs got the default)"
           }
         },
         "type": "object",
@@ -7165,6 +7274,14 @@
             },
             "type": "object",
             "title": "Summary"
+          },
+          "environment_versions": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Environment Versions",
+            "description": "The environment versions its runs use, {environment: number}"
           }
         },
         "type": "object",
