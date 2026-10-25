@@ -12,7 +12,12 @@ def test_every_post_has_an_explicit_submission_policy() -> None:
     spec = json.loads(importlib.resources.files("compose_api_client").joinpath("openapi.json").read_text())
     posts = {path for path, methods in spec["paths"].items() if "post" in methods}
     # POSTs that change nothing, or set a state, so a retry is safe (replayable)
-    idempotent_operations = {"preview-sedml", "preview-environment-version", "retire-environment-version"}
+    idempotent_operations = {
+        "preview-sedml",
+        "preview-environment-version",
+        "retire-environment-version",
+        "inspect-environment-version",
+    }
     idempotent = {
         path
         for path, methods in spec["paths"].items()

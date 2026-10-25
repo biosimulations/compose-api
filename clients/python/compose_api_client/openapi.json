@@ -1823,6 +1823,70 @@
         }
       }
     },
+    "/registry/environments/{name}/versions/{number}/inspect": {
+      "post": {
+        "tags": [
+          "Registry"
+        ],
+        "summary": "Read again what a prebuilt version's image installed and provides, in a Job that runs the image",
+        "description": "Started in the background; `GET \u2026/versions/{number}` shows the result. A shared version's image is read back\nby its own build.",
+        "operationId": "inspect-environment-version",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Number"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentVersion"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such environment, or no such version"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Not an environment administrator, or environment administration is not configured"
+          },
+          "409": {
+            "description": "A shared version (its build reads it back), or no Kubernetes to run the Job on"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/registry/environments/{name}/default": {
       "put": {
         "tags": [

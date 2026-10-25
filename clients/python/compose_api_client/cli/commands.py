@@ -846,6 +846,17 @@ def environments_default(ctx: typer.Context, name: _ENV_ARG, number: _NUMBER_ARG
         emit(settings.output, s.set_environment_default(name, number))
 
 
+@environments_app.command("inspect")
+@claims("environments inspect", "inspect-environment-version")
+@handled
+def environments_inspect(ctx: typer.Context, name: _ENV_ARG, number: _NUMBER_ARG) -> None:
+    """Read a prebuilt version's image back again: what it installed and the interfaces it provides (in the
+    background; `environments version` shows them). Needs the environment administrator role."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.inspect_environment_version(name, number))
+
+
 @environments_app.command("retire")
 @claims("environments retire", "retire-environment-version")
 @handled

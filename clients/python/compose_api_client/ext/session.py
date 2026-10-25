@@ -37,6 +37,7 @@ from compose_api_client.api.registry import (
     get_environment_manifest,
     get_environment_version,
     get_simulator_images,
+    inspect_environment_version,
     list_environment_versions,
     list_environments,
     list_registry_entries,
@@ -653,6 +654,13 @@ class ComposeSession:
         """Retire a version: it refuses new runs; its images are kept. Needs the environment administrator role."""
         op = Operation("POST", f"/registry/environments/{name}/versions/{number}/retire", replayable=True)
         r, _ = self._send(op, lambda c: retire_environment_version.sync_detailed(name, number, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def inspect_environment_version(self, name: str, number: int) -> EnvironmentVersion:
+        """Read a prebuilt version's image back again (what it installed and provides), in the background. Needs the
+        environment administrator role."""
+        op = Operation("POST", f"/registry/environments/{name}/versions/{number}/inspect", replayable=True)
+        r, _ = self._send(op, lambda c: inspect_environment_version.sync_detailed(name, number, client=c))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def simulator_images(self, simulator_id: int) -> ImageStatus:
@@ -1454,6 +1462,13 @@ class AsyncComposeSession:
         """Retire a version: it refuses new runs; its images are kept. Needs the environment administrator role."""
         op = Operation("POST", f"/registry/environments/{name}/versions/{number}/retire", replayable=True)
         r, _ = await self._send(op, lambda c: retire_environment_version.asyncio_detailed(name, number, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def inspect_environment_version(self, name: str, number: int) -> EnvironmentVersion:
+        """Read a prebuilt version's image back again (what it installed and provides), in the background. Needs the
+        environment administrator role."""
+        op = Operation("POST", f"/registry/environments/{name}/versions/{number}/inspect", replayable=True)
+        r, _ = await self._send(op, lambda c: inspect_environment_version.asyncio_detailed(name, number, client=c))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def simulator_images(self, simulator_id: int) -> ImageStatus:

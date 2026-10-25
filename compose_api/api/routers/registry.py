@@ -17,13 +17,14 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from compose_api.authentication import OptionalPrincipal, get_optional_principal
 from compose_api.authorization import EnvironmentAdmin
 from compose_api.common.gateway.models import RouterConfig
+from compose_api.config import get_settings
 from compose_api.dependencies import (
     get_required_database_service,
     get_required_job_monitor,
     get_required_simulation_service,
 )
 from compose_api.environments import service as environment_service
-from compose_api.environments.contents import record_contents
+from compose_api.environments.contents import inspect_prebuilt_version, record_contents
 from compose_api.environments.service import VersionRequestError
 from compose_api.environments.versions import version_for
 from compose_api.registry.environments import (
@@ -264,8 +265,26 @@ async def _build_version(version: EnvironmentVersion, simulator: SimulatorVersio
         await environments_db.set_state(version.database_id, VersionState.FAILED)
         return
     await environments_db.set_state(version.database_id, VersionState.READY)
-    recorded = await record_contents(get_required_database_service(), version)
-    logger.info(f"{version.label} is ready" + ("" if recorded else "; its image left nothing read back from it"))
+    logger.info(f"{version.label} is ready")
+    await _read_back(version)
+
+
+async def _read_back(version: EnvironmentVersion) -> None:
+    """Store what the version's image installed and provides: left beside a built image by its build, or read from a
+    pulled (prebuilt) one by a Job of its own. Never fails the version."""
+    database_service = get_required_database_service()
+    try:
+        if version.image is not None:
+            recorded = get_settings().build_backend == "k8s" and await inspect_prebuilt_version(
+                database_service, version
+            )
+        else:
+            recorded = await record_contents(database_service, version)
+    except Exception:
+        logger.exception(f"Reading back {version.label} failed")
+        return
+    if not recorded:
+        logger.info(f"Nothing was read back from {version.label}'s image")
 
 
 @config.router.get(
@@ -360,6 +379,36 @@ async def create_environment_version(
                 version = version.model_copy(update={"state": VersionState.BUILDING})
     logger.info(f"{version.label} {'created' if created else 'requested again'} by {caller.subject}")
     return version
+
+
+@config.router.post(
+    path="/environments/{name}/versions/{number}/inspect",
+    response_model=EnvironmentVersion,
+    status_code=202,
+    operation_id="inspect-environment-version",
+    tags=["Registry"],
+    summary="Read again what a prebuilt version's image installed and provides, in a Job that runs the image",
+    responses={
+        **_NO_ENVIRONMENT,
+        **_ADMIN,
+        409: {"description": "A shared version (its build reads it back), or no Kubernetes to run the Job on"},
+    },
+)
+async def inspect_environment_version(
+    name: str, number: int, background_tasks: BackgroundTasks, caller: EnvironmentAdmin
+) -> EnvironmentVersion:
+    """Started in the background; `GET …/versions/{number}` shows the result. A shared version's image is read back
+    by its own build."""
+    _known_environment(name)
+    version = await _version(name, number)
+    if version.image is None:
+        raise HTTPException(status_code=409, detail=f"{version.label} is shared: its build reads its image back")
+    if get_settings().build_backend != "k8s":
+        raise HTTPException(status_code=409, detail="reading an image back needs the k8s build backend")
+    plain = EnvironmentVersion.model_validate(version.model_dump(exclude={"lock", "installed", "interfaces"}))
+    background_tasks.add_task(_read_back, plain)
+    logger.info(f"{version.label} read back again, for {caller.subject}")
+    return plain
 
 
 @config.router.put(

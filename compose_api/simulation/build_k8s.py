@@ -34,7 +34,7 @@ from compose_api.config import Settings, get_settings
 from compose_api.db.services.hpc_db import HPCDatabaseService
 from compose_api.simulation.builds import BuildFailedError, wait_for_run
 from compose_api.simulation.hpc_utils import get_image_inspection_file, get_slurm_singularity_container_file
-from compose_api.simulation.models import HpcRun, JobType, SimulatorVersion
+from compose_api.simulation.models import EnvironmentVersion, HpcRun, JobType, SimulatorVersion
 
 if TYPE_CHECKING:
     from kubernetes.client import V1Job
@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 WORK_DIR = "/work"
+SCRATCH_DIR = "/scratch"  # an inspection Job's only writable volume
 LABEL = "compose-api-build"
 
 
@@ -123,6 +124,114 @@ def inspect_script(inspection: Inspection) -> str:
             || {{ echo "could not describe the interfaces" >&2; rm -f {WORK_DIR}/image.interfaces.json; }}
         fi
         """).replace("{installed}", _INSTALLED)
+
+
+INSPECT_CONTAINER = "inspect"
+INSPECT_MARKER = "===compose-api-inspection"
+INSTALLED_ENV = "INSTALLED_SCRIPT_B64"
+
+
+def prebuilt_inspect_script(inspection: Inspection) -> str:
+    """Inside a prebuilt image, unprivileged, with nothing mounted but scratch: the same two readings as a build's
+    (``inspect_script``), printed between markers, since a log is all such a Job leaves. Best effort, as there."""
+    python = shlex.join(inspection.python)
+    describe = shlex.join([*inspection.roots, "--env-name", inspection.environment, "--image", inspection.label])
+    return dedent(f"""\
+        cd {SCRATCH_DIR}
+        echo "${INSTALLED_ENV}" | base64 -d > installed.py
+        {python} {SCRATCH_DIR}/installed.py > installed.txt 2> installed.err || rm -f installed.txt
+        if [ -n "${{{DESCRIBE_ENV}:-}}" ]; then
+          echo "${DESCRIBE_ENV}" | base64 -d > describe_env.py
+          {python} {SCRATCH_DIR}/describe_env.py {describe} > interfaces.json 2> interfaces.err || rm -f interfaces.json
+        fi
+        for kind in {" ".join(INSPECTIONS)}; do
+          if [ -f "$kind" ]; then echo "{INSPECT_MARKER} $kind"; cat "$kind"; echo; fi
+        done
+        echo "{INSPECT_MARKER} end"
+        cat installed.err interfaces.err 2>/dev/null | tail -20 >&2 || true
+        """)
+
+
+def read_inspection_log(log: str) -> dict[str, str]:
+    """The files ``prebuilt_inspect_script`` printed, by kind; only those it reached the end of."""
+    found: dict[str, str] = {}
+    kind: str | None = None
+    lines: list[str] = []
+    for line in log.splitlines():
+        if line.startswith(INSPECT_MARKER + " "):
+            if kind is not None:
+                found[kind] = "\n".join(lines).rstrip("\n") + "\n"
+            kind, lines = line.removeprefix(INSPECT_MARKER + " ").strip(), []
+            if kind == "end":
+                return found
+        elif kind is not None:
+            lines.append(line)
+    return {}  # cut off before the end: nothing is trusted
+
+
+def inspection_job(name: str, site: BuildSite, image: str, inspection: Inspection) -> V1Job:
+    """A Job that runs a prebuilt image to read it back: unprivileged, as the service user, no service account token,
+    nothing mounted but scratch (the image is an owner's; it is trusted to run documents, nothing more)."""
+    from kubernetes import client as k8s
+
+    env = [k8s.V1EnvVar(name=INSTALLED_ENV, value=base64.b64encode(_INSTALLED.encode()).decode())]
+    if inspection.describe_script is not None:
+        encoded = base64.b64encode(inspection.describe_script.encode()).decode()
+        env.append(k8s.V1EnvVar(name=DESCRIBE_ENV, value=encoded))
+    labels = {"app": LABEL, "compose-api-build": name}
+    return k8s.V1Job(
+        metadata=k8s.V1ObjectMeta(name=name, labels=labels),
+        spec=k8s.V1JobSpec(
+            backoff_limit=0,
+            ttl_seconds_after_finished=3600,
+            active_deadline_seconds=900,
+            template=k8s.V1PodTemplateSpec(
+                metadata=k8s.V1ObjectMeta(labels=labels),
+                spec=k8s.V1PodSpec(
+                    restart_policy="Never",
+                    node_selector={"vlan": "internal"},
+                    automount_service_account_token=False,
+                    containers=[
+                        k8s.V1Container(
+                            name=INSPECT_CONTAINER,
+                            image=image,
+                            command=["/bin/bash", "-c", prebuilt_inspect_script(inspection)],
+                            env=env,
+                            security_context=k8s.V1SecurityContext(
+                                privileged=False,
+                                run_as_user=site.run_as_uid or None,
+                                run_as_group=site.run_as_gid or None,
+                                run_as_non_root=bool(site.run_as_uid),
+                                allow_privilege_escalation=False,
+                            ),
+                            volume_mounts=[k8s.V1VolumeMount(name="scratch", mount_path=SCRATCH_DIR)],
+                        )
+                    ],
+                    volumes=[k8s.V1Volume(name="scratch", empty_dir=k8s.V1EmptyDirVolumeSource())],
+                ),
+            ),
+        ),
+    )
+
+
+async def inspect_prebuilt(
+    image: str, inspection: Inspection, suffix: str, poll_seconds: float = 5.0
+) -> dict[str, str]:
+    """Run ``image``'s inspection Job and wait for it: the files it printed, by kind ({} when it failed)."""
+    site = BuildSite.from_settings(get_settings())
+    digest = image.rpartition("@sha256:")[2][:12] or "image"
+    name = f"inspect-{digest}-{suffix.lower()[:5]}"
+    builds = k8s_builds()
+    await asyncio.to_thread(builds.create, inspection_job(name, site, image, inspection))
+    deadline = asyncio.get_running_loop().time() + 960
+    state = "running"
+    while state == "running" and asyncio.get_running_loop().time() < deadline:
+        await asyncio.sleep(poll_seconds)
+        state, why = await asyncio.to_thread(builds.state, name)
+        if state == "failed":
+            logger.warning(f"Inspection Job {name} failed: {why}")
+    log = await asyncio.to_thread(builds.container_log, name, INSPECT_CONTAINER)
+    return read_inspection_log(log)
 
 
 def build_script() -> str:
@@ -298,6 +407,15 @@ class K8sBuilds:
                 out.append(f"== {pod_name} / {container} ==\n{text}")
         return "\n".join(out)
 
+    def container_log(self, name: str, container: str) -> str:
+        """One container's whole log, from the Job's newest pod ("" when it has none)."""
+        pods = self.core.list_namespaced_pod(namespace=self.namespace, label_selector=f"compose-api-build={name}")
+        names = [p.metadata.name for p in pods.items if p.metadata is not None and p.metadata.name]
+        if not names:
+            return ""
+        log: str = self.core.read_namespaced_pod_log(name=names[-1], namespace=self.namespace, container=container)
+        return log
+
 
 _builds: K8sBuilds | None = None
 
@@ -360,25 +478,33 @@ async def describe_script() -> str | None:
     return _describe_scripts[url]
 
 
+async def inspection_of(version: EnvironmentVersion) -> Inspection | None:
+    """How to read back a version's image: its environment's Python and module roots (None for an environment
+    ``environments.yaml`` does not list). A prebuilt manifest names the image; a shared one, the version."""
+    from compose_api.registry.environments import load_environments, module_roots
+
+    spec = next((e for e in load_environments().environments if e.name == version.environment), None)
+    if spec is None:
+        return None
+    roots = tuple(module_roots(spec.name))
+    return Inspection(
+        python=tuple(spec.python),
+        roots=roots,
+        environment=spec.name,
+        label=version.image or version.label,
+        describe_script=await describe_script() if roots else None,
+    )
+
+
 async def inspection_for(simulator_version: SimulatorVersion) -> Inspection | None:
     """How to read back the image of an environment version's simulator; None for a simulator no version names."""
     from compose_api.dependencies import get_database_service  # late: dependencies imports the simulation modules
-    from compose_api.registry.environments import load_environments, module_roots
 
     database_service = get_database_service()
     if database_service is None:
         return None
     version = await database_service.get_environments_db().of_simulator(simulator_version.database_id)
-    spec = next((e for e in load_environments().environments if version and e.name == version.environment), None)
-    if version is None or spec is None:
-        return None
-    return Inspection(
-        python=tuple(spec.python),
-        roots=tuple(module_roots(spec.name)),
-        environment=spec.name,
-        label=version.label,
-        describe_script=await describe_script() if module_roots(spec.name) else None,
-    )
+    return await inspection_of(version) if version is not None else None
 
 
 async def submit_build(simulator_version: SimulatorVersion, hpc_db: HPCDatabaseService, suffix: str) -> HpcRun:

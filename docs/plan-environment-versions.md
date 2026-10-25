@@ -1,6 +1,6 @@
 # Environment versions: locked, built and chosen through the API
 
-**Status (2026-10-25): steps 1–3 and 4a merged (#369–#372); step 4b in review.** One PR per step, merged with a merge commit; each PR updates the table below. A
+**Status (2026-10-25): steps 1–4b merged (#369–#373); step 4c in review.** One PR per step, merged with a merge commit; each PR updates the table below. A
 merge deploys nothing by itself: the next release's image ships it (CLAUDE.md, "Deploys are GitOps").
 
 | Step | What | State |
@@ -8,7 +8,7 @@ merge deploys nothing by itself: the next release's image ships it (CLAUDE.md, "
 | 1 | This document | merged (#369) |
 | 2 | `environment` and `environment_version` tables; today's two environments seeded as version 1 and made the defaults; one function chooses a run's version. No change in behavior | merged (#370) |
 | 3 | A shared version is a **lock**: compiled by the API with uv, its hash the identity; the definition installs from it | merged (#371) |
-| 4 | Creating versions through the API (refresh, prebuilt registration), with the lock diff, the installed packages and the interfaces recorded; the admin role | 4a merged (#372); 4b (what a shared build installed and provides) in review; 4c (the same for prebuilt images) to do |
+| 4 | Creating versions through the API (refresh, prebuilt registration), with the lock diff, the installed packages and the interfaces recorded; the admin role | 4a, 4b merged (#372, #373); 4c (prebuilt images read back) in review |
 | 5 | Choosing them: `environment_version` on runs, required on suite runs; recorded on every simulation and suite run | |
 | 6 | Retire the hard-coding: `PREBUILT_SIMULATORS`, `shared_image()`, the committed interface manifests | |
 
@@ -162,8 +162,14 @@ suite_run            + environment_versions  {environment: version}
    (`hpc_utils.get_image_inspection_file`). They are stored on the version when an administrator's build finishes,
    and otherwise the first time a ready version without them is read (`environments/contents.py`), so a version a run
    built gets them too. A build that no version names (`/registry/simulators/{id}/build`) reads nothing back.
-   4c: a prebuilt version is pulled, not built, so reading it back needs a Job of its own (the image run unprivileged
-   with its Python and the describe script).
+   *As built, 4c:* a prebuilt version is pulled, not built, so a Job of its own reads it back
+   (`build_k8s.inspection_job`): the image itself, unprivileged, as the service user, with no service account token
+   and nothing mounted but an `emptyDir`, runs the same two scripts with its environment's Python and prints the
+   files between markers; the API reads the pod's log (`read_inspection_log` trusts only a log that reached its end
+   marker) and stores them. It runs once an administrator's prebuilt version is ready, and on request:
+   `POST …/versions/{number}/inspect` (admin; 409 for a shared version, whose build reads it back, and without the
+   `k8s` build backend), CLI `environments inspect`. Versions that existed before 4b/4c (the seeded @1s) get theirs
+   that way for prebuilt; a shared @1 gets them only from a new build.
 5. **Choosing versions.** The run parameters, the suite requirement (`sedml-suites.yml` passes repository
    variables), the simulation column and label, `solvers.yaml` checked against the chosen version's interfaces, and
    the web app's environment page listing versions with their diffs.
