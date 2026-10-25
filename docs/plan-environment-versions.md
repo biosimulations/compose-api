@@ -167,9 +167,13 @@ suite_run            + environment_versions  {environment: version}
    and nothing mounted but an `emptyDir`, runs the same two scripts with its environment's Python and prints the
    files between markers; the API reads the pod's log (`read_inspection_log` trusts only a log that reached its end
    marker) and stores them. It runs once an administrator's prebuilt version is ready, and on request:
-   `POST …/versions/{number}/inspect` (admin; 409 for a shared version, whose build reads it back, and without the
-   `k8s` build backend), CLI `environments inspect`. Versions that existed before 4b/4c (the seeded @1s) get theirs
-   that way for prebuilt; a shared @1 gets them only from a new build.
+   `POST …/versions/{number}/inspect` (admin; 409 without the `k8s` build backend), CLI `environments inspect`.
+   *Later (2026-10-25):* the same route reads a **shared** version's image again when it is ready, for one built
+   before builds read images back (registry_env@1, adopted from the deployment). `build_k8s.reread_job`: the service
+   user copies the SIF from the store (mounted read-only) into the work volume, the privileged container runs the
+   build's own `inspect_script` seeing only that volume, and the service user places the two files beside the SIF.
+   A preview whose default has no lock compares with the packages its image installed (`against_basis:
+   "installed"`); a package installed from git shows its version there, and its URL in the lock.
 5. **Choosing versions.** The run parameters, the suite requirement (`sedml-suites.yml` passes repository
    variables), the simulation column and label, `solvers.yaml` checked against the chosen version's interfaces, and
    the web app's environment page listing versions with their diffs.

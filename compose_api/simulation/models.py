@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pbest.utils.input_types import ContainerizationFileRepr
 from pydantic import BaseModel as _BaseModel
@@ -282,7 +282,14 @@ class LockPreview(BaseModel):
     lock_sha256: str
     lock: str
     existing: int | None = Field(default=None, description="The number of a version with this very lock, if any")
-    against: int | None = Field(default=None, description="The default version compared with, if it has a lock")
+    against: int | None = Field(
+        default=None, description="The default version compared with, if it has a lock or a list of installed packages"
+    )
+    against_basis: Literal["lock", "installed"] | None = Field(
+        default=None,
+        description="What of the default version was compared: its lock, or (a version made before locks, such as one"
+        " built by a run) the packages its image installed, which name a package installed from git by its version",
+    )
     changes: list[PackageChange] = Field(default_factory=list)
 
 

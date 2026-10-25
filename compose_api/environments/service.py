@@ -58,7 +58,8 @@ async def preview(
     environments_db = database_service.get_environments_db()
     existing = await environments_db.find_by_lock(environment.name, lock.sha256)
     default = await environments_db.get_default_detail(environment.name)
-    against = default if default is not None and default.lock is not None else None
+    # A version made before locks is compared by what its image installed (read back from it)
+    basis = (default.lock or default.installed) if default is not None else None
     return LockPreview(
         environment=environment.name,
         resolved_at=lock.resolved_at,
@@ -66,10 +67,11 @@ async def preview(
         lock_sha256=lock.sha256,
         lock=lock.text,
         existing=existing.number if existing is not None else None,
-        against=against.number if against is not None else None,
+        against=default.number if default is not None and basis else None,
+        against_basis=("lock" if default.lock else "installed") if default is not None and basis else None,
         changes=[
             PackageChange(name=name, before=before, after=after)
-            for name, before, after in (changes(against.lock or "", lock.text) if against is not None else [])
+            for name, before, after in (changes(basis, lock.text) if basis else [])
         ],
     )
 

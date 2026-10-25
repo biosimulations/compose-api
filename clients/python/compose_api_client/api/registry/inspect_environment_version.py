@@ -79,11 +79,12 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
 ) -> Response[Any | EnvironmentVersion | HTTPValidationError]:
-    """Read again what a prebuilt version's image installed and provides, in a Job that runs the image
+    """Read again what a version's image installed and provides, in a Job that runs the image
 
-     Started in the background; `GET …/versions/{number}` shows the result. A shared version's image is
-    read back
-    by its own build.
+     Started in the background; `GET …/versions/{number}` shows the result. A prebuilt image is pulled
+    and run; a
+    shared one, already built, is read again as its build reads a new one (for images built before
+    builds did).
 
     Args:
         name (str):
@@ -115,11 +116,12 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
 ) -> Any | EnvironmentVersion | HTTPValidationError | None:
-    """Read again what a prebuilt version's image installed and provides, in a Job that runs the image
+    """Read again what a version's image installed and provides, in a Job that runs the image
 
-     Started in the background; `GET …/versions/{number}` shows the result. A shared version's image is
-    read back
-    by its own build.
+     Started in the background; `GET …/versions/{number}` shows the result. A prebuilt image is pulled
+    and run; a
+    shared one, already built, is read again as its build reads a new one (for images built before
+    builds did).
 
     Args:
         name (str):
@@ -146,11 +148,12 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
 ) -> Response[Any | EnvironmentVersion | HTTPValidationError]:
-    """Read again what a prebuilt version's image installed and provides, in a Job that runs the image
+    """Read again what a version's image installed and provides, in a Job that runs the image
 
-     Started in the background; `GET …/versions/{number}` shows the result. A shared version's image is
-    read back
-    by its own build.
+     Started in the background; `GET …/versions/{number}` shows the result. A prebuilt image is pulled
+    and run; a
+    shared one, already built, is read again as its build reads a new one (for images built before
+    builds did).
 
     Args:
         name (str):
@@ -180,11 +183,12 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
 ) -> Any | EnvironmentVersion | HTTPValidationError | None:
-    """Read again what a prebuilt version's image installed and provides, in a Job that runs the image
+    """Read again what a version's image installed and provides, in a Job that runs the image
 
-     Started in the background; `GET …/versions/{number}` shows the result. A shared version's image is
-    read back
-    by its own build.
+     Started in the background; `GET …/versions/{number}` shows the result. A prebuilt image is pulled
+    and run; a
+    shared one, already built, is read again as its build reads a new one (for images built before
+    builds did).
 
     Args:
         name (str):

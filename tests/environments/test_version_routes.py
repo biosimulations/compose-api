@@ -191,6 +191,33 @@ async def test_the_chosen_default_is_what_runs_get_and_it_cannot_be_retired(
 
 
 @pytest.mark.asyncio
+async def test_a_default_made_before_locks_is_compared_by_what_its_image_installed(
+    app: FastAPI, builds: Builds, database_service: DatabaseServiceSQL, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lock = "numpy==2.5.4\npbest @ git+https://github.com/biosimulations/pbest@a4713e9\n"
+
+    async def compile_lock(spec: SharedSpec, resolved_at: datetime.datetime) -> Lock:
+        return Lock(text=lock, resolved_at=resolved_at.replace(tzinfo=None))
+
+    monkeypatch.setattr(environment_service, "compile_lock", compile_lock)
+    default, _ = await version_for(database_service, None)  # adopted from the deployment: no lock
+    async with _as(app, ADMIN) as admin:
+        unread_response = await admin.post("/registry/environments/registry_env/versions/preview", json={})
+        assert unread_response.status_code == 200, unread_response.text
+        unread = unread_response.json()
+        assert (unread["against"], unread["against_basis"], unread["changes"]) == (None, None, [])
+
+        installed = "numpy==2.4.0\npbest==0.6.5\n"  # read back from its image: a git install shows its version
+        await database_service.get_environments_db().set_contents(default.database_id, installed, None)
+        preview = (await admin.post("/registry/environments/registry_env/versions/preview", json={})).json()
+    assert (preview["against"], preview["against_basis"]) == (default.number, "installed")
+    assert preview["changes"] == [
+        {"name": "numpy", "before": "2.4.0", "after": "2.5.4"},
+        {"name": "pbest", "before": "0.6.5", "after": "git+https://github.com/biosimulations/pbest@a4713e9"},
+    ]
+
+
+@pytest.mark.asyncio
 async def test_a_shared_version_is_its_lock_and_a_preview_shows_what_would_change(
     app: FastAPI, builds: Builds, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -218,7 +245,7 @@ async def test_a_shared_version_is_its_lock_and_a_preview_shows_what_would_chang
 
         use["lock"] = locks["new"]
         preview = (await admin.post("/registry/environments/registry_env/versions/preview", json={})).json()
-        assert preview["existing"] is None and preview["against"] == number
+        assert preview["existing"] is None and preview["against"] == number and preview["against_basis"] == "lock"
         assert preview["changes"] == [
             {"name": "libvcell", "before": None, "after": "0.0.24"},
             {"name": "numpy", "before": "2.4.0", "after": "2.5.4"},

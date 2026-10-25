@@ -60,6 +60,20 @@ async def inspect_prebuilt_version(database_service: DatabaseService, version: E
     return True
 
 
+async def inspect_shared_version(database_service: DatabaseService, version: EnvironmentVersion) -> bool:
+    """Read back a shared version's image already built, in a Job of its own, then store what it read: for an image
+    built before builds read images back (registry_env@1); whether anything was read."""
+    from compose_api.simulation.build_k8s import inspection_of, reread_shared
+
+    simulator = await database_service.get_simulator_db().get_simulator(version.simulator_id)
+    inspection = await inspection_of(version)
+    if simulator is None or inspection is None:
+        return False
+    if not await reread_shared(simulator.container_def_hash, inspection, uuid.uuid4().hex[:5]):
+        return False
+    return await record_contents(database_service, version)
+
+
 async def record_contents(database_service: DatabaseService, version: EnvironmentVersion) -> bool:
     """Store what the version's image installed and provides, if the build left them; whether anything was."""
     simulator = await database_service.get_simulator_db().get_simulator(version.simulator_id)
