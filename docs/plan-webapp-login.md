@@ -9,10 +9,10 @@ change (W2) deploys on merge, so it waits for W3 and W4 to be in a release.
 
 | Item | What | Owner | State |
 |---|---|---|---|
-| W1 | The Auth0 Single Page Application | Novrus (auth0-pulumi) | requested (UCHHPC/auth0-pulumi#5) |
-| W2 | `AUTH0_SPA_CLIENT_ID` in the deployments | us | waits on W1 |
-| W3 | Webapp fixes: return target, token allowlist, sign-up, identity, expired sessions | us | in review |
-| W4 | Security headers on `/ui`, Content-Security-Policy report-only first | us | in review |
+| W1 | The Auth0 Single Page Application | Novrus (auth0-pulumi) | deployed 2026-10-23 (UCHHPC/auth0-pulumi#5) |
+| W2 | `AUTH0_SPA_CLIENT_ID` in the deployments | us | ready; deploys on merge |
+| W3 | Webapp fixes: return target, token allowlist, sign-up, identity, expired sessions | us | released (#331, 0.7.30) |
+| W4 | Security headers on `/ui`, Content-Security-Policy report-only first | us | released (#331, 0.7.30) |
 | W5 | Documentation | us | open |
 
 ## Findings (2026-10-22)
