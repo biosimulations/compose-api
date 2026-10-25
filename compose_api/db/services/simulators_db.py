@@ -8,10 +8,25 @@ from dataclasses import dataclass, field
 from typing import override
 
 from pbest.utils.input_types import ContainerizationFileRepr
-from sqlalchemy import ColumnElement, Result, Row, ScalarSelect, Select, Subquery, and_, case, func, or_, select, text
+from sqlalchemy import (
+    ColumnElement,
+    Result,
+    Row,
+    ScalarSelect,
+    Select,
+    Subquery,
+    and_,
+    case,
+    delete,
+    func,
+    or_,
+    select,
+    text,
+)
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
+from compose_api.db.tables.environment_tables import ORMEnvironmentVersion
 from compose_api.db.tables.hpc_tables import JobStatusDB, JobTypeDB, ORMHpcRun, ORMSubmission
 from compose_api.db.tables.simulator_tables import (
     ORMDownloadedContainers,
@@ -451,6 +466,10 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
             images = select(ORMEnvironmentImage).where(ORMEnvironmentImage.simulator_id == simulator_id)
             for image in (await session.execute(images)).scalars().all():
                 await session.delete(image)
+            # its environment versions (an environment's default pointing at one is cleared by the foreign key)
+            await session.execute(
+                delete(ORMEnvironmentVersion).where(ORMEnvironmentVersion.simulator_id == simulator_id)
+            )
             await session.flush()
             await session.delete(orm_simulator)
 
