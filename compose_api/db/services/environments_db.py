@@ -66,6 +66,14 @@ class EnvironmentsDatabaseService(ABC):
         """Make it the default, as an administrator's choice (``default_source`` `api`)."""
 
     @abstractmethod
+    async def set_contents(self, version_id: int, installed: str | None, interfaces: dict[str, Any] | None) -> None:
+        """What its image installed and provides, as read from the image (V7)."""
+
+    @abstractmethod
+    async def of_simulator(self, simulator_id: int) -> EnvironmentVersion | None:
+        """A version whose simulator this is (the newest, should several environments share one)."""
+
+    @abstractmethod
     async def get_version(self, version_id: int) -> EnvironmentVersion | None: ...
 
     @abstractmethod
@@ -203,6 +211,24 @@ class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
         async with self.async_session_maker() as session, session.begin():
             query = update(ORMEnvironment).where(ORMEnvironment.name == environment)
             await session.execute(query.values(default_version_id=version_id, default_source=API))
+
+    @override
+    async def set_contents(self, version_id: int, installed: str | None, interfaces: dict[str, Any] | None) -> None:
+        async with self.async_session_maker() as session, session.begin():
+            query = update(ORMEnvironmentVersion).where(ORMEnvironmentVersion.id == version_id)
+            await session.execute(query.values(installed=installed, interfaces=interfaces))
+
+    @override
+    async def of_simulator(self, simulator_id: int) -> EnvironmentVersion | None:
+        async with self.async_session_maker() as session:
+            query = (
+                select(ORMEnvironmentVersion)
+                .where(ORMEnvironmentVersion.simulator_id == simulator_id)
+                .order_by(ORMEnvironmentVersion.id.desc())
+                .limit(1)
+            )
+            version = (await session.execute(query)).scalar_one_or_none()
+            return version.to_environment_version() if version is not None else None
 
     @override
     async def get_version(self, version_id: int) -> EnvironmentVersion | None:

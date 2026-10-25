@@ -1,6 +1,6 @@
 # Environment versions: locked, built and chosen through the API
 
-**Status (2026-10-25): steps 1–3 merged (#369–#371); step 4a in review.** One PR per step, merged with a merge commit; each PR updates the table below. A
+**Status (2026-10-25): steps 1–3 and 4a merged (#369–#372); step 4b in review.** One PR per step, merged with a merge commit; each PR updates the table below. A
 merge deploys nothing by itself: the next release's image ships it (CLAUDE.md, "Deploys are GitOps").
 
 | Step | What | State |
@@ -8,7 +8,7 @@ merge deploys nothing by itself: the next release's image ships it (CLAUDE.md, "
 | 1 | This document | merged (#369) |
 | 2 | `environment` and `environment_version` tables; today's two environments seeded as version 1 and made the defaults; one function chooses a run's version. No change in behavior | merged (#370) |
 | 3 | A shared version is a **lock**: compiled by the API with uv, its hash the identity; the definition installs from it | merged (#371) |
-| 4 | Creating versions through the API (refresh, prebuilt registration), with the lock diff, the installed packages and the interfaces recorded; the admin role | 4a (routes, role, CLI) in review; 4b (installed packages and interfaces from the build) to do |
+| 4 | Creating versions through the API (refresh, prebuilt registration), with the lock diff, the installed packages and the interfaces recorded; the admin role | 4a merged (#372); 4b (what a shared build installed and provides) in review; 4c (the same for prebuilt images) to do |
 | 5 | Choosing them: `environment_version` on runs, required on suite runs; recorded on every simulation and suite run | |
 | 6 | Retire the hard-coding: `PREBUILT_SIMULATORS`, `shared_image()`, the committed interface manifests | |
 
@@ -153,6 +153,17 @@ suite_run            + environment_versions  {environment: version}
    custom` version. A prebuilt version is an image by digest only. CLI: `environments versions | version | preview |
    create | default | retire`. Creating is a submission in the client (sent once); preview and retire may be retried.
    A prebuilt environment still needs its name in `PREBUILT_SIMULATORS` for runs to be accepted (step 6).
+   *As built, 4b:* when the Kubernetes build Job builds a simulator that an environment version names, its privileged
+   container then runs the new image with the environment's own Python (`apptainer exec --bind /work …`, the command
+   `environments.yaml` gives): a standard-library script lists its Python distributions, and the pinned describe
+   script (fetched once by the API, carried in the Job as base64 like the definition) describes the environment's
+   module roots. Both are best effort: a failure leaves that file out and never fails the build. The copy container
+   places them beside the SIF as `<hash>.installed.txt` and `<hash>.interfaces.json`
+   (`hpc_utils.get_image_inspection_file`). They are stored on the version when an administrator's build finishes,
+   and otherwise the first time a ready version without them is read (`environments/contents.py`), so a version a run
+   built gets them too. A build that no version names (`/registry/simulators/{id}/build`) reads nothing back.
+   4c: a prebuilt version is pulled, not built, so reading it back needs a Job of its own (the image run unprivileged
+   with its Python and the describe script).
 5. **Choosing versions.** The run parameters, the suite requirement (`sedml-suites.yml` passes repository
    variables), the simulation column and label, `solvers.yaml` checked against the chosen version's interfaces, and
    the web app's environment page listing versions with their diffs.

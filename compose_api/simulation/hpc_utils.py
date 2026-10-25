@@ -38,6 +38,12 @@ def get_slurm_singularity_container_file(singularity_hash: str) -> Path:
     return _namespace_path() / "images" / f"{singularity_hash}.sif"
 
 
+def get_image_inspection_file(singularity_hash: str, kind: str) -> Path:
+    """What a build read from the image it made, beside it: ``installed.txt`` or ``interfaces.json``
+    (docs/plan-environment-versions.md, V7)."""
+    return _namespace_path() / "images" / f"{singularity_hash}.{kind}"
+
+
 def get_slurm_sim_input_file_path(experiment_id: str, suffix: str = "omex") -> Path:
     """The submitted file on the cluster, named with its own suffix: the job script runs
     ``/experiment/<id>.<suffix>`` (job_script.py), so a ``.pbg`` stored as ``.omex`` is never found."""
