@@ -120,6 +120,7 @@ class SimulatorDatabaseService(ABC):
         owner_sub: str | None = None,
         visibility: Visibility = Visibility.PUBLIC,
         submission: SubmissionSpec | None = None,
+        environment_version_id: int | None = None,
     ) -> Simulation:
         """Record the simulation; with ``submission``, also its queued ``requested`` submission (one transaction), whose
         request is ``sim_request`` as given (its paths the staged files)."""
@@ -474,11 +475,13 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
         owner_sub: str | None = None,
         visibility: Visibility = Visibility.PUBLIC,
         submission: SubmissionSpec | None = None,
+        environment_version_id: int | None = None,
     ) -> Simulation:
         async with self.async_session_maker() as session, session.begin():
             orm_simulation = ORMSimulation(
                 experiment_id=experiment_id,
                 simulator_id=simulator_version.database_id,
+                environment_version_id=environment_version_id,
                 owner_sub=owner_sub,
                 visibility=visibility.value,
                 labels=dict(sim_request.labels),

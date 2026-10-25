@@ -12,11 +12,19 @@ from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.db.db_utils import DeclarativeTableBase, create_db
 from compose_api.simulation.models import JobType, SimulationRequest, SimulatorVersion
 
-HEAD = "6d2e8b4f1a97"
+HEAD = "7c3a9e1d5b20"
 
 NEW_COLUMNS = {
     "hpcrun": {"trace_id", "events_cursor", "last_event_at", "exit_code", "backend", "external_id"},
-    "simulation": {"owner_sub", "visibility", "dispatch_heartbeat_at", "labels", "tags", "description"},
+    "simulation": {
+        "owner_sub",
+        "visibility",
+        "dispatch_heartbeat_at",
+        "labels",
+        "tags",
+        "description",
+        "environment_version_id",
+    },
     "comparison": {"collection", "suite_run"},
     "suite_run": {"sources", "next_source", "lease_owner", "lease_expires_at"},
 }

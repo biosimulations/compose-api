@@ -1,17 +1,12 @@
 import asyncio
 import logging
 import random
-import shutil
 import string
 import tempfile
 import zipfile
 from pathlib import Path
 
 from fastapi import BackgroundTasks, HTTPException
-from pbest.containerization.container_constructor import generate_container_def_file
-from pbest.utils.input_types import (
-    ContainerizationEngine,
-)
 
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService
@@ -24,10 +19,11 @@ from compose_api.dependencies import (
     get_required_simulation_service,
     get_submission_worker,
 )
+from compose_api.environments.versions import version_for
 from compose_api.observability.api_events import record_api_event
 from compose_api.registry.manifest import SERVICE_BUNDLE
 from compose_api.simulation import builds, images, staging
-from compose_api.simulation.hpc_utils import get_experiment_id, get_singularity_hash
+from compose_api.simulation.hpc_utils import get_experiment_id
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.labels import labels
 from compose_api.simulation.models import (
@@ -44,9 +40,8 @@ from compose_api.simulation.models import (
     SubmissionSpec,
     SubmissionState,
 )
-from compose_api.simulation.prebuilt import prebuilt_definition, prebuilt_image, prebuilt_image_of
+from compose_api.simulation.prebuilt import prebuilt_image_of
 from compose_api.simulation.simulation_service import SimulationService
-from compose_api.simulation.simulator_registry import registry_dependencies
 
 logger = logging.getLogger(__name__)
 
@@ -80,24 +75,8 @@ async def run_simulation(
 ) -> SimulationExperiment:
     """Record a run and queue it for the submission worker; its ids. ``queue`` and ``priority`` place it in line
     (docs/plan-durable-submission.md, Q3); ``requested_by`` is the caller's subject, kept for fair scheduling."""
-    with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
-        if simulation_request.simulator is not None:
-            # an owner-published image (settings.prebuilt_simulators), instead of the shared container
-            singularity_rep = prebuilt_definition(prebuilt_image(simulation_request.simulator))
-        else:
-            singularity_rep = generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)
-        # simulation_request.omex_archive = Path(tmp_dir + f"/{os.path.basename(simulation_request.omex_archive.name)}")
-
-    simulator_db = database_service.get_simulator_db()
-    simulator_version = await simulator_db.get_simulator_by_def_hash(get_singularity_hash(singularity_rep))
-    if simulator_version is None:
-        # bi_graph_packages = await database_service.get_package_db().list_packages_from_dependencies(
-        #     dependencies=pbest_dependencies
-        # )
-        # if len(bi_graph_packages) != (len(experiment_dep.pypi_dependencies) + len(experiment_dep.conda_dependencies)):
-        #     raise LookupError(f"Not all dependencies are in database: {experiment_dep}, {bi_graph_packages}")
-
-        simulator_version = await simulator_db.insert_simulator(singularity_rep)
+    # the environment version it runs in (docs/plan-environment-versions.md): today the deployment's own definition
+    version, simulator_version = await version_for(database_service, simulation_request.simulator)
 
     random_string_7_hex = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 doesn't need to be secure
     experiment_id = get_experiment_id(simulator=simulator_version, random_str=random_string_7_hex)
@@ -106,20 +85,16 @@ async def run_simulation(
     # with its `requested` submission in one transaction. The submission worker takes it from there, after a restart
     # too, so nothing here outlives the request.
     staged_request, on_store = staging.stage_request(simulation_request, experiment_id)
-    simulation = await simulator_db.insert_simulation(
+    simulation = await database_service.get_simulator_db().insert_simulation(
         sim_request=staged_request,
         experiment_id=experiment_id,
         simulator_version=simulator_version,
+        environment_version_id=version.database_id,
         submission=SubmissionSpec(staged_on_store=on_store, queue=queue, priority=priority, requested_by=requested_by),
     )
     worker = get_submission_worker()
     if worker is not None:
         worker.kick()
-
-    def remove_temp_dir() -> None:
-        shutil.rmtree(tmp_dir)
-
-    background_tasks.add_task(remove_temp_dir)
 
     return SimulationExperiment(
         simulation_database_id=simulation.database_id,

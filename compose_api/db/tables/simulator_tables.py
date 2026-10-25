@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from compose_api.db.db_utils import DeclarativeTableBase, package_table_name
+from compose_api.db.tables.environment_tables import ORMEnvironmentVersion
 from compose_api.simulation.models import (
     ContainerEngine,
     DownloadedContainerImage,
@@ -115,6 +116,10 @@ class ORMSimulation(DeclarativeTableBase):
     created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
     experiment_id: Mapped[str] = mapped_column(nullable=False, unique=True)
     simulator_id: Mapped[int] = mapped_column(ForeignKey("simulator.id"), nullable=False, index=True)
+    # The environment version it ran in (docs/plan-environment-versions.md); none for runs recorded before versions.
+    environment_version_id: Mapped[int | None] = mapped_column(
+        ForeignKey(ORMEnvironmentVersion.__tablename__ + ".id"), nullable=True, index=True
+    )
 
     # Who may read the simulation and everything it produced (docs/plan-observability.md O7). Its runs, events and
     # datasets carry no owner of their own: they inherit this through their foreign key.

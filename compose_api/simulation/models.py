@@ -201,6 +201,41 @@ class SimulatorVersion(Simulator):
     created_at: datetime.datetime | None = None
 
 
+class VersionState(StrEnum):
+    """An environment version's state (docs/plan-environment-versions.md)."""
+
+    RESOLVING = "resolving"  # its lock is being compiled
+    BUILDING = "building"  # its image is being built or pulled
+    READY = "ready"  # runs may use it; a missing image is still fetched by the run path, as before
+    FAILED = "failed"
+    RETIRED = "retired"  # refuses new runs; its images are kept
+
+
+class EnvironmentVersion(BaseModel):
+    """One version of an environment: its simulator (definition, hash, images) and what it was made from
+    (docs/plan-environment-versions.md, V1)."""
+
+    database_id: int
+    environment: str
+    number: int
+    state: VersionState
+    simulator_id: int
+    image: str | None = Field(default=None, description="A prebuilt version's image, by digest")
+    spec: dict[str, Any] | None = Field(default=None, description="What a shared version was made from")
+    origin: str | None = Field(default=None, description="registry, or custom for libraries no review has seen")
+    resolved_at: datetime.datetime | None = None
+    lock_sha256: str | None = None
+    runtime_contract: int = 1
+    created_by: str | None = None
+    created_at: datetime.datetime | None = None
+    note: str | None = None
+
+    @property
+    def label(self) -> str:
+        """``registry_env@2``"""
+        return f"{self.environment}@{self.number}"
+
+
 class RegisteredSimulators(BaseModel):
     versions: list[SimulatorVersion]
     timestamp: datetime.datetime | None = Field(default_factory=datetime.datetime.now)
