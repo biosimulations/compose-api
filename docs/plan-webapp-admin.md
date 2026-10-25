@@ -16,7 +16,9 @@ webapp's environment version pages. One PR per step, each merged with a merge co
        `POST /webapp/csp-report` (`api/webapp.py`).
    - The only thing missing is the client id (#359, W2). Until it is published, `/webapp/config` gives the app no
      client id and the "Sign in" button never renders.
-   - Nobody has measured the CSP: reports arrive only when people use `/ui`, and few do while sign-in is off.
+   - **The CSP has reported nothing.** Loki for 2026-10-11 to 2026-10-25 shows no `CSP violation report` lines and
+     no `POST /webapp/csp-report` requests, while `/ui` served 80 to 580 requests a day. What it has not seen yet is
+     the sign-in flow itself: the redirect to Auth0, the token calls to it, and profile pictures.
 2. **Administration happens only from the command line.**
    - The admin actions are preview, create, set the default, retire, and inspect an environment version. They exist
      only as `compose-api environments …` commands.
@@ -99,9 +101,11 @@ webapp's environment version pages. One PR per step, each merged with a merge co
    - The suite run guard (A4), with a test.
    - Regenerate the spec and the client, and add the CLI options. This needs a release.
 4. **Enforce the CSP** (`WEBAPP_CSP_ENFORCE=true` in `api.env`, deploys on merge).
-   - Wait about two weeks after step 1, with people signing in.
-   - Before enforcing, read the logged reports in Loki (`CSP violation report`) and allow what Nuxt, Plotly and the
-     viewers legitimately need: script hashes, or `'unsafe-eval'` if a viewer needs it.
+   - Two weeks of ordinary use have already produced no reports (findings, 1). Only the sign-in flow is unmeasured,
+     so enforcing can follow step 1 by a few days, not weeks: long enough for several people to sign in, renew a
+     session and sign out.
+   - Before enforcing, read the logged reports in Loki (`CSP violation report`) and allow what is legitimately
+     needed.
    - Then repeat the smoke test, and open each viewer (Plotly, the composite viewer, zarr).
 5. **Read-only version pages (step 5b of plan-environment-versions).**
    - **The environment page's Versions section:** each version's number, state, the default badge, origin, the
