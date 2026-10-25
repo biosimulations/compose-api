@@ -113,7 +113,8 @@ Today a token changes nothing a caller can read, because every simulation is pub
 ## Development
 
 ```bash
-make webapp-install       # npm ci (Node 24, see webapp/.nvmrc)
+nvm use                   # Node 24: webapp/.nvmrc, linked from the repo root's .nvmrc (CI reads the same file)
+make webapp-install       # npm ci
 make run                  # the API on :8000
 make webapp-dev           # the UI on http://localhost:4200/ui/, calling the API on :8000
 COMPOSE_API_URL=https://compose.cam.uchc.edu make webapp-dev   # against production instead (CORS allows :4200)

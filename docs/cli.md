@@ -368,6 +368,7 @@ $ compose-api run [OPTIONS] DOCUMENT
 * `--batch / --no-batch`: Submit as a batch job (smaller partition, 1 CPU).  [default: no-batch]
 * `-t, --tag TEXT`: A tag to find the run by later (repeatable).
 * `--description TEXT`: What the run is for.
+* `--environment-version INTEGER RANGE`: The version of the environment to run in (registry_env@3 is 3); omitted: its default.  [x&gt;=1]
 * `-w, --wait`: Wait for the job to finish; exit 1 unless it completed.
 * `-d, --download PATH`: With --wait: save the results archive into this directory.
 * `--extract / --no-extract`: With --download: unpack the archive instead of saving the zip.  [default: no-extract]
@@ -954,6 +955,13 @@ $ compose-api environments [OPTIONS] COMMAND [ARGS]...
 * `headers`: An environment's interfaces as .pblang...
 * `images`: Whether an environment's current image is...
 * `build`: Make an environment's current image...
+* `versions`: An environment's versions, newest first,...
+* `version`: One version: what it was made from, its...
+* `preview`: Resolve a shared environment's spec now...
+* `create`: Make a new version (or answer the existing...
+* `default`: Make a ready version the one runs get when...
+* `inspect`: Read a prebuilt version's image back...
+* `retire`: Retire a version: it refuses new runs; its...
 
 ### `compose-api environments list`
 
@@ -1054,6 +1062,151 @@ $ compose-api environments build [OPTIONS] NAME
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
+### `compose-api environments versions`
+
+An environment's versions, newest first, and the default a run that names none gets.
+
+**Usage**:
+
+```console
+$ compose-api environments versions [OPTIONS] NAME
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments version`
+
+One version: what it was made from, its lock, and what it installed and provides.
+
+**Usage**:
+
+```console
+$ compose-api environments version [OPTIONS] NAME NUMBER
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+* `NUMBER`: The version's number (registry_env@3 is 3).  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments preview`
+
+Resolve a shared environment's spec now (or at --resolved-at) and show how its lock differs from the default
+version's. Creates nothing. Needs the environment administrator role.
+
+**Usage**:
+
+```console
+$ compose-api environments preview [OPTIONS] NAME
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+
+**Options**:
+
+* `--resolved-at [%Y-%m-%d|%Y-%m-%dT%H:%M:%S|%Y-%m-%d %H:%M:%S]`: Resolve with nothing newer than this (UTC); default now.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments create`
+
+Make a new version (or answer the existing one with the same definition). Its image builds in the background
+(`environments versions` shows it ready); it does not become the default. Needs the environment administrator
+role.
+
+**Usage**:
+
+```console
+$ compose-api environments create [OPTIONS] NAME
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+
+**Options**:
+
+* `--resolved-at [%Y-%m-%d|%Y-%m-%dT%H:%M:%S|%Y-%m-%d %H:%M:%S]`: A shared environment: resolve as of this time (UTC); default now.
+* `--image TEXT`: A prebuilt environment: its image, by digest.
+* `--note TEXT`: Why this version exists.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments default`
+
+Make a ready version the one runs get when they name none. Needs the environment administrator role.
+
+**Usage**:
+
+```console
+$ compose-api environments default [OPTIONS] NAME NUMBER
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+* `NUMBER`: The version's number (registry_env@3 is 3).  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments inspect`
+
+Read a prebuilt version's image back again: what it installed and the interfaces it provides (in the
+background; `environments version` shows them). Needs the environment administrator role.
+
+**Usage**:
+
+```console
+$ compose-api environments inspect [OPTIONS] NAME NUMBER
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+* `NUMBER`: The version's number (registry_env@3 is 3).  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments retire`
+
+Retire a version: it refuses new runs; its images are kept. Needs the environment administrator role.
+
+**Usage**:
+
+```console
+$ compose-api environments retire [OPTIONS] NAME NUMBER
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+* `NUMBER`: The version's number (registry_env@3 is 3).  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
 ## `compose-api sedml`
 
 Run SED-ML archives on several solvers and compare them.
@@ -1113,6 +1266,7 @@ $ compose-api sedml run [OPTIONS] ARCHIVE
 * `--task TEXT`: A SED-ML task id (repeatable); all when omitted.
 * `-t, --tag TEXT`: A tag for every run (repeatable).
 * `--description TEXT`: What the runs are for.
+* `--environment-version TEXT`: An environment version to run in: environment@number (registry_env@2) or environment@default (repeatable); an environment not named runs at its default.
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
@@ -1334,6 +1488,7 @@ $ compose-api biomodels run [OPTIONS] MODEL_ID
 
 * `-s, --solver TEXT`: A solver id (repeatable); all when omitted.
 * `-t, --tag TEXT`: A tag for every run (repeatable).
+* `--environment-version TEXT`: An environment version to run in: environment@number (registry_env@2) or environment@default (repeatable); an environment not named runs at its default.
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
@@ -1455,6 +1610,7 @@ $ compose-api biosimulations run [OPTIONS] PROJECT_ID
 
 * `-s, --solver TEXT`: A solver id (repeatable); all when omitted.
 * `-t, --tag TEXT`: A tag for every run (repeatable).
+* `--environment-version TEXT`: An environment version to run in: environment@number (registry_env@2) or environment@default (repeatable); an environment not named runs at its default.
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
@@ -1536,7 +1692,7 @@ $ compose-api suites show [OPTIONS] NAME NUMBER
 
 ### `compose-api suites run`
 
-Run every source of the suite on its solvers; prints the new run's number.
+Run every source of the suite on its solvers; prints the new run's number and the versions it runs in.
 
 **Usage**:
 
@@ -1550,6 +1706,7 @@ $ compose-api suites run [OPTIONS] NAME
 
 **Options**:
 
+* `--environment-version TEXT`: Required (repeatable): the environment versions the suite runs in, environment@number (registry_env@2), environment@default, or default (every environment at its default). The run records them as numbers.  [required]
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 

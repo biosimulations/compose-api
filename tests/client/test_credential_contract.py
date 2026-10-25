@@ -11,11 +11,20 @@ from tests.client.test_ext_security import SUBMISSIONS
 def test_every_post_has_an_explicit_submission_policy() -> None:
     spec = json.loads(importlib.resources.files("compose_api_client").joinpath("openapi.json").read_text())
     posts = {path for path, methods in spec["paths"].items() if "post" in methods}
-    preview = {
-        path for path, methods in spec["paths"].items() if methods.get("post", {}).get("operationId") == "preview-sedml"
+    # POSTs that change nothing, or set a state, so a retry is safe (replayable)
+    idempotent_operations = {
+        "preview-sedml",
+        "preview-environment-version",
+        "retire-environment-version",
+        "inspect-environment-version",
     }
-    assert len(preview) == 1
-    assert posts - preview == {path for _, path, _, _ in SUBMISSIONS}
+    idempotent = {
+        path
+        for path, methods in spec["paths"].items()
+        if methods.get("post", {}).get("operationId") in idempotent_operations
+    }
+    assert len(idempotent) == len(idempotent_operations)
+    assert posts - idempotent == {path for _, path, _, _ in SUBMISSIONS}
 
 
 def test_only_generated_code_constructs_bearer_headers() -> None:

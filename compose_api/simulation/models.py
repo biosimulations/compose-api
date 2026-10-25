@@ -201,6 +201,95 @@ class SimulatorVersion(Simulator):
     created_at: datetime.datetime | None = None
 
 
+class VersionState(StrEnum):
+    """An environment version's state (docs/plan-environment-versions.md)."""
+
+    RESOLVING = "resolving"  # its lock is being compiled
+    BUILDING = "building"  # its image is being built or pulled
+    READY = "ready"  # runs may use it; a missing image is still fetched by the run path, as before
+    FAILED = "failed"
+    RETIRED = "retired"  # refuses new runs; its images are kept
+
+
+class EnvironmentVersion(BaseModel):
+    """One version of an environment: its simulator (definition, hash, images) and what it was made from
+    (docs/plan-environment-versions.md, V1)."""
+
+    database_id: int
+    environment: str
+    number: int
+    state: VersionState
+    simulator_id: int
+    image: str | None = Field(default=None, description="A prebuilt version's image, by digest")
+    spec: dict[str, Any] | None = Field(default=None, description="What a shared version was made from")
+    origin: str | None = Field(default=None, description="registry, or custom for libraries no review has seen")
+    resolved_at: datetime.datetime | None = None
+    lock_sha256: str | None = None
+    runtime_contract: int = 1
+    created_by: str | None = None
+    created_at: datetime.datetime | None = None
+    note: str | None = None
+
+    @property
+    def label(self) -> str:
+        """``registry_env@2``"""
+        return f"{self.environment}@{self.number}"
+
+
+class EnvironmentVersionDetail(EnvironmentVersion):
+    """A version with what it was resolved to and, once built, what it installed and provides."""
+
+    lock: str | None = Field(default=None, description="A shared version's lock: every PyPI package, pinned")
+    installed: str | None = Field(default=None, description="What its image installed, read from the image")
+    interfaces: dict[str, Any] | None = Field(default=None, description="Its process interfaces (pbg-interfaces/1)")
+
+
+class EnvironmentVersions(BaseModel):
+    """An environment's versions, newest first, and which one a run that names none gets."""
+
+    environment: str
+    kind: str
+    default: int | None = Field(default=None, description="The default version's number")
+    default_source: str = Field(
+        default="deployment",
+        description="deployment: the deployment's own definition is the default; api: an administrator chose it",
+    )
+    versions: list[EnvironmentVersion] = Field(default_factory=list)
+
+
+class NewEnvironmentVersion(BaseModel):
+    """What to make a version from. A shared environment: a date to resolve its spec at (default now), and optionally
+    a library list other than the registry's (an unreviewed, `custom` version). A prebuilt one: its image by digest."""
+
+    resolved_at: datetime.datetime | None = None
+    libraries: list[dict[str, str]] | None = None
+    image: str | None = None
+    note: str | None = None
+
+
+class PackageChange(BaseModel):
+    name: str
+    before: str | None = None
+    after: str | None = None
+
+
+class LockPreview(BaseModel):
+    """What a shared version would be: its lock, and how it differs from the default version's."""
+
+    environment: str
+    resolved_at: datetime.datetime
+    origin: str
+    lock_sha256: str
+    lock: str
+    existing: int | None = Field(default=None, description="The number of a version with this very lock, if any")
+    against: int | None = Field(default=None, description="The default version compared with, if it has a lock")
+    changes: list[PackageChange] = Field(default_factory=list)
+
+
+class DefaultVersion(BaseModel):
+    number: int
+
+
 class RegisteredSimulators(BaseModel):
     versions: list[SimulatorVersion]
     timestamp: datetime.datetime | None = Field(default_factory=datetime.datetime.now)
@@ -243,6 +332,8 @@ class SimulationRequest(BaseModel):
     is_batch: bool
     # A prebuilt simulator by name (settings.prebuilt_simulators); None runs the shared container.
     simulator: str | None = None
+    # The version of that environment to run in (docs/plan-environment-versions.md, step 5); None: its default.
+    environment_version: int | None = None
     # Stored on the simulation (compose_api/simulation/labels.py): the service's labels, the submitter's tags and text.
     labels: dict[str, str] = Field(default_factory=dict)
     tags: list[str] = Field(default_factory=list)

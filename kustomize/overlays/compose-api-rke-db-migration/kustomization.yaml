@@ -5,7 +5,7 @@ namespace: compose-api-rke
 
 images:
   - name: ghcr.io/biosimulations/compose-api
-    newTag: 0.7.38
+    newTag: 0.7.41
 
 resources:
   - alembic-job.yaml

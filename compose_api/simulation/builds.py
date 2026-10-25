@@ -12,20 +12,18 @@ import datetime
 import logging
 from enum import StrEnum
 
-from pbest.containerization.container_constructor import generate_container_def_file
-from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
+from pbest.utils.input_types import ContainerizationFileRepr
 from pydantic import BaseModel, Field
 
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService
 from compose_api.db.services.hpc_db import HPCDatabaseService
 from compose_api.db.services.simulators_db import SimulatorDatabaseService
+from compose_api.environments.versions import deployed_definition
 from compose_api.registry.environments import EnvironmentSpec, deployed_image, load_environments
 from compose_api.simulation import images
 from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.models import EnvironmentImage, HpcRun, JobStatus, JobType, SimulatorVersion
-from compose_api.simulation.prebuilt import prebuilt_definition
-from compose_api.simulation.simulator_registry import registry_dependencies
 
 logger = logging.getLogger(__name__)
 
@@ -68,12 +66,7 @@ def find_environment(name: str) -> EnvironmentSpec | None:
 
 def environment_definition(spec: EnvironmentSpec) -> ContainerizationFileRepr:
     """The definition this deployment runs the environment from, as a run's dispatch generates it."""
-    if spec.kind == "shared":
-        return generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)
-    image = deployed_image(spec)
-    if image is None:
-        raise LookupError(f"environment {spec.name!r} is not offered here")
-    return prebuilt_definition(image)
+    return deployed_definition(None if spec.kind == "shared" else spec.name)[0]
 
 
 async def simulator_for(

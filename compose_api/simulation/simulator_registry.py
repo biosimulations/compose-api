@@ -19,9 +19,15 @@ REGISTRY_SOURCE = (
 _REGISTRY_PATH = Path(__file__).parent / "simulator_registry.json"
 
 
+def registry_libraries() -> list[dict[str, str]]:
+    """The pinned library list, as recorded in a shared environment version's spec."""
+    libraries: list[dict[str, str]] = json.loads(_REGISTRY_PATH.read_text())["libraries"]
+    return libraries
+
+
 def registry_dependencies() -> ExperimentPrimaryDependencies:
     """Parse the pinned registry the same way pbest's `_default_registry_deps` parses the fetched one."""
-    libraries = json.loads(_REGISTRY_PATH.read_text())["libraries"]
+    libraries = registry_libraries()
     pypi: list[ExperimentDependency] = []
     conda: list[ExperimentDependency] = []
     for lib in libraries:

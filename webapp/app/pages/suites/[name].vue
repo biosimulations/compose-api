@@ -41,7 +41,10 @@ useIntervalFn(() => {
 
 async function runNow() {
   starting.value = true
-  const { data, error: err } = await useApi().POST('/suites/{name}/run', { params: { path: { name: name.value } } })
+  // every environment at its current default; the run records the versions as numbers (plan-environment-versions)
+  const { data, error: err } = await useApi().POST('/suites/{name}/run', {
+    params: { path: { name: name.value }, query: { environment_version: ['default'] } },
+  })
   starting.value = false
   if (err || !data) {
     error.value = errorMessage(err, 'Could not start the suite')

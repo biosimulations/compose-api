@@ -33,7 +33,7 @@ async def test_preview_translates_without_running(client: httpx.AsyncClient, sub
     (task,) = body["tasks"]
     assert (task["task"], task["solvers"], task["refused"], task["reports"]) == (
         "task_1",
-        ["copasi", "tellurium"],
+        ["copasi", "tellurium", "vcell"],
         [],
         ["report"],
     )
@@ -55,11 +55,11 @@ async def test_run_makes_one_labelled_run_per_solver_and_a_comparison(
     (comparison,) = response.json()["comparisons"]
     cid = comparison["comparison_id"]
     assert comparison["status"] == "running" and comparison["task"] == "task_1"
-    assert sorted(m["solver"] for m in comparison["members"]) == ["copasi", "tellurium"]
+    assert sorted(m["solver"] for m in comparison["members"]) == ["copasi", "tellurium", "vcell"]
     assert comparison["settings"]["reports"]["report"]["file"] == "output/reports/simulation_1/report.csv"
 
     runs = submitted["runs"]
-    assert len(runs) == 2
+    assert len(runs) == 3
     for request, _sim_id, _exp in runs:
         assert request.labels["comparison"] == str(cid) and request.labels["sedml_task"] == "task_1"
         assert request.labels["source"] == "upload" and request.labels["environment"] == "registry_env"
@@ -67,7 +67,7 @@ async def test_run_makes_one_labelled_run_per_solver_and_a_comparison(
         assert request.source_file_path is not None and request.source_file_path.read_bytes() == SOURCE.read_bytes()
         with zipfile.ZipFile(request.request_file_path) as z:
             assert sorted(z.namelist()) == ["BIOMD0000000297_url.changed.xml", "task_1.pbg", "task_1.pblang"]
-    assert {r[0].labels["solver"] for r in runs} == {"copasi", "tellurium"}
+    assert {r[0].labels["solver"] for r in runs} == {"copasi", "tellurium", "vcell"}
 
     # each run completes, writing its report where the job would
     hpc_db = database_service.get_hpc_db()
@@ -94,7 +94,7 @@ async def test_run_makes_one_labelled_run_per_solver_and_a_comparison(
     assert [c["comparison_id"] for c in listed["comparisons"]][:1] == [cid]
     assert (await client.get("/comparisons/987654")).status_code == 404
     found = (await client.get("/simulations", params={"label": f"comparison:{cid}"})).json()
-    assert found["total"] == 2
+    assert found["total"] == 3
 
 
 @pytest.mark.asyncio

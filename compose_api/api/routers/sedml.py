@@ -16,6 +16,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, U
 from compose_api.authentication import OptionalPrincipal, describe_caller, get_optional_principal
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.dependencies import get_required_database_service
+from compose_api.environments.versions import VersionUnavailableError, resolve_versions
 from compose_api.registry.solvers import Solver
 from compose_api.registry.validation import SubmissionRejectedError
 from compose_api.sedml import service
@@ -29,6 +30,13 @@ config = RouterConfig(router=APIRouter(), prefix="/sedml", dependencies=[Depends
 
 MAX_ARCHIVE = 100 * 1024 * 1024
 Solvers = Annotated[list[str] | None, Query(description="Solvers to run (registry/solvers.yaml); all when omitted")]
+EnvironmentVersionRefs = Annotated[
+    list[str] | None,
+    Query(
+        description="Environment versions to run in: environment@number (registry_env@2) or environment@default,"
+        " repeatable; an environment not named runs at its default"
+    ),
+]
 
 
 async def _saved(upload: UploadFile) -> Path:
@@ -105,12 +113,14 @@ async def run_sedml(
     rel_tol: Annotated[float, Query(gt=0)] = Tolerances().rel_tol,
     abs_tol_min: Annotated[float, Query(ge=0)] = Tolerances().abs_tol_min,
     abs_tol_scale: Annotated[float, Query(ge=0)] = Tolerances().abs_tol_scale,
+    environment_version: EnvironmentVersionRefs = None,
 ) -> SedmlRunResult:
     logger.info("SED-ML submission from %s", describe_caller(principal))
     source = await _saved(archive)
     tolerances = Tolerances(rel_tol=rel_tol, abs_tol_min=abs_tol_min, abs_tol_scale=abs_tol_scale)
     return await run_archive(
-        source, None, solvers, task, tags, description, tolerances, background_tasks
+        source, None, solvers, task, tags, description, tolerances, background_tasks,
+        environment_versions=environment_version,
     )  # fmt: skip
 
 
@@ -124,18 +134,26 @@ async def run_archive(
     tolerances: Tolerances,
     background_tasks: BackgroundTasks,
     references: dict[str, dict[str, dict[str, list[float]]]] | None = None,
+    environment_versions: list[str] | None = None,
 ) -> SedmlRunResult:
     """Translate, submit one run per accepted task and solver, and answer with the comparisons (`/sedml/run`, and the
-    source shortcuts in sources.py). `source_label` defaults to `upload:<file name>`."""
+    source shortcuts in sources.py). `source_label` defaults to `upload:<file name>`. `environment_versions` names
+    versions of the solvers' environments (docs/plan-environment-versions.md, step 5); the rest run at their default."""
     try:
         run_tags, run_description = clean_tags(tags), clean_description(description)
     except LabelError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     translation, chosen = await _translate(source, solver_ids)
     try:
+        versions = await resolve_versions(
+            get_required_database_service(), environment_versions, {s.environment for s in chosen}, require_all=False
+        )
+    except (VersionUnavailableError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    try:
         ids = await service.submit(
             translation, source, source_label or f"upload:{translation.source}", chosen, tasks, run_tags,
-            run_description, tolerances, background_tasks, references=references,
+            run_description, tolerances, background_tasks, references=references, environment_versions=versions,
         )  # fmt: skip
     except SubmissionRejectedError as e:
         raise HTTPException(

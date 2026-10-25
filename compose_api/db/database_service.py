@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from compose_api.db.services.comparisons_db import ComparisonsDatabaseService, ComparisonsORMExecutor
 from compose_api.db.services.datasets_db import DatasetsDatabaseService, DatasetsORMExecutor
+from compose_api.db.services.environments_db import EnvironmentsDatabaseService, EnvironmentsORMExecutor
 from compose_api.db.services.events_db import EventsDatabaseService, EventsORMExecutor
 from compose_api.db.services.hpc_db import HPCDatabaseService, HPCORMExecutor
 from compose_api.db.services.packages_db import PackageDatabaseService, PackageORMExecutor
@@ -40,6 +41,10 @@ class DatabaseService(ABC):
         pass
 
     @abstractmethod
+    def get_environments_db(self) -> EnvironmentsDatabaseService:
+        pass
+
+    @abstractmethod
     async def close(self) -> None:
         pass
 
@@ -52,6 +57,7 @@ class DatabaseServiceSQL(DatabaseService):
     events_db: EventsDatabaseService
     datasets_db: DatasetsDatabaseService
     comparisons_db: ComparisonsDatabaseService
+    environments_db: EnvironmentsDatabaseService
 
     def __init__(self, async_engine: AsyncEngine):
         self.async_sessionmaker = async_sessionmaker(async_engine, expire_on_commit=True)
@@ -61,6 +67,7 @@ class DatabaseServiceSQL(DatabaseService):
         self.events_db = EventsORMExecutor(self.async_sessionmaker)
         self.datasets_db = DatasetsORMExecutor(self.async_sessionmaker)
         self.comparisons_db = ComparisonsORMExecutor(self.async_sessionmaker)
+        self.environments_db = EnvironmentsORMExecutor(self.async_sessionmaker)
 
     @override
     def get_simulator_db(self) -> SimulatorDatabaseService:
@@ -85,6 +92,10 @@ class DatabaseServiceSQL(DatabaseService):
     @override
     def get_comparisons_db(self) -> ComparisonsDatabaseService:
         return self.comparisons_db
+
+    @override
+    def get_environments_db(self) -> EnvironmentsDatabaseService:
+        return self.environments_db
 
     @override
     async def close(self) -> None:

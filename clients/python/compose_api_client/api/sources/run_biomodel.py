@@ -18,6 +18,7 @@ def _get_kwargs(
     task: list[str] | None | Unset = UNSET,
     tags: list[str] | None | Unset = UNSET,
     description: None | str | Unset = UNSET,
+    environment_version: list[str] | None | Unset = UNSET,
 ) -> dict[str, Any]:
 
     params: dict[str, Any] = {}
@@ -58,6 +59,16 @@ def _get_kwargs(
     else:
         json_description = description
     params["description"] = json_description
+
+    json_environment_version: list[str] | None | Unset
+    if isinstance(environment_version, Unset):
+        json_environment_version = UNSET
+    elif isinstance(environment_version, list):
+        json_environment_version = environment_version
+
+    else:
+        json_environment_version = environment_version
+    params["environment_version"] = json_environment_version
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -118,6 +129,7 @@ def sync_detailed(
     task: list[str] | None | Unset = UNSET,
     tags: list[str] | None | Unset = UNSET,
     description: None | str | Unset = UNSET,
+    environment_version: list[str] | None | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError | SedmlRunResult]:
     """Run a BioModels entry's SED-ML on several solvers (as /sedml/run)
 
@@ -128,6 +140,9 @@ def sync_detailed(
         task (list[str] | None | Unset): Only these SED-ML task ids; all when omitted
         tags (list[str] | None | Unset): Tags for every run
         description (None | str | Unset):
+        environment_version (list[str] | None | Unset): Environment versions to run in:
+            environment@number (registry_env@2) or environment@default, repeatable; an environment not
+            named runs at its default
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -143,6 +158,7 @@ def sync_detailed(
         task=task,
         tags=tags,
         description=description,
+        environment_version=environment_version,
     )
 
     response = client.get_httpx_client().request(
@@ -160,6 +176,7 @@ def sync(
     task: list[str] | None | Unset = UNSET,
     tags: list[str] | None | Unset = UNSET,
     description: None | str | Unset = UNSET,
+    environment_version: list[str] | None | Unset = UNSET,
 ) -> Any | HTTPValidationError | SedmlRunResult | None:
     """Run a BioModels entry's SED-ML on several solvers (as /sedml/run)
 
@@ -170,6 +187,9 @@ def sync(
         task (list[str] | None | Unset): Only these SED-ML task ids; all when omitted
         tags (list[str] | None | Unset): Tags for every run
         description (None | str | Unset):
+        environment_version (list[str] | None | Unset): Environment versions to run in:
+            environment@number (registry_env@2) or environment@default, repeatable; an environment not
+            named runs at its default
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -186,6 +206,7 @@ def sync(
         task=task,
         tags=tags,
         description=description,
+        environment_version=environment_version,
     ).parsed
 
 
@@ -197,6 +218,7 @@ async def asyncio_detailed(
     task: list[str] | None | Unset = UNSET,
     tags: list[str] | None | Unset = UNSET,
     description: None | str | Unset = UNSET,
+    environment_version: list[str] | None | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError | SedmlRunResult]:
     """Run a BioModels entry's SED-ML on several solvers (as /sedml/run)
 
@@ -207,6 +229,9 @@ async def asyncio_detailed(
         task (list[str] | None | Unset): Only these SED-ML task ids; all when omitted
         tags (list[str] | None | Unset): Tags for every run
         description (None | str | Unset):
+        environment_version (list[str] | None | Unset): Environment versions to run in:
+            environment@number (registry_env@2) or environment@default, repeatable; an environment not
+            named runs at its default
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -222,6 +247,7 @@ async def asyncio_detailed(
         task=task,
         tags=tags,
         description=description,
+        environment_version=environment_version,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -237,6 +263,7 @@ async def asyncio(
     task: list[str] | None | Unset = UNSET,
     tags: list[str] | None | Unset = UNSET,
     description: None | str | Unset = UNSET,
+    environment_version: list[str] | None | Unset = UNSET,
 ) -> Any | HTTPValidationError | SedmlRunResult | None:
     """Run a BioModels entry's SED-ML on several solvers (as /sedml/run)
 
@@ -247,6 +274,9 @@ async def asyncio(
         task (list[str] | None | Unset): Only these SED-ML task ids; all when omitted
         tags (list[str] | None | Unset): Tags for every run
         description (None | str | Unset):
+        environment_version (list[str] | None | Unset): Environment versions to run in:
+            environment@number (registry_env@2) or environment@default, repeatable; an environment not
+            named runs at its default
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -264,5 +294,6 @@ async def asyncio(
             task=task,
             tags=tags,
             description=description,
+            environment_version=environment_version,
         )
     ).parsed

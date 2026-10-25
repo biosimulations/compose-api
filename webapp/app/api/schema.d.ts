@@ -51,6 +51,8 @@ export interface paths {
          * Run a simulation
          * @description `simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);
          *     the job then runs in that image instead of the shared container. Omitted: the shared container.
+         *     `environment_version` picks a version of that environment (docs/plan-environment-versions.md); the run is labelled
+         *     `environment_version=<environment>@<number>` either way.
          *
          *     The run is labelled `source=upload` and `environment=<simulator or registry_env>`; `tags` and `description` are
          *     stored with it as given (compose_api/simulation/labels.py) and filter `GET /simulations`.
@@ -489,6 +491,117 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/registry/environments/{name}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An environment's versions, newest first, and its default */
+        get: operations["list-environment-versions"];
+        put?: never;
+        /**
+         * Make a new version: a shared environment's spec resolved at a date, or a prebuilt one's image by digest
+         * @description The new version is `building` until its image is built or pulled, then `ready` (or `failed`). It does not
+         *     become the default: runs get it once an administrator makes it so (`PUT …/default`).
+         */
+        post: operations["create-environment-version"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/environments/{name}/versions/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One version of an environment: what it was made from, its lock, and what it installed and provides */
+        get: operations["get-environment-version"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/environments/{name}/versions/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve a shared environment's spec without creating anything: the lock, and its changes from the default */
+        post: operations["preview-environment-version"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/environments/{name}/versions/{number}/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read again what a prebuilt version's image installed and provides, in a Job that runs the image
+         * @description Started in the background; `GET …/versions/{number}` shows the result. A shared version's image is read back
+         *     by its own build.
+         */
+        post: operations["inspect-environment-version"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/environments/{name}/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Make a ready version the one runs get when they name none */
+        put: operations["set-environment-default"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/environments/{name}/versions/{number}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retire a version: it refuses new runs, and its images are kept for the runs that used it */
+        post: operations["retire-environment-version"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/registry/simulators/{simulator_id}/images": {
         parameters: {
             query?: never;
@@ -855,7 +968,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Run every source of the suite on its solvers (submitted in the background) */
+        /**
+         * Run every source of the suite on its solvers, in the environment versions named (in the background)
+         * @description Every environment the suite's solvers use must be named (docs/plan-environment-versions.md, step 5): a suite
+         *     run records exactly what it ran in, and is independent of the service release that started it.
+         */
         post: operations["run-suite"];
         delete?: never;
         options?: never;
@@ -1223,6 +1340,11 @@ export interface components {
             /** Next Offset */
             next_offset?: number | null;
         };
+        /** DefaultVersion */
+        DefaultVersion: {
+            /** Number */
+            number: number;
+        };
         /**
          * Drift
          * @description One solver's result against its own result in the suite's baseline run.
@@ -1335,6 +1457,141 @@ export interface components {
             errors: number;
             /** Entries */
             entries: components["schemas"]["EntryRef"][];
+        };
+        /**
+         * EnvironmentVersion
+         * @description One version of an environment: its simulator (definition, hash, images) and what it was made from
+         *     (docs/plan-environment-versions.md, V1).
+         */
+        EnvironmentVersion: {
+            /** Database Id */
+            database_id: number;
+            /** Environment */
+            environment: string;
+            /** Number */
+            number: number;
+            state: components["schemas"]["VersionState"];
+            /** Simulator Id */
+            simulator_id: number;
+            /**
+             * Image
+             * @description A prebuilt version's image, by digest
+             */
+            image?: string | null;
+            /**
+             * Spec
+             * @description What a shared version was made from
+             */
+            spec?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Origin
+             * @description registry, or custom for libraries no review has seen
+             */
+            origin?: string | null;
+            /** Resolved At */
+            resolved_at?: string | null;
+            /** Lock Sha256 */
+            lock_sha256?: string | null;
+            /**
+             * Runtime Contract
+             * @default 1
+             */
+            runtime_contract: number;
+            /** Created By */
+            created_by?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * EnvironmentVersionDetail
+         * @description A version with what it was resolved to and, once built, what it installed and provides.
+         */
+        EnvironmentVersionDetail: {
+            /** Database Id */
+            database_id: number;
+            /** Environment */
+            environment: string;
+            /** Number */
+            number: number;
+            state: components["schemas"]["VersionState"];
+            /** Simulator Id */
+            simulator_id: number;
+            /**
+             * Image
+             * @description A prebuilt version's image, by digest
+             */
+            image?: string | null;
+            /**
+             * Spec
+             * @description What a shared version was made from
+             */
+            spec?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Origin
+             * @description registry, or custom for libraries no review has seen
+             */
+            origin?: string | null;
+            /** Resolved At */
+            resolved_at?: string | null;
+            /** Lock Sha256 */
+            lock_sha256?: string | null;
+            /**
+             * Runtime Contract
+             * @default 1
+             */
+            runtime_contract: number;
+            /** Created By */
+            created_by?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Note */
+            note?: string | null;
+            /**
+             * Lock
+             * @description A shared version's lock: every PyPI package, pinned
+             */
+            lock?: string | null;
+            /**
+             * Installed
+             * @description What its image installed, read from the image
+             */
+            installed?: string | null;
+            /**
+             * Interfaces
+             * @description Its process interfaces (pbg-interfaces/1)
+             */
+            interfaces?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * EnvironmentVersions
+         * @description An environment's versions, newest first, and which one a run that names none gets.
+         */
+        EnvironmentVersions: {
+            /** Environment */
+            environment: string;
+            /** Kind */
+            kind: string;
+            /**
+             * Default
+             * @description The default version's number
+             */
+            default?: number | null;
+            /**
+             * Default Source
+             * @description deployment: the deployment's own definition is the default; api: an administrator chose it
+             * @default deployment
+             */
+            default_source: string;
+            /** Versions */
+            versions?: components["schemas"]["EnvironmentVersion"][];
         };
         /** ExpectedFailure */
         ExpectedFailure: {
@@ -1493,6 +1750,63 @@ export interface components {
          * @enum {string}
          */
         JobType: "simulation" | "build_container";
+        /**
+         * LockPreview
+         * @description What a shared version would be: its lock, and how it differs from the default version's.
+         */
+        LockPreview: {
+            /** Environment */
+            environment: string;
+            /**
+             * Resolved At
+             * Format: date-time
+             */
+            resolved_at: string;
+            /** Origin */
+            origin: string;
+            /** Lock Sha256 */
+            lock_sha256: string;
+            /** Lock */
+            lock: string;
+            /**
+             * Existing
+             * @description The number of a version with this very lock, if any
+             */
+            existing?: number | null;
+            /**
+             * Against
+             * @description The default version compared with, if it has a lock
+             */
+            against?: number | null;
+            /** Changes */
+            changes?: components["schemas"]["PackageChange"][];
+        };
+        /**
+         * NewEnvironmentVersion
+         * @description What to make a version from. A shared environment: a date to resolve its spec at (default now), and optionally
+         *     a library list other than the registry's (an unreviewed, `custom` version). A prebuilt one: its image by digest.
+         */
+        NewEnvironmentVersion: {
+            /** Resolved At */
+            resolved_at?: string | null;
+            /** Libraries */
+            libraries?: {
+                [key: string]: string;
+            }[] | null;
+            /** Image */
+            image?: string | null;
+            /** Note */
+            note?: string | null;
+        };
+        /** PackageChange */
+        PackageChange: {
+            /** Name */
+            name: string;
+            /** Before */
+            before?: string | null;
+            /** After */
+            after?: string | null;
+        };
         /**
          * PackageType
          * @enum {string}
@@ -1933,6 +2247,13 @@ export interface components {
             created_at: string | null;
             /** Status */
             status: string;
+            /**
+             * Environment Versions
+             * @description The environment versions its runs use, {environment: number}; empty for runs started before suites named them (theirs got the default)
+             */
+            environment_versions?: {
+                [key: string]: number;
+            };
         };
         /** SuiteRunRow */
         SuiteRunRow: {
@@ -1981,6 +2302,13 @@ export interface components {
             rows: components["schemas"]["SuiteRunRow"][];
             /** Summary */
             summary: {
+                [key: string]: number;
+            };
+            /**
+             * Environment Versions
+             * @description The environment versions its runs use, {environment: number}
+             */
+            environment_versions?: {
                 [key: string]: number;
             };
         };
@@ -2103,6 +2431,12 @@ export interface components {
             simulators?: string[] | null;
         };
         /**
+         * VersionState
+         * @description An environment version's state (docs/plan-environment-versions.md).
+         * @enum {string}
+         */
+        VersionState: "resolving" | "building" | "ready" | "failed" | "retired";
+        /**
          * Visibility
          * @description Who may read a simulation and everything it produced (plan-observability O7).
          * @enum {string}
@@ -2201,6 +2535,8 @@ export interface operations {
                 tags?: string[] | null;
                 /** @description What the run is for; up to 2000 characters */
                 description?: string | null;
+                /** @description The version of the environment to run in (registry_env@3 is 3, or of the prebuilt simulator named); omitted: its default. GET /registry/environments/{name}/versions lists them */
+                environment_version?: number | null;
             };
             header?: never;
             path?: never;
@@ -2248,7 +2584,7 @@ export interface operations {
                 simulator?: string | null;
                 /** @description Only simulations created at or after this time */
                 since?: string | null;
-                /** @description Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, solver, model, project, sedml_task, comparison, collection, suite_run */
+                /** @description Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, environment_version, solver, model, project, sedml_task, comparison, collection, suite_run */
                 label?: string[] | null;
                 /** @description Only simulations with this tag; repeatable, all must match */
                 tag?: string[] | null;
@@ -3145,6 +3481,383 @@ export interface operations {
             };
         };
     };
+    "list-environment-versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentVersions"];
+                };
+            };
+            /** @description No such environment, or no such version */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "create-environment-version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewEnvironmentVersion"];
+            };
+        };
+        responses: {
+            /** @description A version with this very definition exists: that one */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentVersion"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentVersion"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not an environment administrator, or environment administration is not configured */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such environment, or no such version */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request cannot make a version of this environment */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "get-environment-version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentVersionDetail"];
+                };
+            };
+            /** @description No such environment, or no such version */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "preview-environment-version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewEnvironmentVersion"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LockPreview"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not an environment administrator, or environment administration is not configured */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such environment, or no such version */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The spec does not resolve, or is not a lock's */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "inspect-environment-version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentVersion"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not an environment administrator, or environment administration is not configured */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such environment, or no such version */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A shared version (its build reads it back), or no Kubernetes to run the Job on */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "set-environment-default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DefaultVersion"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentVersion"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not an environment administrator, or environment administration is not configured */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such environment, or no such version */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The version is not ready */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "retire-environment-version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentVersion"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not an environment administrator, or environment administration is not configured */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such environment, or no such version */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description It is the default; make another the default first */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     "get-simulator-images": {
         parameters: {
             query?: never;
@@ -3279,6 +3992,8 @@ export interface operations {
                 rel_tol?: number;
                 abs_tol_min?: number;
                 abs_tol_scale?: number;
+                /** @description Environment versions to run in: environment@number (registry_env@2) or environment@default, repeatable; an environment not named runs at its default */
+                environment_version?: string[] | null;
             };
             header?: never;
             path?: never;
@@ -3656,6 +4371,8 @@ export interface operations {
                 /** @description Tags for every run */
                 tags?: string[] | null;
                 description?: string | null;
+                /** @description Environment versions to run in: environment@number (registry_env@2) or environment@default, repeatable; an environment not named runs at its default */
+                environment_version?: string[] | null;
             };
             header?: never;
             path: {
@@ -3885,6 +4602,8 @@ export interface operations {
                 /** @description Tags for every run */
                 tags?: string[] | null;
                 description?: string | null;
+                /** @description Environment versions to run in: environment@number (registry_env@2) or environment@default, repeatable; an environment not named runs at its default */
+                environment_version?: string[] | null;
             };
             header?: never;
             path: {
@@ -4027,7 +4746,10 @@ export interface operations {
     };
     "run-suite": {
         parameters: {
-            query?: never;
+            query: {
+                /** @description The environment versions the suite runs in, required: environment@number (registry_env@2), environment@default, or default (every environment at its default). Stored with the run as numbers */
+                environment_version: string[];
+            };
             header?: never;
             path: {
                 name: string;
@@ -4044,6 +4766,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SuiteRunInfo"];
                 };
+            };
+            /** @description A version not named, malformed, or that runs cannot use */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description No such suite */
             404: {

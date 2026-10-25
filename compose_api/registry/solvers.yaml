@@ -23,3 +23,12 @@ solvers:
     address: local:pbsim_common.simulators.tellurium_process.TelluriumUTCStep
     algorithms: ["KISAO:0000019"]
     provides: [species]
+
+  - id: vcell
+    name: VCell (CVODE/IDA)
+    role: TimeCourseSolver
+    environment: registry_env
+    # VCell's Combined solver through pyvcell (docs/plan-vcell-ode.md): CVODE, or IDA when the math has fast systems
+    address: local:pbsim_common.simulators.vcell_process.VCellUTCStep
+    algorithms: ["KISAO:0000019", "KISAO:0000283"]
+    provides: [species]

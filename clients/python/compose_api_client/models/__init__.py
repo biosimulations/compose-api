@@ -30,6 +30,7 @@ from .current_principal_response import CurrentPrincipalResponse
 from .dataset import Dataset
 from .dataset_attributes import DatasetAttributes
 from .dataset_page import DatasetPage
+from .default_version import DefaultVersion
 from .drift import Drift
 from .entry_environment import EntryEnvironment
 from .entry_ref import EntryRef
@@ -38,6 +39,12 @@ from .environment_headers_components import EnvironmentHeadersComponents
 from .environment_image import EnvironmentImage
 from .environment_summary import EnvironmentSummary
 from .environment_summary_kind import EnvironmentSummaryKind
+from .environment_version import EnvironmentVersion
+from .environment_version_detail import EnvironmentVersionDetail
+from .environment_version_detail_interfaces_type_0 import EnvironmentVersionDetailInterfacesType0
+from .environment_version_detail_spec_type_0 import EnvironmentVersionDetailSpecType0
+from .environment_version_spec_type_0 import EnvironmentVersionSpecType0
+from .environment_versions import EnvironmentVersions
 from .expected_failure import ExpectedFailure
 from .get_biosimulations_reference_response_get_biosimulations_reference import (
     GetBiosimulationsReferenceResponseGetBiosimulationsReference,
@@ -64,6 +71,10 @@ from .interface_manifest_errors_item import InterfaceManifestErrorsItem
 from .job_status import JobStatus
 from .job_type import JobType
 from .list_simulations_status_type_0 import ListSimulationsStatusType0
+from .lock_preview import LockPreview
+from .new_environment_version import NewEnvironmentVersion
+from .new_environment_version_libraries_type_0_item import NewEnvironmentVersionLibrariesType0Item
+from .package_change import PackageChange
 from .package_type import PackageType
 from .project_info import ProjectInfo
 from .registered_package import RegisteredPackage
@@ -96,9 +107,11 @@ from .submission_info import SubmissionInfo
 from .submission_state import SubmissionState
 from .suite import Suite
 from .suite_run_info import SuiteRunInfo
+from .suite_run_info_environment_versions import SuiteRunInfoEnvironmentVersions
 from .suite_run_row import SuiteRunRow
 from .suite_run_row_drift_type_0 import SuiteRunRowDriftType0
 from .suite_run_view import SuiteRunView
+from .suite_run_view_environment_versions import SuiteRunViewEnvironmentVersions
 from .suite_run_view_summary import SuiteRunViewSummary
 from .suite_verify import SuiteVerify
 from .suite_verify_result import SuiteVerifyResult
@@ -110,6 +123,7 @@ from .verification_failed_simulators_item import VerificationFailedSimulatorsIte
 from .verification_state import VerificationState
 from .verify_request import VerifyRequest
 from .verify_suite_run_which import VerifySuiteRunWhich
+from .version_state import VersionState
 from .visibility import Visibility
 
 __all__ = (
@@ -143,6 +157,7 @@ __all__ = (
     "Dataset",
     "DatasetAttributes",
     "DatasetPage",
+    "DefaultVersion",
     "Drift",
     "EntryEnvironment",
     "EntryRef",
@@ -151,6 +166,12 @@ __all__ = (
     "EnvironmentImage",
     "EnvironmentSummary",
     "EnvironmentSummaryKind",
+    "EnvironmentVersion",
+    "EnvironmentVersionDetail",
+    "EnvironmentVersionDetailInterfacesType0",
+    "EnvironmentVersionDetailSpecType0",
+    "EnvironmentVersions",
+    "EnvironmentVersionSpecType0",
     "ExpectedFailure",
     "GetBiosimulationsReferenceResponseGetBiosimulationsReference",
     "GetBiosimulationsReferenceResponseGetBiosimulationsReferenceAdditionalProperty",
@@ -171,6 +192,10 @@ __all__ = (
     "JobStatus",
     "JobType",
     "ListSimulationsStatusType0",
+    "LockPreview",
+    "NewEnvironmentVersion",
+    "NewEnvironmentVersionLibrariesType0Item",
+    "PackageChange",
     "PackageType",
     "ProjectInfo",
     "RegisteredPackage",
@@ -203,9 +228,11 @@ __all__ = (
     "SubmissionState",
     "Suite",
     "SuiteRunInfo",
+    "SuiteRunInfoEnvironmentVersions",
     "SuiteRunRow",
     "SuiteRunRowDriftType0",
     "SuiteRunView",
+    "SuiteRunViewEnvironmentVersions",
     "SuiteRunViewSummary",
     "SuiteVerify",
     "SuiteVerifyResult",
@@ -217,5 +244,6 @@ __all__ = (
     "VerificationState",
     "VerifyRequest",
     "VerifySuiteRunWhich",
+    "VersionState",
     "Visibility",
 )

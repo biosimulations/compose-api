@@ -5,6 +5,7 @@ the monitor updates, its image recorded as produced by that run."""
 import asyncio
 import base64
 import contextlib
+import dataclasses
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
@@ -40,11 +41,25 @@ def test_the_build_runs_privileged_in_scratch_and_copies_as_the_service_user() -
     assert base64.b64decode(env.value).decode() == definition
     assert f'echo "${env.name}" | base64 -d > /work/image.def' in build.command[-1]
     assert "apptainer build /work/image.sif /work/image.def" in build.command[-1]
+    # all of the build's scratch (Apptainer's sandbox and cache) is the volume it requests disk for
+    assert "export APPTAINER_TMPDIR=/work/scratch APPTAINER_CACHEDIR=/work/cache" in build.command[-1]
+    assert build.resources is None  # SITE requests no ephemeral storage
     assert copy.security_context.privileged is False and copy.security_context.run_as_user == 16997
     assert {m.mount_path: m.read_only for m in copy.volume_mounts} == {"/projects/CRBM": None, "/work": None}
     assert f'mv -f "{container}.part-$HOSTNAME" "{container}"' in copy.command[-1]
     assert job.spec.backoff_limit == 0 and spec.restart_policy == "Never"
     assert spec.volumes[0].persistent_volume_claim.claim_name == "home"
+
+
+def test_the_build_requests_disk_so_it_is_placed_on_a_node_with_room() -> None:
+    site = dataclasses.replace(SITE, ephemeral_storage="20Gi")
+    job: Any = build_job("build-abc-x", site, "Bootstrap: docker\nFrom: busybox\n", Path("/c"))
+    (build,) = job.spec.template.spec.init_containers
+    assert build.resources.requests == {"ephemeral-storage": "20Gi"}
+    assert build.resources.limits is None  # a request, never a limit: a bigger build is not evicted
+    assert BuildSite.from_settings(get_settings().model_copy(update={
+        "build_k8s_pvc_claim": "home", "build_k8s_pvc_mount_path": "/projects/CRBM",
+    })).ephemeral_storage == "20Gi"  # fmt: skip
 
 
 class _Gone(Exception):

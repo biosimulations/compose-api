@@ -10,18 +10,26 @@ import hashlib
 import logging
 import random
 import string
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 
 from compose_api.authentication import OptionalPrincipal, get_optional_principal
+from compose_api.authorization import EnvironmentAdmin
 from compose_api.common.gateway.models import RouterConfig
+from compose_api.config import get_settings
 from compose_api.dependencies import (
     get_required_database_service,
     get_required_job_monitor,
     get_required_simulation_service,
 )
+from compose_api.environments import service as environment_service
+from compose_api.environments.contents import inspect_prebuilt_version, record_contents
+from compose_api.environments.service import VersionRequestError
+from compose_api.environments.versions import version_for
 from compose_api.registry.environments import (
     CatalogEntry,
+    EnvironmentSpec,
     EnvironmentSummary,
     InterfaceManifest,
     catalog_entries,
@@ -35,7 +43,16 @@ from compose_api.registry.solvers import Solver, load_solvers
 from compose_api.sedml.translator import TranslatorUnavailableError
 from compose_api.simulation import builds, handlers
 from compose_api.simulation.builds import ImageState, ImageStatus
-from compose_api.simulation.models import SimulatorVersion
+from compose_api.simulation.models import (
+    DefaultVersion,
+    EnvironmentVersion,
+    EnvironmentVersionDetail,
+    EnvironmentVersions,
+    LockPreview,
+    NewEnvironmentVersion,
+    SimulatorVersion,
+    VersionState,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -140,8 +157,9 @@ async def _environment_simulator(name: str) -> SimulatorVersion:
     spec = builds.find_environment(name)
     if spec is None:
         raise HTTPException(status_code=404, detail=f"no environment {name!r}")
-    simulator_db = get_required_database_service().get_simulator_db()
-    return await builds.simulator_for(simulator_db, builds.environment_definition(spec))
+    # its default version's (docs/plan-environment-versions.md)
+    _version, simulator = await version_for(get_required_database_service(), None if spec.kind == "shared" else name)
+    return simulator
 
 
 async def _simulator(simulator_id: int) -> SimulatorVersion:
@@ -206,6 +224,230 @@ async def build_environment(
 ) -> ImageStatus:
     # anyone who may submit a run may cause this build: a run of the environment would start it
     return await _start_build(await _environment_simulator(name), name, background_tasks, response)
+
+
+# --- environment versions (docs/plan-environment-versions.md, step 4) ----------------------------------------------
+
+_NO_ENVIRONMENT: dict[int | str, dict[str, Any]] = {404: {"description": "No such environment, or no such version"}}
+_ADMIN: dict[int | str, dict[str, Any]] = {
+    401: {"description": "Not signed in"},
+    403: {"description": "Not an environment administrator, or environment administration is not configured"},
+}
+
+
+def _known_environment(name: str) -> EnvironmentSpec:
+    spec = environment_service.environment_spec(name)
+    if spec is None:
+        raise HTTPException(status_code=404, detail=f"no environment {name!r}")
+    return spec
+
+
+async def _version(name: str, number: int) -> EnvironmentVersionDetail:
+    version = await get_required_database_service().get_environments_db().get_by_number(name, number)
+    if version is None:
+        raise HTTPException(status_code=404, detail=f"no version {name}@{number}")
+    return version
+
+
+async def _build_version(version: EnvironmentVersion, simulator: SimulatorVersion) -> None:
+    """Make the version's image available through the run path's own function; its state follows the outcome."""
+    environments_db = get_required_database_service().get_environments_db()
+    try:
+        await handlers.ensure_image(
+            simulator,
+            database_service=get_required_database_service(),
+            simulation_service_slurm=get_required_simulation_service(),
+            job_monitor=get_required_job_monitor(),
+            random_string="".join(random.choices(string.hexdigits, k=7)),  # noqa: S311 a name, not a secret
+        )
+    except Exception:
+        logger.exception(f"The image of {version.label} (simulator {simulator.database_id}) failed")
+        await environments_db.set_state(version.database_id, VersionState.FAILED)
+        return
+    await environments_db.set_state(version.database_id, VersionState.READY)
+    logger.info(f"{version.label} is ready")
+    await _read_back(version)
+
+
+async def _read_back(version: EnvironmentVersion) -> None:
+    """Store what the version's image installed and provides: left beside a built image by its build, or read from a
+    pulled (prebuilt) one by a Job of its own. Never fails the version."""
+    database_service = get_required_database_service()
+    try:
+        if version.image is not None:
+            recorded = get_settings().build_backend == "k8s" and await inspect_prebuilt_version(
+                database_service, version
+            )
+        else:
+            recorded = await record_contents(database_service, version)
+    except Exception:
+        logger.exception(f"Reading back {version.label} failed")
+        return
+    if not recorded:
+        logger.info(f"Nothing was read back from {version.label}'s image")
+
+
+@config.router.get(
+    path="/environments/{name}/versions",
+    response_model=EnvironmentVersions,
+    operation_id="list-environment-versions",
+    tags=["Registry"],
+    summary="An environment's versions, newest first, and its default",
+    responses=_NO_ENVIRONMENT,
+)
+async def list_environment_versions(name: str, principal: OptionalPrincipal) -> EnvironmentVersions:
+    # public: the same for every caller
+    spec = _known_environment(name)
+    return await get_required_database_service().get_environments_db().describe(name, spec.kind)
+
+
+@config.router.get(
+    path="/environments/{name}/versions/{number}",
+    response_model=EnvironmentVersionDetail,
+    operation_id="get-environment-version",
+    tags=["Registry"],
+    summary="One version of an environment: what it was made from, its lock, and what it installed and provides",
+    responses=_NO_ENVIRONMENT,
+)
+async def get_environment_version(name: str, number: int, principal: OptionalPrincipal) -> EnvironmentVersionDetail:
+    # public: the same for every caller
+    _known_environment(name)
+    version = await _version(name, number)
+    pending = version.installed is None and version.interfaces is None
+    if pending and version.state == VersionState.READY:  # built by a run, or before this service read images back
+        database_service = get_required_database_service()
+        if await record_contents(database_service, version):
+            version = await _version(name, number)
+    return version
+
+
+@config.router.post(
+    path="/environments/{name}/versions/preview",
+    response_model=LockPreview,
+    operation_id="preview-environment-version",
+    tags=["Registry"],
+    summary="Resolve a shared environment's spec without creating anything: the lock, and its changes from the default",
+    responses={**_NO_ENVIRONMENT, **_ADMIN, 422: {"description": "The spec does not resolve, or is not a lock's"}},
+)
+async def preview_environment_version(
+    name: str, request: NewEnvironmentVersion, caller: EnvironmentAdmin
+) -> LockPreview:
+    spec = _known_environment(name)
+    try:
+        return await environment_service.preview(get_required_database_service(), spec, request)
+    except VersionRequestError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+@config.router.post(
+    path="/environments/{name}/versions",
+    response_model=EnvironmentVersion,
+    status_code=201,
+    operation_id="create-environment-version",
+    tags=["Registry"],
+    summary="Make a new version: a shared environment's spec resolved at a date, or a prebuilt one's image by digest",
+    responses={
+        200: {"model": EnvironmentVersion, "description": "A version with this very definition exists: that one"},
+        **_NO_ENVIRONMENT,
+        **_ADMIN,
+        422: {"description": "The request cannot make a version of this environment"},
+    },
+)
+async def create_environment_version(
+    name: str,
+    request: NewEnvironmentVersion,
+    background_tasks: BackgroundTasks,
+    response: Response,
+    caller: EnvironmentAdmin,
+) -> EnvironmentVersion:
+    """The new version is `building` until its image is built or pulled, then `ready` (or `failed`). It does not
+    become the default: runs get it once an administrator makes it so (`PUT …/default`)."""
+    spec = _known_environment(name)
+    database_service = get_required_database_service()
+    try:
+        version, created = await environment_service.create(database_service, spec, request, caller.subject)
+    except VersionRequestError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    if not created:
+        response.status_code = 200
+    if created or version.state in (VersionState.BUILDING, VersionState.FAILED):  # a retry restarts its image
+        simulator = await database_service.get_simulator_db().get_simulator(version.simulator_id)
+        if simulator is not None:
+            background_tasks.add_task(_build_version, version, simulator)
+            if version.state == VersionState.FAILED:
+                await database_service.get_environments_db().set_state(version.database_id, VersionState.BUILDING)
+                version = version.model_copy(update={"state": VersionState.BUILDING})
+    logger.info(f"{version.label} {'created' if created else 'requested again'} by {caller.subject}")
+    return version
+
+
+@config.router.post(
+    path="/environments/{name}/versions/{number}/inspect",
+    response_model=EnvironmentVersion,
+    status_code=202,
+    operation_id="inspect-environment-version",
+    tags=["Registry"],
+    summary="Read again what a prebuilt version's image installed and provides, in a Job that runs the image",
+    responses={
+        **_NO_ENVIRONMENT,
+        **_ADMIN,
+        409: {"description": "A shared version (its build reads it back), or no Kubernetes to run the Job on"},
+    },
+)
+async def inspect_environment_version(
+    name: str, number: int, background_tasks: BackgroundTasks, caller: EnvironmentAdmin
+) -> EnvironmentVersion:
+    """Started in the background; `GET …/versions/{number}` shows the result. A shared version's image is read back
+    by its own build."""
+    _known_environment(name)
+    version = await _version(name, number)
+    if version.image is None:
+        raise HTTPException(status_code=409, detail=f"{version.label} is shared: its build reads its image back")
+    if get_settings().build_backend != "k8s":
+        raise HTTPException(status_code=409, detail="reading an image back needs the k8s build backend")
+    plain = EnvironmentVersion.model_validate(version.model_dump(exclude={"lock", "installed", "interfaces"}))
+    background_tasks.add_task(_read_back, plain)
+    logger.info(f"{version.label} read back again, for {caller.subject}")
+    return plain
+
+
+@config.router.put(
+    path="/environments/{name}/default",
+    response_model=EnvironmentVersion,
+    operation_id="set-environment-default",
+    tags=["Registry"],
+    summary="Make a ready version the one runs get when they name none",
+    responses={**_NO_ENVIRONMENT, **_ADMIN, 409: {"description": "The version is not ready"}},
+)
+async def set_environment_default(name: str, request: DefaultVersion, caller: EnvironmentAdmin) -> EnvironmentVersion:
+    _known_environment(name)
+    version = await _version(name, request.number)
+    if version.state != VersionState.READY:
+        raise HTTPException(status_code=409, detail=f"{version.label} is {version.state}, not ready")
+    await get_required_database_service().get_environments_db().set_default(name, version.database_id)
+    logger.info(f"{version.label} made the default by {caller.subject}")
+    return EnvironmentVersion.model_validate(version.model_dump(exclude={"lock", "installed", "interfaces"}))
+
+
+@config.router.post(
+    path="/environments/{name}/versions/{number}/retire",
+    response_model=EnvironmentVersion,
+    operation_id="retire-environment-version",
+    tags=["Registry"],
+    summary="Retire a version: it refuses new runs, and its images are kept for the runs that used it",
+    responses={**_NO_ENVIRONMENT, **_ADMIN, 409: {"description": "It is the default; make another the default first"}},
+)
+async def retire_environment_version(name: str, number: int, caller: EnvironmentAdmin) -> EnvironmentVersion:
+    _known_environment(name)
+    version = await _version(name, number)
+    environments_db = get_required_database_service().get_environments_db()
+    default = await environments_db.get_default(name)
+    if default is not None and default.database_id == version.database_id:
+        raise HTTPException(status_code=409, detail=f"{version.label} is the default")
+    await environments_db.set_state(version.database_id, VersionState.RETIRED)
+    logger.info(f"{version.label} retired by {caller.subject}")
+    retired = version.model_dump(exclude={"lock", "installed", "interfaces"}) | {"state": VersionState.RETIRED}
+    return EnvironmentVersion.model_validate(retired)
 
 
 @config.router.get(

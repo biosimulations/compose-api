@@ -20,6 +20,13 @@ config = RouterConfig(router=APIRouter(), prefix="/sources", dependencies=[Depen
 NOT_FOUND: dict[int | str, dict[str, Any]] = {404: {"description": "No such model or project upstream"}}
 UNAVAILABLE: dict[int | str, dict[str, Any]] = {502: {"description": "The upstream service did not answer as expected"}}
 Solvers = Annotated[list[str] | None, Query(description="Solvers to run (registry/solvers.yaml); all when omitted")]
+EnvironmentVersionRefs = Annotated[
+    list[str] | None,
+    Query(
+        description="Environment versions to run in: environment@number (registry_env@2) or environment@default,"
+        " repeatable; an environment not named runs at its default"
+    ),
+]
 Tasks = Annotated[list[str] | None, Query(description="Only these SED-ML task ids; all when omitted")]
 Tags = Annotated[list[str] | None, Query(description="Tags for every run")]
 
@@ -76,6 +83,7 @@ async def get_biomodel_omex(model_id: str, principal: OptionalPrincipal) -> File
 async def run_biomodel(
     model_id: str, background_tasks: BackgroundTasks, principal: OptionalPrincipal,
     solvers: Solvers = None, task: Tasks = None, tags: Tags = None, description: str | None = None,
+    environment_version: EnvironmentVersionRefs = None,
 ) -> SedmlRunResult:  # fmt: skip
     from compose_api.api.routers.sedml import run_archive
 
@@ -87,7 +95,7 @@ async def run_biomodel(
     references = await sources.biomodel_references(model_id)
     return await run_archive(
         path, f"biomodels:{model_id}", solvers, task, tags, description, Tolerances(), background_tasks,
-        references=references or None,
+        references=references or None, environment_versions=environment_version,
     )  # fmt: skip
 
 
@@ -149,6 +157,7 @@ async def get_project_reference(project_id: str, principal: OptionalPrincipal) -
 async def run_project(
     project_id: str, background_tasks: BackgroundTasks, principal: OptionalPrincipal,
     solvers: Solvers = None, task: Tasks = None, tags: Tags = None, description: str | None = None,
+    environment_version: EnvironmentVersionRefs = None,
 ) -> SedmlRunResult:  # fmt: skip
     from compose_api.api.routers.sedml import run_archive
 
@@ -161,4 +170,5 @@ async def run_project(
     return await run_archive(
         path, f"biosimulations:{project_id}", solvers, task, tags, description, Tolerances(), background_tasks,
         references={f"biosimulations:{info.simulator or info.run}": reference} if reference else None,
+        environment_versions=environment_version,
     )  # fmt: skip

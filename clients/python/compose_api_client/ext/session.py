@@ -31,13 +31,20 @@ from compose_api_client.api.datasets import get_dataset, get_dataset_content, ge
 from compose_api_client.api.registry import (
     build_environment,
     build_simulator,
+    create_environment_version,
     get_environment_headers,
     get_environment_images,
     get_environment_manifest,
+    get_environment_version,
     get_simulator_images,
+    inspect_environment_version,
+    list_environment_versions,
     list_environments,
     list_registry_entries,
     list_solvers,
+    preview_environment_version,
+    retire_environment_version,
+    set_environment_default,
 )
 from compose_api_client.api.results import (
     get_simulation_events,
@@ -123,12 +130,18 @@ from compose_api_client.models import (
     CurrentPrincipalResponse,
     Dataset,
     DatasetPage,
+    DefaultVersion,
     EnvironmentHeaders,
     EnvironmentSummary,
+    EnvironmentVersion,
+    EnvironmentVersionDetail,
+    EnvironmentVersions,
     HpcRun,
     ImageStatus,
     InterfaceManifest,
     ListSimulationsStatusType0,
+    LockPreview,
+    NewEnvironmentVersion,
     ProjectInfo,
     RegisteredSimulators,
     RunEvent,
@@ -590,6 +603,66 @@ class ComposeSession:
         r, _ = self._send(op, lambda c: build_environment.sync_detailed(name, client=c))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
+    def environment_versions(self, name: str) -> EnvironmentVersions:
+        """An environment's versions, newest first, and its default (docs/plan-environment-versions.md)."""
+        op = Operation("GET", f"/registry/environments/{name}/versions", replayable=True)
+        r, _ = self._send(op, lambda c: list_environment_versions.sync_detailed(name, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def environment_version(self, name: str, number: int) -> EnvironmentVersionDetail:
+        """One version: what it was made from, its lock, and what it installed and provides."""
+        op = Operation("GET", f"/registry/environments/{name}/versions/{number}", replayable=True)
+        r, _ = self._send(op, lambda c: get_environment_version.sync_detailed(name, number, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def preview_environment_version(self, name: str, *, resolved_at: datetime.datetime | None = None) -> LockPreview:
+        """A shared environment's spec resolved at ``resolved_at`` (default now), and its changes from the default;
+        nothing is created. Needs the environment administrator role."""
+        op = Operation("POST", f"/registry/environments/{name}/versions/preview", replayable=True)
+        body = NewEnvironmentVersion(resolved_at=resolved_at if resolved_at is not None else UNSET)
+        r, _ = self._send(op, lambda c: preview_environment_version.sync_detailed(name, client=c, body=body))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def create_environment_version(
+        self,
+        name: str,
+        *,
+        resolved_at: datetime.datetime | None = None,
+        image: str | None = None,
+        note: str | None = None,
+    ) -> EnvironmentVersion:
+        """A new version (or the existing one with the same definition): a shared environment resolved at
+        ``resolved_at`` (default now), or a prebuilt one's ``image`` by digest. Its image is built in the background;
+        it does not become the default. Needs the environment administrator role."""
+        op = Operation("POST", f"/registry/environments/{name}/versions", replayable=False)
+        body = NewEnvironmentVersion(
+            resolved_at=resolved_at if resolved_at is not None else UNSET,
+            image=image if image is not None else UNSET,
+            note=note if note is not None else UNSET,
+        )
+        r, _ = self._send(op, lambda c: create_environment_version.sync_detailed(name, client=c, body=body))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def set_environment_default(self, name: str, number: int) -> EnvironmentVersion:
+        """Make a ready version the one runs get when they name none. Needs the environment administrator role."""
+        op = Operation("PUT", f"/registry/environments/{name}/default", replayable=True)
+        body = DefaultVersion(number=number)
+        r, _ = self._send(op, lambda c: set_environment_default.sync_detailed(name, client=c, body=body))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def retire_environment_version(self, name: str, number: int) -> EnvironmentVersion:
+        """Retire a version: it refuses new runs; its images are kept. Needs the environment administrator role."""
+        op = Operation("POST", f"/registry/environments/{name}/versions/{number}/retire", replayable=True)
+        r, _ = self._send(op, lambda c: retire_environment_version.sync_detailed(name, number, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def inspect_environment_version(self, name: str, number: int) -> EnvironmentVersion:
+        """Read a prebuilt version's image back again (what it installed and provides), in the background. Needs the
+        environment administrator role."""
+        op = Operation("POST", f"/registry/environments/{name}/versions/{number}/inspect", replayable=True)
+        r, _ = self._send(op, lambda c: inspect_environment_version.sync_detailed(name, number, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
     def simulator_images(self, simulator_id: int) -> ImageStatus:
         """Whether a simulator's image is built, with its image records and newest build run."""
         op = Operation("GET", f"/registry/simulators/{simulator_id}/images", replayable=True)
@@ -613,9 +686,11 @@ class ComposeSession:
         batch: bool = False,
         tags: Sequence[str] = (),
         description: str | None = None,
+        environment_version: int | None = None,
     ) -> SimulationExperiment:
-        """Submit an ``.omex`` (or ``.pbg``). ``simulator`` names a prebuilt simulator image; ``tags`` and
-        ``description`` are stored with the run and filter ``simulations()``."""
+        """Submit an ``.omex`` (or ``.pbg``). ``simulator`` names a prebuilt simulator image; ``environment_version``
+        a version of that environment (its default when omitted); ``tags`` and ``description`` are stored with the run
+        and filter ``simulations()``."""
         op = Operation("POST", "/simulation/run", replayable=False)
         r, _ = self._send(
             op,
@@ -627,6 +702,7 @@ class ComposeSession:
                 simulator=simulator if simulator is not None else UNSET,
                 tags=list(tags) if tags else UNSET,
                 description=description if description is not None else UNSET,
+                environment_version=environment_version if environment_version is not None else UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -752,8 +828,10 @@ class ComposeSession:
         tasks: Sequence[str] = (),
         tags: Sequence[str] = (),
         description: str | None = None,
+        environment_versions: Sequence[str] = (),
     ) -> SedmlRunResult:
-        """Run each task of a SED-ML archive once per solver; one comparison per task."""
+        """Run each task of a SED-ML archive once per solver; one comparison per task. ``environment_versions``:
+        ``environment@number`` or ``environment@default``; an environment not named runs at its default."""
         op = Operation("POST", "/sedml/run", replayable=False)
         r, _ = self._send(
             op,
@@ -764,6 +842,7 @@ class ComposeSession:
                 task=list(tasks) if tasks else UNSET,
                 tags=list(tags) if tags else UNSET,
                 description=description if description is not None else UNSET,
+                environment_version=list(environment_versions) if environment_versions else UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -786,7 +865,14 @@ class ComposeSession:
         _raise_for(r, op)
         return r.content
 
-    def run_biomodel(self, model_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()) -> SedmlRunResult:
+    def run_biomodel(
+        self,
+        model_id: str,
+        *,
+        solvers: Sequence[str] = (),
+        tags: Sequence[str] = (),
+        environment_versions: Sequence[str] = (),
+    ) -> SedmlRunResult:
         op = Operation("POST", f"/sources/biomodels/{model_id}/run", replayable=False)
         r, _ = self._send(
             op,
@@ -795,6 +881,7 @@ class ComposeSession:
                 client=c,
                 solvers=list(solvers) if solvers else UNSET,
                 tags=list(tags) if tags else UNSET,
+                environment_version=list(environment_versions) if environment_versions else UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -824,7 +911,12 @@ class ComposeSession:
         return data
 
     def run_biosimulations_project(
-        self, project_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()
+        self,
+        project_id: str,
+        *,
+        solvers: Sequence[str] = (),
+        tags: Sequence[str] = (),
+        environment_versions: Sequence[str] = (),
     ) -> SedmlRunResult:
         op = Operation("POST", f"/sources/biosimulations/{project_id}/run", replayable=False)
         r, _ = self._send(
@@ -834,6 +926,7 @@ class ComposeSession:
                 client=c,
                 solvers=list(solvers) if solvers else UNSET,
                 tags=list(tags) if tags else UNSET,
+                environment_version=list(environment_versions) if environment_versions else UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -856,10 +949,13 @@ class ComposeSession:
         r, _ = self._send(op, lambda c: get_suite_run.sync_detailed(name, number, client=c))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
-    def run_suite(self, name: str) -> SuiteRunInfo:
-        """Run every source of the suite (submitted in the background); the new run's number."""
+    def run_suite(self, name: str, *, environment_versions: Sequence[str]) -> SuiteRunInfo:
+        """Run every source of the suite (submitted in the background) in the environment versions named:
+        ``environment@number``, ``environment@default``, or ``default`` (each at its default); the new run's number."""
         op = Operation("POST", f"/suites/{name}/run", replayable=False)
-        r, _ = self._send(op, lambda c: run_suite.sync_detailed(name, client=c))
+        r, _ = self._send(
+            op, lambda c: run_suite.sync_detailed(name, client=c, environment_version=list(environment_versions))
+        )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def comparisons(self, *, source: str | None = None, limit: int = 25, offset: int = 0) -> ComparisonPage:
@@ -1336,6 +1432,68 @@ class AsyncComposeSession:
         r, _ = await self._send(op, lambda c: build_environment.asyncio_detailed(name, client=c))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
+    async def environment_versions(self, name: str) -> EnvironmentVersions:
+        """An environment's versions, newest first, and its default (docs/plan-environment-versions.md)."""
+        op = Operation("GET", f"/registry/environments/{name}/versions", replayable=True)
+        r, _ = await self._send(op, lambda c: list_environment_versions.asyncio_detailed(name, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def environment_version(self, name: str, number: int) -> EnvironmentVersionDetail:
+        """One version: what it was made from, its lock, and what it installed and provides."""
+        op = Operation("GET", f"/registry/environments/{name}/versions/{number}", replayable=True)
+        r, _ = await self._send(op, lambda c: get_environment_version.asyncio_detailed(name, number, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def preview_environment_version(
+        self, name: str, *, resolved_at: datetime.datetime | None = None
+    ) -> LockPreview:
+        """A shared environment's spec resolved at ``resolved_at`` (default now), and its changes from the default;
+        nothing is created. Needs the environment administrator role."""
+        op = Operation("POST", f"/registry/environments/{name}/versions/preview", replayable=True)
+        body = NewEnvironmentVersion(resolved_at=resolved_at if resolved_at is not None else UNSET)
+        r, _ = await self._send(op, lambda c: preview_environment_version.asyncio_detailed(name, client=c, body=body))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def create_environment_version(
+        self,
+        name: str,
+        *,
+        resolved_at: datetime.datetime | None = None,
+        image: str | None = None,
+        note: str | None = None,
+    ) -> EnvironmentVersion:
+        """A new version (or the existing one with the same definition): a shared environment resolved at
+        ``resolved_at`` (default now), or a prebuilt one's ``image`` by digest. Its image is built in the background;
+        it does not become the default. Needs the environment administrator role."""
+        op = Operation("POST", f"/registry/environments/{name}/versions", replayable=False)
+        body = NewEnvironmentVersion(
+            resolved_at=resolved_at if resolved_at is not None else UNSET,
+            image=image if image is not None else UNSET,
+            note=note if note is not None else UNSET,
+        )
+        r, _ = await self._send(op, lambda c: create_environment_version.asyncio_detailed(name, client=c, body=body))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def set_environment_default(self, name: str, number: int) -> EnvironmentVersion:
+        """Make a ready version the one runs get when they name none. Needs the environment administrator role."""
+        op = Operation("PUT", f"/registry/environments/{name}/default", replayable=True)
+        body = DefaultVersion(number=number)
+        r, _ = await self._send(op, lambda c: set_environment_default.asyncio_detailed(name, client=c, body=body))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def retire_environment_version(self, name: str, number: int) -> EnvironmentVersion:
+        """Retire a version: it refuses new runs; its images are kept. Needs the environment administrator role."""
+        op = Operation("POST", f"/registry/environments/{name}/versions/{number}/retire", replayable=True)
+        r, _ = await self._send(op, lambda c: retire_environment_version.asyncio_detailed(name, number, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def inspect_environment_version(self, name: str, number: int) -> EnvironmentVersion:
+        """Read a prebuilt version's image back again (what it installed and provides), in the background. Needs the
+        environment administrator role."""
+        op = Operation("POST", f"/registry/environments/{name}/versions/{number}/inspect", replayable=True)
+        r, _ = await self._send(op, lambda c: inspect_environment_version.asyncio_detailed(name, number, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
     async def simulator_images(self, simulator_id: int) -> ImageStatus:
         """Whether a simulator's image is built, with its image records and newest build run."""
         op = Operation("GET", f"/registry/simulators/{simulator_id}/images", replayable=True)
@@ -1357,6 +1515,7 @@ class AsyncComposeSession:
         batch: bool = False,
         tags: Sequence[str] = (),
         description: str | None = None,
+        environment_version: int | None = None,
     ) -> SimulationExperiment:
         op = Operation("POST", "/simulation/run", replayable=False)
         r, _ = await self._send(
@@ -1369,6 +1528,7 @@ class AsyncComposeSession:
                 simulator=simulator if simulator is not None else UNSET,
                 tags=list(tags) if tags else UNSET,
                 description=description if description is not None else UNSET,
+                environment_version=environment_version if environment_version is not None else UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -1498,8 +1658,10 @@ class AsyncComposeSession:
         tasks: Sequence[str] = (),
         tags: Sequence[str] = (),
         description: str | None = None,
+        environment_versions: Sequence[str] = (),
     ) -> SedmlRunResult:
-        """Run each task of a SED-ML archive once per solver; one comparison per task."""
+        """Run each task of a SED-ML archive once per solver; one comparison per task. ``environment_versions``:
+        ``environment@number`` or ``environment@default``; an environment not named runs at its default."""
         op = Operation("POST", "/sedml/run", replayable=False)
         r, _ = await self._send(
             op,
@@ -1510,6 +1672,7 @@ class AsyncComposeSession:
                 task=list(tasks) if tasks else UNSET,
                 tags=list(tags) if tags else UNSET,
                 description=description if description is not None else UNSET,
+                environment_version=list(environment_versions) if environment_versions else UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -1535,7 +1698,12 @@ class AsyncComposeSession:
         return r.content
 
     async def run_biomodel(
-        self, model_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()
+        self,
+        model_id: str,
+        *,
+        solvers: Sequence[str] = (),
+        tags: Sequence[str] = (),
+        environment_versions: Sequence[str] = (),
     ) -> SedmlRunResult:
         op = Operation("POST", f"/sources/biomodels/{model_id}/run", replayable=False)
         r, _ = await self._send(
@@ -1545,6 +1713,7 @@ class AsyncComposeSession:
                 client=c,
                 solvers=list(solvers) if solvers else UNSET,
                 tags=list(tags) if tags else UNSET,
+                environment_version=list(environment_versions) if environment_versions else UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -1578,7 +1747,12 @@ class AsyncComposeSession:
         return data
 
     async def run_biosimulations_project(
-        self, project_id: str, *, solvers: Sequence[str] = (), tags: Sequence[str] = ()
+        self,
+        project_id: str,
+        *,
+        solvers: Sequence[str] = (),
+        tags: Sequence[str] = (),
+        environment_versions: Sequence[str] = (),
     ) -> SedmlRunResult:
         op = Operation("POST", f"/sources/biosimulations/{project_id}/run", replayable=False)
         r, _ = await self._send(
@@ -1588,6 +1762,7 @@ class AsyncComposeSession:
                 client=c,
                 solvers=list(solvers) if solvers else UNSET,
                 tags=list(tags) if tags else UNSET,
+                environment_version=list(environment_versions) if environment_versions else UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -1610,10 +1785,13 @@ class AsyncComposeSession:
         r, _ = await self._send(op, lambda c: get_suite_run.asyncio_detailed(name, number, client=c))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
-    async def run_suite(self, name: str) -> SuiteRunInfo:
-        """Run every source of the suite (submitted in the background); the new run's number."""
+    async def run_suite(self, name: str, *, environment_versions: Sequence[str]) -> SuiteRunInfo:
+        """Run every source of the suite (submitted in the background) in the environment versions named:
+        ``environment@number``, ``environment@default``, or ``default`` (each at its default); the new run's number."""
         op = Operation("POST", f"/suites/{name}/run", replayable=False)
-        r, _ = await self._send(op, lambda c: run_suite.asyncio_detailed(name, client=c))
+        r, _ = await self._send(
+            op, lambda c: run_suite.asyncio_detailed(name, client=c, environment_version=list(environment_versions))
+        )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def comparisons(self, *, source: str | None = None, limit: int = 25, offset: int = 0) -> ComparisonPage:

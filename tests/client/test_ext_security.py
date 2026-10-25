@@ -641,11 +641,12 @@ SUBMISSIONS: list[tuple[str, str, tuple[Any, ...], dict[str, Any]]] = [
     ("sedml_run", "/sedml/run", (b"archive",), {}),
     ("run_biomodel", "/sources/biomodels/{model_id}/run", ("BIOMD1",), {}),
     ("run_biosimulations_project", "/sources/biosimulations/{project_id}/run", ("project",), {}),
-    ("run_suite", "/suites/{name}/run", ("suite",), {}),
+    ("run_suite", "/suites/{name}/run", ("suite",), {"environment_versions": ["default"]}),
     ("verify_comparison", "/comparisons/{comparison_id}/verify", (354,), {}),
     ("verify_suite_run", "/suites/{name}/runs/{number}/verify", ("suite", 1), {}),
     ("build_environment", "/registry/environments/{name}/build", ("environment",), {}),
     ("build_simulator", "/registry/simulators/{simulator_id}/build", (7,), {}),
+    ("create_environment_version", "/registry/environments/{name}/versions", ("environment",), {}),
 ]
 
 

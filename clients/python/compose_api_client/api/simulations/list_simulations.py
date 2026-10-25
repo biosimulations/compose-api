@@ -134,8 +134,8 @@ def sync_detailed(
             definitions with this hash prefix
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
         label (list[str] | None | Unset): Only simulations with this label, as key:value;
-            repeatable, all must match. Keys: source, environment, solver, model, project, sedml_task,
-            comparison, collection, suite_run
+            repeatable, all must match. Keys: source, environment, environment_version, solver, model,
+            project, sedml_task, comparison, collection, suite_run
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
@@ -184,8 +184,8 @@ def sync(
             definitions with this hash prefix
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
         label (list[str] | None | Unset): Only simulations with this label, as key:value;
-            repeatable, all must match. Keys: source, environment, solver, model, project, sedml_task,
-            comparison, collection, suite_run
+            repeatable, all must match. Keys: source, environment, environment_version, solver, model,
+            project, sedml_task, comparison, collection, suite_run
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
@@ -229,8 +229,8 @@ async def asyncio_detailed(
             definitions with this hash prefix
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
         label (list[str] | None | Unset): Only simulations with this label, as key:value;
-            repeatable, all must match. Keys: source, environment, solver, model, project, sedml_task,
-            comparison, collection, suite_run
+            repeatable, all must match. Keys: source, environment, environment_version, solver, model,
+            project, sedml_task, comparison, collection, suite_run
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
@@ -277,8 +277,8 @@ async def asyncio(
             definitions with this hash prefix
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
         label (list[str] | None | Unset): Only simulations with this label, as key:value;
-            repeatable, all must match. Keys: source, environment, solver, model, project, sedml_task,
-            comparison, collection, suite_run
+            repeatable, all must match. Keys: source, environment, environment_version, solver, model,
+            project, sedml_task, comparison, collection, suite_run
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.

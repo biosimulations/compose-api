@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: compose-api
-  version: 0.7.38
+  version: 0.7.41
 paths:
   /curated/copasi:
     post:
@@ -102,6 +102,11 @@ paths:
         the job then runs in that image instead of the shared container. Omitted:
         the shared container.
 
+        `environment_version` picks a version of that environment (docs/plan-environment-versions.md);
+        the run is labelled
+
+        `environment_version=<environment>@<number>` either way.
+
 
         The run is labelled `source=upload` and `environment=<simulator or registry_env>`;
         `tags` and `description` are
@@ -154,6 +159,21 @@ paths:
           description: What the run is for; up to 2000 characters
           title: Description
         description: What the run is for; up to 2000 characters
+      - name: environment_version
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            minimum: 1
+          - type: 'null'
+          description: 'The version of the environment to run in (registry_env@3 is
+            3, or of the prebuilt simulator named); omitted: its default. GET /registry/environments/{name}/versions
+            lists them'
+          title: Environment Version
+        description: 'The version of the environment to run in (registry_env@3 is
+          3, or of the prebuilt simulator named); omitted: its default. GET /registry/environments/{name}/versions
+          lists them'
       requestBody:
         required: true
         content:
@@ -242,12 +262,12 @@ paths:
               type: string
           - type: 'null'
           description: 'Only simulations with this label, as key:value; repeatable,
-            all must match. Keys: source, environment, solver, model, project, sedml_task,
-            comparison, collection, suite_run'
+            all must match. Keys: source, environment, environment_version, solver,
+            model, project, sedml_task, comparison, collection, suite_run'
           title: Label
         description: 'Only simulations with this label, as key:value; repeatable,
-          all must match. Keys: source, environment, solver, model, project, sedml_task,
-          comparison, collection, suite_run'
+          all must match. Keys: source, environment, environment_version, solver,
+          model, project, sedml_task, comparison, collection, suite_run'
       - name: tag
         in: query
         required: false
@@ -1051,6 +1071,277 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /registry/environments/{name}/versions:
+    get:
+      tags:
+      - Registry
+      summary: An environment's versions, newest first, and its default
+      operationId: list-environment-versions
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvironmentVersions'
+        '404':
+          description: No such environment, or no such version
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Registry
+      summary: 'Make a new version: a shared environment''s spec resolved at a date,
+        or a prebuilt one''s image by digest'
+      description: "The new version is `building` until its image is built or pulled,\
+        \ then `ready` (or `failed`). It does not\nbecome the default: runs get it\
+        \ once an administrator makes it so (`PUT \u2026/default`)."
+      operationId: create-environment-version
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewEnvironmentVersion'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvironmentVersion'
+        '200':
+          description: 'A version with this very definition exists: that one'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvironmentVersion'
+        '404':
+          description: No such environment, or no such version
+        '401':
+          description: Not signed in
+        '403':
+          description: Not an environment administrator, or environment administration
+            is not configured
+        '422':
+          description: The request cannot make a version of this environment
+  /registry/environments/{name}/versions/{number}:
+    get:
+      tags:
+      - Registry
+      summary: 'One version of an environment: what it was made from, its lock, and
+        what it installed and provides'
+      operationId: get-environment-version
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Number
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvironmentVersionDetail'
+        '404':
+          description: No such environment, or no such version
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /registry/environments/{name}/versions/preview:
+    post:
+      tags:
+      - Registry
+      summary: 'Resolve a shared environment''s spec without creating anything: the
+        lock, and its changes from the default'
+      operationId: preview-environment-version
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewEnvironmentVersion'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LockPreview'
+        '404':
+          description: No such environment, or no such version
+        '401':
+          description: Not signed in
+        '403':
+          description: Not an environment administrator, or environment administration
+            is not configured
+        '422':
+          description: The spec does not resolve, or is not a lock's
+  /registry/environments/{name}/versions/{number}/inspect:
+    post:
+      tags:
+      - Registry
+      summary: Read again what a prebuilt version's image installed and provides,
+        in a Job that runs the image
+      description: "Started in the background; `GET \u2026/versions/{number}` shows\
+        \ the result. A shared version's image is read back\nby its own build."
+      operationId: inspect-environment-version
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Number
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvironmentVersion'
+        '404':
+          description: No such environment, or no such version
+        '401':
+          description: Not signed in
+        '403':
+          description: Not an environment administrator, or environment administration
+            is not configured
+        '409':
+          description: A shared version (its build reads it back), or no Kubernetes
+            to run the Job on
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /registry/environments/{name}/default:
+    put:
+      tags:
+      - Registry
+      summary: Make a ready version the one runs get when they name none
+      operationId: set-environment-default
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DefaultVersion'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvironmentVersion'
+        '404':
+          description: No such environment, or no such version
+        '401':
+          description: Not signed in
+        '403':
+          description: Not an environment administrator, or environment administration
+            is not configured
+        '409':
+          description: The version is not ready
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /registry/environments/{name}/versions/{number}/retire:
+    post:
+      tags:
+      - Registry
+      summary: 'Retire a version: it refuses new runs, and its images are kept for
+        the runs that used it'
+      operationId: retire-environment-version
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Number
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvironmentVersion'
+        '404':
+          description: No such environment, or no such version
+        '401':
+          description: Not signed in
+        '403':
+          description: Not an environment administrator, or environment administration
+            is not configured
+        '409':
+          description: It is the default; make another the default first
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /registry/simulators/{simulator_id}/images:
     get:
       tags:
@@ -1230,6 +1521,22 @@ paths:
           minimum: 0
           default: 1.0e-05
           title: Abs Tol Scale
+      - name: environment_version
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: 'Environment versions to run in: environment@number (registry_env@2)
+            or environment@default, repeatable; an environment not named runs at its
+            default'
+          title: Environment Version
+        description: 'Environment versions to run in: environment@number (registry_env@2)
+          or environment@default, repeatable; an environment not named runs at its
+          default'
       requestBody:
         required: true
         content:
@@ -1600,6 +1907,22 @@ paths:
           - type: string
           - type: 'null'
           title: Description
+      - name: environment_version
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: 'Environment versions to run in: environment@number (registry_env@2)
+            or environment@default, repeatable; an environment not named runs at its
+            default'
+          title: Environment Version
+        description: 'Environment versions to run in: environment@number (registry_env@2)
+          or environment@default, repeatable; an environment not named runs at its
+          default'
       responses:
         '200':
           description: Successful Response
@@ -1811,6 +2134,22 @@ paths:
           - type: string
           - type: 'null'
           title: Description
+      - name: environment_version
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+          - type: 'null'
+          description: 'Environment versions to run in: environment@number (registry_env@2)
+            or environment@default, repeatable; an environment not named runs at its
+            default'
+          title: Environment Version
+        description: 'Environment versions to run in: environment@number (registry_env@2)
+          or environment@default, repeatable; an environment not named runs at its
+          default'
       responses:
         '200':
           description: Successful Response
@@ -1914,7 +2253,13 @@ paths:
     post:
       tags:
       - Suites
-      summary: Run every source of the suite on its solvers (submitted in the background)
+      summary: Run every source of the suite on its solvers, in the environment versions
+        named (in the background)
+      description: 'Every environment the suite''s solvers use must be named (docs/plan-environment-versions.md,
+        step 5): a suite
+
+        run records exactly what it ran in, and is independent of the service release
+        that started it.'
       operationId: run-suite
       parameters:
       - name: name
@@ -1923,6 +2268,21 @@ paths:
         schema:
           type: string
           title: Name
+      - name: environment_version
+        in: query
+        required: true
+        schema:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          description: 'The environment versions the suite runs in, required: environment@number
+            (registry_env@2), environment@default, or default (every environment at
+            its default). Stored with the run as numbers'
+          title: Environment Version
+        description: 'The environment versions the suite runs in, required: environment@number
+          (registry_env@2), environment@default, or default (every environment at
+          its default). Stored with the run as numbers'
       responses:
         '200':
           description: Successful Response
@@ -1930,6 +2290,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuiteRunInfo'
+        '400':
+          description: A version not named, malformed, or that runs cannot use
         '404':
           description: No such suite
         '422':
@@ -2569,6 +2931,15 @@ components:
       - datasets
       - total
       title: DatasetPage
+    DefaultVersion:
+      properties:
+        number:
+          type: integer
+          title: Number
+      type: object
+      required:
+      - number
+      title: DefaultVersion
     Drift:
       properties:
         close:
@@ -2762,6 +3133,211 @@ components:
       - errors
       - entries
       title: EnvironmentSummary
+    EnvironmentVersion:
+      properties:
+        database_id:
+          type: integer
+          title: Database Id
+        environment:
+          type: string
+          title: Environment
+        number:
+          type: integer
+          title: Number
+        state:
+          $ref: '#/components/schemas/VersionState'
+        simulator_id:
+          type: integer
+          title: Simulator Id
+        image:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Image
+          description: A prebuilt version's image, by digest
+        spec:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Spec
+          description: What a shared version was made from
+        origin:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Origin
+          description: registry, or custom for libraries no review has seen
+        resolved_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Resolved At
+        lock_sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Lock Sha256
+        runtime_contract:
+          type: integer
+          title: Runtime Contract
+          default: 1
+        created_by:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created By
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+      type: object
+      required:
+      - database_id
+      - environment
+      - number
+      - state
+      - simulator_id
+      title: EnvironmentVersion
+      description: 'One version of an environment: its simulator (definition, hash,
+        images) and what it was made from
+
+        (docs/plan-environment-versions.md, V1).'
+    EnvironmentVersionDetail:
+      properties:
+        database_id:
+          type: integer
+          title: Database Id
+        environment:
+          type: string
+          title: Environment
+        number:
+          type: integer
+          title: Number
+        state:
+          $ref: '#/components/schemas/VersionState'
+        simulator_id:
+          type: integer
+          title: Simulator Id
+        image:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Image
+          description: A prebuilt version's image, by digest
+        spec:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Spec
+          description: What a shared version was made from
+        origin:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Origin
+          description: registry, or custom for libraries no review has seen
+        resolved_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Resolved At
+        lock_sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Lock Sha256
+        runtime_contract:
+          type: integer
+          title: Runtime Contract
+          default: 1
+        created_by:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created By
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+        lock:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Lock
+          description: 'A shared version''s lock: every PyPI package, pinned'
+        installed:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Installed
+          description: What its image installed, read from the image
+        interfaces:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Interfaces
+          description: Its process interfaces (pbg-interfaces/1)
+      type: object
+      required:
+      - database_id
+      - environment
+      - number
+      - state
+      - simulator_id
+      title: EnvironmentVersionDetail
+      description: A version with what it was resolved to and, once built, what it
+        installed and provides.
+    EnvironmentVersions:
+      properties:
+        environment:
+          type: string
+          title: Environment
+        kind:
+          type: string
+          title: Kind
+        default:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Default
+          description: The default version's number
+        default_source:
+          type: string
+          title: Default Source
+          description: 'deployment: the deployment''s own definition is the default;
+            api: an administrator chose it'
+          default: deployment
+        versions:
+          items:
+            $ref: '#/components/schemas/EnvironmentVersion'
+          type: array
+          title: Versions
+      type: object
+      required:
+      - environment
+      - kind
+      title: EnvironmentVersions
+      description: An environment's versions, newest first, and which one a run that
+        names none gets.
     ExpectedFailure:
       properties:
         source:
@@ -3036,6 +3612,104 @@ components:
       - simulation
       - build_container
       title: JobType
+    LockPreview:
+      properties:
+        environment:
+          type: string
+          title: Environment
+        resolved_at:
+          type: string
+          format: date-time
+          title: Resolved At
+        origin:
+          type: string
+          title: Origin
+        lock_sha256:
+          type: string
+          title: Lock Sha256
+        lock:
+          type: string
+          title: Lock
+        existing:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Existing
+          description: The number of a version with this very lock, if any
+        against:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Against
+          description: The default version compared with, if it has a lock
+        changes:
+          items:
+            $ref: '#/components/schemas/PackageChange'
+          type: array
+          title: Changes
+      type: object
+      required:
+      - environment
+      - resolved_at
+      - origin
+      - lock_sha256
+      - lock
+      title: LockPreview
+      description: 'What a shared version would be: its lock, and how it differs from
+        the default version''s.'
+    NewEnvironmentVersion:
+      properties:
+        resolved_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Resolved At
+        libraries:
+          anyOf:
+          - items:
+              additionalProperties:
+                type: string
+              type: object
+            type: array
+          - type: 'null'
+          title: Libraries
+        image:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Image
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+      type: object
+      title: NewEnvironmentVersion
+      description: 'What to make a version from. A shared environment: a date to resolve
+        its spec at (default now), and optionally
+
+        a library list other than the registry''s (an unreviewed, `custom` version).
+        A prebuilt one: its image by digest.'
+    PackageChange:
+      properties:
+        name:
+          type: string
+          title: Name
+        before:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Before
+        after:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: After
+      type: object
+      required:
+      - name
+      title: PackageChange
     PackageType:
       type: string
       enum:
@@ -3871,6 +4545,13 @@ components:
         status:
           type: string
           title: Status
+        environment_versions:
+          additionalProperties:
+            type: integer
+          type: object
+          title: Environment Versions
+          description: 'The environment versions its runs use, {environment: number};
+            empty for runs started before suites named them (theirs got the default)'
       type: object
       required:
       - number
@@ -3979,6 +4660,12 @@ components:
             type: integer
           type: object
           title: Summary
+        environment_versions:
+          additionalProperties:
+            type: integer
+          type: object
+          title: Environment Versions
+          description: 'The environment versions its runs use, {environment: number}'
       type: object
       required:
       - suite
@@ -4166,6 +4853,16 @@ components:
       title: VerifyRequest
       description: Which BioSimulators simulators to verify a comparison with (docs/plan-verify-oracle.md,
         V4).
+    VersionState:
+      type: string
+      enum:
+      - resolving
+      - building
+      - ready
+      - failed
+      - retired
+      title: VersionState
+      description: An environment version's state (docs/plan-environment-versions.md).
     Visibility:
       type: string
       enum:
