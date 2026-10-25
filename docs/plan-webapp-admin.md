@@ -1,6 +1,6 @@
 # Web UI: sign-in switched on, and the administrative tasks brought into it
 
-**Status (2026-10-25): proposed.** It continues [plan-webapp-login](plan-webapp-login.md), whose work is done apart
+**Status (2026-10-25): decisions confirmed; steps 1 and 2 under way.** It continues [plan-webapp-login](plan-webapp-login.md), whose work is done apart
 from switching it on (W2, #359), and step 5b of [plan-environment-versions](plan-environment-versions.md), the
 webapp's environment version pages. One PR per step, each merged with a merge commit. Steps that change
 `kustomize/` deploy on merge; the others reach production with a release.
@@ -41,7 +41,7 @@ webapp's environment version pages. One PR per step, each merged with a merge co
    - The preview diffs a proposed lock against the default.
    - `GET …/versions/{n}` returns one version's lock and installed packages, with no way to compare it to another.
 
-## Decisions (proposed; to confirm)
+## Decisions (Jim, 2026-10-25: A1–A5 confirmed)
 
 - **A1. The API says what the caller may do; the webapp only displays it.**
   - `GET /auth/me` gains `capabilities`, a list of names such as `environments:admin` and `simulations:read-all`.
