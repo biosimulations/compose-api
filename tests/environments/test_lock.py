@@ -11,7 +11,7 @@ from pbest.containerization.container_constructor import generate_container_def_
 from pbest.utils.input_types import ContainerizationEngine
 
 from compose_api.environments.definition import ENV_PATH, shared_definition
-from compose_api.environments.lock import Lock, LockError, SharedSpec, compile_lock, exclude_newer
+from compose_api.environments.lock import Lock, LockError, SharedSpec, changes, compile_lock, exclude_newer, pins
 from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.simulator_registry import registry_dependencies, registry_libraries
 
@@ -83,3 +83,14 @@ def test_the_definitions_hash_follows_the_lock() -> None:
 def test_a_shared_definition_needs_the_pbest_runtime() -> None:
     with pytest.raises(ValueError, match="pbest"):
         shared_definition(SIX, Lock(text="six==1.10.0\n", resolved_at=BEFORE_SIX_1_11))
+
+
+def test_a_locks_packages_are_read_by_normalized_name_and_compared() -> None:
+    old = "Pb_Multiscale.Actin==1.3.1\n    # via -r spec.in\nnumpy==2.4.0\npbest @ git+https://x/pbest@a\n"
+    new = "pb-multiscale-actin==1.3.1\nnumpy==2.5.4\npbest @ git+https://x/pbest@b\nlibvcell==0.0.24\n"
+    assert pins(old) == {"pb-multiscale-actin": "1.3.1", "numpy": "2.4.0", "pbest": "git+https://x/pbest@a"}
+    assert changes(old, new) == [
+        ("libvcell", None, "0.0.24"),
+        ("numpy", "2.4.0", "2.5.4"),
+        ("pbest", "git+https://x/pbest@a", "git+https://x/pbest@b"),
+    ]

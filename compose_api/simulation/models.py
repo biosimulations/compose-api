@@ -236,6 +236,60 @@ class EnvironmentVersion(BaseModel):
         return f"{self.environment}@{self.number}"
 
 
+class EnvironmentVersionDetail(EnvironmentVersion):
+    """A version with what it was resolved to and, once built, what it installed and provides."""
+
+    lock: str | None = Field(default=None, description="A shared version's lock: every PyPI package, pinned")
+    installed: str | None = Field(default=None, description="What its image installed, read from the image")
+    interfaces: dict[str, Any] | None = Field(default=None, description="Its process interfaces (pbg-interfaces/1)")
+
+
+class EnvironmentVersions(BaseModel):
+    """An environment's versions, newest first, and which one a run that names none gets."""
+
+    environment: str
+    kind: str
+    default: int | None = Field(default=None, description="The default version's number")
+    default_source: str = Field(
+        default="deployment",
+        description="deployment: the deployment's own definition is the default; api: an administrator chose it",
+    )
+    versions: list[EnvironmentVersion] = Field(default_factory=list)
+
+
+class NewEnvironmentVersion(BaseModel):
+    """What to make a version from. A shared environment: a date to resolve its spec at (default now), and optionally
+    a library list other than the registry's (an unreviewed, `custom` version). A prebuilt one: its image by digest."""
+
+    resolved_at: datetime.datetime | None = None
+    libraries: list[dict[str, str]] | None = None
+    image: str | None = None
+    note: str | None = None
+
+
+class PackageChange(BaseModel):
+    name: str
+    before: str | None = None
+    after: str | None = None
+
+
+class LockPreview(BaseModel):
+    """What a shared version would be: its lock, and how it differs from the default version's."""
+
+    environment: str
+    resolved_at: datetime.datetime
+    origin: str
+    lock_sha256: str
+    lock: str
+    existing: int | None = Field(default=None, description="The number of a version with this very lock, if any")
+    against: int | None = Field(default=None, description="The default version compared with, if it has a lock")
+    changes: list[PackageChange] = Field(default_factory=list)
+
+
+class DefaultVersion(BaseModel):
+    number: int
+
+
 class RegisteredSimulators(BaseModel):
     versions: list[SimulatorVersion]
     timestamp: datetime.datetime | None = Field(default_factory=datetime.datetime.now)

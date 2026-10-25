@@ -40,8 +40,8 @@ def deployed_definition(simulator: str | None) -> tuple[ContainerizationFileRepr
 async def version_for(
     database_service: "DatabaseService", simulator: str | None
 ) -> tuple[EnvironmentVersion, SimulatorVersion]:
-    """The version a run of ``simulator`` uses (None: the shared environment), and its simulator row, both created
-    the first time the deployment's definition is seen."""
+    """The version a run of ``simulator`` uses (None: the shared environment), and its simulator row: the default an
+    administrator chose, or else the deployment's own definition, both created the first time it is seen."""
     definition, image = deployed_definition(simulator)
     simulator_db = database_service.get_simulator_db()
     found = await simulator_db.get_simulator_by_def_hash(get_singularity_hash(definition))
@@ -59,4 +59,9 @@ async def version_for(
         version = await environments_db.adopt_deployed(
             simulator, "prebuilt", simulator_version.database_id, image=image
         )
+    if version.simulator_id != simulator_version.database_id:  # an administrator chose another version
+        chosen = await simulator_db.get_simulator(version.simulator_id)
+        if chosen is None:
+            raise LookupError(f"{version.label}'s simulator {version.simulator_id} is gone")
+        simulator_version = chosen
     return version, simulator_version

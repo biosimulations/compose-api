@@ -13,7 +13,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from compose_api.db.db_utils import DeclarativeTableBase
-from compose_api.simulation.models import EnvironmentVersion, VersionState
+from compose_api.simulation.models import EnvironmentVersion, EnvironmentVersionDetail, VersionState
 
 
 class ORMEnvironment(DeclarativeTableBase):
@@ -25,6 +25,8 @@ class ORMEnvironment(DeclarativeTableBase):
     default_version_id: Mapped[int | None] = mapped_column(
         ForeignKey("environment_version.id", use_alter=True, ondelete="SET NULL"), nullable=True
     )
+    # deployment: the deployment's own definition is adopted as the default (step 2); api: an administrator chose it
+    default_source: Mapped[str] = mapped_column(String(16), nullable=False, server_default="deployment")
     created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
 
 
@@ -72,4 +74,12 @@ class ORMEnvironmentVersion(DeclarativeTableBase):
             created_by=self.created_by,
             created_at=self.created_at,
             note=self.note,
+        )
+
+    def to_environment_version_detail(self) -> EnvironmentVersionDetail:
+        return EnvironmentVersionDetail(
+            **self.to_environment_version().model_dump(),
+            lock=self.lock,
+            installed=self.installed,
+            interfaces=self.interfaces,
         )

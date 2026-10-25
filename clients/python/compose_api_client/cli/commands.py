@@ -39,6 +39,7 @@ from compose_api_client.cli.render import (
     err,
     event_line,
     lines,
+    plain,
     printable,
     printable_lines,
     resolve,
@@ -743,6 +744,116 @@ def environments_build(
     settings = _settings(ctx)
     with make_session(settings) as s:
         _emit_image_status(settings, s.build_environment(name))
+
+
+_VERSION_COLUMNS = ["number", "state", "origin", "resolved_at", "image", "lock_sha256", "created_by", "note"]
+_ENV_ARG = Annotated[str, typer.Argument(help="The environment, e.g. registry_env.")]
+_NUMBER_ARG = Annotated[int, typer.Argument(help="The version's number (registry_env@3 is 3).")]
+
+
+def _version_row(v: Any) -> dict[str, Any]:
+    row = {c: plain(getattr(v, c, None)) for c in _VERSION_COLUMNS}
+    row["lock_sha256"] = (row["lock_sha256"] or "")[:12] or None
+    return row
+
+
+@environments_app.command("versions")
+@claims("environments versions", "list-environment-versions")
+@handled
+def environments_versions(ctx: typer.Context, name: _ENV_ARG) -> None:
+    """An environment's versions, newest first, and the default a run that names none gets."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        listed = s.environment_versions(name)
+    if resolve(settings.output) is Output.JSON:
+        emit(settings.output, listed)
+        return
+    print(f"{listed.environment} ({listed.kind}): default @{listed.default} (chosen by {listed.default_source})")
+    versions = listed.versions if isinstance(listed.versions, list) else []
+    emit(settings.output, [_version_row(v) for v in versions], _VERSION_COLUMNS)
+
+
+@environments_app.command("version")
+@claims("environments version", "get-environment-version")
+@handled
+def environments_version(ctx: typer.Context, name: _ENV_ARG, number: _NUMBER_ARG) -> None:
+    """One version: what it was made from, its lock, and what it installed and provides."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.environment_version(name, number))
+
+
+@environments_app.command("preview")
+@claims("environments preview", "preview-environment-version")
+@handled
+def environments_preview(
+    ctx: typer.Context,
+    name: _ENV_ARG,
+    resolved_at: Annotated[
+        datetime.datetime | None, typer.Option(help="Resolve with nothing newer than this (UTC); default now.")
+    ] = None,
+) -> None:
+    """Resolve a shared environment's spec now (or at --resolved-at) and show how its lock differs from the default
+    version's. Creates nothing. Needs the environment administrator role."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        preview = s.preview_environment_version(name, resolved_at=resolved_at)
+    if resolve(settings.output) is Output.JSON:
+        emit(settings.output, preview)
+        return
+    same = f"; the same lock as @{preview.existing}" if preview.existing else ""
+    print(f"{preview.environment} resolved at {preview.resolved_at}: lock {preview.lock_sha256[:12]}{same}")
+    if preview.against is None:
+        print("the default version has no lock to compare with")
+        return
+    rows = [
+        {"package": c.name, "@" + str(preview.against): c.before, "new": c.after}
+        for c in (preview.changes if isinstance(preview.changes, list) else [])
+    ]
+    if rows:
+        emit(settings.output, rows, ["package", "@" + str(preview.against), "new"])
+    else:
+        print("no changes")
+
+
+@environments_app.command("create")
+@claims("environments create", "create-environment-version")
+@handled
+def environments_create(
+    ctx: typer.Context,
+    name: _ENV_ARG,
+    resolved_at: Annotated[
+        datetime.datetime | None, typer.Option(help="A shared environment: resolve as of this time (UTC); default now.")
+    ] = None,
+    image: Annotated[str | None, typer.Option(help="A prebuilt environment: its image, by digest.")] = None,
+    note: Annotated[str | None, typer.Option(help="Why this version exists.")] = None,
+) -> None:
+    """Make a new version (or answer the existing one with the same definition). Its image builds in the background
+    (`environments versions` shows it ready); it does not become the default. Needs the environment administrator
+    role."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.create_environment_version(name, resolved_at=resolved_at, image=image, note=note))
+
+
+@environments_app.command("default")
+@claims("environments default", "set-environment-default")
+@handled
+def environments_default(ctx: typer.Context, name: _ENV_ARG, number: _NUMBER_ARG) -> None:
+    """Make a ready version the one runs get when they name none. Needs the environment administrator role."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.set_environment_default(name, number))
+
+
+@environments_app.command("retire")
+@claims("environments retire", "retire-environment-version")
+@handled
+def environments_retire(ctx: typer.Context, name: _ENV_ARG, number: _NUMBER_ARG) -> None:
+    """Retire a version: it refuses new runs; its images are kept. Needs the environment administrator role."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.retire_environment_version(name, number))
 
 
 @simulators_app.command("images")

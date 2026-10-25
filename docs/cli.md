@@ -954,6 +954,12 @@ $ compose-api environments [OPTIONS] COMMAND [ARGS]...
 * `headers`: An environment's interfaces as .pblang...
 * `images`: Whether an environment's current image is...
 * `build`: Make an environment's current image...
+* `versions`: An environment's versions, newest first,...
+* `version`: One version: what it was made from, its...
+* `preview`: Resolve a shared environment's spec now...
+* `create`: Make a new version (or answer the existing...
+* `default`: Make a ready version the one runs get when...
+* `retire`: Retire a version: it refuses new runs; its...
 
 ### `compose-api environments list`
 
@@ -1048,6 +1054,130 @@ $ compose-api environments build [OPTIONS] NAME
 **Arguments**:
 
 * `NAME`: The environment, e.g. registry_env.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments versions`
+
+An environment's versions, newest first, and the default a run that names none gets.
+
+**Usage**:
+
+```console
+$ compose-api environments versions [OPTIONS] NAME
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments version`
+
+One version: what it was made from, its lock, and what it installed and provides.
+
+**Usage**:
+
+```console
+$ compose-api environments version [OPTIONS] NAME NUMBER
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+* `NUMBER`: The version's number (registry_env@3 is 3).  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments preview`
+
+Resolve a shared environment's spec now (or at --resolved-at) and show how its lock differs from the default
+version's. Creates nothing. Needs the environment administrator role.
+
+**Usage**:
+
+```console
+$ compose-api environments preview [OPTIONS] NAME
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+
+**Options**:
+
+* `--resolved-at [%Y-%m-%d|%Y-%m-%dT%H:%M:%S|%Y-%m-%d %H:%M:%S]`: Resolve with nothing newer than this (UTC); default now.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments create`
+
+Make a new version (or answer the existing one with the same definition). Its image builds in the background
+(`environments versions` shows it ready); it does not become the default. Needs the environment administrator
+role.
+
+**Usage**:
+
+```console
+$ compose-api environments create [OPTIONS] NAME
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+
+**Options**:
+
+* `--resolved-at [%Y-%m-%d|%Y-%m-%dT%H:%M:%S|%Y-%m-%d %H:%M:%S]`: A shared environment: resolve as of this time (UTC); default now.
+* `--image TEXT`: A prebuilt environment: its image, by digest.
+* `--note TEXT`: Why this version exists.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments default`
+
+Make a ready version the one runs get when they name none. Needs the environment administrator role.
+
+**Usage**:
+
+```console
+$ compose-api environments default [OPTIONS] NAME NUMBER
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+* `NUMBER`: The version's number (registry_env@3 is 3).  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments retire`
+
+Retire a version: it refuses new runs; its images are kept. Needs the environment administrator role.
+
+**Usage**:
+
+```console
+$ compose-api environments retire [OPTIONS] NAME NUMBER
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+* `NUMBER`: The version's number (registry_env@3 is 3).  [required]
 
 **Options**:
 
