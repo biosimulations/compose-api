@@ -33,6 +33,7 @@ class ClaimedSuiteRun:
     number: int
     sources: list[str]
     next_source: int
+    environment_versions: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -66,7 +67,9 @@ class ComparisonsDatabaseService(ABC):
         """A new comparison, `running`, with no members; its id."""
 
     @abstractmethod
-    async def new_suite_run(self, collection: str, sources: list[str] | None = None) -> tuple[int, int]:
+    async def new_suite_run(
+        self, collection: str, sources: list[str] | None = None, environment_versions: dict[str, int] | None = None
+    ) -> tuple[int, int]:
         """The suite's next run (its number one more than the last), `submitting` its ``sources``: its id and
         number."""
 
@@ -183,12 +186,19 @@ class ComparisonsORMExecutor(ComparisonsDatabaseService):
             return row.id
 
     @override
-    async def new_suite_run(self, collection: str, sources: list[str] | None = None) -> tuple[int, int]:
+    async def new_suite_run(
+        self, collection: str, sources: list[str] | None = None, environment_versions: dict[str, int] | None = None
+    ) -> tuple[int, int]:
         async with self.session_maker() as session, session.begin():
             last = (
                 await session.execute(select(func.max(ORMSuiteRun.number)).where(ORMSuiteRun.collection == collection))
             ).scalar_one()
-            run = ORMSuiteRun(collection=collection, number=(last or 0) + 1, sources=list(sources or []))
+            run = ORMSuiteRun(
+                collection=collection,
+                number=(last or 0) + 1,
+                sources=list(sources or []),
+                environment_versions=dict(environment_versions or {}),
+            )
             session.add(run)
             await session.flush()
             return run.id, run.number
@@ -217,7 +227,14 @@ class ComparisonsORMExecutor(ComparisonsDatabaseService):
             )
             rows = await session.execute(select(ORMSuiteRun).where(ORMSuiteRun.id.in_(ids)).order_by(ORMSuiteRun.id))
             return [
-                ClaimedSuiteRun(r.id, r.collection, r.number, list(r.sources or []), r.next_source)
+                ClaimedSuiteRun(
+                    r.id,
+                    r.collection,
+                    r.number,
+                    list(r.sources or []),
+                    r.next_source,
+                    dict(r.environment_versions or {}),
+                )
                 for r in rows.scalars()
             ]
 

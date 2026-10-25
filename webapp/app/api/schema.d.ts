@@ -51,6 +51,8 @@ export interface paths {
          * Run a simulation
          * @description `simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);
          *     the job then runs in that image instead of the shared container. Omitted: the shared container.
+         *     `environment_version` picks a version of that environment (docs/plan-environment-versions.md); the run is labelled
+         *     `environment_version=<environment>@<number>` either way.
          *
          *     The run is labelled `source=upload` and `environment=<simulator or registry_env>`; `tags` and `description` are
          *     stored with it as given (compose_api/simulation/labels.py) and filter `GET /simulations`.
@@ -966,7 +968,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Run every source of the suite on its solvers (submitted in the background) */
+        /**
+         * Run every source of the suite on its solvers, in the environment versions named (in the background)
+         * @description Every environment the suite's solvers use must be named (docs/plan-environment-versions.md, step 5): a suite
+         *     run records exactly what it ran in, and is independent of the service release that started it.
+         */
         post: operations["run-suite"];
         delete?: never;
         options?: never;
@@ -2241,6 +2247,13 @@ export interface components {
             created_at: string | null;
             /** Status */
             status: string;
+            /**
+             * Environment Versions
+             * @description The environment versions its runs use, {environment: number}; empty for runs started before suites named them (theirs got the default)
+             */
+            environment_versions?: {
+                [key: string]: number;
+            };
         };
         /** SuiteRunRow */
         SuiteRunRow: {
@@ -2289,6 +2302,13 @@ export interface components {
             rows: components["schemas"]["SuiteRunRow"][];
             /** Summary */
             summary: {
+                [key: string]: number;
+            };
+            /**
+             * Environment Versions
+             * @description The environment versions its runs use, {environment: number}
+             */
+            environment_versions?: {
                 [key: string]: number;
             };
         };
@@ -2515,6 +2535,8 @@ export interface operations {
                 tags?: string[] | null;
                 /** @description What the run is for; up to 2000 characters */
                 description?: string | null;
+                /** @description The version of the environment to run in (registry_env@3 is 3, or of the prebuilt simulator named); omitted: its default. GET /registry/environments/{name}/versions lists them */
+                environment_version?: number | null;
             };
             header?: never;
             path?: never;
@@ -2562,7 +2584,7 @@ export interface operations {
                 simulator?: string | null;
                 /** @description Only simulations created at or after this time */
                 since?: string | null;
-                /** @description Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, solver, model, project, sedml_task, comparison, collection, suite_run */
+                /** @description Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, environment_version, solver, model, project, sedml_task, comparison, collection, suite_run */
                 label?: string[] | null;
                 /** @description Only simulations with this tag; repeatable, all must match */
                 tag?: string[] | null;
@@ -3970,6 +3992,8 @@ export interface operations {
                 rel_tol?: number;
                 abs_tol_min?: number;
                 abs_tol_scale?: number;
+                /** @description Environment versions to run in: environment@number (registry_env@2) or environment@default, repeatable; an environment not named runs at its default */
+                environment_version?: string[] | null;
             };
             header?: never;
             path?: never;
@@ -4347,6 +4371,8 @@ export interface operations {
                 /** @description Tags for every run */
                 tags?: string[] | null;
                 description?: string | null;
+                /** @description Environment versions to run in: environment@number (registry_env@2) or environment@default, repeatable; an environment not named runs at its default */
+                environment_version?: string[] | null;
             };
             header?: never;
             path: {
@@ -4576,6 +4602,8 @@ export interface operations {
                 /** @description Tags for every run */
                 tags?: string[] | null;
                 description?: string | null;
+                /** @description Environment versions to run in: environment@number (registry_env@2) or environment@default, repeatable; an environment not named runs at its default */
+                environment_version?: string[] | null;
             };
             header?: never;
             path: {
@@ -4718,7 +4746,10 @@ export interface operations {
     };
     "run-suite": {
         parameters: {
-            query?: never;
+            query: {
+                /** @description The environment versions the suite runs in, required: environment@number (registry_env@2), environment@default, or default (every environment at its default). Stored with the run as numbers */
+                environment_version: string[];
+            };
             header?: never;
             path: {
                 name: string;
@@ -4735,6 +4766,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SuiteRunInfo"];
                 };
+            };
+            /** @description A version not named, malformed, or that runs cannot use */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description No such suite */
             404: {

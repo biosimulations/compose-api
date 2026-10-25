@@ -10,8 +10,10 @@ from compose_api.config import get_settings
 from compose_api.dependencies import (
     get_database_service,
     get_job_monitor,
+    get_required_database_service,
     get_simulation_service,
 )
+from compose_api.environments.versions import VersionUnavailableError, chosen_version, environment_of
 from compose_api.registry.manifest import SERVICE_BUNDLE
 from compose_api.registry.validation import AddressPolicy, SubmissionRejectedError, validate_submission
 from compose_api.simulation.handlers import (
@@ -85,20 +87,36 @@ async def submit_simulation(
     description: Annotated[
         str | None, Query(description=f"What the run is for; up to {MAX_DESCRIPTION} characters")
     ] = None,
+    environment_version: Annotated[
+        int | None,
+        Query(
+            ge=1,
+            description="The version of the environment to run in (registry_env@3 is 3, or of the prebuilt simulator"
+            " named); omitted: its default. GET /registry/environments/{name}/versions lists them",
+        ),
+    ] = None,
 ) -> SimulationExperiment:
     """`simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);
     the job then runs in that image instead of the shared container. Omitted: the shared container.
+    `environment_version` picks a version of that environment (docs/plan-environment-versions.md); the run is labelled
+    `environment_version=<environment>@<number>` either way.
 
     The run is labelled `source=upload` and `environment=<simulator or registry_env>`; `tags` and `description` are
     stored with it as given (compose_api/simulation/labels.py) and filter `GET /simulations`."""
     logger.info("Simulation submission from %s", describe_caller(principal))
     run_tags, run_description = _checked_options(simulator, interval_time, tags, description)
+    if environment_version is not None:
+        try:
+            await chosen_version(get_required_database_service(), environment_of(simulator), environment_version)
+        except VersionUnavailableError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
     simulation_request = await get_simulation_request_from_uploaded_file(
         uploaded_file=uploaded_file, batch_submission=batch_submission
     )
     simulation_request.end_time_point = interval_time
     simulation_request.simulator = simulator
+    simulation_request.environment_version = environment_version
     simulation_request.labels = labels(source="upload", environment=simulator or SERVICE_BUNDLE)
     simulation_request.tags = run_tags
     simulation_request.description = run_description

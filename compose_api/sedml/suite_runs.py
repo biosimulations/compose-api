@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 from fastapi import BackgroundTasks
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from compose_api.db.services.comparisons_db import ClaimedSuiteRun
 from compose_api.dependencies import get_required_database_service
@@ -49,12 +49,20 @@ class SuiteRunView(BaseModel):
     baseline: int | None
     rows: list[SuiteRunRow]
     summary: dict[str, int]
+    environment_versions: dict[str, int] = Field(
+        default_factory=dict, description="The environment versions its runs use, {environment: number}"
+    )
 
 
 class SuiteRunInfo(BaseModel):
     number: int
     created_at: str | None
     status: str
+    environment_versions: dict[str, int] = Field(
+        default_factory=dict,
+        description="The environment versions its runs use, {environment: number}; empty for runs started before"
+        " suites named them (theirs got the default)",
+    )
 
 
 #: Where a suite's runs wait, and how far behind interactive ones (docs/plan-durable-submission.md, Q3).
@@ -65,12 +73,23 @@ def suite_queue(name: str) -> str:
     return f"suite:{name}"
 
 
-async def start(suite: Suite) -> int:
-    """A new run of the suite, recorded with its sources; the submission worker fetches, translates and submits them,
-    resuming after a restart from the source it had reached. Its number."""
+def suite_environments(suite: Suite) -> set[str]:
+    """The environments a suite's solvers run in (registry/solvers.yaml)."""
+    return {s.environment for s in service.chosen_solvers(suite.solvers)}
+
+
+async def start(suite: Suite, environment_versions: dict[str, int] | None = None) -> int:
+    """A new run of the suite, recorded with its sources and the environment versions its runs use (resolved by the
+    caller with `environments.versions.resolve_versions`, which the route requires; none: the defaults). The
+    submission worker fetches, translates and submits them, resuming after a restart from the source it had reached.
+    Its number."""
     from compose_api.dependencies import get_submission_worker  # late: dependencies imports the simulation modules
 
-    _, number = await get_required_database_service().get_comparisons_db().new_suite_run(suite.name, suite.sources)
+    _, number = (
+        await get_required_database_service()
+        .get_comparisons_db()
+        .new_suite_run(suite.name, suite.sources, environment_versions)
+    )
     worker = get_submission_worker()
     if worker is not None:
         worker.kick()
@@ -90,7 +109,7 @@ async def submit_run(run: ClaimedSuiteRun, owner: str) -> None:
         if found is None:
             failure = (source, f"the suite {run.collection!r} is no longer defined")
         elif not await db.suite_source_submitted(run.collection, run.number, source):
-            why = await _submit_source(found, source, run.number)
+            why = await _submit_source(found, source, run.number, run.environment_versions)
             failure = (source, why) if why is not None else None
         if not await db.advance_suite_run(run.id, owner, index + 1, failure):
             logger.warning(f"suite {run.collection} run {run.number}: taken over at source {index}; stopping")
@@ -98,7 +117,9 @@ async def submit_run(run: ClaimedSuiteRun, owner: str) -> None:
     await db.finish_suite_run(run.id, owner)
 
 
-async def _submit_source(suite: Suite, source: str, number: int) -> str | None:
+async def _submit_source(
+    suite: Suite, source: str, number: int, environment_versions: dict[str, int] | None = None
+) -> str | None:
     """Fetch, translate and queue one source's runs; why not, if it could not be."""
     jobs = BackgroundTasks()
     solvers = service.chosen_solvers(suite.solvers)
@@ -119,6 +140,7 @@ async def _submit_source(suite: Suite, source: str, number: int) -> str | None:
             translation, path, source, solvers, None, [suite.name], None, suite.tolerances, jobs,
             references=references, collection=suite.name, suite_run=number,
             queue=suite_queue(suite.name), priority=SUITE_PRIORITY, batch=True,
+            environment_versions=environment_versions or None,
         )  # fmt: skip
         if not ids:
             return (
@@ -142,7 +164,15 @@ async def _submit_source(suite: Suite, source: str, number: int) -> str | None:
 
 async def runs(suite: Suite) -> list[SuiteRunInfo]:
     found = await get_required_database_service().get_comparisons_db().suite_runs(suite.name)
-    return [SuiteRunInfo(number=r.number, created_at=service._iso(r.created_at), status=r.status) for r in found]
+    return [
+        SuiteRunInfo(
+            number=r.number,
+            created_at=service._iso(r.created_at),
+            status=r.status,
+            environment_versions=dict(r.environment_versions or {}),
+        )
+        for r in found
+    ]
 
 
 async def view(suite: Suite, number: int) -> SuiteRunView | None:
@@ -199,6 +229,7 @@ async def view(suite: Suite, number: int) -> SuiteRunView | None:
     return SuiteRunView(
         suite=suite.name, number=number, created_at=service._iso(run.created_at), status=run.status,
         baseline=suite.baseline, rows=rows, summary=summary,
+        environment_versions=dict(run.environment_versions or {}),
     )  # fmt: skip
 
 

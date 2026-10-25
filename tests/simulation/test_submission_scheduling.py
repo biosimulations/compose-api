@@ -94,7 +94,7 @@ async def test_a_suite_run_resumes_from_the_source_it_had_reached(
     monkeypatch.setattr(suites, "load_suites", lambda: {"resume-suite": test_suite})
     submitted: list[str] = []
 
-    async def submit_source(suite: Suite, source: str, number: int) -> str | None:
+    async def submit_source(suite: Suite, source: str, number: int, *_: object) -> str | None:
         submitted.append(source)
         return "not upstream" if source.endswith("3") else None
 
@@ -124,7 +124,7 @@ async def test_a_source_already_submitted_before_a_restart_is_not_submitted_agai
     monkeypatch.setattr(suites, "load_suites", lambda: {"dedup-suite": test_suite})
     submitted: list[str] = []
 
-    async def submit_source(suite: Suite, source: str, number: int) -> str | None:
+    async def submit_source(suite: Suite, source: str, number: int, *_: object) -> str | None:
         submitted.append(source)
         return None
 
@@ -148,7 +148,7 @@ async def test_a_worker_shutting_down_gives_its_suite_run_back_at_once(
     monkeypatch.setattr(suites, "load_suites", lambda: {"handover-suite": test_suite})
     started = asyncio.Event()
 
-    async def slow_source(suite: Suite, source: str, number: int) -> str | None:
+    async def slow_source(suite: Suite, source: str, number: int, *_: object) -> str | None:
         started.set()
         await asyncio.sleep(3600)  # the pod goes away mid-source
         return None

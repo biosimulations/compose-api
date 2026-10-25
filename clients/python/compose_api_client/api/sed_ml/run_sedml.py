@@ -21,6 +21,7 @@ def _get_kwargs(
     rel_tol: float | Unset = 0.0001,
     abs_tol_min: float | Unset = 0.001,
     abs_tol_scale: float | Unset = 1e-05,
+    environment_version: list[str] | None | Unset = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
 
@@ -68,6 +69,16 @@ def _get_kwargs(
     params["abs_tol_min"] = abs_tol_min
 
     params["abs_tol_scale"] = abs_tol_scale
+
+    json_environment_version: list[str] | None | Unset
+    if isinstance(environment_version, Unset):
+        json_environment_version = UNSET
+    elif isinstance(environment_version, list):
+        json_environment_version = environment_version
+
+    else:
+        json_environment_version = environment_version
+    params["environment_version"] = json_environment_version
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -130,6 +141,7 @@ def sync_detailed(
     rel_tol: float | Unset = 0.0001,
     abs_tol_min: float | Unset = 0.001,
     abs_tol_scale: float | Unset = 1e-05,
+    environment_version: list[str] | None | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError | SedmlRunResult]:
     """Run each task of a SED-ML archive on several solvers, one run per solver, grouped by a comparison
 
@@ -142,6 +154,9 @@ def sync_detailed(
         rel_tol (float | Unset):  Default: 0.0001.
         abs_tol_min (float | Unset):  Default: 0.001.
         abs_tol_scale (float | Unset):  Default: 1e-05.
+        environment_version (list[str] | None | Unset): Environment versions to run in:
+            environment@number (registry_env@2) or environment@default, repeatable; an environment not
+            named runs at its default
         body (BodyRunSedml):
 
     Raises:
@@ -161,6 +176,7 @@ def sync_detailed(
         rel_tol=rel_tol,
         abs_tol_min=abs_tol_min,
         abs_tol_scale=abs_tol_scale,
+        environment_version=environment_version,
     )
 
     response = client.get_httpx_client().request(
@@ -181,6 +197,7 @@ def sync(
     rel_tol: float | Unset = 0.0001,
     abs_tol_min: float | Unset = 0.001,
     abs_tol_scale: float | Unset = 1e-05,
+    environment_version: list[str] | None | Unset = UNSET,
 ) -> Any | HTTPValidationError | SedmlRunResult | None:
     """Run each task of a SED-ML archive on several solvers, one run per solver, grouped by a comparison
 
@@ -193,6 +210,9 @@ def sync(
         rel_tol (float | Unset):  Default: 0.0001.
         abs_tol_min (float | Unset):  Default: 0.001.
         abs_tol_scale (float | Unset):  Default: 1e-05.
+        environment_version (list[str] | None | Unset): Environment versions to run in:
+            environment@number (registry_env@2) or environment@default, repeatable; an environment not
+            named runs at its default
         body (BodyRunSedml):
 
     Raises:
@@ -213,6 +233,7 @@ def sync(
         rel_tol=rel_tol,
         abs_tol_min=abs_tol_min,
         abs_tol_scale=abs_tol_scale,
+        environment_version=environment_version,
     ).parsed
 
 
@@ -227,6 +248,7 @@ async def asyncio_detailed(
     rel_tol: float | Unset = 0.0001,
     abs_tol_min: float | Unset = 0.001,
     abs_tol_scale: float | Unset = 1e-05,
+    environment_version: list[str] | None | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError | SedmlRunResult]:
     """Run each task of a SED-ML archive on several solvers, one run per solver, grouped by a comparison
 
@@ -239,6 +261,9 @@ async def asyncio_detailed(
         rel_tol (float | Unset):  Default: 0.0001.
         abs_tol_min (float | Unset):  Default: 0.001.
         abs_tol_scale (float | Unset):  Default: 1e-05.
+        environment_version (list[str] | None | Unset): Environment versions to run in:
+            environment@number (registry_env@2) or environment@default, repeatable; an environment not
+            named runs at its default
         body (BodyRunSedml):
 
     Raises:
@@ -258,6 +283,7 @@ async def asyncio_detailed(
         rel_tol=rel_tol,
         abs_tol_min=abs_tol_min,
         abs_tol_scale=abs_tol_scale,
+        environment_version=environment_version,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -276,6 +302,7 @@ async def asyncio(
     rel_tol: float | Unset = 0.0001,
     abs_tol_min: float | Unset = 0.001,
     abs_tol_scale: float | Unset = 1e-05,
+    environment_version: list[str] | None | Unset = UNSET,
 ) -> Any | HTTPValidationError | SedmlRunResult | None:
     """Run each task of a SED-ML archive on several solvers, one run per solver, grouped by a comparison
 
@@ -288,6 +315,9 @@ async def asyncio(
         rel_tol (float | Unset):  Default: 0.0001.
         abs_tol_min (float | Unset):  Default: 0.001.
         abs_tol_scale (float | Unset):  Default: 1e-05.
+        environment_version (list[str] | None | Unset): Environment versions to run in:
+            environment@number (registry_env@2) or environment@default, repeatable; an environment not
+            named runs at its default
         body (BodyRunSedml):
 
     Raises:
@@ -309,5 +339,6 @@ async def asyncio(
             rel_tol=rel_tol,
             abs_tol_min=abs_tol_min,
             abs_tol_scale=abs_tol_scale,
+            environment_version=environment_version,
         )
     ).parsed

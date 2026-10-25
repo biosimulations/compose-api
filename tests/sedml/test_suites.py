@@ -88,7 +88,7 @@ async def test_a_suite_run_and_its_drift_from_the_baseline(
     )
     monkeypatch.setattr(suites, "load_suites", lambda: {"test-suite": test_suite})
 
-    started = (await client.post("/suites/test-suite/run")).json()
+    started = (await client.post("/suites/test-suite/run", params={"environment_version": "default"})).json()
     assert started["number"] == 1
     await _settled(database_service)
     assert [r["number"] for r in (await client.get("/suites/test-suite/runs")).json()] == [1]
@@ -112,7 +112,9 @@ async def test_a_suite_run_and_its_drift_from_the_baseline(
 
     # run 1 accepted as the baseline; run 2's COPASI results drift, Tellurium's do not
     monkeypatch.setattr(test_suite, "baseline", 1)
-    assert (await client.post("/suites/test-suite/run")).json()["number"] == 2
+    assert (await client.post("/suites/test-suite/run", params={"environment_version": "default"})).json()[
+        "number"
+    ] == 2
     await _settled(database_service)
     second = submitted["runs"][4:]
     await _finish(database_service, [r for r in second if r[0].labels["solver"] == "tellurium"], tmp_path)

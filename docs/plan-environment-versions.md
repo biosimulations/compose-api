@@ -1,6 +1,6 @@
 # Environment versions: locked, built and chosen through the API
 
-**Status (2026-10-25): steps 1–4b merged (#369–#373); step 4c in review.** One PR per step, merged with a merge commit; each PR updates the table below. A
+**Status (2026-10-25): steps 1–4 merged (#369–#374); step 5a in review.** One PR per step, merged with a merge commit; each PR updates the table below. A
 merge deploys nothing by itself: the next release's image ships it (CLAUDE.md, "Deploys are GitOps").
 
 | Step | What | State |
@@ -8,8 +8,8 @@ merge deploys nothing by itself: the next release's image ships it (CLAUDE.md, "
 | 1 | This document | merged (#369) |
 | 2 | `environment` and `environment_version` tables; today's two environments seeded as version 1 and made the defaults; one function chooses a run's version. No change in behavior | merged (#370) |
 | 3 | A shared version is a **lock**: compiled by the API with uv, its hash the identity; the definition installs from it | merged (#371) |
-| 4 | Creating versions through the API (refresh, prebuilt registration), with the lock diff, the installed packages and the interfaces recorded; the admin role | 4a, 4b merged (#372, #373); 4c (prebuilt images read back) in review |
-| 5 | Choosing them: `environment_version` on runs, required on suite runs; recorded on every simulation and suite run | |
+| 4 | Creating versions through the API (refresh, prebuilt registration), with the lock diff, the installed packages and the interfaces recorded; the admin role | merged (#372, #373, #374) |
+| 5 | Choosing them: `environment_version` on runs, required on suite runs; recorded on every simulation and suite run | 5a (runs, SED-ML, suites, CLI, workflow) in review; 5b (web app pages, solvers checked against interfaces) to do |
 | 6 | Retire the hard-coding: `PREBUILT_SIMULATORS`, `shared_image()`, the committed interface manifests | |
 
 This is the first concrete step of the epoch-2 environments plan
@@ -173,6 +173,19 @@ suite_run            + environment_versions  {environment: version}
 5. **Choosing versions.** The run parameters, the suite requirement (`sedml-suites.yml` passes repository
    variables), the simulation column and label, `solvers.yaml` checked against the chosen version's interfaces, and
    the web app's environment page listing versions with their diffs.
+   *As built, 5a:* `/simulation/run?environment_version=<number>` (of the environment `simulator` names, else the
+   shared one), checked before the upload is read (400 for a version that does not exist, is retired or failed; one
+   still building is accepted and waited for, like any image). `/sedml/run` and the BioModels and biosimulations.org
+   run routes take `environment_version=<environment>@<number>|<environment>@default` (repeatable), resolved once
+   against the chosen solvers' environments before anything is submitted; an environment not named runs at its
+   default. `POST /suites/{name}/run` **requires** `environment_version`: every environment the suite's solvers use
+   must be named, or `default` given (each at its default); `suite_run.environment_versions` (revision
+   `9a5c3e7f1b42`) stores them as numbers, `@default` resolved when the run starts, and the worker submits every
+   source in them (a resumed run keeps them). Every run is labelled `environment_version=<environment>@<number>`. The
+   web app's Run button sends `default`; `sedml-suites.yml` sends the repository variable
+   `SUITE_ENVIRONMENT_VERSIONS` (space-separated) or `default`. CLI: `--environment-version` on `run` (a number),
+   `sedml run`, `biomodels run`, `biosimulations run`, and, required, `suites run`. Every SED-ML solver runs in the
+   shared environment today; a solver in a prebuilt one would need its request's `simulator` set too.
 6. **Retire the hard-coding.** `PREBUILT_SIMULATORS` (read once by the seed, then removed), `shared_image()`, the
    committed `registry/manifests/*.json` and `registry-manifests.yml` (tests use fixtures).
    `simulator_registry.json` stays as the default spec of new shared versions until EV0 retires the library list.
@@ -209,3 +222,9 @@ biomodels-curated-300 on it, compare with run 3 on @1, then make @2 the default.
 Publishing images to a registry (EV12's push), the pixi workspace (EV2), the per-composite resolver (EV4), the
 `simulator` → `environment` renames in the API (EV0 migration step 1 is partly this; the renames are their own PRs),
 an unprivileged builder, and garbage-collecting old versions' images.
+
+**Later: authorization as declarative policy.** The admin role here is one more hand-written check, beside
+`authorization.py`'s `can_read` / `readable_clause`. The maintainer's direction (2026-10-25) is to consider the Oso
+library for declarative rules that SQLAlchemy enforces in queries (Oso's data filtering), so a new route or query cannot
+leak what a caller may not see. Not part of this plan; a plan of its own when owners are stamped (plan-observability
+step 5).

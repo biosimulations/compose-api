@@ -71,6 +71,7 @@ async def submit(
     queue: str = "interactive",
     priority: int = 0,
     batch: bool = False,
+    environment_versions: dict[str, int] | None = None,
 ) -> list[int]:
     """One comparison per accepted task (all, or those named), one run per solver that accepted it; the ids.
     `references[origin]["<sedml>/<report>"]` (the archive's own `reports.h5`, a biosimulations.org run's) are stored
@@ -123,6 +124,10 @@ async def submit(
                 # a suite's runs are queued behind interactive ones, with the batch resources (Q3, Q4)
                 is_batch=batch,
                 end_time_point=1.0,
+                # the version named for the solver's environment (docs/plan-environment-versions.md); else its default.
+                # Every solver runs in the shared environment today (registry/solvers.yaml), which a request without a
+                # `simulator` names; a solver in a prebuilt one would need its `simulator` set here too.
+                environment_version=(environment_versions or {}).get(by_id[solver_id].environment),
                 labels=labels(
                     source=source_kind or "upload",
                     environment=by_id[solver_id].environment,
