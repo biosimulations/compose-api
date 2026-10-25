@@ -1,12 +1,12 @@
 # Environment versions: locked, built and chosen through the API
 
-**Status (2026-10-25): proposed.** One PR per step, merged with a merge commit; each PR updates the table below. A
+**Status (2026-10-25): step 1 merged (#369); step 2 in review (#370).** One PR per step, merged with a merge commit; each PR updates the table below. A
 merge deploys nothing by itself: the next release's image ships it (CLAUDE.md, "Deploys are GitOps").
 
 | Step | What | State |
 |---|---|---|
-| 1 | This document | in review |
-| 2 | `environment` and `environment_version` tables; today's two environments seeded as version 1 and made the defaults; one function chooses a run's version. No change in behavior | |
+| 1 | This document | merged (#369) |
+| 2 | `environment` and `environment_version` tables; today's two environments seeded as version 1 and made the defaults; one function chooses a run's version. No change in behavior | in review (#370) |
 | 3 | A shared version is a **lock**: compiled by the API with uv, its hash the identity; the definition installs from it | |
 | 4 | Creating versions through the API (refresh, prebuilt registration), with the lock diff, the installed packages and the interfaces recorded; the admin role | |
 | 5 | Choosing them: `environment_version` on runs, required on suite runs; recorded on every simulation and suite run | |
@@ -114,10 +114,16 @@ suite_run            + environment_versions  {environment: version}
 ## Steps
 
 2. **Tables and seed.** The tables and columns, one idempotent alembic revision
-   (`tests/common/test_migrations.py`). At startup, seed version 1 of each environment if absent: registry_env from
-   its current simulator (hash `0f31dda0…`, its image, the committed manifest) and viva-pde-particle from
-   `PREBUILT_SIMULATORS`; both become defaults. One function, `environments.version_for(request)`, replaces the five
-   places that compute a definition; it returns the default, so runs use the same images as today.
+   (`tests/common/test_migrations.py`). One function, `environments.versions.version_for`, replaces the places that
+   computed a run's definition (`handlers.run_simulation`, `builds.environment_definition`, the registry's
+   environment routes). It returns the version of the deployment's own definition (the shared library list, or a
+   prebuilt simulator's pin in `PREBUILT_SIMULATORS`), made the environment's default, so runs use the same images
+   as today.
+   *As built (#370):* there is no seed at startup. A version is created, as the next number, the first time a run
+   (or an environment route) needs that definition, under a per-environment advisory lock. This has the same effect
+   and also covers runs that never pass through the lifespan. A deploy that changes a pin adds a version, and a
+   rollback makes the earlier version the default again. `shared_image()` and `registry/generate.py` still compute
+   the shared image on their own, for the committed manifests, until step 6.
 3. **The lock.** compose-api owns the definition template (moving it from pbest's `generate_container_def_file`, as
    strategy decision 1 absorbs pbest): base image, micromamba with the conda pins, then `uv pip sync` of the lock
    into the runtime environment. `compose_api/environments/lock.py` compiles; `definition.py` renders. Nothing
