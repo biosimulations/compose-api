@@ -72,6 +72,7 @@ from .job_status import JobStatus
 from .job_type import JobType
 from .list_simulations_status_type_0 import ListSimulationsStatusType0
 from .lock_preview import LockPreview
+from .lock_preview_against_basis_type_0 import LockPreviewAgainstBasisType0
 from .new_environment_version import NewEnvironmentVersion
 from .new_environment_version_libraries_type_0_item import NewEnvironmentVersionLibrariesType0Item
 from .package_change import PackageChange
@@ -193,6 +194,7 @@ __all__ = (
     "JobType",
     "ListSimulationsStatusType0",
     "LockPreview",
+    "LockPreviewAgainstBasisType0",
     "NewEnvironmentVersion",
     "NewEnvironmentVersionLibrariesType0Item",
     "PackageChange",

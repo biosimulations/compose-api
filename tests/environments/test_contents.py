@@ -22,6 +22,7 @@ from compose_api.environments.contents import record_contents
 from compose_api.environments.versions import version_for
 from compose_api.simulation import build_k8s
 from compose_api.simulation.build_k8s import BuildSite, Inspection, build_job, inspect_script, publish_script
+from compose_api.simulation.models import VersionState
 
 SITE = BuildSite(
     namespace="ns", image="ghcr.io/apptainer/apptainer:1.3.6", pvc_claim="home", pvc_mount_path="/projects/CRBM",
@@ -119,6 +120,50 @@ def test_the_job_carries_the_describe_script_and_copies_beside_the_image() -> No
     assert "installed.txt" not in plain.spec.template.spec.containers[0].command[-1]
 
 
+def test_the_reread_job_reads_a_built_image_again_without_exposing_the_store_to_the_privileged_container() -> None:
+    container = Path("/projects/CRBM/compose_api/prod/images/abc.sif")
+    job: Any = build_k8s.reread_job("reread-abc-x", SITE, container, INSPECTION)
+    spec = job.spec.template.spec
+    fetch, inspect = spec.init_containers
+    (copy,) = spec.containers
+    # the service user copies the image in, reading the store only
+    assert fetch.security_context.privileged is False and fetch.security_context.run_as_user == 16997
+    assert [(m.name, m.read_only) for m in fetch.volume_mounts] == [("shared", True), ("work", None)]
+    assert f'cp "{container}" /work/image.sif' in fetch.command[-1]
+    # the privileged container sees the work volume only, and runs the build's own read-back
+    assert inspect.security_context.privileged is True
+    assert [m.name for m in inspect.volume_mounts] == ["work"]
+    assert inspect.command[-1].endswith(inspect_script(INSPECTION))
+    assert "apptainer build" not in inspect.command[-1]
+    assert _unb64({e.name: e.value for e in inspect.env}[build_k8s.DESCRIBE_ENV]) == DESCRIBE
+    # and the service user places what was read beside the image, never the image itself
+    assert "abc.installed.txt" in copy.command[-1] and "abc.interfaces.json" in copy.command[-1]
+    assert "image.sif" not in copy.command[-1]
+
+
+def test_the_reread_job_scripts_leave_what_they_read_beside_the_image(
+    work: tuple[Path, dict[str, str]], tmp_path: Path
+) -> None:
+    from compose_api.simulation.hpc_utils import get_slurm_singularity_container_file
+
+    root, env = work
+    (root / "image.sif").unlink()
+    with override_settings(simulation_store_base_path=str(tmp_path / "store")):
+        container = get_slurm_singularity_container_file("abc")
+        job: Any = build_k8s.reread_job("reread-abc-x", SITE, container, INSPECTION)
+    images = container.parent
+    images.mkdir(parents=True)
+    container.write_bytes(b"sif")
+    fetch, inspect = job.spec.template.spec.init_containers
+    (copy,) = job.spec.template.spec.containers
+    for step, extra in ((fetch, {}), (inspect, {build_k8s.DESCRIBE_ENV: _b64(DESCRIBE)}), (copy, {})):
+        result = _bash(step.command[-1], {**env, **extra})
+        assert result.returncode == 0, result.stderr
+    assert container.read_bytes() == b"sif"
+    assert (images / "abc.installed.txt").read_text().strip()
+    assert json.loads((images / "abc.interfaces.json").read_text())["argv"][:2] == ["pbsim_common", "biosim_toolkit"]
+
+
 @pytest.mark.asyncio
 async def test_what_the_build_left_is_stored_on_the_version_when_it_is_read(
     database_service: DatabaseServiceSQL, tmp_path: Path
@@ -210,6 +255,11 @@ async def test_a_prebuilt_version_is_read_back_after_it_is_ready_and_on_request(
         roles: frozenset[str] = frozenset({"user", "env-admin"})
 
     inspected: list[str] = []
+    reread: list[str] = []
+
+    async def reread_shared(singularity_hash: str, inspection: Inspection, suffix: str) -> bool:
+        reread.append(singularity_hash)
+        return True
 
     async def inspect_prebuilt(image: str, inspection: Inspection, suffix: str) -> dict[str, str]:
         inspected.append(image)
@@ -222,6 +272,7 @@ async def test_a_prebuilt_version_is_read_back_after_it_is_ready_and_on_request(
         return None
 
     monkeypatch.setattr(build_k8s, "inspect_prebuilt", inspect_prebuilt)
+    monkeypatch.setattr(build_k8s, "reread_shared", reread_shared)
     monkeypatch.setattr(build_k8s, "describe_script", no_script)
     monkeypatch.setattr(handlers, "ensure_image", ensure_image)
     for name in ("get_required_simulation_service", "get_required_job_monitor"):
@@ -245,12 +296,18 @@ async def test_a_prebuilt_version_is_read_back_after_it_is_ready_and_on_request(
             again = await client.post(f"{base}/{number}/inspect")
             assert again.status_code == 202
             assert inspected == [image, image]
-            shared = (await client.get("/registry/environments/registry_env/versions")).json()["versions"]
-            if shared:  # a shared version is read back by its build, never by this Job
-                refused = await client.post(
-                    f"/registry/environments/registry_env/versions/{shared[0]['number']}/inspect"
-                )
-                assert refused.status_code == 409
+            assert reread == []  # a prebuilt image is pulled and run, not read from the store
+            # a shared version built before builds read images back is read again from its built image
+            shared, simulator = await version_for(database_service, None)
+            await database_service.get_environments_db().set_state(shared.database_id, VersionState.READY)
+            again = await client.post(f"/registry/environments/registry_env/versions/{shared.number}/inspect")
+            assert again.status_code == 202
+            assert reread == [simulator.container_def_hash]
+            # one still building is read back by its build
+            await database_service.get_environments_db().set_state(shared.database_id, VersionState.BUILDING)
+            refused = await client.post(f"/registry/environments/registry_env/versions/{shared.number}/inspect")
+            assert refused.status_code == 409
+            await database_service.get_environments_db().set_state(shared.database_id, VersionState.READY)
     with override_settings(environment_admin_role="env-admin", build_backend="slurm"):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as client:
             assert (await client.post(f"{base}/{number}/inspect")).status_code == 409  # no Kubernetes to run it on

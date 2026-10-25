@@ -804,8 +804,10 @@ def environments_preview(
     same = f"; the same lock as @{preview.existing}" if preview.existing else ""
     print(f"{preview.environment} resolved at {preview.resolved_at}: lock {preview.lock_sha256[:12]}{same}")
     if preview.against is None:
-        print("the default version has no lock to compare with")
+        print("the default version has no lock, and no installed packages read back, to compare with")
         return
+    if preview.against_basis == "installed":
+        print(f"compared with the packages @{preview.against} installed (it has no lock; git installs show versions)")
     rows = [
         {"package": c.name, "@" + str(preview.against): c.before, "new": c.after}
         for c in (preview.changes if isinstance(preview.changes, list) else [])
@@ -850,8 +852,9 @@ def environments_default(ctx: typer.Context, name: _ENV_ARG, number: _NUMBER_ARG
 @claims("environments inspect", "inspect-environment-version")
 @handled
 def environments_inspect(ctx: typer.Context, name: _ENV_ARG, number: _NUMBER_ARG) -> None:
-    """Read a prebuilt version's image back again: what it installed and the interfaces it provides (in the
-    background; `environments version` shows them). Needs the environment administrator role."""
+    """Read a version's image back again: what it installed and the interfaces it provides (in the background;
+    `environments version` shows them). For a prebuilt image, or a shared one built before builds read images back.
+    Needs the environment administrator role."""
     settings = _settings(ctx)
     with make_session(settings) as s:
         emit(settings.output, s.inspect_environment_version(name, number))

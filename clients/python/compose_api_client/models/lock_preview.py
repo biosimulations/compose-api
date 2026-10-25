@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..models.lock_preview_against_basis_type_0 import LockPreviewAgainstBasisType0
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
@@ -27,7 +28,11 @@ class LockPreview:
         lock_sha256 (str):
         lock (str):
         existing (int | None | Unset): The number of a version with this very lock, if any
-        against (int | None | Unset): The default version compared with, if it has a lock
+        against (int | None | Unset): The default version compared with, if it has a lock or a list of installed
+            packages
+        against_basis (LockPreviewAgainstBasisType0 | None | Unset): What of the default version was compared: its lock,
+            or (a version made before locks, such as one built by a run) the packages its image installed, which name a
+            package installed from git by its version
         changes (list[PackageChange] | Unset):
     """
 
@@ -38,6 +43,7 @@ class LockPreview:
     lock: str
     existing: int | None | Unset = UNSET
     against: int | None | Unset = UNSET
+    against_basis: LockPreviewAgainstBasisType0 | None | Unset = UNSET
     changes: list[PackageChange] | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -64,6 +70,14 @@ class LockPreview:
         else:
             against = self.against
 
+        against_basis: None | str | Unset
+        if isinstance(self.against_basis, Unset):
+            against_basis = UNSET
+        elif isinstance(self.against_basis, LockPreviewAgainstBasisType0):
+            against_basis = self.against_basis.value
+        else:
+            against_basis = self.against_basis
+
         changes: list[dict[str, Any]] | Unset = UNSET
         if not isinstance(self.changes, Unset):
             changes = []
@@ -84,6 +98,8 @@ class LockPreview:
             field_dict["existing"] = existing
         if against is not UNSET:
             field_dict["against"] = against
+        if against_basis is not UNSET:
+            field_dict["against_basis"] = against_basis
         if changes is not UNSET:
             field_dict["changes"] = changes
 
@@ -122,6 +138,23 @@ class LockPreview:
 
         against = _parse_against(d.pop("against", UNSET))
 
+        def _parse_against_basis(data: object) -> LockPreviewAgainstBasisType0 | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, str):
+                    raise TypeError()
+                against_basis_type_0 = LockPreviewAgainstBasisType0(data)
+
+                return against_basis_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(LockPreviewAgainstBasisType0 | None | Unset, data)
+
+        against_basis = _parse_against_basis(d.pop("against_basis", UNSET))
+
         _changes = d.pop("changes", UNSET)
         changes: list[PackageChange] | Unset = UNSET
         if _changes is not UNSET:
@@ -139,6 +172,7 @@ class LockPreview:
             lock=lock,
             existing=existing,
             against=against,
+            against_basis=against_basis,
             changes=changes,
         )
 

@@ -24,7 +24,7 @@ from compose_api.dependencies import (
     get_required_simulation_service,
 )
 from compose_api.environments import service as environment_service
-from compose_api.environments.contents import inspect_prebuilt_version, record_contents
+from compose_api.environments.contents import inspect_prebuilt_version, inspect_shared_version, record_contents
 from compose_api.environments.service import VersionRequestError
 from compose_api.environments.versions import version_for
 from compose_api.registry.environments import (
@@ -269,15 +269,17 @@ async def _build_version(version: EnvironmentVersion, simulator: SimulatorVersio
     await _read_back(version)
 
 
-async def _read_back(version: EnvironmentVersion) -> None:
-    """Store what the version's image installed and provides: left beside a built image by its build, or read from a
-    pulled (prebuilt) one by a Job of its own. Never fails the version."""
+async def _read_back(version: EnvironmentVersion, reread: bool = False) -> None:
+    """Store what the version's image installed and provides: left beside a built image by its build (or, with
+    ``reread``, by a Job that reads the built image again), or read from a pulled (prebuilt) one by a Job of its own.
+    Never fails the version."""
     database_service = get_required_database_service()
+    k8s = get_settings().build_backend == "k8s"
     try:
         if version.image is not None:
-            recorded = get_settings().build_backend == "k8s" and await inspect_prebuilt_version(
-                database_service, version
-            )
+            recorded = k8s and await inspect_prebuilt_version(database_service, version)
+        elif reread:
+            recorded = k8s and await inspect_shared_version(database_service, version)
         else:
             recorded = await record_contents(database_service, version)
     except Exception:
@@ -387,26 +389,26 @@ async def create_environment_version(
     status_code=202,
     operation_id="inspect-environment-version",
     tags=["Registry"],
-    summary="Read again what a prebuilt version's image installed and provides, in a Job that runs the image",
+    summary="Read again what a version's image installed and provides, in a Job that runs the image",
     responses={
         **_NO_ENVIRONMENT,
         **_ADMIN,
-        409: {"description": "A shared version (its build reads it back), or no Kubernetes to run the Job on"},
+        409: {"description": "A shared version whose image is not built yet, or no Kubernetes to run the Job on"},
     },
 )
 async def inspect_environment_version(
     name: str, number: int, background_tasks: BackgroundTasks, caller: EnvironmentAdmin
 ) -> EnvironmentVersion:
-    """Started in the background; `GET …/versions/{number}` shows the result. A shared version's image is read back
-    by its own build."""
+    """Started in the background; `GET …/versions/{number}` shows the result. A prebuilt image is pulled and run; a
+    shared one, already built, is read again as its build reads a new one (for images built before builds did)."""
     _known_environment(name)
     version = await _version(name, number)
-    if version.image is None:
-        raise HTTPException(status_code=409, detail=f"{version.label} is shared: its build reads its image back")
+    if version.image is None and version.state != VersionState.READY:
+        raise HTTPException(status_code=409, detail=f"{version.label} is {version.state}: its build reads it back")
     if get_settings().build_backend != "k8s":
         raise HTTPException(status_code=409, detail="reading an image back needs the k8s build backend")
     plain = EnvironmentVersion.model_validate(version.model_dump(exclude={"lock", "installed", "interfaces"}))
-    background_tasks.add_task(_read_back, plain)
+    background_tasks.add_task(_read_back, plain, reread=True)
     logger.info(f"{version.label} read back again, for {caller.subject}")
     return plain
 

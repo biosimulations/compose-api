@@ -249,14 +249,19 @@ def build_script() -> str:
         """)
 
 
+def _publish_inspections(inspections: dict[str, Path]) -> str:
+    """Each file read from the image (file kind -> its target) written beside its target and renamed, if it was."""
+    return "".join(
+        f'if [ -f {WORK_DIR}/image.{kind} ]; then cp {WORK_DIR}/image.{kind} "{target}.part-$HOSTNAME" && '
+        f'mv -f "{target}.part-$HOSTNAME" "{target}"; fi\n'
+        for kind, target in inspections.items()
+    )
+
+
 def publish_script(container: Path, inspections: dict[str, Path] | None = None) -> str:
     """As the service user: the image written beside its target and renamed, so a reader never sees a partial one;
     then whatever the build read from it (``inspections``: file kind -> its target), each only if it was written."""
-    extra = "".join(
-        f'if [ -f {WORK_DIR}/image.{kind} ]; then cp {WORK_DIR}/image.{kind} "{target}.part-$HOSTNAME" && '
-        f'mv -f "{target}.part-$HOSTNAME" "{target}"; fi\n'
-        for kind, target in (inspections or {}).items()
-    )
+    extra = _publish_inspections(inspections or {})
     return (
         dedent(f"""\
         set -eu
@@ -352,6 +357,118 @@ def build_job(
             ),
         ),
     )
+
+
+def _reread_setup() -> str:
+    """As in ``build_script``: Apptainer's temporary files in the work volume, not the container's /tmp and /root."""
+    return dedent(f"""\
+        set -u
+        export APPTAINER_TMPDIR={WORK_DIR}/scratch APPTAINER_CACHEDIR={WORK_DIR}/cache
+        mkdir -p "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"
+        """)
+
+
+def reread_job(name: str, site: BuildSite, container: Path, inspection: Inspection) -> V1Job:
+    """A Job that reads back a shared image already built, as its build would have (``inspect_script``): for a version
+    whose image was built before builds read images back. As in a build, the privileged container sees only the work
+    volume: the service user copies the image in from the shared filesystem (read-only), and places what was read
+    beside it."""
+    from kubernetes import client as k8s
+
+    env = []
+    if inspection.describe_script is not None:
+        encoded = base64.b64encode(inspection.describe_script.encode()).decode()
+        env.append(k8s.V1EnvVar(name=DESCRIBE_ENV, value=encoded))
+    stem = container.name.removesuffix(".sif")
+    inspections = {kind: get_image_inspection_file(stem, kind) for kind in INSPECTIONS}
+    service_user = k8s.V1SecurityContext(
+        privileged=False,
+        run_as_user=site.run_as_uid,
+        run_as_group=site.run_as_gid,
+        run_as_non_root=bool(site.run_as_uid),
+        allow_privilege_escalation=False,
+    )
+    shared = k8s.V1VolumeMount(name="shared", mount_path=site.pvc_mount_path, sub_path=site.pvc_sub_path or None)
+    shared_read_only = k8s.V1VolumeMount(
+        name="shared", mount_path=site.pvc_mount_path, sub_path=site.pvc_sub_path or None, read_only=True
+    )
+    work = k8s.V1VolumeMount(name="work", mount_path=WORK_DIR)
+    scratch = (
+        k8s.V1ResourceRequirements(requests={"ephemeral-storage": site.ephemeral_storage})
+        if site.ephemeral_storage
+        else None
+    )
+    labels = {"app": LABEL, "compose-api-build": name}
+    return k8s.V1Job(
+        metadata=k8s.V1ObjectMeta(name=name, labels=labels),
+        spec=k8s.V1JobSpec(
+            backoff_limit=0,
+            ttl_seconds_after_finished=3600,
+            active_deadline_seconds=1800,
+            template=k8s.V1PodTemplateSpec(
+                metadata=k8s.V1ObjectMeta(labels=labels),
+                spec=k8s.V1PodSpec(
+                    restart_policy="Never",
+                    node_selector={"vlan": "internal"},
+                    security_context=k8s.V1PodSecurityContext(
+                        fs_group=site.run_as_gid or None, supplemental_groups=list(site.supplemental_groups) or None
+                    ),
+                    init_containers=[
+                        k8s.V1Container(
+                            name="fetch",
+                            image=site.image,
+                            command=["/bin/bash", "-c", f'set -eu\ncp "{container}" {WORK_DIR}/image.sif\n'],
+                            security_context=service_user,
+                            resources=scratch,
+                            volume_mounts=[shared_read_only, work],
+                        ),
+                        k8s.V1Container(
+                            name=INSPECT_CONTAINER,
+                            image=site.image,
+                            command=["/bin/bash", "-c", _reread_setup() + inspect_script(inspection)],
+                            env=env,
+                            security_context=k8s.V1SecurityContext(privileged=True, run_as_user=0),
+                            volume_mounts=[work],
+                        ),
+                    ],
+                    containers=[
+                        k8s.V1Container(
+                            name="copy",
+                            image=site.image,
+                            command=["/bin/bash", "-c", "set -eu\n" + _publish_inspections(inspections)],
+                            security_context=service_user,
+                            volume_mounts=[shared, work],
+                        )
+                    ],
+                    volumes=[
+                        k8s.V1Volume(
+                            name="shared",
+                            persistent_volume_claim=k8s.V1PersistentVolumeClaimVolumeSource(claim_name=site.pvc_claim),
+                        ),
+                        k8s.V1Volume(name="work", empty_dir=k8s.V1EmptyDirVolumeSource()),
+                    ],
+                ),
+            ),
+        ),
+    )
+
+
+async def reread_shared(singularity_hash: str, inspection: Inspection, suffix: str, poll_seconds: float = 5.0) -> bool:
+    """Run the read-back Job for the shared image ``singularity_hash`` and wait for it: whether it completed (what it
+    read is then beside the image)."""
+    site = BuildSite.from_settings(get_settings())
+    container = get_slurm_singularity_container_file(singularity_hash=singularity_hash)
+    name = f"reread-{singularity_hash[:12]}-{suffix.lower()[:5]}"
+    builds = k8s_builds()
+    await asyncio.to_thread(builds.create, reread_job(name, site, container, inspection))
+    deadline = asyncio.get_running_loop().time() + 1860
+    state = "running"
+    while state == "running" and asyncio.get_running_loop().time() < deadline:
+        await asyncio.sleep(poll_seconds)
+        state, why = await asyncio.to_thread(builds.state, name)
+        if state == "failed":
+            logger.warning(f"Read-back Job {name} failed: {why}")
+    return state == "completed"
 
 
 class K8sBuilds:

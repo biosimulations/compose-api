@@ -557,9 +557,9 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Read again what a prebuilt version's image installed and provides, in a Job that runs the image
-         * @description Started in the background; `GET …/versions/{number}` shows the result. A shared version's image is read back
-         *     by its own build.
+         * Read again what a version's image installed and provides, in a Job that runs the image
+         * @description Started in the background; `GET …/versions/{number}` shows the result. A prebuilt image is pulled and run; a
+         *     shared one, already built, is read again as its build reads a new one (for images built before builds did).
          */
         post: operations["inspect-environment-version"];
         delete?: never;
@@ -1775,9 +1775,14 @@ export interface components {
             existing?: number | null;
             /**
              * Against
-             * @description The default version compared with, if it has a lock
+             * @description The default version compared with, if it has a lock or a list of installed packages
              */
             against?: number | null;
+            /**
+             * Against Basis
+             * @description What of the default version was compared: its lock, or (a version made before locks, such as one built by a run) the packages its image installed, which name a package installed from git by its version
+             */
+            against_basis?: ("lock" | "installed") | null;
             /** Changes */
             changes?: components["schemas"]["PackageChange"][];
         };
@@ -3717,7 +3722,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description A shared version (its build reads it back), or no Kubernetes to run the Job on */
+            /** @description A shared version whose image is not built yet, or no Kubernetes to run the Job on */
             409: {
                 headers: {
                     [name: string]: unknown;
