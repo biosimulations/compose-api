@@ -1,7 +1,8 @@
 # Environment builds: jobs and artifacts of their own
 
 ~~**Status (2026-10-13): phases 1–3 merged (release 0.7.20); phase 4 in review.**~~ **Status (2026-10-13, later):
-phases 1–4 merged and released (0.7.20, 0.7.21); phase 5 deferred.** One PR per phase, merged with a merge commit; each PR updates the
+phases 1–4 merged and released (0.7.20, 0.7.21); phase 5 deferred.** Versions of an environment (several definitions per
+environment, chosen per run) are [plan-environment-versions.md](plan-environment-versions.md). One PR per phase, merged with a merge commit; each PR updates the
 table below. A merge deploys nothing by itself: the next release's image ships it (CLAUDE.md, "Deploys are GitOps").
 
 | Phase | What | State |
