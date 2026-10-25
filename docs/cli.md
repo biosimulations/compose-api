@@ -959,6 +959,7 @@ $ compose-api environments [OPTIONS] COMMAND [ARGS]...
 * `preview`: Resolve a shared environment's spec now...
 * `create`: Make a new version (or answer the existing...
 * `default`: Make a ready version the one runs get when...
+* `inspect`: Read a prebuilt version's image back...
 * `retire`: Retire a version: it refuses new runs; its...
 
 ### `compose-api environments list`
@@ -1152,6 +1153,27 @@ Make a ready version the one runs get when they name none. Needs the environment
 
 ```console
 $ compose-api environments default [OPTIONS] NAME NUMBER
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+* `NUMBER`: The version's number (registry_env@3 is 3).  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments inspect`
+
+Read a prebuilt version's image back again: what it installed and the interfaces it provides (in the
+background; `environments version` shows them). Needs the environment administrator role.
+
+**Usage**:
+
+```console
+$ compose-api environments inspect [OPTIONS] NAME NUMBER
 ```
 
 **Arguments**:
