@@ -20,6 +20,7 @@ from compose_api.dependencies import (
     get_required_job_monitor,
     get_required_simulation_service,
 )
+from compose_api.environments.versions import version_for
 from compose_api.registry.environments import (
     CatalogEntry,
     EnvironmentSummary,
@@ -140,8 +141,9 @@ async def _environment_simulator(name: str) -> SimulatorVersion:
     spec = builds.find_environment(name)
     if spec is None:
         raise HTTPException(status_code=404, detail=f"no environment {name!r}")
-    simulator_db = get_required_database_service().get_simulator_db()
-    return await builds.simulator_for(simulator_db, builds.environment_definition(spec))
+    # its default version's (docs/plan-environment-versions.md)
+    _version, simulator = await version_for(get_required_database_service(), None if spec.kind == "shared" else name)
+    return simulator
 
 
 async def _simulator(simulator_id: int) -> SimulatorVersion:

@@ -8,10 +8,25 @@ from dataclasses import dataclass, field
 from typing import override
 
 from pbest.utils.input_types import ContainerizationFileRepr
-from sqlalchemy import ColumnElement, Result, Row, ScalarSelect, Select, Subquery, and_, case, func, or_, select, text
+from sqlalchemy import (
+    ColumnElement,
+    Result,
+    Row,
+    ScalarSelect,
+    Select,
+    Subquery,
+    and_,
+    case,
+    delete,
+    func,
+    or_,
+    select,
+    text,
+)
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
+from compose_api.db.tables.environment_tables import ORMEnvironmentVersion
 from compose_api.db.tables.hpc_tables import JobStatusDB, JobTypeDB, ORMHpcRun, ORMSubmission
 from compose_api.db.tables.simulator_tables import (
     ORMDownloadedContainers,
@@ -120,6 +135,7 @@ class SimulatorDatabaseService(ABC):
         owner_sub: str | None = None,
         visibility: Visibility = Visibility.PUBLIC,
         submission: SubmissionSpec | None = None,
+        environment_version_id: int | None = None,
     ) -> Simulation:
         """Record the simulation; with ``submission``, also its queued ``requested`` submission (one transaction), whose
         request is ``sim_request`` as given (its paths the staged files)."""
@@ -450,6 +466,10 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
             images = select(ORMEnvironmentImage).where(ORMEnvironmentImage.simulator_id == simulator_id)
             for image in (await session.execute(images)).scalars().all():
                 await session.delete(image)
+            # its environment versions (an environment's default pointing at one is cleared by the foreign key)
+            await session.execute(
+                delete(ORMEnvironmentVersion).where(ORMEnvironmentVersion.simulator_id == simulator_id)
+            )
             await session.flush()
             await session.delete(orm_simulator)
 
@@ -474,11 +494,13 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
         owner_sub: str | None = None,
         visibility: Visibility = Visibility.PUBLIC,
         submission: SubmissionSpec | None = None,
+        environment_version_id: int | None = None,
     ) -> Simulation:
         async with self.async_session_maker() as session, session.begin():
             orm_simulation = ORMSimulation(
                 experiment_id=experiment_id,
                 simulator_id=simulator_version.database_id,
+                environment_version_id=environment_version_id,
                 owner_sub=owner_sub,
                 visibility=visibility.value,
                 labels=dict(sim_request.labels),
