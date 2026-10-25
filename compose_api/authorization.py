@@ -50,6 +50,28 @@ def _is_admin(caller: Caller | None) -> bool:
     return bool(configured) and configured in caller.roles
 
 
+def is_environment_admin(caller: Caller | None) -> bool:
+    """Whether the caller may create and change environment versions (docs/plan-environment-versions.md)."""
+    if caller is None:
+        return False
+    configured = get_settings().environment_admin_role.strip()
+    return bool(configured) and configured in caller.roles
+
+
+async def require_environment_admin(caller: OptionalCaller) -> Caller:
+    """The caller, if an environment administrator: otherwise 401 when anonymous, 403 when signed in."""
+    if caller is None:
+        raise HTTPException(status_code=401, detail="sign in as an environment administrator")
+    if not get_settings().environment_admin_role.strip():
+        raise HTTPException(status_code=403, detail="environment administration is not configured on this service")
+    if not is_environment_admin(caller):
+        raise HTTPException(status_code=403, detail="this needs the environment administrator role")
+    return caller
+
+
+EnvironmentAdmin = Annotated[Caller, Depends(require_environment_admin)]
+
+
 def can_read(caller: Caller | None, simulation: SimulationAccess) -> bool:
     """The read policy: public simulations to anyone, private ones to their owner and to configured admins."""
     if simulation.visibility == Visibility.PUBLIC:

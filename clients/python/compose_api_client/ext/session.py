@@ -31,13 +31,19 @@ from compose_api_client.api.datasets import get_dataset, get_dataset_content, ge
 from compose_api_client.api.registry import (
     build_environment,
     build_simulator,
+    create_environment_version,
     get_environment_headers,
     get_environment_images,
     get_environment_manifest,
+    get_environment_version,
     get_simulator_images,
+    list_environment_versions,
     list_environments,
     list_registry_entries,
     list_solvers,
+    preview_environment_version,
+    retire_environment_version,
+    set_environment_default,
 )
 from compose_api_client.api.results import (
     get_simulation_events,
@@ -123,12 +129,18 @@ from compose_api_client.models import (
     CurrentPrincipalResponse,
     Dataset,
     DatasetPage,
+    DefaultVersion,
     EnvironmentHeaders,
     EnvironmentSummary,
+    EnvironmentVersion,
+    EnvironmentVersionDetail,
+    EnvironmentVersions,
     HpcRun,
     ImageStatus,
     InterfaceManifest,
     ListSimulationsStatusType0,
+    LockPreview,
+    NewEnvironmentVersion,
     ProjectInfo,
     RegisteredSimulators,
     RunEvent,
@@ -588,6 +600,59 @@ class ComposeSession:
         """Make an environment's current image available: pulled or built unless it is, joining a build under way."""
         op = Operation("POST", f"/registry/environments/{name}/build", replayable=False)
         r, _ = self._send(op, lambda c: build_environment.sync_detailed(name, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def environment_versions(self, name: str) -> EnvironmentVersions:
+        """An environment's versions, newest first, and its default (docs/plan-environment-versions.md)."""
+        op = Operation("GET", f"/registry/environments/{name}/versions", replayable=True)
+        r, _ = self._send(op, lambda c: list_environment_versions.sync_detailed(name, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def environment_version(self, name: str, number: int) -> EnvironmentVersionDetail:
+        """One version: what it was made from, its lock, and what it installed and provides."""
+        op = Operation("GET", f"/registry/environments/{name}/versions/{number}", replayable=True)
+        r, _ = self._send(op, lambda c: get_environment_version.sync_detailed(name, number, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def preview_environment_version(self, name: str, *, resolved_at: datetime.datetime | None = None) -> LockPreview:
+        """A shared environment's spec resolved at ``resolved_at`` (default now), and its changes from the default;
+        nothing is created. Needs the environment administrator role."""
+        op = Operation("POST", f"/registry/environments/{name}/versions/preview", replayable=True)
+        body = NewEnvironmentVersion(resolved_at=resolved_at if resolved_at is not None else UNSET)
+        r, _ = self._send(op, lambda c: preview_environment_version.sync_detailed(name, client=c, body=body))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def create_environment_version(
+        self,
+        name: str,
+        *,
+        resolved_at: datetime.datetime | None = None,
+        image: str | None = None,
+        note: str | None = None,
+    ) -> EnvironmentVersion:
+        """A new version (or the existing one with the same definition): a shared environment resolved at
+        ``resolved_at`` (default now), or a prebuilt one's ``image`` by digest. Its image is built in the background;
+        it does not become the default. Needs the environment administrator role."""
+        op = Operation("POST", f"/registry/environments/{name}/versions", replayable=False)
+        body = NewEnvironmentVersion(
+            resolved_at=resolved_at if resolved_at is not None else UNSET,
+            image=image if image is not None else UNSET,
+            note=note if note is not None else UNSET,
+        )
+        r, _ = self._send(op, lambda c: create_environment_version.sync_detailed(name, client=c, body=body))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def set_environment_default(self, name: str, number: int) -> EnvironmentVersion:
+        """Make a ready version the one runs get when they name none. Needs the environment administrator role."""
+        op = Operation("PUT", f"/registry/environments/{name}/default", replayable=True)
+        body = DefaultVersion(number=number)
+        r, _ = self._send(op, lambda c: set_environment_default.sync_detailed(name, client=c, body=body))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def retire_environment_version(self, name: str, number: int) -> EnvironmentVersion:
+        """Retire a version: it refuses new runs; its images are kept. Needs the environment administrator role."""
+        op = Operation("POST", f"/registry/environments/{name}/versions/{number}/retire", replayable=True)
+        r, _ = self._send(op, lambda c: retire_environment_version.sync_detailed(name, number, client=c))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def simulator_images(self, simulator_id: int) -> ImageStatus:
@@ -1334,6 +1399,61 @@ class AsyncComposeSession:
         """Make an environment's current image available: pulled or built unless it is, joining a build under way."""
         op = Operation("POST", f"/registry/environments/{name}/build", replayable=False)
         r, _ = await self._send(op, lambda c: build_environment.asyncio_detailed(name, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def environment_versions(self, name: str) -> EnvironmentVersions:
+        """An environment's versions, newest first, and its default (docs/plan-environment-versions.md)."""
+        op = Operation("GET", f"/registry/environments/{name}/versions", replayable=True)
+        r, _ = await self._send(op, lambda c: list_environment_versions.asyncio_detailed(name, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def environment_version(self, name: str, number: int) -> EnvironmentVersionDetail:
+        """One version: what it was made from, its lock, and what it installed and provides."""
+        op = Operation("GET", f"/registry/environments/{name}/versions/{number}", replayable=True)
+        r, _ = await self._send(op, lambda c: get_environment_version.asyncio_detailed(name, number, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def preview_environment_version(
+        self, name: str, *, resolved_at: datetime.datetime | None = None
+    ) -> LockPreview:
+        """A shared environment's spec resolved at ``resolved_at`` (default now), and its changes from the default;
+        nothing is created. Needs the environment administrator role."""
+        op = Operation("POST", f"/registry/environments/{name}/versions/preview", replayable=True)
+        body = NewEnvironmentVersion(resolved_at=resolved_at if resolved_at is not None else UNSET)
+        r, _ = await self._send(op, lambda c: preview_environment_version.asyncio_detailed(name, client=c, body=body))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def create_environment_version(
+        self,
+        name: str,
+        *,
+        resolved_at: datetime.datetime | None = None,
+        image: str | None = None,
+        note: str | None = None,
+    ) -> EnvironmentVersion:
+        """A new version (or the existing one with the same definition): a shared environment resolved at
+        ``resolved_at`` (default now), or a prebuilt one's ``image`` by digest. Its image is built in the background;
+        it does not become the default. Needs the environment administrator role."""
+        op = Operation("POST", f"/registry/environments/{name}/versions", replayable=False)
+        body = NewEnvironmentVersion(
+            resolved_at=resolved_at if resolved_at is not None else UNSET,
+            image=image if image is not None else UNSET,
+            note=note if note is not None else UNSET,
+        )
+        r, _ = await self._send(op, lambda c: create_environment_version.asyncio_detailed(name, client=c, body=body))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def set_environment_default(self, name: str, number: int) -> EnvironmentVersion:
+        """Make a ready version the one runs get when they name none. Needs the environment administrator role."""
+        op = Operation("PUT", f"/registry/environments/{name}/default", replayable=True)
+        body = DefaultVersion(number=number)
+        r, _ = await self._send(op, lambda c: set_environment_default.asyncio_detailed(name, client=c, body=body))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def retire_environment_version(self, name: str, number: int) -> EnvironmentVersion:
+        """Retire a version: it refuses new runs; its images are kept. Needs the environment administrator role."""
+        op = Operation("POST", f"/registry/environments/{name}/versions/{number}/retire", replayable=True)
+        r, _ = await self._send(op, lambda c: retire_environment_version.asyncio_detailed(name, number, client=c))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def simulator_images(self, simulator_id: int) -> ImageStatus:

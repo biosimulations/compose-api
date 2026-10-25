@@ -14,6 +14,7 @@ import asyncio
 import datetime
 import hashlib
 import importlib.metadata
+import re
 import shutil
 import sys
 import tempfile
@@ -74,6 +75,26 @@ class Lock:
     @property
     def sha256(self) -> str:
         return hashlib.sha256(self.text.encode()).hexdigest()
+
+
+def pins(lock: str) -> dict[str, str]:
+    """A lock's packages, by normalized name: the version, or the URL of a direct reference."""
+    found: dict[str, str] = {}
+    for line in lock.splitlines():
+        if not line or line[0].isspace() or line.startswith("#"):
+            continue
+        if " @ " in line:
+            name, _, version = line.partition(" @ ")
+        else:
+            name, _, version = line.partition("==")
+        found[re.sub(r"[-_.]+", "-", name.split("[")[0].strip()).lower()] = version.strip()
+    return found
+
+
+def changes(before: str, after: str) -> list[tuple[str, str | None, str | None]]:
+    """``(name, before, after)`` for each package added, removed or moved between two locks, by name."""
+    old, new = pins(before), pins(after)
+    return [(n, old.get(n), new.get(n)) for n in sorted(old.keys() | new.keys()) if old.get(n) != new.get(n)]
 
 
 def exclude_newer(resolved_at: datetime.datetime) -> str:

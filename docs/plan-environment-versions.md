@@ -1,14 +1,14 @@
 # Environment versions: locked, built and chosen through the API
 
-**Status (2026-10-25): steps 1–2 merged (#369, #370); step 3 in review.** One PR per step, merged with a merge commit; each PR updates the table below. A
+**Status (2026-10-25): steps 1–3 merged (#369–#371); step 4a in review.** One PR per step, merged with a merge commit; each PR updates the table below. A
 merge deploys nothing by itself: the next release's image ships it (CLAUDE.md, "Deploys are GitOps").
 
 | Step | What | State |
 |---|---|---|
 | 1 | This document | merged (#369) |
 | 2 | `environment` and `environment_version` tables; today's two environments seeded as version 1 and made the defaults; one function chooses a run's version. No change in behavior | merged (#370) |
-| 3 | A shared version is a **lock**: compiled by the API with uv, its hash the identity; the definition installs from it | in review |
-| 4 | Creating versions through the API (refresh, prebuilt registration), with the lock diff, the installed packages and the interfaces recorded; the admin role | |
+| 3 | A shared version is a **lock**: compiled by the API with uv, its hash the identity; the definition installs from it | merged (#371) |
+| 4 | Creating versions through the API (refresh, prebuilt registration), with the lock diff, the installed packages and the interfaces recorded; the admin role | 4a (routes, role, CLI) in review; 4b (installed packages and interfaces from the build) to do |
 | 5 | Choosing them: `environment_version` on runs, required on suite runs; recorded on every simulation and suite run | |
 | 6 | Retire the hard-coding: `PREBUILT_SIMULATORS`, `shared_image()`, the committed interface manifests | |
 
@@ -142,6 +142,17 @@ suite_run            + environment_versions  {environment: version}
    `pip freeze`, `micromamba list` and the describe script with `apptainer exec` against the new SIF, and the copy
    container moves `<hash>.installed.txt` and `<hash>.interfaces.json` beside it; recording the image stores them
    on the version and marks it ready. The prebuilt describe Job. Client, spec, CLI.
+   *As built, 4a:* `GET /registry/environments/{name}/versions[/{number}]` (public);
+   `POST …/versions/preview`, `POST …/versions`, `PUT …/default`, `POST …/versions/{number}/retire`, behind
+   `environment_admin_role` (401 anonymous, 403 otherwise; 403 for everyone while the setting is empty). Creating
+   answers 201 with the version `building` and builds its image in the background through `handlers.ensure_image`
+   (then `ready` or `failed`); the same definition again answers 200 with the existing version, and restarts a
+   failed one's image. A version never becomes the default on its own. `environment.default_source` (revision
+   `8f4b2d6e3a71`) records who chose the default: `deployment` (step 2's adoption, which continues) or `api`, which
+   the deployment's definition no longer overrides. A library list other than the registry's makes an `origin =
+   custom` version. A prebuilt version is an image by digest only. CLI: `environments versions | version | preview |
+   create | default | retire`. Creating is a submission in the client (sent once); preview and retire may be retried.
+   A prebuilt environment still needs its name in `PREBUILT_SIMULATORS` for runs to be accepted (step 6).
 5. **Choosing versions.** The run parameters, the suite requirement (`sedml-suites.yml` passes repository
    variables), the simulation column and label, `solvers.yaml` checked against the chosen version's interfaces, and
    the web app's environment page listing versions with their diffs.

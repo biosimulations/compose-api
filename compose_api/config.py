@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from dotenv import load_dotenv
-from pydantic import field_validator
+from pydantic import ValidationInfo, field_validator
 from pydantic_settings import BaseSettings
 
 KV_DRIVER = Literal["file", "s3", "gcs"]
@@ -180,6 +180,10 @@ class Settings(BaseSettings):
     # the admin bypass so the tenant-wide `admin` role does not automatically read private compose-api simulations.
     # DEFAULT_ROLE is refused: every signed-in caller holds it, so it would let anyone read every private simulation.
     admin_role: str = ""
+    # Role name allowed to create, refresh, set the default of and retire environment versions
+    # (docs/plan-environment-versions.md, "Authorization"). Empty disables those actions; runs still build and use an
+    # environment's versions. DEFAULT_ROLE is refused, as for admin_role.
+    environment_admin_role: str = ""
 
     # The static web UI build served at /ui (webapp/, `npm run generate`). Absent: the API runs without a UI.
     webapp_dist_dir: str = f"{REPO_ROOT}/webapp/.output/public"
@@ -187,15 +191,18 @@ class Settings(BaseSettings):
     # /webapp/csp-report. Turn on once the reports show the policy matches what the UI loads.
     webapp_csp_enforce: bool = False
 
-    @field_validator("admin_role")
+    @field_validator("admin_role", "environment_admin_role")
     @classmethod
-    def _admin_role_is_not_everyone(cls, value: str) -> str:
-        # Fails the deployment at startup (settings load at import) rather than serving private simulations to all.
+    def _admin_role_is_not_everyone(cls, value: str, info: ValidationInfo) -> str:
+        # Fails the deployment at startup (settings load at import) rather than granting every signed-in caller.
         if value.strip() == DEFAULT_ROLE:
+            what = {
+                "admin_role": "read every private simulation",
+                "environment_admin_role": "create and change environment versions",
+            }[str(info.field_name)]
             raise ValueError(
-                f"ADMIN_ROLE must not be {DEFAULT_ROLE!r}: every signed-in caller holds that role, so it would let"
-                " anyone who signs in read every private simulation. Name a role only administrators hold, or leave"
-                " it empty"
+                f"{str(info.field_name).upper()} must not be {DEFAULT_ROLE!r}: every signed-in caller holds that role,"
+                f" so it would let anyone who signs in {what}. Name a role only administrators hold, or leave it empty"
             )
         return value
 
