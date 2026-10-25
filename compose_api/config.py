@@ -83,6 +83,7 @@ class Settings(BaseSettings):
     build_k8s_run_as_gid: int = 0
     build_k8s_supplemental_groups: str = ""
     build_k8s_timeout_seconds: int = 7200
+    build_k8s_ephemeral_storage: str = "20Gi"  # requested for a build's scratch volume ("" requests none)
     slurm_qos: str = ""
     batch_slurm_qos: str = ""
     batch_slurm_partition: str = ""

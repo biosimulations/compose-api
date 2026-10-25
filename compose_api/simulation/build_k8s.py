@@ -58,6 +58,7 @@ class BuildSite:
     run_as_gid: int
     supplemental_groups: tuple[int, ...]
     timeout_seconds: int
+    ephemeral_storage: str = ""
 
     @classmethod
     def from_settings(cls, s: Settings) -> BuildSite:
@@ -74,6 +75,7 @@ class BuildSite:
             run_as_gid=s.build_k8s_run_as_gid,
             supplemental_groups=groups,
             timeout_seconds=s.build_k8s_timeout_seconds,
+            ephemeral_storage=s.build_k8s_ephemeral_storage,
         )
 
 
@@ -81,9 +83,13 @@ DEFINITION_ENV = "CONTAINER_DEFINITION_B64"
 
 
 def build_script() -> str:
-    """PRIVILEGED, as root, in scratch: the image built from the definition the Job carries (base64, in the env)."""
+    """PRIVILEGED, as root, in scratch: the image built from the definition the Job carries (base64, in the env).
+    Apptainer's temporary sandbox and its cache go in the scratch volume too, not the container's own /tmp and /root,
+    so everything the build writes is the volume the Job requests ephemeral storage for."""
     return dedent(f"""\
         set -eu
+        export APPTAINER_TMPDIR={WORK_DIR}/scratch APPTAINER_CACHEDIR={WORK_DIR}/cache
+        mkdir -p "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"
         apptainer --version
         echo "${DEFINITION_ENV}" | base64 -d > {WORK_DIR}/image.def
         apptainer build {WORK_DIR}/image.sif {WORK_DIR}/image.def
@@ -110,6 +116,13 @@ def build_job(name: str, site: BuildSite, definition: str, container: Path) -> V
 
     shared = k8s.V1VolumeMount(name="shared", mount_path=site.pvc_mount_path, sub_path=site.pvc_sub_path or None)
     work = k8s.V1VolumeMount(name="work", mount_path=WORK_DIR)
+    # A request, not a limit: the scheduler places the build on a node with that much disk free (k8s-wn-02 filled up
+    # mid-build on 2026-10-24, "[Errno 28] No space left on device"), and a build that needs more is not evicted.
+    scratch = (
+        k8s.V1ResourceRequirements(requests={"ephemeral-storage": site.ephemeral_storage})
+        if site.ephemeral_storage
+        else None
+    )
     labels = {"app": LABEL, "compose-api-build": name}
     return k8s.V1Job(
         metadata=k8s.V1ObjectMeta(name=name, labels=labels),
@@ -134,6 +147,7 @@ def build_job(name: str, site: BuildSite, definition: str, container: Path) -> V
                                 k8s.V1EnvVar(name=DEFINITION_ENV, value=base64.b64encode(definition.encode()).decode())
                             ],
                             security_context=k8s.V1SecurityContext(privileged=True, run_as_user=0),
+                            resources=scratch,
                             volume_mounts=[work],
                         )
                     ],
