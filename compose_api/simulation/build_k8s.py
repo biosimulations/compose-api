@@ -23,6 +23,7 @@ import asyncio
 import base64
 import datetime
 import logging
+import shlex
 from dataclasses import dataclass
 from pathlib import Path
 from textwrap import dedent
@@ -32,7 +33,7 @@ from compose_api.common.hpc.models import SlurmJob
 from compose_api.config import Settings, get_settings
 from compose_api.db.services.hpc_db import HPCDatabaseService
 from compose_api.simulation.builds import BuildFailedError, wait_for_run
-from compose_api.simulation.hpc_utils import get_slurm_singularity_container_file
+from compose_api.simulation.hpc_utils import get_image_inspection_file, get_slurm_singularity_container_file
 from compose_api.simulation.models import HpcRun, JobType, SimulatorVersion
 
 if TYPE_CHECKING:
@@ -80,6 +81,48 @@ class BuildSite:
 
 
 DEFINITION_ENV = "CONTAINER_DEFINITION_B64"
+DESCRIBE_ENV = "DESCRIBE_SCRIPT_B64"
+#: what a build reads from the image it made, by file kind (docs/plan-environment-versions.md, V7)
+INSPECTIONS = ("installed.txt", "interfaces.json")
+
+# The Python distributions an image holds, read with its own interpreter (standard library only).
+_INSTALLED = """\
+import importlib.metadata as m
+names = {f"{d.metadata['Name']}=={d.version}" for d in m.distributions() if d.metadata['Name']}
+print("\\n".join(sorted(names, key=str.lower)))
+"""
+
+
+@dataclass(frozen=True)
+class Inspection:
+    """Reading back an environment version's image once it is built: its environment's Python (the command that
+    enters it), the module roots to describe and the label the manifest carries, and the describe script itself
+    (process-bigraph-lang's, standard library only; None reads the installed packages only)."""
+
+    python: tuple[str, ...]
+    roots: tuple[str, ...]
+    environment: str
+    label: str
+    describe_script: str | None = None
+
+
+def inspect_script(inspection: Inspection) -> str:
+    """PRIVILEGED, after the build: the image run with its own Python, to list what it installed and describe its
+    process interfaces. Best effort: a failure leaves that file out and never fails the build."""
+    python = shlex.join(inspection.python)
+    run = f"apptainer exec --bind {WORK_DIR} {WORK_DIR}/image.sif {python}"
+    describe = shlex.join([*inspection.roots, "--env-name", inspection.environment, "--image", inspection.label])
+    return dedent(f"""\
+        cat > {WORK_DIR}/installed.py <<'COMPOSE_API_INSTALLED'
+        {{installed}}COMPOSE_API_INSTALLED
+        {run} {WORK_DIR}/installed.py > {WORK_DIR}/image.installed.txt \\
+          || {{ echo "could not list the installed packages" >&2; rm -f {WORK_DIR}/image.installed.txt; }}
+        if [ -n "${{{DESCRIBE_ENV}:-}}" ]; then
+          echo "${DESCRIBE_ENV}" | base64 -d > {WORK_DIR}/describe_env.py
+          {run} {WORK_DIR}/describe_env.py {describe} > {WORK_DIR}/image.interfaces.json \\
+            || {{ echo "could not describe the interfaces" >&2; rm -f {WORK_DIR}/image.interfaces.json; }}
+        fi
+        """).replace("{installed}", _INSTALLED)
 
 
 def build_script() -> str:
@@ -97,22 +140,47 @@ def build_script() -> str:
         """)
 
 
-def publish_script(container: Path) -> str:
-    """As the service user: the image written beside its target and renamed, so a reader never sees a partial one."""
-    return dedent(f"""\
+def publish_script(container: Path, inspections: dict[str, Path] | None = None) -> str:
+    """As the service user: the image written beside its target and renamed, so a reader never sees a partial one;
+    then whatever the build read from it (``inspections``: file kind -> its target), each only if it was written."""
+    extra = "".join(
+        f'if [ -f {WORK_DIR}/image.{kind} ]; then cp {WORK_DIR}/image.{kind} "{target}.part-$HOSTNAME" && '
+        f'mv -f "{target}.part-$HOSTNAME" "{target}"; fi\n'
+        for kind, target in (inspections or {}).items()
+    )
+    return (
+        dedent(f"""\
         set -eu
         id
         mkdir -p "{container.parent}"
         cp {WORK_DIR}/image.sif "{container}.part-$HOSTNAME"
         mv -f "{container}.part-$HOSTNAME" "{container}"
         ls -la "{container}"
-        echo "Finished building container."
         """)
+        + extra
+        + 'echo "Finished building container."\n'
+    )
 
 
-def build_job(name: str, site: BuildSite, definition: str, container: Path) -> V1Job:
-    """The build Job, as a value (what a test reads)."""
+def build_job(
+    name: str, site: BuildSite, definition: str, container: Path, inspection: Inspection | None = None
+) -> V1Job:
+    """The build Job, as a value (what a test reads). With ``inspection``, the image is read back once built, and
+    what was read is placed beside it (``get_image_inspection_file``)."""
     from kubernetes import client as k8s
+
+    script, env = (
+        build_script(),
+        [k8s.V1EnvVar(name=DEFINITION_ENV, value=base64.b64encode(definition.encode()).decode())],
+    )
+    inspections: dict[str, Path] = {}
+    if inspection is not None:
+        script += inspect_script(inspection)
+        if inspection.describe_script is not None:
+            encoded = base64.b64encode(inspection.describe_script.encode()).decode()
+            env.append(k8s.V1EnvVar(name=DESCRIBE_ENV, value=encoded))
+        stem = container.name.removesuffix(".sif")
+        inspections = {kind: get_image_inspection_file(stem, kind) for kind in INSPECTIONS}
 
     shared = k8s.V1VolumeMount(name="shared", mount_path=site.pvc_mount_path, sub_path=site.pvc_sub_path or None)
     work = k8s.V1VolumeMount(name="work", mount_path=WORK_DIR)
@@ -142,10 +210,8 @@ def build_job(name: str, site: BuildSite, definition: str, container: Path) -> V
                         k8s.V1Container(
                             name="build",
                             image=site.image,
-                            command=["/bin/bash", "-c", build_script()],
-                            env=[
-                                k8s.V1EnvVar(name=DEFINITION_ENV, value=base64.b64encode(definition.encode()).decode())
-                            ],
+                            command=["/bin/bash", "-c", script],
+                            env=env,
                             security_context=k8s.V1SecurityContext(privileged=True, run_as_user=0),
                             resources=scratch,
                             volume_mounts=[work],
@@ -155,7 +221,7 @@ def build_job(name: str, site: BuildSite, definition: str, container: Path) -> V
                         k8s.V1Container(
                             name="copy",
                             image=site.image,
-                            command=["/bin/bash", "-c", publish_script(container)],
+                            command=["/bin/bash", "-c", publish_script(container, inspections)],
                             security_context=k8s.V1SecurityContext(
                                 privileged=False,
                                 run_as_user=site.run_as_uid,
@@ -271,13 +337,58 @@ def job_name(simulator_version: SimulatorVersion, suffix: str) -> str:
     return f"build-{simulator_version.container_def_hash[:12]}-{suffix.lower()[:5]}"
 
 
+_describe_scripts: dict[str, str] = {}
+
+
+async def describe_script() -> str | None:
+    """process-bigraph-lang's describe script at the commit ``environments.yaml`` pins, fetched once; None when it
+    cannot be fetched (the build then lists the installed packages only)."""
+    import httpx
+
+    from compose_api.registry.environments import load_environments
+
+    url = load_environments().describe.raw_url
+    if url not in _describe_scripts:
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                response = await client.get(url)
+                response.raise_for_status()
+        except httpx.HTTPError as e:
+            logger.warning(f"The describe script could not be fetched ({url}): {e}")
+            return None
+        _describe_scripts[url] = response.text
+    return _describe_scripts[url]
+
+
+async def inspection_for(simulator_version: SimulatorVersion) -> Inspection | None:
+    """How to read back the image of an environment version's simulator; None for a simulator no version names."""
+    from compose_api.dependencies import get_database_service  # late: dependencies imports the simulation modules
+    from compose_api.registry.environments import load_environments, module_roots
+
+    database_service = get_database_service()
+    if database_service is None:
+        return None
+    version = await database_service.get_environments_db().of_simulator(simulator_version.database_id)
+    spec = next((e for e in load_environments().environments if version and e.name == version.environment), None)
+    if version is None or spec is None:
+        return None
+    return Inspection(
+        python=tuple(spec.python),
+        roots=tuple(module_roots(spec.name)),
+        environment=spec.name,
+        label=version.label,
+        describe_script=await describe_script() if module_roots(spec.name) else None,
+    )
+
+
 async def submit_build(simulator_version: SimulatorVersion, hpc_db: HPCDatabaseService, suffix: str) -> HpcRun:
     """Create the build Job, carrying the definition, and record it as the simulator's build run: backend ``k8s``,
-    external id the Job's name; the monitor polls it."""
+    external id the Job's name; the monitor polls it. An environment version's image is read back once built."""
     site = BuildSite.from_settings(get_settings())
     container = get_slurm_singularity_container_file(singularity_hash=simulator_version.container_def_hash)
     name = job_name(simulator_version, suffix)
-    job = build_job(name, site, simulator_version.container_def.representation, container)
+    inspection = await inspection_for(simulator_version)
+    job = build_job(name, site, simulator_version.container_def.representation, container, inspection)
     await asyncio.to_thread(k8s_builds().create, job)
     logger.info("Submitted container build %s as a Kubernetes Job (-> %s)", name, container)
     return await hpc_db.insert_hpcrun(

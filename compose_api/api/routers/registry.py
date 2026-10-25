@@ -23,6 +23,7 @@ from compose_api.dependencies import (
     get_required_simulation_service,
 )
 from compose_api.environments import service as environment_service
+from compose_api.environments.contents import record_contents
 from compose_api.environments.service import VersionRequestError
 from compose_api.environments.versions import version_for
 from compose_api.registry.environments import (
@@ -263,7 +264,8 @@ async def _build_version(version: EnvironmentVersion, simulator: SimulatorVersio
         await environments_db.set_state(version.database_id, VersionState.FAILED)
         return
     await environments_db.set_state(version.database_id, VersionState.READY)
-    logger.info(f"{version.label} is ready")
+    recorded = await record_contents(get_required_database_service(), version)
+    logger.info(f"{version.label} is ready" + ("" if recorded else "; its image left nothing read back from it"))
 
 
 @config.router.get(
@@ -291,7 +293,13 @@ async def list_environment_versions(name: str, principal: OptionalPrincipal) -> 
 async def get_environment_version(name: str, number: int, principal: OptionalPrincipal) -> EnvironmentVersionDetail:
     # public: the same for every caller
     _known_environment(name)
-    return await _version(name, number)
+    version = await _version(name, number)
+    pending = version.installed is None and version.interfaces is None
+    if pending and version.state == VersionState.READY:  # built by a run, or before this service read images back
+        database_service = get_required_database_service()
+        if await record_contents(database_service, version):
+            version = await _version(name, number)
+    return version
 
 
 @config.router.post(
