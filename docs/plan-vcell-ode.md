@@ -117,4 +117,5 @@ those through its `expected` list as solver limits, as it does for Tellurium's d
 2. pbest: the pbsim-common pin, then tag 0.6.5.
 3. compose-api: the library entry, the pbest pin, the manifest, `solvers.yaml`, the cluster test; then regenerate
    `registry_env`'s interface manifest (CI PR); release.
-4. Suite: add `vcell` to `biomodels-curated-300`, run it, and record the expected entries.
+4. Suite: add `vcell` to `biomodels-curated-300`, run it, and record the expected entries. The suite names `vcell`
+   from 0.7.40; its run 3 is the first with it.
