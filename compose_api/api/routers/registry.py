@@ -475,7 +475,7 @@ async def inspect_environment_version(
 ) -> EnvironmentVersion:
     """Started in the background; `GET …/versions/{number}` shows the result. A prebuilt image is pulled and run; a
     shared one, already built, is read again as its build reads a new one (for images built before builds did)."""
-    _known_environment(name)
+    await _readable_kind(name)  # a mash-up's versions are read back like any composed one's
     version = await _version(name, number)
     if version.image is None and version.state != VersionState.READY:
         raise HTTPException(status_code=409, detail=f"{version.label} is {version.state}: its build reads it back")

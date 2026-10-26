@@ -19,7 +19,7 @@
 | 5c | Admission by what the version certifies: a refused component, a failed entry, members only | merged (#391) |
 | 6 | registry_env migrates to a composed version on a current process-bigraph | @4 (0.7.46) and @5 (0.7.50) ready; suite run 5 running; then the default |
 | 7a | Runs name an environment or have one inferred; environments listed from the database | merged (#415, #416) |
-| 7b | Implicit mash-ups, proven with viva-basic-processes | 7b-1 (#417) and 7b-2 (#418) merged; 7b-3 (implicit creation) in review; then 7b-4 (live, after a release) |
+| 7b | Implicit mash-ups, proven with viva-basic-processes | 7b-1 to 7b-3 merged (#417–#419) and live in 0.7.51; the live check found the read-back fix (in review) |
 | 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | |
 | 8 | Retire the shared uv path, `simulator_registry.json`, `shared_image()`, pbest in images, `PREBUILT_SIMULATORS`, the committed interface manifests | |
 
@@ -371,6 +371,19 @@
        twice: a later run uses it, or is told it failed (409). Nothing is made for a run validation would refuse (an
        unsafe address, a class under no entry). An administrator makes a mash-up's later versions with
        `environments create` (D7.7).
+     - *Live, 7b-4 (2026-10-26, 0.7.51):* a signed-in run of COPASI's phase-cycle step beside Intervention,
+       MathExpressionStep and Clock, naming no environment, made `mash-0a364f43c1` (pbsim-common, its four engines,
+       viva-basic-processes) with the lock in the request (7.9 s). It built in about a minute, the run completed
+       (x = 11, y = 34, tick = 5, and COPASI's 51-point time course), and all three compliance cases passed in it
+       (pbsim-common's two, viva-basic-processes' one): both entries `tested` there. A second identical run was
+       accepted in 1.2 s and used the same version, with no lock and no build.
+       Two findings:
+       - **Nothing was read back from the mash-up's image:** `build_k8s.inspection_of` found its Python and module
+         roots in environments.yaml only. Fixed: a composed version is entered through pixi and provides its own
+         entries' roots. `@1` is read again through `inspect`, which now accepts a mash-up's name.
+       - **A document cannot name process-bigraph's own `RAMEmitter`:** `local:RAMEmitter` is refused as a short
+         name, and no entry covers `process_bigraph`, so the live document carries no emitter (its results are its
+         saved state). Compliance cases use it because they are not checked as submissions. Parked.
      - Second, later: viva-emitters (PyPI 0.4.3; `SQLiteEmitter` needs no extras). viva-torch is too heavy for a first
        test. Pinning viva-basic-processes changes nothing in vivarium-collective.
      - Live: a document using it with a pbsim-common step creates `mash-…`, builds it, runs, and a second identical
