@@ -13,9 +13,9 @@
 | 3 | pixi: generated from entries, locked in an unprivileged Job; the definition that installs the lock | in review |
 | 4a | Environments get a stable id; versions and suite runs refer to it, never to a name | merged (#386) |
 | 4 | Composed versions: created `resolving`, locked in the background, built, read back; exported as pixi | merged (#387) |
-| 4b | The uv export (`pyproject.toml` and `uv.lock`) for a composed version that needs no conda | in review |
-| 5a | Compliance checks: the generic `step-outputs-replace` check, cases kept with an entry, their evaluation; pbsim-common's first cases | in review |
-| 5b | Compliance runs: after a build, each member entry's cases run in the version; levels recorded per entry and version; API and CLI | |
+| 4b | The uv export (`pyproject.toml` and `uv.lock`) for a composed version that needs no conda | merged (#388) |
+| 5a | Compliance checks: the generic `step-outputs-replace` check, cases kept with an entry, their evaluation; pbsim-common's first cases | merged (#389) |
+| 5b | Compliance runs: after a build, each member entry's cases run in the version; levels recorded per entry and version; API and CLI | in review |
 | 5c | Admission by computed level: a component runs only where its entry is `tested` in the version that will run it | |
 | 6 | registry_env migrates to a composed version on a current process-bigraph | |
 | 7 | The per-composite resolver: mash-ups built on demand from a run | |
@@ -58,6 +58,8 @@
   - Every version publishes `pixi.toml` and `pixi.lock`.
   - A version with no conda requirements also offers a generated `pyproject.toml` and `uv.lock` for local `uv sync`. They are resolved with exact pins from its `pixi.lock`, and offered only if uv arrives at the identical set.
 - **C3. Compliance tests live with the registry entry.**
+  - **A component that fails a generic check is refused on its own** in that version (Jim, 2026-10-25), not its
+    whole entry. The entry's level comes from its cases.
   - What is certified is the *process class* that wraps a library (`CopasiUTCStep`), not the library: COPASI's and tellurium's own suites test only themselves.
   - Each entry carries small composites (`.pbg`) with inputs, expected outputs and pass/fail criteria: tolerances, reference tables, invariants.
   - **Generic interface checks** apply to every component, for example: a step fired twice leaves its latest result (the overwrite bug of pbsim_common#21); its ports resolve.
@@ -191,7 +193,30 @@
    - **pbsim-common's first two cases:** `CopasiUTCStep` and `TelluriumUTCStep` on the public phase-cycle model,
      against COPASI's own report at t = 0, 2, …, 10. Both passed in the real pixi image on process-bigraph 1.9.1, run
      by the runner from an omex as step 5b will.
-5b. **Compliance runs** (`entry_level`, the runs after a build, the API and CLI).
+5b. **Compliance runs.**
+   *As built (2026-10-25):*
+   - **When:** once a composed version is ready and read back, `compliance_runs.start` submits each member entry's
+     cases through the run path.
+   - **What a case run is:** an omex of the case's document and files, run in *that* version (`environment_version`
+     is its number), queued as `compliance:<environment>`, labelled `source=compliance` and
+     `compliance=<entry>/<case>`.
+   - **Where it is recorded:** in `compliance_run`, one row per version, entry and case.
+   - **Evaluation** happens when the report is read (`GET …/versions/{n}/compliance`, public), so nothing polls:
+     - a finished run's `.pber` is read from its experiment directory and checked against the case;
+     - a run that did not complete is an `error`.
+   - **An entry's level:**
+     - `tested` when all its cases passed;
+     - `pending` while any runs;
+     - `failed` when one did not pass;
+     - `untested` without cases.
+   - **The generic checks** run at read-back. The read-back now also prints the image's type tables (`types.json`,
+     from `COMPOSE_RUNNER_TYPES`), and their findings are kept on the version (`findings`, migration
+     `e5a8b3d1f926`). The report lists the refused components.
+   - **Running them again:** `POST …/compliance` (admin) runs a ready composed version's cases again. The client
+     sends it once and never retries it, since it submits runs.
+   - **CLI:** `environments compliance NAME N [--run]`.
+   - **A bug the tests caught:** the type-table script was first called `types.py`, which shadowed Python's `types`
+     module for the describe script beside it. It is `type_tables.py`.
 5c. **Admission by computed level.**
 6. **registry_env migrates.**
    - pbsim-common and biosim-toolkit move to process-bigraph ≥1.9.1. pbsim_common is changed only with Jim's go-ahead.

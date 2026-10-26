@@ -103,6 +103,8 @@ def port_findings(interfaces: dict[str, Any], named: dict[str, Any], module_root
     ``module_roots``: a step whose output ports accumulate fails ``step-outputs-replace``."""
     findings: list[Finding] = []
     for component in interfaces.get("components", []):
+        if not isinstance(component, dict):
+            continue  # a malformed read-back judges nothing
         module = str(component.get("module", ""))
         if not any(module == root or module.startswith(root + ".") for root in module_roots):
             continue

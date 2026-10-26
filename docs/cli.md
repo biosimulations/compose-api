@@ -958,6 +958,7 @@ $ compose-api environments [OPTIONS] COMMAND [ARGS]...
 * `versions`: An environment's versions, newest first,...
 * `version`: One version: what it was made from, its...
 * `export`: Write the files that recreate a version...
+* `compliance`: Where each entry of a version stands...
 * `preview`: Resolve a shared environment's spec now...
 * `create`: Make a new version (or answer the existing...
 * `default`: Make a ready version the one runs get when...
@@ -1124,6 +1125,28 @@ $ compose-api environments export [OPTIONS] NAME NUMBER
 
 * `-o, --out PATH`: Directory to write the files into.  [default: .]
 * `--format TEXT`: pixi (pixi.toml, pixi.lock), uv (pyproject.toml, uv.lock; without conda) or requirements; pixi by default for a composed version.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments compliance`
+
+Where each entry of a version stands there: `tested` when its compliance cases passed in it, and the components
+a generic check refuses (a step whose results accumulate, say).
+
+**Usage**:
+
+```console
+$ compose-api environments compliance [OPTIONS] NAME NUMBER
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+* `NUMBER`: The version's number (registry_env@3 is 3).  [required]
+
+**Options**:
+
+* `--run`: Run the cases again first (needs the environment administrator role).
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 

@@ -11,6 +11,7 @@ from ..models.version_state import VersionState
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
+    from ..models.environment_version_detail_findings_type_0_item import EnvironmentVersionDetailFindingsType0Item
     from ..models.environment_version_detail_interfaces_type_0 import EnvironmentVersionDetailInterfacesType0
     from ..models.environment_version_detail_spec_type_0 import EnvironmentVersionDetailSpecType0
 
@@ -42,6 +43,9 @@ class EnvironmentVersionDetail:
         lock (None | str | Unset): A shared version's lock: every PyPI package, pinned
         installed (None | str | Unset): What its image installed, read from the image
         interfaces (EnvironmentVersionDetailInterfacesType0 | None | Unset): Its process interfaces (pbg-interfaces/1)
+        findings (list[EnvironmentVersionDetailFindingsType0Item] | None | Unset): What the generic compliance checks
+            found in its components: a component with a `fail` is refused in this version (docs/plan-environment-
+            composition.md, step 5)
     """
 
     database_id: int
@@ -63,6 +67,7 @@ class EnvironmentVersionDetail:
     lock: None | str | Unset = UNSET
     installed: None | str | Unset = UNSET
     interfaces: EnvironmentVersionDetailInterfacesType0 | None | Unset = UNSET
+    findings: list[EnvironmentVersionDetailFindingsType0Item] | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -166,6 +171,18 @@ class EnvironmentVersionDetail:
         else:
             interfaces = self.interfaces
 
+        findings: list[dict[str, Any]] | None | Unset
+        if isinstance(self.findings, Unset):
+            findings = UNSET
+        elif isinstance(self.findings, list):
+            findings = []
+            for findings_type_0_item_data in self.findings:
+                findings_type_0_item = findings_type_0_item_data.to_dict()
+                findings.append(findings_type_0_item)
+
+        else:
+            findings = self.findings
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
@@ -202,11 +219,16 @@ class EnvironmentVersionDetail:
             field_dict["installed"] = installed
         if interfaces is not UNSET:
             field_dict["interfaces"] = interfaces
+        if findings is not UNSET:
+            field_dict["findings"] = findings
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        from ..models.environment_version_detail_findings_type_0_item import (
+            EnvironmentVersionDetailFindingsType0Item,  # noqa: PLC0415
+        )
         from ..models.environment_version_detail_interfaces_type_0 import (
             EnvironmentVersionDetailInterfacesType0,  # noqa: PLC0415
         )
@@ -372,6 +394,30 @@ class EnvironmentVersionDetail:
 
         interfaces = _parse_interfaces(d.pop("interfaces", UNSET))
 
+        def _parse_findings(data: object) -> list[EnvironmentVersionDetailFindingsType0Item] | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, list):
+                    raise TypeError()
+                findings_type_0 = []
+                _findings_type_0 = data
+                for findings_type_0_item_data in _findings_type_0:
+                    findings_type_0_item = EnvironmentVersionDetailFindingsType0Item.from_dict(
+                        findings_type_0_item_data
+                    )
+
+                    findings_type_0.append(findings_type_0_item)
+
+                return findings_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(list[EnvironmentVersionDetailFindingsType0Item] | None | Unset, data)
+
+        findings = _parse_findings(d.pop("findings", UNSET))
+
         environment_version_detail = cls(
             database_id=database_id,
             environment_id=environment_id,
@@ -392,6 +438,7 @@ class EnvironmentVersionDetail:
             lock=lock,
             installed=installed,
             interfaces=interfaces,
+            findings=findings,
         )
 
         environment_version_detail.additional_properties = d

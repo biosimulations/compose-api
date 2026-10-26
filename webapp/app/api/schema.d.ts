@@ -549,6 +549,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/registry/environments/{name}/versions/{number}/compliance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Where each entry of a version stands there (its cases' runs), and the components a generic check refuses */
+        get: operations["get-environment-version-compliance"];
+        put?: never;
+        /** Run a version's compliance cases again (its entries' cases, as committed now) */
+        post: operations["run-environment-version-compliance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/registry/environments/{name}/versions/preview": {
         parameters: {
             query?: never;
@@ -1280,6 +1298,44 @@ export interface components {
             };
         };
         /**
+         * ComplianceCase
+         * @description One compliance case of an entry, run in a version: `pending` until its run finishes, then `passed`, `failed`
+         *     (an expectation not met) or `error` (the run did not finish).
+         */
+        ComplianceCase: {
+            /** Case */
+            case: string;
+            /** State */
+            state: string;
+            /** Simulation Id */
+            simulation_id?: number | null;
+            /** Failures */
+            failures?: string[];
+        };
+        /**
+         * ComplianceReport
+         * @description What certifies a version's entries (docs/plan-environment-composition.md, step 5): their cases' runs there,
+         *     and the generic checks over its components. A component that fails a check is refused in this version (`refused`),
+         *     whatever its entry's level.
+         */
+        ComplianceReport: {
+            /** Environment */
+            environment: string;
+            /** Number */
+            number: number;
+            /** Entries */
+            entries?: components["schemas"]["EntryCompliance"][];
+            /** Findings */
+            findings?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Refused
+             * @description Components a generic check failed
+             */
+            refused?: string[];
+        };
+        /**
          * ContainerizationEngine
          * @enum {integer}
          */
@@ -1375,6 +1431,19 @@ export interface components {
             worst_label?: string | null;
             /** Worst Score */
             worst_score?: number | string | null;
+        };
+        /**
+         * EntryCompliance
+         * @description An entry's standing in a version: `tested` when its cases all passed there, `pending` while any runs,
+         *     `failed` when one did not pass, `untested` when it has no cases yet.
+         */
+        EntryCompliance: {
+            /** Entry */
+            entry: string;
+            /** Level */
+            level: string;
+            /** Cases */
+            cases?: components["schemas"]["ComplianceCase"][];
         };
         /**
          * EntryEnvironment
@@ -1641,6 +1710,13 @@ export interface components {
             interfaces?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Findings
+             * @description What the generic compliance checks found in its components: a component with a `fail` is refused in this version (docs/plan-environment-composition.md, step 5)
+             */
+            findings?: {
+                [key: string]: unknown;
+            }[] | null;
         };
         /**
          * EnvironmentVersions
@@ -2663,7 +2739,7 @@ export interface operations {
                 simulator?: string | null;
                 /** @description Only simulations created at or after this time */
                 since?: string | null;
-                /** @description Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, environment_version, solver, model, project, sedml_task, comparison, collection, suite_run */
+                /** @description Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, environment_version, solver, model, project, sedml_task, comparison, collection, suite_run, compliance */
                 label?: string[] | null;
                 /** @description Only simulations with this tag; repeatable, all must match */
                 tag?: string[] | null;
@@ -3732,6 +3808,105 @@ export interface operations {
                 content?: never;
             };
             /** @description The version has no lock in that format (prebuilt, older, or still resolving) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "get-environment-version-compliance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComplianceReport"];
+                };
+            };
+            /** @description No such environment, or no such version */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "run-environment-version-compliance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComplianceReport"];
+                };
+            };
+            /** @description Not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not an environment administrator, or environment administration is not configured */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such environment, or no such version */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The version is not ready, or not composed */
             409: {
                 headers: {
                     [name: string]: unknown;

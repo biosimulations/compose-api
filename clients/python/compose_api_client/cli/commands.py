@@ -817,6 +817,39 @@ def environments_export(
     print(f"{exported.environment}@{exported.number} ({exported.format_}): wrote {', '.join(sorted(files))} to {out}")
 
 
+@environments_app.command("compliance")
+@claims("environments compliance", "get-environment-version-compliance", "run-environment-version-compliance")
+@handled
+def environments_compliance(
+    ctx: typer.Context,
+    name: _ENV_ARG,
+    number: _NUMBER_ARG,
+    run: Annotated[
+        bool, typer.Option("--run", help="Run the cases again first (needs the environment administrator role).")
+    ] = False,
+) -> None:
+    """Where each entry of a version stands there: `tested` when its compliance cases passed in it, and the components
+    a generic check refuses (a step whose results accumulate, say)."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        report = s.run_environment_compliance(name, number) if run else s.environment_compliance(name, number)
+    if resolve(settings.output) is Output.JSON:
+        emit(settings.output, report)
+        return
+    entries = report.entries if isinstance(report.entries, list) else []
+    rows = [
+        {
+            "entry": e.entry,
+            "level": e.level,
+            "cases": ", ".join(f"{c.case} {c.state}" for c in (e.cases if isinstance(e.cases, list) else [])) or "-",
+        }
+        for e in entries
+    ]
+    emit(settings.output, rows, ["entry", "level", "cases"])
+    for component in report.refused if isinstance(report.refused, list) else []:
+        print(f"refused: {component}")
+
+
 @environments_app.command("preview")
 @claims("environments preview", "preview-environment-version")
 @handled

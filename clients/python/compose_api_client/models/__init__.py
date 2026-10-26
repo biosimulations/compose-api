@@ -23,6 +23,9 @@ from .comparison_series_solvers import ComparisonSeriesSolvers
 from .comparison_series_solvers_additional_property import ComparisonSeriesSolversAdditionalProperty
 from .comparison_settings import ComparisonSettings
 from .comparison_status import ComparisonStatus
+from .compliance_case import ComplianceCase
+from .compliance_report import ComplianceReport
+from .compliance_report_findings_item import ComplianceReportFindingsItem
 from .containerization_engine import ContainerizationEngine
 from .containerization_file_repr import ContainerizationFileRepr
 from .curation_level import CurationLevel
@@ -32,6 +35,7 @@ from .dataset_attributes import DatasetAttributes
 from .dataset_page import DatasetPage
 from .default_version import DefaultVersion
 from .drift import Drift
+from .entry_compliance import EntryCompliance
 from .entry_environment import EntryEnvironment
 from .entry_ref import EntryRef
 from .environment_export import EnvironmentExport
@@ -43,6 +47,7 @@ from .environment_summary import EnvironmentSummary
 from .environment_summary_kind import EnvironmentSummaryKind
 from .environment_version import EnvironmentVersion
 from .environment_version_detail import EnvironmentVersionDetail
+from .environment_version_detail_findings_type_0_item import EnvironmentVersionDetailFindingsType0Item
 from .environment_version_detail_interfaces_type_0 import EnvironmentVersionDetailInterfacesType0
 from .environment_version_detail_spec_type_0 import EnvironmentVersionDetailSpecType0
 from .environment_version_spec_type_0 import EnvironmentVersionSpecType0
@@ -153,6 +158,9 @@ __all__ = (
     "ComparisonSeriesSolversAdditionalProperty",
     "ComparisonSettings",
     "ComparisonStatus",
+    "ComplianceCase",
+    "ComplianceReport",
+    "ComplianceReportFindingsItem",
     "ContainerizationEngine",
     "ContainerizationFileRepr",
     "CurationLevel",
@@ -162,6 +170,7 @@ __all__ = (
     "DatasetPage",
     "DefaultVersion",
     "Drift",
+    "EntryCompliance",
     "EntryEnvironment",
     "EntryRef",
     "EnvironmentExport",
@@ -173,6 +182,7 @@ __all__ = (
     "EnvironmentSummaryKind",
     "EnvironmentVersion",
     "EnvironmentVersionDetail",
+    "EnvironmentVersionDetailFindingsType0Item",
     "EnvironmentVersionDetailInterfacesType0",
     "EnvironmentVersionDetailSpecType0",
     "EnvironmentVersions",

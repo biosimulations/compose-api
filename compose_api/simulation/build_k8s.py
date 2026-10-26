@@ -85,13 +85,25 @@ class BuildSite:
 DEFINITION_ENV = "CONTAINER_DEFINITION_B64"
 DESCRIBE_ENV = "DESCRIBE_SCRIPT_B64"
 #: what a build reads from the image it made, by file kind (docs/plan-environment-versions.md, V7)
-INSPECTIONS = ("installed.txt", "interfaces.json")
+INSPECTIONS = ("installed.txt", "interfaces.json", "types.json")
 
 # The Python distributions an image holds, read with its own interpreter (standard library only).
 _INSTALLED = """\
 import importlib.metadata as m
 names = {f"{d.metadata['Name']}=={d.version}" for d in m.distributions() if d.metadata['Name']}
 print("\\n".join(sorted(names, key=str.lower)))
+"""
+
+
+# The type tables the image's runner registers (COMPOSE_RUNNER_TYPES, a composed image's), as JSON: what the generic
+# compliance checks resolve type names with (environments/compliance.py). {} for an image that names none.
+_TYPES = """\
+import importlib, json, os
+tables = {}
+for name in filter(None, (n.strip() for n in os.environ.get("COMPOSE_RUNNER_TYPES", "").split(","))):
+    module, _, attribute = name.partition(":")
+    tables.update(getattr(importlib.import_module(module), attribute or "standard_types"))
+print(json.dumps(tables, default=str))
 """
 
 
@@ -114,17 +126,25 @@ def inspect_script(inspection: Inspection) -> str:
     python = shlex.join(inspection.python)
     run = f"apptainer exec --bind {WORK_DIR} {WORK_DIR}/image.sif {python}"
     describe = shlex.join([*inspection.roots, "--env-name", inspection.environment, "--image", inspection.label])
-    return dedent(f"""\
+    return (
+        dedent(f"""\
         cat > {WORK_DIR}/installed.py <<'COMPOSE_API_INSTALLED'
         {{installed}}COMPOSE_API_INSTALLED
         {run} {WORK_DIR}/installed.py > {WORK_DIR}/image.installed.txt \\
           || {{ echo "could not list the installed packages" >&2; rm -f {WORK_DIR}/image.installed.txt; }}
+        cat > {WORK_DIR}/type_tables.py <<'COMPOSE_API_TYPES'
+        {{types}}COMPOSE_API_TYPES
+        {run} {WORK_DIR}/type_tables.py > {WORK_DIR}/image.types.json \\
+          || {{ echo "could not read the type tables" >&2; rm -f {WORK_DIR}/image.types.json; }}
         if [ -n "${{{DESCRIBE_ENV}:-}}" ]; then
           echo "${DESCRIBE_ENV}" | base64 -d > {WORK_DIR}/describe_env.py
           {run} {WORK_DIR}/describe_env.py {describe} > {WORK_DIR}/image.interfaces.json \\
             || {{ echo "could not describe the interfaces" >&2; rm -f {WORK_DIR}/image.interfaces.json; }}
         fi
-        """).replace("{installed}", _INSTALLED)
+        """)
+        .replace("{installed}", _INSTALLED)
+        .replace("{types}", _TYPES)
+    )
 
 
 INSPECT_CONTAINER = "inspect"

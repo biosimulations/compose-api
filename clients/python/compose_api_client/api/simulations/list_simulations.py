@@ -135,7 +135,7 @@ def sync_detailed(
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
         label (list[str] | None | Unset): Only simulations with this label, as key:value;
             repeatable, all must match. Keys: source, environment, environment_version, solver, model,
-            project, sedml_task, comparison, collection, suite_run
+            project, sedml_task, comparison, collection, suite_run, compliance
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
@@ -185,7 +185,7 @@ def sync(
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
         label (list[str] | None | Unset): Only simulations with this label, as key:value;
             repeatable, all must match. Keys: source, environment, environment_version, solver, model,
-            project, sedml_task, comparison, collection, suite_run
+            project, sedml_task, comparison, collection, suite_run, compliance
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
@@ -230,7 +230,7 @@ async def asyncio_detailed(
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
         label (list[str] | None | Unset): Only simulations with this label, as key:value;
             repeatable, all must match. Keys: source, environment, environment_version, solver, model,
-            project, sedml_task, comparison, collection, suite_run
+            project, sedml_task, comparison, collection, suite_run, compliance
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
@@ -278,7 +278,7 @@ async def asyncio(
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
         label (list[str] | None | Unset): Only simulations with this label, as key:value;
             repeatable, all must match. Keys: source, environment, environment_version, solver, model,
-            project, sedml_task, comparison, collection, suite_run
+            project, sedml_task, comparison, collection, suite_run, compliance
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.

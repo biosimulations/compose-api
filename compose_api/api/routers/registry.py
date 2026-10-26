@@ -23,6 +23,7 @@ from compose_api.dependencies import (
     get_required_job_monitor,
     get_required_simulation_service,
 )
+from compose_api.environments import compliance_runs, pixi
 from compose_api.environments import service as environment_service
 from compose_api.environments.contents import inspect_prebuilt_version, inspect_shared_version, record_contents
 from compose_api.environments.service import VersionRequestError
@@ -44,6 +45,7 @@ from compose_api.sedml.translator import TranslatorUnavailableError
 from compose_api.simulation import builds, handlers
 from compose_api.simulation.builds import ImageState, ImageStatus
 from compose_api.simulation.models import (
+    ComplianceReport,
     DefaultVersion,
     EnvironmentExport,
     EnvironmentVersion,
@@ -268,6 +270,16 @@ async def _build_version(version: EnvironmentVersion, simulator: SimulatorVersio
     await environments_db.set_state(version.database_id, VersionState.READY)
     logger.info(f"{version.label} is ready")
     await _read_back(version)
+    await _start_compliance(version)
+
+
+async def _start_compliance(version: EnvironmentVersion) -> None:
+    """Run the cases of a composed version's entries in it (docs/plan-environment-composition.md, step 5b). Never
+    fails the version: an entry whose cases did not run stays untested there."""
+    try:
+        await compliance_runs.start(get_required_database_service(), version)
+    except Exception:
+        logger.exception(f"The compliance cases of {version.label} could not be started")
 
 
 async def _resolve_and_build(version: EnvironmentVersion) -> None:
@@ -372,6 +384,46 @@ async def export_environment_version(
         return environment_service.export(version, format, exports)
     except VersionRequestError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
+
+
+@config.router.get(
+    path="/environments/{name}/versions/{number}/compliance",
+    response_model=ComplianceReport,
+    operation_id="get-environment-version-compliance",
+    tags=["Registry"],
+    summary="Where each entry of a version stands there (its cases' runs), and the components a generic check refuses",
+    responses=_NO_ENVIRONMENT,
+)
+async def get_environment_version_compliance(name: str, number: int, principal: OptionalPrincipal) -> ComplianceReport:
+    # public: the same for every caller; finished runs are evaluated as this is read
+    _known_environment(name)
+    database_service = get_required_database_service()
+    version = await _version(name, number)
+    await compliance_runs.refresh(database_service, version)
+    return await compliance_runs.report(database_service, version)
+
+
+@config.router.post(
+    path="/environments/{name}/versions/{number}/compliance",
+    response_model=ComplianceReport,
+    status_code=202,
+    operation_id="run-environment-version-compliance",
+    tags=["Registry"],
+    summary="Run a version's compliance cases again (its entries' cases, as committed now)",
+    responses={**_NO_ENVIRONMENT, **_ADMIN, 409: {"description": "The version is not ready, or not composed"}},
+)
+async def run_environment_version_compliance(
+    name: str, number: int, background_tasks: BackgroundTasks, caller: EnvironmentAdmin
+) -> ComplianceReport:
+    _known_environment(name)
+    version = await _version(name, number)
+    if version.state != VersionState.READY or version.runtime_contract != pixi.RUNTIME_CONTRACT:
+        raise HTTPException(status_code=409, detail=f"{version.label} is not a ready composed version")
+    detail_only = {"lock", "installed", "interfaces", "findings"}
+    plain = EnvironmentVersion.model_validate(version.model_dump(exclude=detail_only))
+    background_tasks.add_task(_start_compliance, plain)
+    logger.info(f"{version.label}: compliance run again for {caller.subject}")
+    return await compliance_runs.report(get_required_database_service(), version)
 
 
 @config.router.post(
