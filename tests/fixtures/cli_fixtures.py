@@ -578,7 +578,11 @@ def fake_compose_api(auth0_verifier: Auth0Verifier, monkeypatch: pytest.MonkeyPa
         monkeypatch.setattr(simulation_router, name, object)
     monkeypatch.setattr(simulation_router, "get_simulation_request_from_uploaded_file", fake.request_from_upload)
     monkeypatch.setattr(simulation_router, "validate_submission", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(simulation_router, "_inferred_simulator", lambda *_args: None)  # no file: the shared one
+
+    async def shared(*_args: object) -> object:
+        return simulation_router._Inferred()  # no file to infer from: the shared environment
+
+    monkeypatch.setattr(simulation_router, "_inferred", shared)
 
     async def no_standing(*_args: object) -> None:  # no versions here: the stand-in validation decides
         return None

@@ -143,16 +143,19 @@ async def create_composed(
     environment: EnvironmentSpec,
     request: NewEnvironmentVersion,
     created_by: str | None,
+    *,
+    bundled: bool = True,
 ) -> EnvironmentVersion:
     """A new composed version, `resolving`: the environment's entries composed at a date. Nothing is locked here
-    (``resolve_composed`` does, in the background); the request is checked."""
+    (``resolve_composed`` does, in the background); the request is checked. A mash-up (``bundled=False``) is in no
+    entry's bundle."""
     if request.image is not None or request.libraries is not None:
         raise VersionRequestError(f"{environment.name} is composed from its registry entries: give a date, not those")
     composition = load_environments().composition
     if composition is None:
         raise VersionRequestError("this service has no composition settings (environments.yaml, `composition`)")
     manifest = load_manifest()
-    problems = spec_problems(environment, manifest)
+    problems = spec_problems(environment, manifest, bundled=bundled)
     if problems:
         raise VersionRequestError("; ".join(problems))
     resolved_at = request.resolved_at or datetime.datetime.now(datetime.UTC)

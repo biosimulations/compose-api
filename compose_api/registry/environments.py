@@ -36,7 +36,8 @@ class DescribeSource(BaseModel):
 
 class EnvironmentSpec(BaseModel):
     name: str
-    kind: Literal["shared", "prebuilt"]
+    # a mash-up's spec is made from its entries (environments/lifecycle.py), never declared here
+    kind: Literal["shared", "prebuilt", "mash-up"]
     python: list[str] = Field(min_length=1)
     # the registry entries composed into it (docs/plan-environment-composition.md, C2): each declares how it installs.
     # A prebuilt image's contents are its owner's, so it lists none.

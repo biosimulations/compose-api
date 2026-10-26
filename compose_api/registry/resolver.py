@@ -8,8 +8,9 @@ entries cover that set is chosen:
    document it covers keeps running there;
 2. then the other environments, the fewest entries first, then by name.
 
-A set no environment covers falls back to the shared environment until mash-ups are built (step 7b), so validation
-reports what it lacks, exactly as before. Pure functions over the manifest and ``environments.yaml``.
+Then the mash-ups the database holds (step 7b). A set nothing covers is either made a mash-up (by the run route, from
+``environments/lifecycle.py``) or falls back to the shared environment, whose validation reports what it lacks.
+Pure functions over the manifest, ``environments.yaml`` and the mash-ups given.
 """
 
 from collections.abc import Callable, Iterable
@@ -30,17 +31,32 @@ def needed_entries(targets: Iterable[str], manifest: Manifest) -> set[str]:
     return manifest.with_requirements(found)
 
 
+def covering_environment(
+    needed: set[str],
+    manifest: Manifest,
+    environments: EnvironmentsFile,
+    offered: Callable[[EnvironmentSpec], bool] = lambda spec: True,
+    mash_ups: Iterable[EnvironmentSpec] = (),
+) -> EnvironmentSpec | None:
+    """The environment whose entries cover ``needed``, if one does: the shared one, then the other declared ones this
+    deployment offers, then the mash-ups (D7.3); among each, the fewest entries, then the name."""
+    shared = next(spec for spec in environments.environments if spec.kind == "shared")
+    declared = [spec for spec in environments.environments if spec is shared or offered(spec)]
+    covering = [spec for spec in [*declared, *mash_ups] if needed <= members_of(spec, manifest)]
+    if not covering:
+        return None
+    return min(
+        covering,
+        key=lambda spec: (spec is not shared, spec.kind == "mash-up", len(members_of(spec, manifest)), spec.name),
+    )
+
+
 def choose_environment(
     needed: set[str],
     manifest: Manifest,
     environments: EnvironmentsFile,
     offered: Callable[[EnvironmentSpec], bool] = lambda spec: True,
 ) -> EnvironmentSpec:
-    """The environment a run needing ``needed`` uses: the shared one if it covers them, else the smallest offered one
-    that does, else (until step 7b) the shared one, whose validation then names what is missing."""
+    """The covering environment, or else the shared one, whose validation then names what is missing."""
     shared = next(spec for spec in environments.environments if spec.kind == "shared")
-    candidates = [spec for spec in environments.environments if spec is shared or offered(spec)]
-    covering = [spec for spec in candidates if needed <= members_of(spec, manifest)]
-    if not covering:
-        return shared
-    return min(covering, key=lambda spec: (spec is not shared, len(members_of(spec, manifest)), spec.name))
+    return covering_environment(needed, manifest, environments, offered) or shared

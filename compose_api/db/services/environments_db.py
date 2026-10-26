@@ -158,6 +158,10 @@ class EnvironmentsDatabaseService(ABC):
     async def get_default_detail(self, environment: str) -> EnvironmentVersionDetail | None: ...
 
     @abstractmethod
+    async def ensure_mash_up(self, name: str, entries: list[str]) -> EnvironmentRecord:
+        """The mash-up of ``entries`` called ``name``, made if it does not exist (D7.6)."""
+
+    @abstractmethod
     async def environments(self) -> list[EnvironmentRecord]:
         """Every environment the database holds, by name (docs/plan-environment-composition.md, D7.9)."""
 
@@ -458,6 +462,14 @@ class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
         async with self.async_session_maker() as session:
             version, _ = await self._default(session, environment)
             return version.to_environment_version_detail() if version is not None else None
+
+    @override
+    async def ensure_mash_up(self, name: str, entries: list[str]) -> EnvironmentRecord:
+        async with self.async_session_maker() as session, session.begin():
+            row = insert(ORMEnvironment).values(name=name, kind="mash-up", entries=sorted(entries))
+            await session.execute(row.on_conflict_do_nothing(index_elements=["name"]))
+            env = (await session.execute(select(ORMEnvironment).where(ORMEnvironment.name == name))).scalar_one()
+            return EnvironmentRecord(id=env.id, name=env.name, kind=env.kind, entries=env.entries)
 
     @override
     async def environments(self) -> list[EnvironmentRecord]:
