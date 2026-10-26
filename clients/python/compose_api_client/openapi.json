@@ -4794,9 +4794,15 @@
             "type": "integer",
             "title": "Database Id"
           },
+          "environment_id": {
+            "type": "integer",
+            "title": "Environment Id",
+            "description": "Its environment's identity; the name below may change"
+          },
           "environment": {
             "type": "string",
-            "title": "Environment"
+            "title": "Environment",
+            "description": "Its environment's current name"
           },
           "number": {
             "type": "integer",
@@ -4912,6 +4918,7 @@
         "type": "object",
         "required": [
           "database_id",
+          "environment_id",
           "environment",
           "number",
           "state",
@@ -4926,9 +4933,15 @@
             "type": "integer",
             "title": "Database Id"
           },
+          "environment_id": {
+            "type": "integer",
+            "title": "Environment Id",
+            "description": "Its environment's identity; the name below may change"
+          },
           "environment": {
             "type": "string",
-            "title": "Environment"
+            "title": "Environment",
+            "description": "Its environment's current name"
           },
           "number": {
             "type": "integer",
@@ -5081,6 +5094,7 @@
         "type": "object",
         "required": [
           "database_id",
+          "environment_id",
           "environment",
           "number",
           "state",

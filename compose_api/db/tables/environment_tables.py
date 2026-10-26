@@ -1,8 +1,10 @@
 """Environments and their versions (docs/plan-environment-versions.md).
 
-An environment (``registry_env``, a prebuilt simulator's name) has numbered versions. Each version is one simulator
-row, its definition and hash, through which its images and build runs already hang (docs/plan-environment-builds.md),
-plus what it was made from. The environment's default version is the one a run that names none gets.
+An environment has an id, its identity, and a name (``registry_env``, a prebuilt simulator's name) that may change:
+everything that refers to an environment or a version refers to it by id, never by name. It has numbered versions.
+Each version is one simulator row, its definition and hash, through which its images and build runs already hang
+(docs/plan-environment-builds.md), plus what it was made from. The environment's default version is the one a run
+that names none gets.
 """
 
 import datetime
@@ -10,7 +12,7 @@ from typing import Any
 
 from sqlalchemy import ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from compose_api.db.db_utils import DeclarativeTableBase
 from compose_api.simulation.models import EnvironmentVersion, EnvironmentVersionDetail, VersionState
@@ -19,7 +21,9 @@ from compose_api.simulation.models import EnvironmentVersion, EnvironmentVersion
 class ORMEnvironment(DeclarativeTableBase):
     __tablename__ = "environment"
 
-    name: Mapped[str] = mapped_column(String(64), primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # what requests and pages call it; renaming it changes no reference (they hold the id)
+    name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     kind: Mapped[str] = mapped_column(String(16), nullable=False)  # shared, prebuilt
     # use_alter: the two tables reference each other
     default_version_id: Mapped[int | None] = mapped_column(
@@ -33,12 +37,14 @@ class ORMEnvironment(DeclarativeTableBase):
 class ORMEnvironmentVersion(DeclarativeTableBase):
     __tablename__ = "environment_version"
     __table_args__ = (
-        UniqueConstraint("environment", "number", name="uq_environment_version_number"),
-        UniqueConstraint("environment", "simulator_id", name="uq_environment_version_simulator"),
+        UniqueConstraint("environment_id", "number", name="uq_environment_version_number"),
+        UniqueConstraint("environment_id", "simulator_id", name="uq_environment_version_simulator"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    environment: Mapped[str] = mapped_column(ForeignKey("environment.name"), nullable=False, index=True)
+    environment_id: Mapped[int] = mapped_column(ForeignKey("environment.id"), nullable=False, index=True)
+    # loaded with the version, for its current name
+    env: Mapped[ORMEnvironment] = relationship(lazy="joined", foreign_keys=[environment_id])
     number: Mapped[int] = mapped_column(nullable=False)
     state: Mapped[str] = mapped_column(String(16), nullable=False)
     simulator_id: Mapped[int] = mapped_column(ForeignKey("simulator.id"), nullable=False, index=True)
@@ -61,7 +67,8 @@ class ORMEnvironmentVersion(DeclarativeTableBase):
     def to_environment_version(self) -> EnvironmentVersion:
         return EnvironmentVersion(
             database_id=self.id,
-            environment=self.environment,
+            environment_id=self.environment_id,
+            environment=self.env.name,
             number=self.number,
             state=VersionState(self.state),
             simulator_id=self.simulator_id,

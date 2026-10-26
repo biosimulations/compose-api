@@ -9,10 +9,10 @@ from sqlalchemy import Connection, Enum, inspect, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from compose_api.db.database_service import DatabaseServiceSQL
-from compose_api.db.db_utils import DeclarativeTableBase, create_db
+from compose_api.db.db_utils import _ALEMBIC_INI, DeclarativeTableBase, create_db
 from compose_api.simulation.models import JobType, SimulationRequest, SimulatorVersion
 
-HEAD = "9a5c3e7f1b42"
+HEAD = "c3e8a1d5f904"
 
 NEW_COLUMNS = {
     "hpcrun": {"trace_id", "events_cursor", "last_event_at", "exit_code", "backend", "external_id"},
@@ -26,7 +26,7 @@ NEW_COLUMNS = {
         "environment_version_id",
     },
     "comparison": {"collection", "suite_run"},
-    "suite_run": {"sources", "next_source", "lease_owner", "lease_expires_at", "environment_versions"},
+    "suite_run": {"sources", "next_source", "lease_owner", "lease_expires_at", "environment_version_ids"},
     "environment": {"default_source"},
 }
 
@@ -142,4 +142,81 @@ async def test_existing_simulations_get_a_submission_row_for_their_state(
     async with async_postgres_engine.connect() as conn:
         states = {row[0]: row[1] for row in (await conn.execute(query)).all()}
     assert states == {ran: "submitted", never: "failed"}
+    assert await _revision(async_postgres_engine) == HEAD
+
+
+def _alembic(sync_conn: Connection, direction: str, revision: str) -> None:
+    from alembic.config import Config
+
+    from alembic import command
+
+    cfg = Config(str(_ALEMBIC_INI))
+    cfg.attributes["connection"] = sync_conn
+    getattr(command, direction)(cfg, revision)
+
+
+@pytest.mark.asyncio
+async def test_environments_and_suite_runs_refer_to_versions_by_id_after_the_upgrade(
+    async_postgres_engine: AsyncEngine,
+) -> None:
+    """Down to the shape 0.7.41 stored (an environment keyed by its name, a suite run's versions as {name: number}),
+    rows written that way, and up again: every reference becomes an id, so a rename changes none. Ends at head, as
+    the shared database must."""
+    async with async_postgres_engine.begin() as conn:
+        await conn.run_sync(_alembic, "downgrade", "9a5c3e7f1b42")
+        simulator = (
+            await conn.execute(
+                text(
+                    "INSERT INTO simulator (container_def, container_def_hash, container_engine)"
+                    " VALUES ('Bootstrap: docker', :hash, 'APPTAINER') RETURNING id"
+                ),
+                {"hash": "migration-test-environment-ids"},
+            )
+        ).scalar_one()
+        await conn.execute(text("INSERT INTO environment (name, kind) VALUES ('env-ids', 'shared')"))
+        version = (
+            await conn.execute(
+                text(
+                    "INSERT INTO environment_version (environment, number, state, simulator_id)"
+                    " VALUES ('env-ids', 7, 'ready', :simulator) RETURNING id"
+                ),
+                {"simulator": simulator},
+            )
+        ).scalar_one()
+        suite_run = (
+            await conn.execute(
+                text(
+                    "INSERT INTO suite_run (collection, number, environment_versions)"
+                    " VALUES ('env-ids-suite', 1, '{\"env-ids\": 7}'::jsonb) RETURNING id"
+                )
+            )
+        ).scalar_one()
+        await conn.run_sync(_alembic, "upgrade", "head")
+    async with async_postgres_engine.begin() as conn:
+        environment_id = (await conn.execute(text("SELECT id FROM environment WHERE name = 'env-ids'"))).scalar_one()
+        row = (
+            await conn.execute(
+                text("SELECT environment_id, number FROM environment_version WHERE id = :v"), {"v": version}
+            )
+        ).one()
+        assert tuple(row) == (environment_id, 7)
+        ids = (
+            await conn.execute(text("SELECT environment_version_ids FROM suite_run WHERE id = :s"), {"s": suite_run})
+        ).scalar_one()
+        assert ids == [version]
+        await conn.execute(text("UPDATE environment SET name = 'env-ids-renamed' WHERE id = :e"), {"e": environment_id})
+        renamed = (
+            await conn.execute(
+                text(
+                    "SELECT e.name FROM environment_version v JOIN environment e ON e.id = v.environment_id"
+                    " WHERE v.id = :v"
+                ),
+                {"v": version},
+            )
+        ).scalar_one()
+        assert renamed == "env-ids-renamed"
+        await conn.execute(text("DELETE FROM suite_run WHERE id = :s"), {"s": suite_run})
+        await conn.execute(text("DELETE FROM environment_version WHERE id = :v"), {"v": version})
+        await conn.execute(text("DELETE FROM environment WHERE id = :e"), {"e": environment_id})
+        await conn.execute(text("DELETE FROM simulator WHERE id = :s"), {"s": simulator})
     assert await _revision(async_postgres_engine) == HEAD

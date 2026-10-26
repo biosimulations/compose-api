@@ -1466,7 +1466,15 @@ export interface components {
         EnvironmentVersion: {
             /** Database Id */
             database_id: number;
-            /** Environment */
+            /**
+             * Environment Id
+             * @description Its environment's identity; the name below may change
+             */
+            environment_id: number;
+            /**
+             * Environment
+             * @description Its environment's current name
+             */
             environment: string;
             /** Number */
             number: number;
@@ -1513,7 +1521,15 @@ export interface components {
         EnvironmentVersionDetail: {
             /** Database Id */
             database_id: number;
-            /** Environment */
+            /**
+             * Environment Id
+             * @description Its environment's identity; the name below may change
+             */
+            environment_id: number;
+            /**
+             * Environment
+             * @description Its environment's current name
+             */
             environment: string;
             /** Number */
             number: number;

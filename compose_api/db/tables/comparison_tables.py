@@ -73,10 +73,11 @@ class ORMSuiteRun(DeclarativeTableBase):
     # and the submission worker holding it while it is `submitting`.
     sources: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     next_source: Mapped[int] = mapped_column(nullable=False, server_default="0")
-    # The environment versions its runs use, {environment: number} (docs/plan-environment-versions.md, step 5);
-    # empty for runs started before suites named them (theirs got the default).
-    environment_versions: Mapped[dict[str, int]] = mapped_column(
-        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    # The environment versions its runs use, by id (docs/plan-environment-versions.md, step 5): shown as
+    # {environment: number} under the environments' current names. Empty for runs started before suites named them
+    # (theirs got the default).
+    environment_version_ids: Mapped[list[int]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
     )
     lease_owner: Mapped[str | None] = mapped_column(nullable=True)
     lease_expires_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
