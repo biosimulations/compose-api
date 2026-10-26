@@ -28,15 +28,41 @@ Several documents answer different questions. Start with the one that matches yo
 | SED-ML models (BioModels, biosimulations.org, uploads) run on several solvers and compared; catalog, environments and solvers defined | [plan-sedml.md](plan-sedml.md) | plan, implemented (curated routes and interpolation deferred) | 2026-10-13 |
 | environment builds as jobs of their own, image artifacts recorded, builds on Kubernetes, publishing | [plan-environment-builds.md](plan-environment-builds.md) | plan, phases 1–4 implemented; publishing deferred | 2026-10-13 |
 | environment versions as database records: locked with uv, created and chosen through the API, recorded on every run; the registry as the build trust gate | [plan-environment-versions.md](plan-environment-versions.md) | plan; steps 1–5a merged (0.7.41); rest superseded by composition | 2026-10-25 |
-| environments composed from curated manifest entries: pixi (uv export), compliance composites per entry, registry_env migrated off pbest, mash-ups on demand | [plan-environment-composition.md](plan-environment-composition.md) | plan, decided | 2026-10-25 |
+| environments composed from curated manifest entries: pixi (uv export), compliance composites per entry, registry_env migrated off pbest, mash-ups on demand | [plan-environment-composition.md](plan-environment-composition.md) | plan, **active**; steps 0–5 done, step 6 finishing | 2026-10-26 |
 | each solver's known problems in a suite: excused per solver, flagged when fixed, curated by an admin in the webapp or CLI | [plan-known-problems.md](plan-known-problems.md) | plan; steps 1, 2a, 3 done (0.7.49); 2b waits for the CSP | 2026-10-26 |
 | viewers for datasets, registered per type and loaded lazily; the results bundle in 3D | [plan-viewers.md](plan-viewers.md) | plan, implemented (A1–A3 later) | 2026-10-13 |
 | signing in to the web UI: a PKCE single-page app (no backend-for-frontend), the Auth0 SPA application, hardening | [plan-webapp-login.md](plan-webapp-login.md) | plan; built, switched on by W2 (#359) | 2026-10-25 |
-| the web UI's sign-in switched on, capabilities from `/auth/me`, environment version pages and admin actions, one suite run at a time | [plan-webapp-admin.md](plan-webapp-admin.md) | plan, decided; steps 1–2 under way | 2026-10-25 |
+| the web UI's sign-in switched on, capabilities from `/auth/me`, environment version pages and admin actions, one suite run at a time | [plan-webapp-admin.md](plan-webapp-admin.md) | plan, parked; steps 1–2 done, 5 partly | 2026-10-26 |
 | runs recorded as `requested` and dispatched by a worker that survives restarts; caps, priorities, resumable suite runs | [plan-durable-submission.md](plan-durable-submission.md) | plan, implemented (0.7.31) | 2026-10-22 |
-| checking SED-ML comparisons against BioSimulators: legacy runs as references, and biosim's `/verify` API as an oracle | [plan-verify-oracle.md](plan-verify-oracle.md) | plan, proposed | 2026-10-22 |
+| checking SED-ML comparisons against BioSimulators: legacy runs as references, and biosim's `/verify` API as an oracle | [plan-verify-oracle.md](plan-verify-oracle.md) | plan, parked; V0–V4 done, V5 left | 2026-10-26 |
 | the web UI at `/ui`: pages, viewers, composite authoring, how it is built | [webapp.md](webapp.md) | user documentation | 2026-10-13 |
 | the `compose-api` command line, with its generated reference | [cli.md](cli.md) | user documentation | 2026-10-13 |
+
+## Active plan, and what is parked (2026-10-26)
+
+We work one plan at a time: the active plan runs to its end, and anything found outside it is recorded here and
+raised, not fixed on the spot.
+
+**Active: [plan-environment-composition](plan-environment-composition.md).**
+- Step 6 (registry_env migrates): `registry_env@4` is built and passes compliance. Suite run 4 on it shows no
+  regressions and four models fixed.
+  - Left: `@5` (pbsim-common c6c1804, 0.7.50), a suite run on it compared with run 4, then making it the default.
+- Then step 7 (resolver and on-demand mash-ups), then step 8 (retirements).
+
+**Next, in order:** [plan-webapp-admin](plan-webapp-admin.md) steps 3–4 (capabilities, version diff API, one suite
+run at a time; enforcing the CSP), then [plan-verify-oracle](plan-verify-oracle.md) V5.
+
+**Parked**, with where each stopped:
+
+| Thread | Done | Left |
+|---|---|---|
+| [plan-webapp-admin](plan-webapp-admin.md) | 1, 2; 5 partly (environment and version pages, #410) | 3, 4; the rest of 5 (suite version picker, versions on simulation and comparison pages); 6 (admin actions); 7 |
+| [plan-known-problems](plan-known-problems.md) | 1, 2a, 3 (0.7.49) | 2b: mark and clear in the webapp, after webapp-admin 4 |
+| [plan-verify-oracle](plan-verify-oracle.md) | V0–V4 | V5: verdicts on the comparison and suite pages |
+| [plan-vcell-ode](plan-vcell-ode.md) | 1–4 | report VCell bugs: BIOMD 112 (`null`), 175 (unknown identifier), 56 and 168 (disagree), 137 (solve error); 235 (out of memory) and 255 (timeout) |
+| [plan-observability](plan-observability.md) | 0–4 | 5: an owner stamped at submit |
+| [plan-environment-builds](plan-environment-builds.md) | phases 1–4 | publishing |
+| Open PRs | | #403 (regenerated manifests; moot after composition step 8), #345 (vivarium-workbench plan), dependency bumps |
 
 **Direction** documents say what we intend. **Analysis** documents measure something and lay out options; they are
 dated because measurements go stale. **Record** documents track commitments. When two disagree, the direction
