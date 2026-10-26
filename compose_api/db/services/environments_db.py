@@ -80,6 +80,14 @@ class EnvironmentsDatabaseService(ABC):
         """Mark the version `failed`, with why."""
 
     @abstractmethod
+    async def set_export(self, version_id: int, export_format: str, files: dict[str, str]) -> None:
+        """Keep the files that recreate the version in ``export_format`` (step 4b)."""
+
+    @abstractmethod
+    async def get_exports(self, version_id: int) -> dict[str, dict[str, str]]:
+        """The files kept for the version, by format ({} when none)."""
+
+    @abstractmethod
     async def set_state(self, version_id: int, state: VersionState) -> None: ...
 
     @abstractmethod
@@ -289,6 +297,20 @@ class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
         async with self.async_session_maker() as session, session.begin():
             query = update(ORMEnvironmentVersion).where(ORMEnvironmentVersion.id == version_id)
             await session.execute(query.values(state=VersionState.FAILED.value, failure=failure))
+
+    @override
+    async def set_export(self, version_id: int, export_format: str, files: dict[str, str]) -> None:
+        async with self.async_session_maker() as session, session.begin():
+            version = await session.get(ORMEnvironmentVersion, version_id)
+            if version is None:
+                raise LookupError(f"no environment version {version_id}")
+            version.exports = {**(version.exports or {}), export_format: files}
+
+    @override
+    async def get_exports(self, version_id: int) -> dict[str, dict[str, str]]:
+        async with self.async_session_maker() as session:
+            version = await session.get(ORMEnvironmentVersion, version_id)
+            return dict(version.exports or {}) if version is not None else {}
 
     @override
     async def set_state(self, version_id: int, state: VersionState) -> None:

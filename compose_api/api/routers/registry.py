@@ -287,6 +287,8 @@ async def _resolve_and_build(version: EnvironmentVersion) -> None:
         logger.info(f"{version.label} did not resolve")
         return
     await _build_version(*resolved)
+    if await environment_service.export_uv(get_required_database_service(), resolved[0], suffix):
+        logger.info(f"{version.label} has a uv form")
 
 
 async def _read_back(version: EnvironmentVersion, reread: bool = False) -> None:
@@ -348,7 +350,7 @@ async def get_environment_version(name: str, number: int, principal: OptionalPri
     response_model=EnvironmentExport,
     operation_id="export-environment-version",
     tags=["Registry"],
-    summary="A version as files to recreate it locally: pixi.toml and pixi.lock, or a uv requirements lock",
+    summary="A version as files to recreate it locally: pixi files, uv files (without conda), or requirements",
     responses={
         **_NO_ENVIRONMENT,
         409: {"description": "The version has no lock in that format (prebuilt, older, or still resolving)"},
@@ -359,13 +361,15 @@ async def export_environment_version(
     number: int,
     principal: OptionalPrincipal,
     format: Annotated[  # noqa: A002 the query parameter's name
-        str | None, Query(description="pixi or requirements; the version's own by default")
+        str | None, Query(description="pixi, uv (a composed version without conda) or requirements; pixi by default")
     ] = None,
 ) -> EnvironmentExport:
     # public: the same for every caller
     _known_environment(name)
+    version = await _version(name, number)
+    exports = await get_required_database_service().get_environments_db().get_exports(version.database_id)
     try:
-        return environment_service.export(await _version(name, number), format)
+        return environment_service.export(version, format, exports)
     except VersionRequestError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
 

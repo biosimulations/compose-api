@@ -1105,7 +1105,9 @@ $ compose-api environments version [OPTIONS] NAME NUMBER
 ### `compose-api environments export`
 
 Write the files that recreate a version locally: a composed version's pixi.toml and pixi.lock (then
-`pixi install --frozen`), or a shared one's uv lock as requirements.txt (then `uv pip install -r`).
+`pixi install --frozen`) or, when it needs nothing from conda, its pyproject.toml and uv.lock (then `uv sync`);
+a shared one's uv lock as requirements.txt (then `uv pip install -r`). Both describe CPython on Linux x86-64, the
+platform the image runs.
 
 **Usage**:
 
@@ -1121,7 +1123,7 @@ $ compose-api environments export [OPTIONS] NAME NUMBER
 **Options**:
 
 * `-o, --out PATH`: Directory to write the files into.  [default: .]
-* `--format TEXT`: pixi (pixi.toml, pixi.lock) or requirements; the version's own by default.
+* `--format TEXT`: pixi (pixi.toml, pixi.lock), uv (pyproject.toml, uv.lock; without conda) or requirements; pixi by default for a composed version.
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 

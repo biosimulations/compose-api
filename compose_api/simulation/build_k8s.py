@@ -251,6 +251,61 @@ def lock_job(name: str, site: BuildSite, pixi_image: str, toml: str) -> V1Job:
     return _scratch_job(name, site, pixi_image, lock_script(), env, deadline_seconds=1800)
 
 
+PYPROJECT_ENV = "PYPROJECT_B64"
+UV_LOCKED = "uv.lock"
+UV_ERROR = "uv.err"
+
+
+def uv_lock_script() -> str:
+    """Inside the pixi image, unprivileged, in scratch: lock the uv project the Job carries with uv (fetched from
+    conda-forge by `pixi exec`), and print the lock or why it did not resolve."""
+    return dedent(f"""\
+        set -u
+        cd {SCRATCH_DIR}
+        export HOME={SCRATCH_DIR} PIXI_CACHE_DIR={SCRATCH_DIR}/cache RATTLER_CACHE_DIR={SCRATCH_DIR}/cache \\
+          UV_CACHE_DIR={SCRATCH_DIR}/uv
+        echo "${PYPROJECT_ENV}" | base64 -d > pyproject.toml
+        if pixi exec --spec uv uv lock > uv.out 2> {UV_ERROR}; then kind={UV_LOCKED}; else kind={UV_ERROR}; fi
+        echo "{INSPECT_MARKER} $kind"
+        cat "$kind"
+        echo
+        echo "{INSPECT_MARKER} end"
+        """)
+
+
+def uv_lock_job(name: str, site: BuildSite, pixi_image: str, project: str) -> V1Job:
+    """The Job that locks a composed version's uv project (docs/plan-environment-composition.md, step 4b)."""
+    env = {PYPROJECT_ENV: base64.b64encode(project.encode()).decode()}
+    return _scratch_job(name, site, pixi_image, uv_lock_script(), env, deadline_seconds=1800)
+
+
+async def _run_scratch_job(name: str, job: V1Job, poll_seconds: float) -> dict[str, str]:
+    """Create ``job`` and wait for it: the files it printed, by kind ({} when it printed none to its end)."""
+    builds = k8s_builds()
+    await asyncio.to_thread(builds.create, job)
+    deadline = asyncio.get_running_loop().time() + 1860
+    state = "running"
+    while state == "running" and asyncio.get_running_loop().time() < deadline:
+        await asyncio.sleep(poll_seconds)
+        state, why = await asyncio.to_thread(builds.state, name)
+        if state == "failed":
+            logger.warning(f"Job {name} failed: {why}")
+    return read_inspection_log(await asyncio.to_thread(builds.container_log, name, INSPECT_CONTAINER))
+
+
+async def uv_lock(project: str, pixi_image: str, suffix: str, poll_seconds: float = 5.0) -> str:
+    """Lock ``project`` with uv in a Job of its own: the ``uv.lock`` text. `LockFailedError` with uv's explanation
+    when it does not resolve; `RuntimeError` when the Job failed without saying."""
+    site = BuildSite.from_settings(get_settings())
+    name = f"uvlock-{hashlib.sha256(project.encode()).hexdigest()[:12]}-{suffix.lower()[:5]}"
+    found = await _run_scratch_job(name, uv_lock_job(name, site, pixi_image, project), poll_seconds)
+    if UV_LOCKED in found:
+        return found[UV_LOCKED]
+    if UV_ERROR in found:
+        raise LockFailedError(found[UV_ERROR].strip()[-4000:])
+    raise RuntimeError(f"uv lock Job {name} ended without a lock or an explanation")
+
+
 class LockFailedError(Exception):
     """The workspace did not resolve; the message is pixi's explanation (the conflicting requirements)."""
 
@@ -260,21 +315,12 @@ async def lock_composed(toml: str, pixi_image: str, suffix: str, poll_seconds: f
     resolve, with pixi's explanation; `RuntimeError` when the Job failed without saying."""
     site = BuildSite.from_settings(get_settings())
     name = f"lock-{hashlib.sha256(toml.encode()).hexdigest()[:12]}-{suffix.lower()[:5]}"
-    builds = k8s_builds()
-    await asyncio.to_thread(builds.create, lock_job(name, site, pixi_image, toml))
-    deadline = asyncio.get_running_loop().time() + 1860
-    state = "running"
-    while state == "running" and asyncio.get_running_loop().time() < deadline:
-        await asyncio.sleep(poll_seconds)
-        state, why = await asyncio.to_thread(builds.state, name)
-        if state == "failed":
-            logger.warning(f"Lock Job {name} failed: {why}")
-    found = read_inspection_log(await asyncio.to_thread(builds.container_log, name, INSPECT_CONTAINER))
+    found = await _run_scratch_job(name, lock_job(name, site, pixi_image, toml), poll_seconds)
     if LOCKED in found:
         return found[LOCKED]
     if LOCK_ERROR in found:
         raise LockFailedError(found[LOCK_ERROR].strip()[-4000:])
-    raise RuntimeError(f"lock Job {name} ended ({state}) without a lock or an explanation")
+    raise RuntimeError(f"lock Job {name} ended without a lock or an explanation")
 
 
 async def inspect_prebuilt(

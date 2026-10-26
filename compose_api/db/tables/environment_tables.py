@@ -66,6 +66,8 @@ class ORMEnvironmentVersion(DeclarativeTableBase):
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     # why a version failed (a composed version's lock did not resolve: pixi's explanation)
     failure: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # the files that recreate it in other forms, by format: {"uv": {"pyproject.toml": ..., "uv.lock": ...}}
+    exports: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     def to_environment_version(self) -> EnvironmentVersion:
         return EnvironmentVersion(
