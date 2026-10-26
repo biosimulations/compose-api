@@ -647,6 +647,12 @@ SUBMISSIONS: list[tuple[str, str, tuple[Any, ...], dict[str, Any]]] = [
     ("build_environment", "/registry/environments/{name}/build", ("environment",), {}),
     ("build_simulator", "/registry/simulators/{simulator_id}/build", (7,), {}),
     ("create_environment_version", "/registry/environments/{name}/versions", ("environment",), {}),
+    (
+        "run_environment_compliance",
+        "/registry/environments/{name}/versions/{number}/compliance",
+        ("environment", 1),
+        {},
+    ),
 ]
 
 

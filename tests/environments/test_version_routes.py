@@ -8,6 +8,7 @@ import datetime
 import uuid
 from collections.abc import AsyncGenerator, Iterator
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -59,10 +60,13 @@ class Builds:
 
 @pytest.fixture
 def builds(monkeypatch: pytest.MonkeyPatch) -> Iterator[Builds]:
+    from compose_api import dependencies
+
     fake = Builds()
     monkeypatch.setattr(handlers, "ensure_image", fake)
     for name in ("get_required_simulation_service", "get_required_job_monitor"):
         monkeypatch.setattr(registry_router, name, lambda: None)
+        monkeypatch.setattr(dependencies, name, lambda: None)  # compliance runs are only recorded and queued here
     with override_settings(environment_admin_role=ROLE):
         yield fake
 
@@ -428,3 +432,114 @@ async def test_a_composition_without_conda_also_exports_as_uv(
     answer["lock"] += '\n[[package]]\nname = "cffi"\nversion = "2.1.1"\n'  # uv arrives elsewhere: not kept
     missing = await export_uv(await create())
     assert missing.status_code == 409 and "has not been made" in missing.json()["detail"]
+
+
+# --- compliance (docs/plan-environment-composition.md, step 5b) ---------------------------------------------------
+
+
+def _passing_results(case_dir: Path) -> dict[str, object]:
+    """What a run of a pbsim-common case emits when it matches its reference exactly."""
+    rows = [line.split(",") for line in (case_dir / "reference.csv").read_text().splitlines()]
+    header, body = rows[0], rows[1:]
+    result = {
+        "time": [float(r[0]) for r in body],
+        "columns": header[1:],
+        "values": [[float(v) for v in r[1:]] for r in body],
+    }
+    return {"emitter": [{"result": result}]}
+
+
+@pytest.mark.asyncio
+async def test_a_ready_composed_version_runs_its_entries_cases_and_reports_their_levels(
+    app: FastAPI, builds: Builds, locks: Locks, database_service: DatabaseServiceSQL, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from compose_api import dependencies
+    from compose_api.environments import compliance, compliance_runs
+
+    for name in ("get_required_simulation_service", "get_required_job_monitor"):
+        monkeypatch.setattr(dependencies, name, lambda: None)  # runs are only recorded and queued here
+    async with _as(app, ADMIN) as admin:
+        number = (await admin.post("/registry/environments/registry_env/versions", json={})).json()["number"]
+    version = await database_service.get_environments_db().get_by_number("registry_env", number)
+    assert version is not None and version.state == "ready"
+
+    async def report() -> dict[str, Any]:
+        async with _as(app, None) as anonymous:  # public, as reading a version is
+            response = await anonymous.get(f"/registry/environments/registry_env/versions/{number}/compliance")
+            assert response.status_code == 200, response.text
+            body: dict[str, Any] = response.json()
+            return body
+
+    # submitted once the version was ready: pbsim-common's cases are running in it; entries without cases are untested
+    pending = {e["entry"]: e for e in (await report())["entries"]}
+    assert pending["pbsim-common"]["level"] == "pending"
+    assert {c["case"] for c in pending["pbsim-common"]["cases"]} >= {"copasi-phase-cycle", "tellurium-phase-cycle"}
+    assert pending["biosim-toolkit"]["level"] == "untested" and pending["biosim-toolkit"]["cases"] == []
+    simulation_id = pending["pbsim-common"]["cases"][0]["simulation_id"]
+    row = await database_service.get_simulator_db().get_simulation_row(simulation_id)
+    assert row is not None and row.simulation.environment_version_id == version.database_id  # run in that version
+    assert row.simulation.labels["source"] == "compliance" and row.simulation.labels["compliance"].startswith(
+        "pbsim-common/"
+    )
+
+    # the runs finish and match their references: evaluated as the report is read
+    cases = {c.name: c for c in compliance.load_cases("pbsim-common")}
+    runs = {
+        r.simulation_id: r.case
+        for r in await database_service.get_environments_db().compliance_runs(version.database_id)
+    }
+
+    async def finished(ids: list[int]) -> dict[int, str]:
+        return dict.fromkeys(ids, "completed")
+
+    monkeypatch.setattr(database_service.get_simulator_db(), "get_simulation_statuses", finished)
+    by_experiment: dict[str, str] = {}
+    original = database_service.get_simulator_db().get_simulations_experiment_id
+
+    async def experiment_id(simulation_id: int) -> str:
+        found = await original(simulation_id=simulation_id)
+        by_experiment[found] = runs[simulation_id]
+        return found
+
+    monkeypatch.setattr(database_service.get_simulator_db(), "get_simulations_experiment_id", experiment_id)
+
+    def results(experiment_dir: Path) -> dict[str, object]:
+        directory = cases[by_experiment[experiment_dir.name.removeprefix("experiment-")]].directory
+        assert directory is not None
+        return _passing_results(directory)
+
+    monkeypatch.setattr(compliance_runs, "_results", results)
+    tested = {e["entry"]: e for e in (await report())["entries"]}
+    assert tested["pbsim-common"]["level"] == "tested"
+    assert all(c["state"] == "passed" for c in tested["pbsim-common"]["cases"])
+
+    # a generic check's failure refuses that component alone; the entry's level stands
+    component = "pbsim_common.comparison.MSEComparison"
+    await database_service.get_environments_db().set_findings(
+        version.database_id,
+        [{"component": component, "check": "step-outputs-replace", "severity": "fail", "detail": "x"}],
+    )
+    refused = await report()
+    assert refused["refused"] == [component]
+    assert {e["entry"]: e["level"] for e in refused["entries"]}["pbsim-common"] == "tested"
+
+    # run again: the cases are pending again, then a run that fails is an error
+    async with _as(app, ADMIN) as admin:
+        again = await admin.post(f"/registry/environments/registry_env/versions/{number}/compliance")
+        assert again.status_code == 202, again.text
+
+    async def failed(ids: list[int]) -> dict[int, str]:
+        return dict.fromkeys(ids, "failed")
+
+    monkeypatch.setattr(database_service.get_simulator_db(), "get_simulation_statuses", failed)
+    errored = {e["entry"]: e for e in (await report())["entries"]}
+    assert errored["pbsim-common"]["level"] == "failed"
+    assert errored["pbsim-common"]["cases"][0]["failures"] == ["the run ended failed"]
+
+
+@pytest.mark.asyncio
+async def test_compliance_runs_only_for_a_ready_composed_version(app: FastAPI, builds: Builds) -> None:
+    async with _as(app, ADMIN) as admin:
+        image = (await admin.post(f"/registry/environments/{PREBUILT}/versions", json={"image": _digest()})).json()
+        refused = await admin.post(f"/registry/environments/{PREBUILT}/versions/{image['number']}/compliance")
+    assert refused.status_code == 409 and "not a ready composed version" in refused.json()["detail"]

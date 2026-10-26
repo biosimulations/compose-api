@@ -330,3 +330,42 @@ async def test_a_composed_version_is_read_back_through_pixis_activation(monkeypa
     shared = await build_k8s.inspection_of(version.model_copy(update={"runtime_contract": 1}))
     assert composed is not None and composed.python == pixi.PYTHON
     assert shared is not None and shared.python[0] == "micromamba"  # @1, built the old way, keeps its own
+
+
+@pytest.mark.asyncio
+async def test_the_read_back_records_what_the_generic_checks_find_using_the_images_type_tables(
+    database_service: DatabaseServiceSQL, tmp_path: Path
+) -> None:
+    name = "viva-pde-particle"  # its module root is viva_pde_particle
+    image = f"ghcr.io/example/s@sha256:{uuid.uuid4().hex}{uuid.uuid4().hex}"
+    root = tmp_path / "mount"
+    base = {} if get_settings().simulation_store_base_path else {"simulation_store_base_path": "/store/compose_api"}
+    interfaces = {
+        "components": [
+            {
+                "name": "Utc",
+                "kind": "step",
+                "module": "viva_pde_particle.steps",
+                "outputs": {"result": "numeric_result"},
+            },
+            {"name": "Ok", "kind": "step", "module": "viva_pde_particle.steps", "outputs": {"x": "overwrite[float]"}},
+        ]
+    }
+    types = {"numeric_result": {"time": "list[float]", "values": "list[list[float]]"}}
+    with override_settings(prebuilt_simulators={name: image}, internal_mount_dir=str(root), **base):
+        version, simulator = await version_for(database_service, name)
+        images = root / get_settings().namespace / "images"
+        images.mkdir(parents=True)
+        (images / f"{simulator.container_def_hash}.interfaces.json").write_text(json.dumps(interfaces))
+        (images / f"{simulator.container_def_hash}.types.json").write_text(json.dumps(types))
+        assert await record_contents(database_service, version)
+    stored = await database_service.get_environments_db().get_by_number(name, version.number)
+    assert stored is not None and stored.findings is not None
+    (finding,) = stored.findings
+    assert finding["component"] == "viva_pde_particle.steps.Utc" and finding["severity"] == "fail"
+    assert "result.time: list[float] (appends)" in finding["detail"]
+
+
+def test_the_type_tables_are_read_by_a_script_that_shadows_no_standard_module() -> None:
+    script = inspect_script(INSPECTION)
+    assert "/type_tables.py" in script and "/types.py" not in script  # `types` would shadow the standard module

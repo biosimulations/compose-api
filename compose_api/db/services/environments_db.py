@@ -9,7 +9,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from compose_api.db.tables.environment_tables import ORMEnvironment, ORMEnvironmentVersion
+from compose_api.db.tables.environment_tables import ORMComplianceRun, ORMEnvironment, ORMEnvironmentVersion
 from compose_api.simulation.models import (
     EnvironmentVersion,
     EnvironmentVersionDetail,
@@ -34,6 +34,18 @@ class VersionSource:
     created_by: str | None = None
     note: str | None = None
     runtime_contract: int = 1
+
+
+@dataclass(frozen=True)
+class ComplianceRunRecord:
+    """A case's run in a version, as stored."""
+
+    id: int
+    entry: str
+    case: str
+    simulation_id: int | None
+    state: str
+    failures: list[str]
 
 
 class EnvironmentsDatabaseService(ABC):
@@ -78,6 +90,22 @@ class EnvironmentsDatabaseService(ABC):
     @abstractmethod
     async def set_failure(self, version_id: int, failure: str) -> None:
         """Mark the version `failed`, with why."""
+
+    @abstractmethod
+    async def add_compliance_run(self, version_id: int, entry: str, case: str, simulation_id: int) -> None:
+        """Record a case's run in the version, `pending` (a case run again replaces its earlier run)."""
+
+    @abstractmethod
+    async def compliance_runs(self, version_id: int) -> list[ComplianceRunRecord]:
+        """The version's case runs."""
+
+    @abstractmethod
+    async def set_compliance_outcome(self, run_id: int, state: str, failures: list[str]) -> None:
+        """How a case's run went."""
+
+    @abstractmethod
+    async def set_findings(self, version_id: int, findings: list[dict[str, Any]]) -> None:
+        """Keep what the generic compliance checks found in the version's components (step 5)."""
 
     @abstractmethod
     async def set_export(self, version_id: int, export_format: str, files: dict[str, str]) -> None:
@@ -297,6 +325,43 @@ class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
         async with self.async_session_maker() as session, session.begin():
             query = update(ORMEnvironmentVersion).where(ORMEnvironmentVersion.id == version_id)
             await session.execute(query.values(state=VersionState.FAILED.value, failure=failure))
+
+    @override
+    async def add_compliance_run(self, version_id: int, entry: str, case: str, simulation_id: int) -> None:
+        async with self.async_session_maker() as session, session.begin():
+            row = {"environment_version_id": version_id, "entry": entry, "case": case, "simulation_id": simulation_id}
+            statement = insert(ORMComplianceRun).values(**row, state="pending", failures=[])
+            await session.execute(
+                statement.on_conflict_do_update(
+                    constraint="uq_compliance_run_case",
+                    set_={"simulation_id": simulation_id, "state": "pending", "failures": [], "updated_at": func.now()},
+                )
+            )
+
+    @override
+    async def compliance_runs(self, version_id: int) -> list[ComplianceRunRecord]:
+        async with self.async_session_maker() as session:
+            query = (
+                select(ORMComplianceRun)
+                .where(ORMComplianceRun.environment_version_id == version_id)
+                .order_by(ORMComplianceRun.entry, ORMComplianceRun.case)
+            )
+            return [
+                ComplianceRunRecord(r.id, r.entry, r.case, r.simulation_id, r.state, list(r.failures or []))
+                for r in (await session.execute(query)).scalars()
+            ]
+
+    @override
+    async def set_compliance_outcome(self, run_id: int, state: str, failures: list[str]) -> None:
+        async with self.async_session_maker() as session, session.begin():
+            query = update(ORMComplianceRun).where(ORMComplianceRun.id == run_id)
+            await session.execute(query.values(state=state, failures=failures, updated_at=func.now()))
+
+    @override
+    async def set_findings(self, version_id: int, findings: list[dict[str, Any]]) -> None:
+        async with self.async_session_maker() as session, session.begin():
+            query = update(ORMEnvironmentVersion).where(ORMEnvironmentVersion.id == version_id)
+            await session.execute(query.values(findings=findings))
 
     @override
     async def set_export(self, version_id: int, export_format: str, files: dict[str, str]) -> None:

@@ -43,6 +43,41 @@ def _parse(version: EnvironmentVersion, files: dict[str, str]) -> tuple[str | No
     return files.get("installed.txt"), interfaces
 
 
+def _types(version: EnvironmentVersion, files: dict[str, str]) -> dict[str, Any]:
+    try:
+        tables = json.loads(files.get("types.json") or "{}")
+    except json.JSONDecodeError:
+        logger.warning(f"{version.label}'s type tables are not JSON; left out")
+        return {}
+    return tables if isinstance(tables, dict) else {}
+
+
+def version_roots(version: EnvironmentVersion) -> list[str]:
+    """The module roots a version provides: its entries' (a composed version records them), else its bundle's."""
+    from compose_api.registry.environments import module_roots
+    from compose_api.registry.manifest import load_manifest
+
+    ids = [str(e["id"]) for e in (version.spec or {}).get("entries", []) if "id" in e]
+    if not ids:
+        return module_roots(version.environment)
+    return sorted({root for e in load_manifest().entries if e.id in ids for root in e.module_roots})
+
+
+async def _store(
+    database_service: DatabaseService, version: EnvironmentVersion, files: dict[str, str]
+) -> tuple[str | None, dict[str, Any] | None]:
+    """Store what was read back, and the generic compliance checks over it (environments/compliance.py, step 5)."""
+    from compose_api.environments.compliance import port_findings
+
+    installed, interfaces = _parse(version, files)
+    environments_db = database_service.get_environments_db()
+    await environments_db.set_contents(version.database_id, installed, interfaces)
+    if interfaces is not None:
+        findings = port_findings(interfaces, _types(version, files), version_roots(version))
+        await environments_db.set_findings(version.database_id, [f.model_dump() for f in findings])
+    return installed, interfaces
+
+
 async def inspect_prebuilt_version(database_service: DatabaseService, version: EnvironmentVersion) -> bool:
     """Run a prebuilt version's image in a Job of its own to read what it installed and provides (step 4c), and
     store them; whether anything was read."""
@@ -56,7 +91,7 @@ async def inspect_prebuilt_version(database_service: DatabaseService, version: E
     if installed is None and interfaces is None:
         logger.warning(f"Reading back {version.label} ({version.image}) found nothing")
         return False
-    await database_service.get_environments_db().set_contents(version.database_id, installed, interfaces)
+    await _store(database_service, version, files)
     return True
 
 
@@ -87,5 +122,5 @@ async def record_contents(database_service: DatabaseService, version: Environmen
     installed, interfaces = _parse(version, files)
     if installed is None and interfaces is None:
         return False
-    await database_service.get_environments_db().set_contents(version.database_id, installed, interfaces)
+    await _store(database_service, version, files)
     return True

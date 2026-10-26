@@ -263,11 +263,11 @@ paths:
           - type: 'null'
           description: 'Only simulations with this label, as key:value; repeatable,
             all must match. Keys: source, environment, environment_version, solver,
-            model, project, sedml_task, comparison, collection, suite_run'
+            model, project, sedml_task, comparison, collection, suite_run, compliance'
           title: Label
         description: 'Only simulations with this label, as key:value; repeatable,
           all must match. Keys: source, environment, environment_version, solver,
-          model, project, sedml_task, comparison, collection, suite_run'
+          model, project, sedml_task, comparison, collection, suite_run, compliance'
       - name: tag
         in: query
         required: false
@@ -1225,6 +1225,82 @@ paths:
         '409':
           description: The version has no lock in that format (prebuilt, older, or
             still resolving)
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /registry/environments/{name}/versions/{number}/compliance:
+    get:
+      tags:
+      - Registry
+      summary: Where each entry of a version stands there (its cases' runs), and the
+        components a generic check refuses
+      operationId: get-environment-version-compliance
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Number
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplianceReport'
+        '404':
+          description: No such environment, or no such version
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Registry
+      summary: Run a version's compliance cases again (its entries' cases, as committed
+        now)
+      operationId: run-environment-version-compliance
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Number
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplianceReport'
+        '404':
+          description: No such environment, or no such version
+        '401':
+          description: Not signed in
+        '403':
+          description: Not an environment administrator, or environment administration
+            is not configured
+        '409':
+          description: The version is not ready, or not composed
         '422':
           description: Validation Error
           content:
@@ -2830,6 +2906,70 @@ components:
       title: ComparisonSeries
       description: One report's columns from each member (by solver) and each reference
         (by origin), for overlays.
+    ComplianceCase:
+      properties:
+        case:
+          type: string
+          title: Case
+        state:
+          type: string
+          title: State
+        simulation_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Simulation Id
+        failures:
+          items:
+            type: string
+          type: array
+          title: Failures
+      type: object
+      required:
+      - case
+      - state
+      title: ComplianceCase
+      description: 'One compliance case of an entry, run in a version: `pending` until
+        its run finishes, then `passed`, `failed`
+
+        (an expectation not met) or `error` (the run did not finish).'
+    ComplianceReport:
+      properties:
+        environment:
+          type: string
+          title: Environment
+        number:
+          type: integer
+          title: Number
+        entries:
+          items:
+            $ref: '#/components/schemas/EntryCompliance'
+          type: array
+          title: Entries
+        findings:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Findings
+        refused:
+          items:
+            type: string
+          type: array
+          title: Refused
+          description: Components a generic check failed
+      type: object
+      required:
+      - environment
+      - number
+      title: ComplianceReport
+      description: 'What certifies a version''s entries (docs/plan-environment-composition.md,
+        step 5): their cases'' runs there,
+
+        and the generic checks over its components. A component that fails a check
+        is refused in this version (`refused`),
+
+        whatever its entry''s level.'
     ContainerizationEngine:
       type: integer
       enum:
@@ -3019,6 +3159,28 @@ components:
       title: Drift
       description: One solver's result against its own result in the suite's baseline
         run.
+    EntryCompliance:
+      properties:
+        entry:
+          type: string
+          title: Entry
+        level:
+          type: string
+          title: Level
+        cases:
+          items:
+            $ref: '#/components/schemas/ComplianceCase'
+          type: array
+          title: Cases
+      type: object
+      required:
+      - entry
+      - level
+      title: EntryCompliance
+      description: 'An entry''s standing in a version: `tested` when its cases all
+        passed there, `pending` while any runs,
+
+        `failed` when one did not pass, `untested` when it has no cases yet.'
     EntryEnvironment:
       properties:
         name:
@@ -3411,6 +3573,17 @@ components:
           - type: 'null'
           title: Interfaces
           description: Its process interfaces (pbg-interfaces/1)
+        findings:
+          anyOf:
+          - items:
+              additionalProperties: true
+              type: object
+            type: array
+          - type: 'null'
+          title: Findings
+          description: 'What the generic compliance checks found in its components:
+            a component with a `fail` is refused in this version (docs/plan-environment-composition.md,
+            step 5)'
       type: object
       required:
       - database_id

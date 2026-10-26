@@ -10,7 +10,7 @@ that names none gets.
 import datetime
 from typing import Any
 
-from sqlalchemy import ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import ForeignKey, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -68,6 +68,8 @@ class ORMEnvironmentVersion(DeclarativeTableBase):
     failure: Mapped[str | None] = mapped_column(Text, nullable=True)
     # the files that recreate it in other forms, by format: {"uv": {"pyproject.toml": ..., "uv.lock": ...}}
     exports: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    # what the generic compliance checks found in its components, from its read-back (environments/compliance.py)
+    findings: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
 
     def to_environment_version(self) -> EnvironmentVersion:
         return EnvironmentVersion(
@@ -95,4 +97,25 @@ class ORMEnvironmentVersion(DeclarativeTableBase):
             lock=self.lock,
             installed=self.installed,
             interfaces=self.interfaces,
+            findings=self.findings,
         )
+
+
+class ORMComplianceRun(DeclarativeTableBase):
+    """One compliance case of a registry entry, run in an environment version (docs/plan-environment-composition.md,
+    step 5): its run, and how it went."""
+
+    __tablename__ = "compliance_run"
+    __table_args__ = (UniqueConstraint("environment_version_id", "entry", "case", name="uq_compliance_run_case"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    environment_version_id: Mapped[int] = mapped_column(
+        ForeignKey("environment_version.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    entry: Mapped[str] = mapped_column(String(128), nullable=False)
+    case: Mapped[str] = mapped_column(String(128), nullable=False)
+    simulation_id: Mapped[int | None] = mapped_column(ForeignKey("simulation.id", ondelete="SET NULL"), nullable=True)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, server_default="pending")
+    failures: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now(), onupdate=func.now())

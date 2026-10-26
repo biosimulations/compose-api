@@ -37,6 +37,7 @@ from compose_api_client.api.registry import (
     get_environment_images,
     get_environment_manifest,
     get_environment_version,
+    get_environment_version_compliance,
     get_simulator_images,
     inspect_environment_version,
     list_environment_versions,
@@ -45,6 +46,7 @@ from compose_api_client.api.registry import (
     list_solvers,
     preview_environment_version,
     retire_environment_version,
+    run_environment_version_compliance,
     set_environment_default,
 )
 from compose_api_client.api.results import (
@@ -128,6 +130,7 @@ from compose_api_client.models import (
     Comparison,
     ComparisonPage,
     ComparisonSeries,
+    ComplianceReport,
     CurrentPrincipalResponse,
     Dataset,
     DatasetPage,
@@ -622,6 +625,19 @@ class ComposeSession:
         op = Operation("GET", f"/registry/environments/{name}/versions/{number}/export", replayable=True)
         fmt = format if format is not None else UNSET
         r, _ = self._send(op, lambda c: export_environment_version.sync_detailed(name, number, client=c, format_=fmt))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def environment_compliance(self, name: str, number: int) -> ComplianceReport:
+        """Where each entry of a version stands there (its cases' runs), and the components a generic check refuses."""
+        op = Operation("GET", f"/registry/environments/{name}/versions/{number}/compliance", replayable=True)
+        r, _ = self._send(op, lambda c: get_environment_version_compliance.sync_detailed(name, number, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def run_environment_compliance(self, name: str, number: int) -> ComplianceReport:
+        """Run a version's compliance cases again (new runs: sent once, never retried). Needs the environment
+        administrator role."""
+        op = Operation("POST", f"/registry/environments/{name}/versions/{number}/compliance", replayable=False)
+        r, _ = self._send(op, lambda c: run_environment_version_compliance.sync_detailed(name, number, client=c))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def preview_environment_version(self, name: str, *, resolved_at: datetime.datetime | None = None) -> LockPreview:
@@ -1465,6 +1481,23 @@ class AsyncComposeSession:
         fmt = format if format is not None else UNSET
         r, _ = await self._send(
             op, lambda c: export_environment_version.asyncio_detailed(name, number, client=c, format_=fmt)
+        )
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def environment_compliance(self, name: str, number: int) -> ComplianceReport:
+        """Where each entry of a version stands there (its cases' runs), and the components a generic check refuses."""
+        op = Operation("GET", f"/registry/environments/{name}/versions/{number}/compliance", replayable=True)
+        r, _ = await self._send(
+            op, lambda c: get_environment_version_compliance.asyncio_detailed(name, number, client=c)
+        )
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def run_environment_compliance(self, name: str, number: int) -> ComplianceReport:
+        """Run a version's compliance cases again (new runs: sent once, never retried). Needs the environment
+        administrator role."""
+        op = Operation("POST", f"/registry/environments/{name}/versions/{number}/compliance", replayable=False)
+        r, _ = await self._send(
+            op, lambda c: run_environment_version_compliance.asyncio_detailed(name, number, client=c)
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 

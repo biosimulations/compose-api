@@ -244,6 +244,11 @@ class EnvironmentVersionDetail(EnvironmentVersion):
     lock: str | None = Field(default=None, description="A shared version's lock: every PyPI package, pinned")
     installed: str | None = Field(default=None, description="What its image installed, read from the image")
     interfaces: dict[str, Any] | None = Field(default=None, description="Its process interfaces (pbg-interfaces/1)")
+    findings: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="What the generic compliance checks found in its components: a component with a `fail` is"
+        " refused in this version (docs/plan-environment-composition.md, step 5)",
+    )
 
 
 class EnvironmentVersions(BaseModel):
@@ -269,6 +274,37 @@ class NewEnvironmentVersion(BaseModel):
     libraries: list[dict[str, str]] | None = None
     image: str | None = None
     note: str | None = None
+
+
+class ComplianceCase(BaseModel):
+    """One compliance case of an entry, run in a version: `pending` until its run finishes, then `passed`, `failed`
+    (an expectation not met) or `error` (the run did not finish)."""
+
+    case: str
+    state: str
+    simulation_id: int | None = None
+    failures: list[str] = Field(default_factory=list)
+
+
+class EntryCompliance(BaseModel):
+    """An entry's standing in a version: `tested` when its cases all passed there, `pending` while any runs,
+    `failed` when one did not pass, `untested` when it has no cases yet."""
+
+    entry: str
+    level: str
+    cases: list[ComplianceCase] = Field(default_factory=list)
+
+
+class ComplianceReport(BaseModel):
+    """What certifies a version's entries (docs/plan-environment-composition.md, step 5): their cases' runs there,
+    and the generic checks over its components. A component that fails a check is refused in this version (`refused`),
+    whatever its entry's level."""
+
+    environment: str
+    number: int
+    entries: list[EntryCompliance] = Field(default_factory=list)
+    findings: list[dict[str, Any]] = Field(default_factory=list)
+    refused: list[str] = Field(default_factory=list, description="Components a generic check failed")
 
 
 class EnvironmentExport(BaseModel):

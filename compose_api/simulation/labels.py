@@ -20,6 +20,7 @@ LABEL_KEYS: dict[str, str] = {
     "comparison": "the comparison the run belongs to",
     "collection": "the suite the run belongs to",
     "suite_run": "the suite run it was part of",
+    "compliance": "the compliance case it ran, <entry>/<case> (docs/plan-environment-composition.md, step 5)",
 }
 
 MAX_TAGS = 20
