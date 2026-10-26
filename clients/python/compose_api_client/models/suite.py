@@ -29,7 +29,8 @@ class Suite:
             with
             `atol = max(abs_tol_min, max|a|*abs_tol_scale, max|b|*abs_tol_scale)` (docs/plan-sedml.md, D4).
         baseline (int | None | Unset): the accepted suite run that later runs are compared with
-        expected (list[ExpectedFailure] | Unset):
+        expected (list[ExpectedFailure] | Unset): known problems not yet moved to records (docs/plan-known-problems.md,
+            K8); read as open ones
         verify (SuiteVerify | Unset): check comparisons against biosim's /verify once they finish: those that differ,
             are incomplete or have no reference that agrees (failing), or every one (docs/plan-verify-oracle.md, D3)
             Default: SuiteVerify.NONE.

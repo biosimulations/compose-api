@@ -200,10 +200,24 @@ def _verifications(request: httpx.Request) -> httpx.Response:
         return httpx.Response(201, json=_verification(body.get("simulators") or ["amici", "copasi"]))
     if path == "/comparisons/354/verifications":
         return httpx.Response(200, json=[_verification(["amici", "copasi"])])
+    if path.startswith("/suites/s/problems"):
+        return _problems(request)
     if path == "/suites/biomodels-curated-300/runs/1/verify":
         which = request.url.params.get("which")
         return httpx.Response(200, json={"queued": [1, 2] if which == "all" else [2], "already": [], "running": 0})
     return httpx.Response(404, json={"detail": "no"})
+
+
+def _problems(request: httpx.Request) -> httpx.Response:
+    """A suite's known problems: the request's body echoed back as problem 5."""
+    problem = {"problem_id": 5, "suite": "s", "source": "biomodels:A1", "solver": "vcell", "category": "DELAY",
+               "reason": "delay equations", "marked_by": "auth0|me"}  # fmt: skip
+    if request.method == "GET":
+        return httpx.Response(200, json=[problem])
+    body = json.loads(request.content or b"{}")
+    if request.url.path.endswith("/clear"):
+        return httpx.Response(200, json={**problem, "cleared_run": body["run"], "cleared_by": "auth0|me"})
+    return httpx.Response(201 if request.method == "POST" else 200, json={**problem, **body})
 
 
 def _datasets(path: str) -> httpx.Response:
@@ -485,6 +499,24 @@ def test_comparisons_verify_and_a_suite_runs_verifications(service: Callable[...
     assert json.loads(invoke("suites", "verify", "biomodels-curated-300", "1").stdout)["queued"] == [2]
     assert fake.requests[-1].url.params["which"] == "failing"
     assert json.loads(invoke("suites", "verify", "biomodels-curated-300", "1", "--all").stdout)["queued"] == [1, 2]
+
+
+def test_a_suites_known_problems(service: Callable[..., FakeService]) -> None:
+    fake = service()
+    [listed] = json.loads(invoke("suites", "problems", "s", "--open").stdout)
+    assert listed["problem_id"] == 5 and fake.requests[-1].url.params["cleared"] == "false"
+    marked = invoke("suites", "mark-problem", "s", "biomodels:A1", "--solver", "vcell", "--category", "DELAY",
+                    "--reason", "delay equations", "--seen-run", "4")  # fmt: skip
+    assert marked.exit_code == 0, marked.stdout + str(marked.exception)
+    assert json.loads(fake.requests[-1].content) == {
+        "source": "biomodels:A1", "solver": "vcell", "category": "DELAY", "reason": "delay equations", "seen_run": 4,
+    }  # fmt: skip
+    edited = json.loads(invoke("suites", "edit-problem", "s", "5", "--reason", "delay(x, tau)").stdout)
+    assert edited["reason"] == "delay(x, tau)" and fake.requests[-1].method == "PATCH"
+    assert json.loads(fake.requests[-1].content) == {"reason": "delay(x, tau)"}
+    assert json.loads(invoke("suites", "clear-problem", "s", "5", "--run", "6").stdout)["cleared_run"] == 6
+    assert invoke("suites", "edit-problem", "s", "5").exit_code != 0  # nothing to change
+    assert invoke("suites", "problems", "s", "--open", "--cleared").exit_code != 0
 
 
 def test_parse_since() -> None:

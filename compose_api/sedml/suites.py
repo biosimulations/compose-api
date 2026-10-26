@@ -29,7 +29,10 @@ class Suite(BaseModel):
     solvers: list[str] | None = None
     tolerances: Tolerances = Field(default_factory=Tolerances)
     baseline: int | None = Field(default=None, description="the accepted suite run that later runs are compared with")
-    expected: list[ExpectedFailure] = Field(default_factory=list)
+    expected: list[ExpectedFailure] = Field(
+        default_factory=list,
+        description="known problems not yet moved to records (docs/plan-known-problems.md, K8); read as open ones",
+    )
     verify: Literal["none", "failing", "all"] = Field(
         default="none",
         description="check comparisons against biosim's /verify once they finish: those that differ, are incomplete "
@@ -44,13 +47,6 @@ class Suite(BaseModel):
             if kind not in ("biomodels", "biosimulations") or not ident:
                 raise ValueError(f"{s!r}: a source is biomodels:<id> or biosimulations:<project>")
         return sources
-
-    def expected_for(self, source: str, solver: str | None = None) -> ExpectedFailure | None:
-        """The expected entry for ``source``: for one ``solver``, an entry naming it or none; for the whole source
-        (a suite row is one comparison across every solver), any entry for it."""
-        return next(
-            (e for e in self.expected if e.source == source and (solver is None or e.solver in (None, solver))), None
-        )
 
 
 @functools.cache

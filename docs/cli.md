@@ -1685,6 +1685,10 @@ $ compose-api suites [OPTIONS] COMMAND [ARGS]...
 * `show`: One suite run: per source, whether the...
 * `run`: Run every source of the suite on its...
 * `verify`: Queue a check against biosim's /verify for...
+* `problems`: A suite's known problems, oldest first:...
+* `mark-problem`: Record a known problem: the solver's...
+* `edit-problem`: Change a known problem's category or reason.
+* `clear-problem`: Clear a known problem that no longer...
 
 ### `compose-api suites list`
 
@@ -1778,6 +1782,95 @@ $ compose-api suites verify [OPTIONS] NAME NUMBER
 **Options**:
 
 * `--all`: Every finished comparison, not only those that differ or lack agreeing references.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api suites problems`
+
+A suite's known problems, oldest first: each solver's expected failures, excused in its runs until cleared.
+
+**Usage**:
+
+```console
+$ compose-api suites problems [OPTIONS] NAME
+```
+
+**Arguments**:
+
+* `NAME`: The suite, e.g. biomodels-ode-sample.  [required]
+
+**Options**:
+
+* `--open`: Only the open ones.
+* `--cleared`: Only the cleared ones.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api suites mark-problem`
+
+Record a known problem: the solver's failure or disagreement on the source is excused until it is cleared.
+Needs the suite curator role.
+
+**Usage**:
+
+```console
+$ compose-api suites mark-problem [OPTIONS] NAME SOURCE
+```
+
+**Arguments**:
+
+* `NAME`: The suite, e.g. biomodels-ode-sample.  [required]
+* `SOURCE`: The suite's source, e.g. biomodels:BIOMD0000000039.  [required]
+
+**Options**:
+
+* `--category TEXT`: What kind of problem, e.g. NONINTEGER_STOICH.  [required]
+* `--reason TEXT`: Why it fails or differs.  [required]
+* `--solver TEXT`: The solver it applies to; omit for a problem of the whole source.
+* `--seen-run INTEGER`: The suite run it was first seen in.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api suites edit-problem`
+
+Change a known problem's category or reason. Needs the suite curator role.
+
+**Usage**:
+
+```console
+$ compose-api suites edit-problem [OPTIONS] NAME PROBLEM_ID
+```
+
+**Arguments**:
+
+* `NAME`: The suite, e.g. biomodels-ode-sample.  [required]
+* `PROBLEM_ID`: The problem's id (suites problems).  [required]
+
+**Options**:
+
+* `--category TEXT`: A new category.
+* `--reason TEXT`: A new reason.
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api suites clear-problem`
+
+Clear a known problem that no longer occurs (a suite run lists it as resolved). Needs the suite curator role.
+
+**Usage**:
+
+```console
+$ compose-api suites clear-problem [OPTIONS] NAME PROBLEM_ID
+```
+
+**Arguments**:
+
+* `NAME`: The suite, e.g. biomodels-ode-sample.  [required]
+* `PROBLEM_ID`: The problem's id (suites problems).  [required]
+
+**Options**:
+
+* `--run INTEGER`: The suite run that shows it fixed; earlier runs still excuse it.  [required]
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 

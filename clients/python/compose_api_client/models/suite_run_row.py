@@ -10,6 +10,7 @@ from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
     from ..models.suite_run_row_drift_type_0 import SuiteRunRowDriftType0
+    from ..models.suite_run_row_known_problems import SuiteRunRowKnownProblems
 
 
 T = TypeVar("T", bound="SuiteRunRow")
@@ -28,7 +29,11 @@ class SuiteRunRow:
         worst_label (None | str | Unset):
         worst_score (float | None | str | Unset):
         drift (None | SuiteRunRowDriftType0 | Unset):
-        expected (None | str | Unset):
+        expected (None | str | Unset): why the whole source is excused, if it is
+        known_problems (SuiteRunRowKnownProblems | Unset): each solver's known problem here, by solver: its reason
+        excused (bool | Unset): the row fails or differs only through solvers with a known problem; the others agree
+            Default: False.
+        resolved (list[str] | Unset): solvers with a known problem here that completed and agree: clear it
         failure (None | str | Unset):
         verification (None | str | Unset):
         verify_close (bool | None | Unset):
@@ -44,6 +49,9 @@ class SuiteRunRow:
     worst_score: float | None | str | Unset = UNSET
     drift: None | SuiteRunRowDriftType0 | Unset = UNSET
     expected: None | str | Unset = UNSET
+    known_problems: SuiteRunRowKnownProblems | Unset = UNSET
+    excused: bool | Unset = False
+    resolved: list[str] | Unset = UNSET
     failure: None | str | Unset = UNSET
     verification: None | str | Unset = UNSET
     verify_close: bool | None | Unset = UNSET
@@ -106,6 +114,16 @@ class SuiteRunRow:
         else:
             expected = self.expected
 
+        known_problems: dict[str, Any] | Unset = UNSET
+        if not isinstance(self.known_problems, Unset):
+            known_problems = self.known_problems.to_dict()
+
+        excused = self.excused
+
+        resolved: list[str] | Unset = UNSET
+        if not isinstance(self.resolved, Unset):
+            resolved = self.resolved
+
         failure: None | str | Unset
         if isinstance(self.failure, Unset):
             failure = UNSET
@@ -146,6 +164,12 @@ class SuiteRunRow:
             field_dict["drift"] = drift
         if expected is not UNSET:
             field_dict["expected"] = expected
+        if known_problems is not UNSET:
+            field_dict["known_problems"] = known_problems
+        if excused is not UNSET:
+            field_dict["excused"] = excused
+        if resolved is not UNSET:
+            field_dict["resolved"] = resolved
         if failure is not UNSET:
             field_dict["failure"] = failure
         if verification is not UNSET:
@@ -158,6 +182,7 @@ class SuiteRunRow:
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.suite_run_row_drift_type_0 import SuiteRunRowDriftType0  # noqa: PLC0415
+        from ..models.suite_run_row_known_problems import SuiteRunRowKnownProblems  # noqa: PLC0415
 
         d = dict(src_dict)
         source = d.pop("source")
@@ -244,6 +269,17 @@ class SuiteRunRow:
 
         expected = _parse_expected(d.pop("expected", UNSET))
 
+        _known_problems = d.pop("known_problems", UNSET)
+        known_problems: SuiteRunRowKnownProblems | Unset
+        if isinstance(_known_problems, Unset):
+            known_problems = UNSET
+        else:
+            known_problems = SuiteRunRowKnownProblems.from_dict(_known_problems)
+
+        excused = d.pop("excused", UNSET)
+
+        resolved = cast(list[str], d.pop("resolved", UNSET))
+
         def _parse_failure(data: object) -> None | str | Unset:
             if data is None:
                 return data
@@ -282,6 +318,9 @@ class SuiteRunRow:
             worst_score=worst_score,
             drift=drift,
             expected=expected,
+            known_problems=known_problems,
+            excused=excused,
+            resolved=resolved,
             failure=failure,
             verification=verification,
             verify_close=verify_close,

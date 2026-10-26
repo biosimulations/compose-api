@@ -1,5 +1,6 @@
 """Comparisons and their members (compose_api/db/tables/comparison_tables.py)."""
 
+import datetime
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, override
@@ -11,11 +12,13 @@ from compose_api.db.tables.comparison_tables import (
     ORMComparison,
     ORMComparisonMember,
     ORMComparisonReference,
+    ORMSuiteKnownProblem,
     ORMSuiteRun,
     ORMVerification,
 )
 from compose_api.db.tables.environment_tables import ORMEnvironment, ORMEnvironmentVersion
 from compose_api.db.tables.simulator_tables import ORMSimulation
+from compose_api.sedml.models import KnownProblem, KnownProblemMark
 
 
 @dataclass
@@ -164,6 +167,26 @@ class ComparisonsDatabaseService(ABC):
     @abstractmethod
     async def replace_reference(self, comparison_id: int, origin: str, reports: dict[str, Any]) -> None:
         """Add the reference, or replace the one from the same origin."""
+
+    @abstractmethod
+    async def known_problems(self, collection: str) -> list[KnownProblem]:
+        """The suite's known problems, open and cleared, oldest first (docs/plan-known-problems.md)."""
+
+    @abstractmethod
+    async def add_known_problem(self, collection: str, mark: KnownProblemMark, marked_by: str) -> KnownProblem | None:
+        """Record a known problem; None when one is already open for the same source and solver."""
+
+    @abstractmethod
+    async def edit_known_problem(
+        self, collection: str, problem_id: int, category: str | None, reason: str | None
+    ) -> KnownProblem | None:
+        """Change a known problem's category or reason; None when the suite has no such problem."""
+
+    @abstractmethod
+    async def clear_known_problem(
+        self, collection: str, problem_id: int, run: int, cleared_by: str
+    ) -> KnownProblem | None:
+        """Clear an open known problem at ``run``; None when the suite has no such open problem."""
 
 
 class ComparisonsORMExecutor(ComparisonsDatabaseService):
@@ -515,6 +538,80 @@ class ComparisonsORMExecutor(ComparisonsDatabaseService):
             comparison = await session.get(ORMComparison, comparison_id)
             if comparison is not None:
                 comparison.status, comparison.result = status, result
+
+    @override
+    async def known_problems(self, collection: str) -> list[KnownProblem]:
+        async with self.session_maker() as session:
+            rows = await session.execute(
+                select(ORMSuiteKnownProblem)
+                .where(ORMSuiteKnownProblem.collection == collection)
+                .order_by(ORMSuiteKnownProblem.id)
+            )
+            return [_known_problem(r) for r in rows.scalars()]
+
+    @override
+    async def add_known_problem(self, collection: str, mark: KnownProblemMark, marked_by: str) -> KnownProblem | None:
+        async with self.session_maker() as session, session.begin():
+            open_already = await session.execute(
+                select(ORMSuiteKnownProblem.id).where(
+                    ORMSuiteKnownProblem.collection == collection,
+                    ORMSuiteKnownProblem.source == mark.source,
+                    ORMSuiteKnownProblem.solver.is_(None)
+                    if mark.solver is None
+                    else ORMSuiteKnownProblem.solver == mark.solver,
+                    ORMSuiteKnownProblem.cleared_run.is_(None),
+                )
+            )
+            if open_already.first() is not None:
+                return None
+            row = ORMSuiteKnownProblem(collection=collection, marked_by=marked_by, **mark.model_dump())
+            session.add(row)
+            await session.flush()
+            await session.refresh(row)
+            return _known_problem(row)
+
+    @override
+    async def edit_known_problem(
+        self, collection: str, problem_id: int, category: str | None, reason: str | None
+    ) -> KnownProblem | None:
+        async with self.session_maker() as session, session.begin():
+            row = await session.get(ORMSuiteKnownProblem, problem_id)
+            if row is None or row.collection != collection:
+                return None
+            if category is not None:
+                row.category = category
+            if reason is not None:
+                row.reason = reason
+            await session.flush()
+            return _known_problem(row)
+
+    @override
+    async def clear_known_problem(
+        self, collection: str, problem_id: int, run: int, cleared_by: str
+    ) -> KnownProblem | None:
+        async with self.session_maker() as session, session.begin():
+            row = await session.get(ORMSuiteKnownProblem, problem_id)
+            if row is None or row.collection != collection or row.cleared_run is not None:
+                return None
+            row.cleared_run, row.cleared_by = run, cleared_by
+            row.cleared_at = (await session.execute(select(func.localtimestamp()))).scalar_one()
+            await session.flush()
+            return _known_problem(row)
+
+
+def _iso(value: datetime.datetime | None) -> str | None:
+    if value is None:
+        return None
+    aware = value if value.tzinfo else value.replace(tzinfo=datetime.UTC)
+    return aware.astimezone(datetime.UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _known_problem(row: ORMSuiteKnownProblem) -> KnownProblem:
+    return KnownProblem(
+        problem_id=row.id, suite=row.collection, source=row.source, solver=row.solver, category=row.category,
+        reason=row.reason, seen_run=row.seen_run, marked_by=row.marked_by, marked_at=_iso(row.marked_at),
+        cleared_run=row.cleared_run, cleared_by=row.cleared_by, cleared_at=_iso(row.cleared_at),
+    )  # fmt: skip
 
 
 async def _members(session: AsyncSession, comparison_id: int) -> list[ORMComparisonMember]:

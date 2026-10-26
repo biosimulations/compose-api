@@ -81,7 +81,17 @@ from compose_api_client.api.sources import (
     search_biomodels,
     search_biosimulations_projects,
 )
-from compose_api_client.api.suites import get_suite_run, list_suite_runs, list_suites, run_suite, verify_suite_run
+from compose_api_client.api.suites import (
+    clear_suite_problem,
+    edit_suite_problem,
+    get_suite_run,
+    list_suite_problems,
+    list_suite_runs,
+    list_suites,
+    mark_suite_problem,
+    run_suite,
+    verify_suite_run,
+)
 from compose_api_client.ext._policy import (
     _UNKNOWN_OUTCOME,
     _UNREADABLE,
@@ -144,6 +154,10 @@ from compose_api_client.models import (
     HpcRun,
     ImageStatus,
     InterfaceManifest,
+    KnownProblem,
+    KnownProblemClear,
+    KnownProblemEdit,
+    KnownProblemMark,
     ListSimulationsStatusType0,
     LockPreview,
     NewEnvironmentVersion,
@@ -1027,6 +1041,54 @@ class ComposeSession:
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
+    def suite_problems(self, name: str, *, cleared: bool | None = None) -> list[KnownProblem]:
+        """A suite's known problems, oldest first: every one, or only the cleared (True) or open (False) ones."""
+        op = Operation("GET", f"/suites/{name}/problems", replayable=True)
+        flag = cleared if cleared is not None else UNSET
+        r, _ = self._send(op, lambda c: list_suite_problems.sync_detailed(name, client=c, cleared=flag))
+        return list(_parsed(r, op=op))
+
+    def mark_suite_problem(
+        self,
+        name: str,
+        source: str,
+        *,
+        category: str,
+        reason: str,
+        solver: str | None = None,
+        seen_run: int | None = None,
+    ) -> KnownProblem:
+        """Record a known problem of a solver (or of every solver) on a suite's source (sent once, never retried).
+        Needs the suite curator role."""
+        op = Operation("POST", f"/suites/{name}/problems", replayable=False)
+        mark = KnownProblemMark(
+            source=source,
+            category=category,
+            reason=reason,
+            solver=solver if solver is not None else UNSET,
+            seen_run=seen_run if seen_run is not None else UNSET,
+        )
+        r, _ = self._send(op, lambda c: mark_suite_problem.sync_detailed(name, client=c, body=mark))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def edit_suite_problem(
+        self, name: str, problem_id: int, *, category: str | None = None, reason: str | None = None
+    ) -> KnownProblem:
+        """Change a known problem's category or reason. Needs the suite curator role."""
+        op = Operation("PATCH", f"/suites/{name}/problems/{problem_id}", replayable=True)
+        edit = KnownProblemEdit(
+            category=category if category is not None else UNSET, reason=reason if reason is not None else UNSET
+        )
+        r, _ = self._send(op, lambda c: edit_suite_problem.sync_detailed(name, problem_id, client=c, body=edit))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def clear_suite_problem(self, name: str, problem_id: int, run: int) -> KnownProblem:
+        """Clear a known problem at the suite run that shows it fixed. Needs the suite curator role."""
+        op = Operation("POST", f"/suites/{name}/problems/{problem_id}/clear", replayable=True)
+        body = KnownProblemClear(run=run)
+        r, _ = self._send(op, lambda c: clear_suite_problem.sync_detailed(name, problem_id, client=c, body=body))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
     def simulation(self, simulation_id: int) -> SimulationDetail:
         """One simulation: its latest SLURM job and how many events and datasets its run recorded."""
         op = Operation("GET", f"/simulations/{simulation_id}", replayable=True)
@@ -1894,6 +1956,58 @@ class AsyncComposeSession:
         op = Operation("POST", f"/suites/{name}/runs/{number}/verify", replayable=False)
         r, _ = await self._send(
             op, lambda c: verify_suite_run.asyncio_detailed(name, number, client=c, which=VerifySuiteRunWhich(which))
+        )
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def suite_problems(self, name: str, *, cleared: bool | None = None) -> list[KnownProblem]:
+        """A suite's known problems, oldest first: every one, or only the cleared (True) or open (False) ones."""
+        op = Operation("GET", f"/suites/{name}/problems", replayable=True)
+        flag = cleared if cleared is not None else UNSET
+        r, _ = await self._send(op, lambda c: list_suite_problems.asyncio_detailed(name, client=c, cleared=flag))
+        return list(_parsed(r, op=op))
+
+    async def mark_suite_problem(
+        self,
+        name: str,
+        source: str,
+        *,
+        category: str,
+        reason: str,
+        solver: str | None = None,
+        seen_run: int | None = None,
+    ) -> KnownProblem:
+        """Record a known problem of a solver (or of every solver) on a suite's source (sent once, never retried).
+        Needs the suite curator role."""
+        op = Operation("POST", f"/suites/{name}/problems", replayable=False)
+        mark = KnownProblemMark(
+            source=source,
+            category=category,
+            reason=reason,
+            solver=solver if solver is not None else UNSET,
+            seen_run=seen_run if seen_run is not None else UNSET,
+        )
+        r, _ = await self._send(op, lambda c: mark_suite_problem.asyncio_detailed(name, client=c, body=mark))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def edit_suite_problem(
+        self, name: str, problem_id: int, *, category: str | None = None, reason: str | None = None
+    ) -> KnownProblem:
+        """Change a known problem's category or reason. Needs the suite curator role."""
+        op = Operation("PATCH", f"/suites/{name}/problems/{problem_id}", replayable=True)
+        edit = KnownProblemEdit(
+            category=category if category is not None else UNSET, reason=reason if reason is not None else UNSET
+        )
+        r, _ = await self._send(
+            op, lambda c: edit_suite_problem.asyncio_detailed(name, problem_id, client=c, body=edit)
+        )
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def clear_suite_problem(self, name: str, problem_id: int, run: int) -> KnownProblem:
+        """Clear a known problem at the suite run that shows it fixed. Needs the suite curator role."""
+        op = Operation("POST", f"/suites/{name}/problems/{problem_id}/clear", replayable=True)
+        body = KnownProblemClear(run=run)
+        r, _ = await self._send(
+            op, lambda c: clear_suite_problem.asyncio_detailed(name, problem_id, client=c, body=body)
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 

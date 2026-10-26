@@ -112,3 +112,25 @@ class ORMVerification(DeclarativeTableBase):
     submitted_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(nullable=False, server_default=func.localtimestamp())
     updated_at: Mapped[datetime.datetime] = mapped_column(nullable=False, server_default=func.localtimestamp())
+
+
+class ORMSuiteKnownProblem(DeclarativeTableBase):
+    """A known problem of one solver on one source of a suite (docs/plan-known-problems.md, K1): why it fails or
+    differs there, excused in the suite's runs before ``cleared_run``. A problem with no solver excuses the whole
+    source. Cleared problems are kept, with who cleared them and the run that showed them fixed."""
+
+    __tablename__ = "suite_known_problem"
+    __table_args__ = (Index("ix_suite_known_problem_open", "collection", "source", "solver", "cleared_run"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    collection: Mapped[str] = mapped_column(nullable=False, index=True)  # the suite
+    source: Mapped[str] = mapped_column(nullable=False)
+    solver: Mapped[str | None] = mapped_column(nullable=True)
+    category: Mapped[str] = mapped_column(String(64), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    seen_run: Mapped[int | None] = mapped_column(nullable=True)
+    marked_by: Mapped[str] = mapped_column(nullable=False)
+    marked_at: Mapped[datetime.datetime] = mapped_column(nullable=False, server_default=func.localtimestamp())
+    cleared_run: Mapped[int | None] = mapped_column(nullable=True)
+    cleared_by: Mapped[str | None] = mapped_column(nullable=True)
+    cleared_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)

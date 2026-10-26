@@ -1,6 +1,6 @@
 # Known problems: each solver's expected failures in a suite, curated by an admin, cleared when fixed
 
-**Status (2026-10-26): proposed.** It follows run 4 of biomodels-curated-300 on `registry_env@4`
+**Status (2026-10-26): step 1 under way.** It follows run 4 of biomodels-curated-300 on `registry_env@4`
 ([plan-environment-composition](plan-environment-composition.md), step 6) and borrows the known-faults pattern of
 VCell's regression tests. One PR per step, each merged with a merge commit.
 
@@ -71,20 +71,26 @@ VCell's regression tests. One PR per step, each merged with a merge commit.
 ## Steps
 
 1. **API and CLI.**
-   - Table `suite_known_problem` (id, suite, source, solver, category, reason, seen_run, marked_by, marked_at,
-     cleared_run, cleared_by, cleared_at), with an alembic revision.
+   - Table `suite_known_problem` (id, collection, source, solver, category, reason, seen_run, marked_by, marked_at,
+     cleared_run, cleared_by, cleared_at). It is a new table, so `create_all` makes it and no alembic revision is
+     needed.
    - Routes:
      - `GET /suites/{name}/problems?cleared=` (`list-suite-problems`), open to everyone;
-     - `POST /suites/{name}/problems` (`mark-suite-problem`), 409 when an open problem already exists for the source
-       and solver;
+     - `POST /suites/{name}/problems` (`mark-suite-problem`): 400 for a source or solver the suite does not have, 409
+       when a problem is already open for the source and solver;
      - `PATCH /suites/{name}/problems/{id}` (`edit-suite-problem`), for the category and reason;
-     - `POST /suites/{name}/problems/{id}/clear` (`clear-suite-problem`), with the run that shows it fixed.
-   - The three writes need `suites:curate` (K6), the setting, and the capability on `/auth/me`.
-   - The suite view per K2–K5: `SuiteRunRow` gains `excused` (solver → reason) and `resolved` (solvers), and its
-     verdict is recomputed from the comparison's pairs. The summary gains `excused`, `resolved` and `new`; `expected`
-     stays for one release as the count of rows excused whole.
-   - CLI: `suites problems list|mark|edit|clear`, and `suites show` prints the new outcomes.
-   - Tests: each outcome in K5, a cleared problem in an earlier and a later run, 403 without the capability.
+     - `POST /suites/{name}/problems/{id}/clear` (`clear-suite-problem`), with the run that shows it fixed; 409 when
+       already cleared, so a retry is safe.
+   - The three writes need the `suite_curator_role` setting (K6; `SUITE_CURATOR_ROLE=admin` in `api.env`). The
+     `suites:curate` capability on `/auth/me` comes with plan-webapp-admin step 3, which adds capabilities.
+   - The suite view per K2–K5. `SuiteRunRow` gains `known_problems` (solver → reason), `excused` (the row fails or
+     differs only through them) and `resolved` (solvers whose problem no longer occurs); its `close` is unchanged.
+     The summary gains `excused` and `resolved`, and `differ` leaves out excused rows. `expected` stays, counting
+     rows excused whole (a problem with no solver).
+   - CLI, one level like every other group: `suites problems`, `suites mark-problem`, `suites edit-problem`,
+     `suites clear-problem`. `suites show` prints the known, excused and resolved columns.
+   - Tests: each outcome in K5, a cleared problem in an earlier and a later run, 401/403 without the role, the
+     CLI commands.
    - Regenerate the spec, the client and `schema.d.ts`. Needs a release.
 2. **Webapp.**
    - On a suite run row: the excused solvers with their reasons, and a "resolved" badge.

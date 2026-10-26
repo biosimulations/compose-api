@@ -72,6 +72,28 @@ async def require_environment_admin(caller: OptionalCaller) -> Caller:
 EnvironmentAdmin = Annotated[Caller, Depends(require_environment_admin)]
 
 
+def is_suite_curator(caller: Caller | None) -> bool:
+    """Whether the caller may mark, edit and clear a suite's known problems (docs/plan-known-problems.md, K6)."""
+    if caller is None:
+        return False
+    configured = get_settings().suite_curator_role.strip()
+    return bool(configured) and configured in caller.roles
+
+
+async def require_suite_curator(caller: OptionalCaller) -> Caller:
+    """The caller, if a suite curator: otherwise 401 when anonymous, 403 when signed in."""
+    if caller is None:
+        raise HTTPException(status_code=401, detail="sign in as a suite curator")
+    if not get_settings().suite_curator_role.strip():
+        raise HTTPException(status_code=403, detail="suite curation is not configured on this service")
+    if not is_suite_curator(caller):
+        raise HTTPException(status_code=403, detail="this needs the suite curator role")
+    return caller
+
+
+SuiteCurator = Annotated[Caller, Depends(require_suite_curator)]
+
+
 def can_read(caller: Caller | None, simulation: SimulationAccess) -> bool:
     """The read policy: public simulations to anyone, private ones to their owner and to configured admins."""
     if simulation.visibility == Visibility.PUBLIC:
