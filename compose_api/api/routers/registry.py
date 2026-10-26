@@ -28,7 +28,7 @@ from compose_api.environments import compliance_runs, lifecycle, pixi
 from compose_api.environments import service as environment_service
 from compose_api.environments.contents import record_contents
 from compose_api.environments.service import VersionRequestError
-from compose_api.environments.versions import version_for
+from compose_api.environments.versions import prebuilt_images, version_for
 from compose_api.registry.environments import (
     CatalogEntry,
     EnvironmentSpec,
@@ -74,8 +74,9 @@ config = RouterConfig(router=APIRouter(), prefix="/registry", dependencies=[Depe
 async def list_environments(principal: OptionalPrincipal) -> list[EnvironmentSummary]:
     """The environments this deployment declares (environments.yaml), then the mash-ups the database holds
     (docs/plan-environment-composition.md, D7.9). Public: the same for every caller."""
-    declared = [s for s in (summarize(spec) for spec in load_environments().environments) if s is not None]
     database_service = get_database_service()
+    images = await prebuilt_images(database_service)
+    declared = [s for s in (summarize(spec, images) for spec in load_environments().environments) if s is not None]
     if database_service is None:
         return declared
     environments_db = database_service.get_environments_db()
@@ -104,7 +105,7 @@ async def get_environment_manifest(
 ) -> InterfaceManifest | Response:
     # public: the same for every caller
     spec = next((e for e in load_environments().environments if e.name == name), None)
-    if spec is None or summarize(spec) is None:
+    if spec is None or summarize(spec, await prebuilt_images(get_database_service())) is None:
         raise HTTPException(status_code=404, detail=f"no environment {name!r}")
     path = manifest_path(name)
     if not path.exists():
@@ -134,7 +135,7 @@ async def get_environment_manifest(
 async def get_environment_headers(name: str, principal: OptionalPrincipal) -> EnvironmentHeaders:
     # public: the same for every caller
     spec = next((e for e in load_environments().environments if e.name == name), None)
-    if spec is None or summarize(spec) is None:
+    if spec is None or summarize(spec, await prebuilt_images(get_database_service())) is None:
         raise HTTPException(status_code=404, detail=f"no environment {name!r}")
     try:
         headers = await environment_headers(name)
@@ -155,7 +156,7 @@ async def get_environment_headers(name: str, principal: OptionalPrincipal) -> En
 )
 async def list_registry_entries(principal: OptionalPrincipal) -> list[CatalogEntry]:
     # public: the same for every caller
-    return catalog_entries()
+    return catalog_entries(await prebuilt_images(get_database_service()))
 
 
 @config.router.get(
@@ -174,7 +175,7 @@ async def list_solvers(principal: OptionalPrincipal) -> list[Solver]:
 
 
 async def _environment_simulator(name: str) -> SimulatorVersion:
-    spec = builds.find_environment(name)
+    spec = builds.find_environment(name, await prebuilt_images(get_database_service()))
     if spec is None:
         raise HTTPException(status_code=404, detail=f"no environment {name!r}")
     # its default version's (docs/plan-environment-versions.md)

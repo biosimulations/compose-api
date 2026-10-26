@@ -693,6 +693,11 @@ async def test_submit_simulation_logs_the_caller(
     monkeypatch.setattr("compose_api.api.routers.simulation.get_simulation_service", lambda: object())
     monkeypatch.setattr("compose_api.api.routers.simulation.get_database_service", lambda: object())
     monkeypatch.setattr("compose_api.api.routers.simulation.get_job_monitor", lambda: object())
+
+    async def no_prebuilt(*_args: object) -> dict[str, str]:
+        return {}
+
+    monkeypatch.setattr("compose_api.api.routers.simulation.prebuilt_images", no_prebuilt)
     monkeypatch.setattr(
         "compose_api.api.routers.simulation.get_simulation_request_from_uploaded_file",
         stop_here,

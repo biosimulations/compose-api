@@ -22,6 +22,7 @@ from compose_api.simulation.prebuilt import prebuilt_definition
 from compose_api.simulation.simulation_service import SimulationService
 from compose_api.simulation.submission_worker import SubmissionWorker
 from tests.fixtures.mocks import TestBackgroundTask
+from tests.fixtures.postgres_fixtures import register_prebuilt
 
 # one image per test: the database lives for the module, and a recorded download is never fetched again
 IMAGE = "ghcr.io/example/simulator@sha256:" + "1" * 64
@@ -73,9 +74,9 @@ async def test_concurrent_submissions_fetch_the_container_once(
     database_service: DatabaseServiceSQL, simulation_request: SimulationRequest, tmp_path: Path
 ) -> None:
     service = _SlowFetchService(database_service)
-    request = simulation_request.model_copy(update={"simulator": "sim-a"})
+    request = simulation_request.model_copy(update={"simulator": "viva-pde-particle"})
+    await register_prebuilt(database_service, "viva-pde-particle", CONCURRENT_IMAGE)
     with override_settings(
-        prebuilt_simulators={"sim-a": CONCURRENT_IMAGE},
         submission_staging_dir=str(tmp_path),
         submission_worker_concurrency=8,
     ):

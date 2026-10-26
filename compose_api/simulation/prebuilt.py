@@ -2,9 +2,9 @@
 
 Every submission otherwise runs in one container whose package list is fixed here (the simulator
 registry). A workspace with conda-forge dependencies or a compiled extension cannot be expressed that
-way, so its owners publish an OCI image, and the deployment lists it under a name in the
-``prebuilt_simulators`` setting. A request naming that simulator gets an Apptainer definition that is
-just the image:
+way, so its owners publish an OCI image, and an administrator registers it, by digest, as a version of its
+environment (`compose-api environments create <name> --image …`; docs/plan-environment-composition.md, D8.3). A
+run in that environment gets an Apptainer definition that is just the image:
 
     Bootstrap: docker
     From: <image>
@@ -17,29 +17,13 @@ From there everything is unchanged:
 
 The image's ENTRYPOINT must answer that command.
 
-Only names in the setting are accepted, so a request can never pull an arbitrary image. Pin images by
-digest or an immutable tag: the definition text, and so the cached SIF, is keyed on the reference.
+Only images an administrator registered run, so a request can never pull an arbitrary image. Versions are pinned
+by digest: the definition text, and so the cached SIF, is keyed on the reference.
 """
 
 from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
 
-from compose_api.config import get_settings
-
 _HEADER = "Bootstrap: docker\nFrom: "
-
-
-class UnknownSimulatorError(LookupError):
-    """The request names a simulator this deployment does not list."""
-
-
-def prebuilt_image(simulator: str) -> str:
-    """The image reference the deployment lists for ``simulator``."""
-    images = get_settings().prebuilt_simulators
-    if simulator not in images:
-        listed = ", ".join(sorted(images)) or "none"
-        msg = f"unknown simulator {simulator!r}; this deployment lists: {listed}"
-        raise UnknownSimulatorError(msg)
-    return images[simulator]
 
 
 def prebuilt_definition(image: str) -> ContainerizationFileRepr:

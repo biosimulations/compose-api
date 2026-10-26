@@ -14,6 +14,7 @@ from compose_api.dependencies import (
     set_database_service,
     set_postgres_engine,
 )
+from compose_api.simulation.models import EnvironmentVersion
 
 
 @pytest.fixture(scope="module")
@@ -66,3 +67,32 @@ async def database_service(async_postgres_engine: AsyncEngine) -> AsyncGenerator
     set_database_service(database_service)
     yield database_service
     set_database_service(saved_database_service)
+
+
+async def register_prebuilt(database_service: DatabaseService, name: str, image: str) -> EnvironmentVersion:
+    """A prebuilt environment's image, registered as a ready version and made its default, as an administrator does
+    with `environments create <name> --image …` and `environments default` (docs/plan-environment-composition.md,
+    D8.3). ``name`` must be one environments.yaml declares as prebuilt."""
+    from compose_api.db.services.environments_db import VersionSource
+    from compose_api.simulation.builds import simulator_for
+    from compose_api.simulation.models import VersionState
+    from compose_api.simulation.prebuilt import prebuilt_definition
+
+    simulator = await simulator_for(database_service.get_simulator_db(), prebuilt_definition(image))
+    environments_db = database_service.get_environments_db()
+    version, _ = await environments_db.create_version(
+        name, "prebuilt", simulator.database_id, VersionSource(image=image)
+    )
+    await environments_db.set_state(version.database_id, VersionState.READY)
+    await environments_db.set_default(name, version.database_id)
+    return version.model_copy(update={"state": VersionState.READY})
+
+
+async def unregister_prebuilt(database_service: DatabaseService, name: str) -> None:
+    """The prebuilt environment with no default, so not offered here (a deployment that has registered none)."""
+    from sqlalchemy import update
+
+    from compose_api.db.tables.environment_tables import ORMEnvironment
+
+    async with database_service.async_sessionmaker() as session, session.begin():  # type: ignore[attr-defined]
+        await session.execute(update(ORMEnvironment).where(ORMEnvironment.name == name).values(default_version_id=None))

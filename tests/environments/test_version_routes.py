@@ -188,9 +188,8 @@ async def test_the_chosen_default_is_what_runs_get_and_it_cannot_be_retired(
         made = await admin.put(f"/registry/environments/{PREBUILT}/default", json={"number": first["number"]})
         assert made.status_code == 200 and made.json()["number"] == first["number"]
 
-        # the deployment pins something else: an administrator's choice is not overridden by it
-        with override_settings(prebuilt_simulators={PREBUILT: _digest()}):
-            version, simulator = await version_for(database_service, PREBUILT)
+        # the administrator's choice is what runs get
+        version, simulator = await version_for(database_service, PREBUILT)
         assert (version.number, simulator.database_id) == (first["number"], first["simulator_id"])
         listed = (await admin.get(f"/registry/environments/{PREBUILT}/versions")).json()
         assert (listed["default"], listed["default_source"]) == (first["number"], "api")

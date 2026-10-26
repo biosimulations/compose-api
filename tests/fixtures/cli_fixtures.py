@@ -579,6 +579,11 @@ def fake_compose_api(auth0_verifier: Auth0Verifier, monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(simulation_router, "get_simulation_request_from_uploaded_file", fake.request_from_upload)
     monkeypatch.setattr(simulation_router, "validate_submission", lambda *_args, **_kwargs: None)
 
+    async def no_prebuilt(*_args: object) -> dict[str, str]:
+        return {}  # the fake database registers no prebuilt image
+
+    monkeypatch.setattr(simulation_router, "prebuilt_images", no_prebuilt)
+
     async def shared(*_args: object) -> object:
         return simulation_router._Inferred()  # no file to infer from: the shared environment
 

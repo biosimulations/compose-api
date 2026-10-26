@@ -7,20 +7,23 @@ from typing import cast
 
 import pytest
 
-from compose_api.config import override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.db.tables.simulator_tables import ORMSimulation
-from compose_api.environments.versions import version_for
+from compose_api.environments.versions import NoDefaultVersionError, version_for
 from compose_api.simulation import handlers
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import SimulationRequest
-from compose_api.simulation.prebuilt import UnknownSimulatorError, prebuilt_definition
+from compose_api.simulation.prebuilt import prebuilt_definition
 from compose_api.simulation.simulation_service import SimulationService
 from tests.fixtures.mocks import TestBackgroundTask
+from tests.fixtures.postgres_fixtures import register_prebuilt, unregister_prebuilt
 
 
 def _image(tag: str) -> str:
     return f"ghcr.io/example/simulator@sha256:{tag * 64}"
+
+
+PREBUILT = "viva-pde-particle"  # the prebuilt environment environments.yaml declares
 
 
 def _name() -> str:
@@ -64,40 +67,35 @@ async def test_the_shared_environment_runs_its_default_and_without_one_refuses(
 
 
 @pytest.mark.asyncio
-async def test_a_new_pin_is_a_new_version_and_a_rollback_returns_to_the_old_one(
+async def test_a_prebuilt_run_takes_its_default_and_earlier_versions_stay_by_number(
     database_service: DatabaseServiceSQL,
 ) -> None:
-    name, environments_db = _name(), database_service.get_environments_db()
-    with override_settings(prebuilt_simulators={name: _image("a")}):
-        first, simulator = await version_for(database_service, name)
-    assert (first.number, first.image, first.spec) == (1, _image("a"), None)
+    """D8.3: a prebuilt image is a version an administrator registers; runs take the default, and an earlier image
+    stays runnable by its number (D8.2)."""
+    first = await register_prebuilt(database_service, PREBUILT, _image("a"))
+    taken, simulator = await version_for(database_service, PREBUILT)
+    assert taken.database_id == first.database_id and taken.image == _image("a")
     assert simulator.container_def.representation == prebuilt_definition(_image("a")).representation
-
-    with override_settings(prebuilt_simulators={name: _image("b")}):
-        second, _ = await version_for(database_service, name)
-    assert (second.number, second.image) == (2, _image("b"))
-    assert await environments_db.get_default(name) == second
-
-    with override_settings(prebuilt_simulators={name: _image("a")}):
-        rolled_back, _ = await version_for(database_service, name)
-    assert rolled_back == first
-    assert await environments_db.get_default(name) == first
-    assert [v.number for v in await environments_db.list_versions(name)] == [2, 1]
+    second = await register_prebuilt(database_service, PREBUILT, _image("b"))
+    assert (await version_for(database_service, PREBUILT))[0].database_id == second.database_id
+    by_number, _ = await version_for(database_service, PREBUILT, first.number)
+    assert by_number.database_id == first.database_id
 
 
 @pytest.mark.asyncio
-async def test_a_name_the_deployment_does_not_list_has_no_version(database_service: DatabaseServiceSQL) -> None:
-    name = _name()
-    with override_settings(prebuilt_simulators={}), pytest.raises(UnknownSimulatorError):
-        await version_for(database_service, name)
-    assert await database_service.get_environments_db().list_versions(name) == []
+async def test_a_prebuilt_environment_with_no_version_says_how_to_register_one(
+    database_service: DatabaseServiceSQL,
+) -> None:
+    await unregister_prebuilt(database_service, PREBUILT)
+    with pytest.raises(NoDefaultVersionError, match=f"environments create {PREBUILT} --image"):
+        await version_for(database_service, PREBUILT)
 
 
 @pytest.mark.asyncio
 async def test_concurrent_adoptions_of_one_definition_make_one_version(database_service: DatabaseServiceSQL) -> None:
-    name = _name()
-    with override_settings(prebuilt_simulators={name: _image("c")}):
-        _, simulator = await version_for(database_service, name)
+    from compose_api.simulation.builds import simulator_for
+
+    simulator = await simulator_for(database_service.get_simulator_db(), prebuilt_definition(_image("c")))
     other = _name()
     environments_db = database_service.get_environments_db()
     adopted = await asyncio.gather(*(
@@ -111,16 +109,15 @@ async def test_concurrent_adoptions_of_one_definition_make_one_version(database_
 async def test_a_run_records_its_environment_version(
     database_service: DatabaseServiceSQL, simulation_request: SimulationRequest
 ) -> None:
-    name = _name()
-    with override_settings(prebuilt_simulators={name: _image("d")}):
-        experiment = await handlers.run_simulation(
-            simulation_request=simulation_request.model_copy(update={"simulator": name}),
-            database_service=database_service,
-            simulation_service_slurm=cast(SimulationService, None),  # used only by the submission worker
-            job_monitor=cast(JobMonitor, None),
-            background_tasks=TestBackgroundTask(),
-        )
-    version = await database_service.get_environments_db().get_default(name)
+    await register_prebuilt(database_service, PREBUILT, _image("d"))
+    experiment = await handlers.run_simulation(
+        simulation_request=simulation_request.model_copy(update={"simulator": PREBUILT}),
+        database_service=database_service,
+        simulation_service_slurm=cast(SimulationService, None),  # used only by the submission worker
+        job_monitor=cast(JobMonitor, None),
+        background_tasks=TestBackgroundTask(),
+    )
+    version = await database_service.get_environments_db().get_default(PREBUILT)
     assert version is not None and version.simulator_id == experiment.simulator_database_id
     async with database_service.async_sessionmaker() as session:
         simulation = await session.get(ORMSimulation, experiment.simulation_database_id)

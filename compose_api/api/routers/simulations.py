@@ -5,6 +5,7 @@ is what ``POST /simulation/run`` returned as ``simulation_database_id``, and wha
 """
 
 import datetime
+from collections.abc import Mapping
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -12,10 +13,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from compose_api.authentication import get_optional_principal
 from compose_api.authorization import OptionalCaller, can_read, readable_clause
 from compose_api.common.gateway.models import RouterConfig
-from compose_api.config import get_settings
 from compose_api.db.services.datasets_db import DatasetQuery
 from compose_api.db.services.simulators_db import SUBMITTING, SimulationQuery, SimulationRow
-from compose_api.dependencies import get_required_database_service, get_simulation_service
+from compose_api.dependencies import get_database_service, get_required_database_service, get_simulation_service
+from compose_api.environments.versions import prebuilt_images, prebuilt_names
 from compose_api.simulation import handlers
 from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.labels import LABEL_KEYS, LabelError, parse_label_filters
@@ -55,8 +56,9 @@ def _iso(value: datetime.datetime | None) -> str | None:
     return aware.astimezone(datetime.UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def _simulator_label(container_def: str) -> str | None:
-    """The prebuilt simulator's name if the deployment lists its image, else the image; None for a built container."""
+def _simulator_label(container_def: str, names: Mapping[str, str]) -> str | None:
+    """The prebuilt environment's name if one of its versions has the image (``names``: image to name), else the
+    image; None for a built container."""
     from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
 
     image = prebuilt_image_of(
@@ -64,18 +66,17 @@ def _simulator_label(container_def: str) -> str | None:
     )
     if image is None:
         return None
-    names = {img: name for name, img in get_settings().prebuilt_simulators.items()}
     return names.get(image, image)
 
 
-def _summary(row: SimulationRow) -> SimulationSummary:
+def _summary(row: SimulationRow, names: Mapping[str, str]) -> SimulationSummary:
     run = row.run
     return SimulationSummary(
         simulation_id=row.simulation.id,
         created_at=_iso(row.simulation.created_at),
         experiment_id=row.simulation.experiment_id,
         simulator_id=row.simulator.id,
-        simulator=_simulator_label(row.simulator.container_def),
+        simulator=_simulator_label(row.simulator.container_def, names),
         container_def_hash=row.simulator.container_def_hash,
         visibility=Visibility(row.simulation.visibility),
         status=run.status.to_job_status().value if run is not None else SUBMITTING,
@@ -105,9 +106,10 @@ def _submission(row: SimulationRow) -> SubmissionInfo | None:
     )
 
 
-def _container_hash(simulator: str) -> str:
-    """A prebuilt simulator's name as its container definition's hash; anything else is taken as a hash prefix."""
-    image = get_settings().prebuilt_simulators.get(simulator)
+def _container_hash(simulator: str, images: Mapping[str, str]) -> str:
+    """A prebuilt environment's name as its default image's definition hash (``images``: name to image); anything
+    else is taken as a hash prefix."""
+    image = images.get(simulator)
     return get_singularity_hash(prebuilt_definition(image)) if image is not None else simulator
 
 
@@ -147,7 +149,9 @@ async def list_simulations(
         raise HTTPException(status_code=400, detail=str(e)) from e
     query = SimulationQuery(
         status=status,
-        container_def_hash=_container_hash(simulator) if simulator else None,
+        container_def_hash=_container_hash(simulator, await prebuilt_images(get_database_service()))
+        if simulator
+        else None,
         since=since if since is None or since.tzinfo else since.replace(tzinfo=datetime.UTC),
         labels=labels,
         tags=[t.strip() for t in tag or [] if t.strip()],
@@ -158,8 +162,11 @@ async def list_simulations(
         await get_required_database_service().get_simulator_db().page_simulations(query, readable_clause(caller))
     )
     following = offset + len(rows)
+    names = await prebuilt_names(get_database_service())
     return SimulationPage(
-        simulations=[_summary(r) for r in rows], total=total, next_offset=following if following < total else None
+        simulations=[_summary(r, names) for r in rows],
+        total=total,
+        next_offset=following if following < total else None,
     )
 
 
@@ -176,7 +183,7 @@ async def get_simulation(simulation_id: int, caller: OptionalCaller) -> Simulati
     row = await db.get_simulator_db().get_simulation_row(simulation_id)
     if row is None or not can_read(caller, row.simulation.to_simulation_access()):
         raise HTTPException(status_code=404, detail=f"Simulation with id {simulation_id} not found.")
-    summary = _summary(row)
+    summary = _summary(row, await prebuilt_names(db))
     event_count = await db.get_events_db().count_events(summary.trace_id) if summary.trace_id else 0
     _, dataset_count = await db.get_datasets_db().page(
         DatasetQuery(simulation_id=simulation_id, available=None, limit=1)

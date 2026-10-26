@@ -50,7 +50,7 @@ export interface paths {
         /**
          * Run a simulation
          * @description `environment` names the environment to run in; `simulator` is the older way to name a prebuilt one (an
-         *     owner-published image this deployment lists, settings.prebuilt_simulators). With neither, and no
+         *     owner-published image registered as a version of its environment). With neither, and no
          *     `environment_version`, the environment is inferred from the classes the documents name
          *     (docs/plan-environment-composition.md, step 7a): the shared environment for everything it provides, as before;
          *     otherwise the smallest offered environment that provides them all.

@@ -13,7 +13,8 @@ from fastapi import FastAPI
 from httpx import ASGITransport
 
 from compose_api.api.routers import registry as registry_router
-from compose_api.config import get_settings, override_settings
+from compose_api.config import get_settings
+from compose_api.db.database_service import DatabaseService
 from compose_api.registry import environments
 from compose_api.registry.environments import (
     INTERFACES_VERSION,
@@ -28,6 +29,7 @@ from compose_api.registry.environments import (
 )
 from compose_api.registry.generate import describe_command, prebuilt_pins, shared_image
 from compose_api.registry.manifest import CurationLevel, Manifest, RegistryEntry, load_manifest
+from tests.fixtures.postgres_fixtures import register_prebuilt
 
 needs_pblang = pytest.mark.skipif(
     not Path(get_settings().pblang_python).exists(), reason="process-bigraph-lang is not installed (make pblang)"
@@ -180,18 +182,18 @@ def test_summaries_say_whether_the_manifest_matches_the_deployed_image(manifests
     assert moved is not None and moved.stale and moved.manifest_image == PDE_IMAGE
 
     shared = next(e for e in load_environments().environments if e.kind == "shared")
-    listed = summarize(shared)
+    listed = summarize(shared, prebuilt={})
     assert listed is not None
     assert listed.simulator is None and listed.image is None and listed.components == 0 and not listed.stale
 
 
 @pytest_asyncio.fixture
-async def client(manifests_dir: Path) -> AsyncGenerator[httpx.AsyncClient]:
+async def client(manifests_dir: Path, database_service: DatabaseService) -> AsyncGenerator[httpx.AsyncClient]:
     app = FastAPI()
     app.include_router(registry_router.config.router, prefix=registry_router.config.prefix)
-    with override_settings(prebuilt_simulators={"viva-pde-particle": PDE_IMAGE}):
-        async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as c:
-            yield c
+    await register_prebuilt(database_service, "viva-pde-particle", PDE_IMAGE)  # offered: it has a default (D8.3)
+    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as c:
+        yield c
 
 
 @pytest.mark.asyncio

@@ -23,6 +23,7 @@ from compose_api.environments.versions import version_for
 from compose_api.simulation import build_k8s
 from compose_api.simulation.build_k8s import BuildSite, Inspection, build_job, inspect_script, publish_script
 from compose_api.simulation.models import VersionState
+from tests.fixtures.postgres_fixtures import register_prebuilt
 
 SITE = BuildSite(
     namespace="ns", image="ghcr.io/apptainer/apptainer:1.3.6", pvc_claim="home", pvc_mount_path="/projects/CRBM",
@@ -172,7 +173,8 @@ async def test_what_the_build_left_is_stored_on_the_version_when_it_is_read(
     image = f"ghcr.io/example/s@sha256:{uuid.uuid4().hex}{uuid.uuid4().hex}"
     root = tmp_path / "mount"
     base = {} if get_settings().simulation_store_base_path else {"simulation_store_base_path": "/store/compose_api"}
-    with override_settings(prebuilt_simulators={name: image}, internal_mount_dir=str(root), **base):
+    await register_prebuilt(database_service, name, image)
+    with override_settings(internal_mount_dir=str(root), **base):
         version, simulator = await version_for(database_service, name)
         images = root / get_settings().namespace / "images"
         images.mkdir(parents=True)
@@ -366,7 +368,8 @@ async def test_the_read_back_records_what_the_generic_checks_find_using_the_imag
         ]
     }
     types = {"numeric_result": {"time": "list[float]", "values": "list[list[float]]"}}
-    with override_settings(prebuilt_simulators={name: image}, internal_mount_dir=str(root), **base):
+    await register_prebuilt(database_service, name, image)
+    with override_settings(internal_mount_dir=str(root), **base):
         version, simulator = await version_for(database_service, name)
         images = root / get_settings().namespace / "images"
         images.mkdir(parents=True)
