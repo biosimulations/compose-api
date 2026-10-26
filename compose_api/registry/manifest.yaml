@@ -17,13 +17,14 @@
 entries:
   - id: pbsim-common
     package: pbsim-common
-    # installed from this commit through pbest 0.6.5 until 0.1.3 is on PyPI (pbsim_common#18's adapter fixes, and
-    # pbsim_common#20's VCellUTCStep, which needs pyvcell[native,ode] from simulator_registry.json)
-    source: https://github.com/biosimulations/pbsim_common/tree/26fa156cfab2c309150be818774be4a0c307ce3b
+    # composed versions install this commit (pbsim_common#21: result, comparison and statistic ports overwrite);
+    # registry_env@1, built through pbest 0.6.5, still runs 26fa156 (pbsim_common#18's adapter fixes and #20's
+    # VCellUTCStep). Back to a PyPI release once 0.1.3 is published.
+    source: https://github.com/biosimulations/pbsim_common/tree/0b456c5ee999634c60e3e1a3c2e6ffe1f8363b0c
     version: "0.1.3.dev1"
     install:
       git: https://github.com/biosimulations/pbsim_common
-      commit: 26fa156cfab2c309150be818774be4a0c307ce3b
+      commit: 0b456c5ee999634c60e3e1a3c2e6ffe1f8363b0c
     module_roots:
       - pbsim_common
     # numeric_result and the other types its steps' ports use (pbest's core registered them)
@@ -38,6 +39,11 @@ entries:
         (tests/simulators/test_copasi.py, tests/simulators/test_tellurium.py, and the phase_cycle.omex fixture),
         which run CopasiUTCStep and TelluriumUTCStep inside the built registry_env image, not the package's own
         test suite. Phase B of decision 5 replaces this with a computed level.
+      - >-
+        2026-10-26: the pin moves to 0b456c5 (pbsim_common#21) and the level stays, because registry_env@1 (which has
+        no compliance record and so takes this level) still runs 26fa156. A composed version certifies 0b456c5 by
+        its compliance cases (registry/compliance/pbsim-common), which decide admission there
+        (docs/plan-environment-composition.md, step 5c).
 
   - id: pb-multiscale-actin
     package: pb-multiscale-actin
