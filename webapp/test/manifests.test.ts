@@ -4,10 +4,10 @@ import { describe, expect, it } from 'vitest'
 import { Pblang } from 'process-bigraph-lang'
 
 // A real run (simulation 4571, the viva-pde-particle hybrid) checked against the manifest committed for the
-// environment it ran in (compose_api/registry/manifests/, generated inside that image): its processes resolve.
+// environment it ran in (read back from that image; a copy in test/fixtures/): its processes resolve.
 const here = (path: string) => fileURLToPath(new URL(path, import.meta.url))
 const document = () => readFile(here('./fixtures/hybrid_4571.pbg'), 'utf-8')
-const manifest = async () => JSON.parse(await readFile(here('../../compose_api/registry/manifests/viva-pde-particle.json'), 'utf-8'))
+const manifest = async () => JSON.parse(await readFile(here('fixtures/viva-pde-particle.json'), 'utf-8'))
 
 const unresolved = (codes: (string | undefined)[]) => codes.filter(c => c === 'S020').length
 

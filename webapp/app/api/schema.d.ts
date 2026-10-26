@@ -403,7 +403,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** An environment's interface manifest (pbg-interfaces/1), each component with its registry entry */
+        /**
+         * An environment's interface manifest (pbg-interfaces/1), each component with its registry entry
+         * @description Its default version's read-back (docs/plan-environment-composition.md, D8.4); a mash-up's too.
+         */
         get: operations["get-environment-manifest"];
         put?: never;
         post?: never;

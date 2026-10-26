@@ -67,10 +67,9 @@ def test_a_step_whose_results_accumulate_fails_and_a_process_does_not() -> None:
     assert port_findings(_manifest(), {"numeric_result": FIXED}, ["pkg"]) == []
 
 
-def test_registry_env_today_fails_exactly_the_steps_pbsim_common_21_fixes_and_its_tools() -> None:
-    manifest = json.loads(
-        (Path(compliance.__file__).parent.parent / "registry/manifests/registry_env.json").read_text()
-    )
+def test_registry_env_at_1_fails_exactly_the_steps_pbsim_common_21_fixes_and_its_tools() -> None:
+    """registry_env@1's image (pbest's, before pbsim_common#21), as its committed manifest recorded it."""
+    manifest = json.loads((Path(__file__).parents[1] / "fixtures/resources/registry_env@1.interfaces.json").read_text())
     roots = ["pbsim_common", "biosim_toolkit"]
     before = {f.component.rsplit(".", 1)[1] for f in port_findings(manifest, {"numeric_result": NUMERIC_RESULT}, roots)}
     after = {f.component.rsplit(".", 1)[1] for f in port_findings(manifest, {"numeric_result": FIXED}, roots)}

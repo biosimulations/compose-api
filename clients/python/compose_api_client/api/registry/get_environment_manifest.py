@@ -66,6 +66,8 @@ def sync_detailed(
 ) -> Response[Any | HTTPValidationError | InterfaceManifest]:
     """An environment's interface manifest (pbg-interfaces/1), each component with its registry entry
 
+     Its default version's read-back (docs/plan-environment-composition.md, D8.4); a mash-up's too.
+
     Args:
         name (str):
 
@@ -95,6 +97,8 @@ def sync(
 ) -> Any | HTTPValidationError | InterfaceManifest | None:
     """An environment's interface manifest (pbg-interfaces/1), each component with its registry entry
 
+     Its default version's read-back (docs/plan-environment-composition.md, D8.4); a mash-up's too.
+
     Args:
         name (str):
 
@@ -118,6 +122,8 @@ async def asyncio_detailed(
     client: AuthenticatedClient | Client,
 ) -> Response[Any | HTTPValidationError | InterfaceManifest]:
     """An environment's interface manifest (pbg-interfaces/1), each component with its registry entry
+
+     Its default version's read-back (docs/plan-environment-composition.md, D8.4); a mash-up's too.
 
     Args:
         name (str):
@@ -145,6 +151,8 @@ async def asyncio(
     client: AuthenticatedClient | Client,
 ) -> Any | HTTPValidationError | InterfaceManifest | None:
     """An environment's interface manifest (pbg-interfaces/1), each component with its registry entry
+
+     Its default version's read-back (docs/plan-environment-composition.md, D8.4); a mash-up's too.
 
     Args:
         name (str):

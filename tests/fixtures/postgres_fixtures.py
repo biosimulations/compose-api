@@ -1,4 +1,6 @@
+import json
 from collections.abc import AsyncGenerator, Generator
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -54,9 +56,14 @@ async def seed_shared_default(database_service: DatabaseService) -> None:
     from compose_api.simulation.builds import simulator_for
 
     simulator = await simulator_for(database_service.get_simulator_db(), shared_definition())
-    await database_service.get_environments_db().adopt_deployed(
-        "registry_env", "shared", simulator.database_id, origin="registry"
-    )
+    environments_db = database_service.get_environments_db()
+    version = await environments_db.adopt_deployed("registry_env", "shared", simulator.database_id, origin="registry")
+    # what it provides, as read back from registry_env@5's image on 2026-10-26: the manifest SED-ML runs are
+    # translated against and the checker reads (D8.4)
+    detail = await environments_db.get_by_number("registry_env", version.number)
+    if detail is not None and detail.interfaces is None:
+        interfaces = json.loads((Path(__file__).parent / "resources" / "registry_env.interfaces.json").read_text())
+        await environments_db.set_contents(version.database_id, None, interfaces)
 
 
 @pytest_asyncio.fixture(scope="function")

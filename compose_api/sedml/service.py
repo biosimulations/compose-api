@@ -52,8 +52,17 @@ def chosen_solvers(ids: list[str] | None) -> list[Solver]:
 
 
 async def translate_upload(source: Path, solvers: list[Solver]) -> Translation:
+    """The archive translated against the manifests of its solvers' environments, each its default version's read-back
+    (docs/plan-environment-composition.md, D8.4)."""
+    from compose_api.dependencies import get_database_service
+    from compose_api.environments.manifests import manifest_files
+
     workdir = Path(tempfile.mkdtemp(prefix="sedml-"))
-    return await translate(source, solvers, workdir)
+    manifests_dir = workdir / "manifests"
+    manifests_dir.mkdir()
+    environments: dict[str, int | None] = dict.fromkeys(s.environment for s in solvers)
+    manifests = await manifest_files(get_database_service(), environments, manifests_dir)
+    return await translate(source, solvers, workdir, manifests)
 
 
 async def submit(

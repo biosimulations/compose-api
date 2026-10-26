@@ -5,7 +5,7 @@ import { ComponentIndex, addressKey, interfaceMarkdown, reindentJson, typeText }
 
 const here = (path: string) => fileURLToPath(new URL(path, import.meta.url))
 const manifest = async (name: string) =>
-  JSON.parse(await readFile(here(`../../compose_api/registry/manifests/${name}.json`), 'utf-8'))
+  JSON.parse(await readFile(here(`fixtures/${name}.json`), 'utf-8'))
 
 describe('looking up the classes a document names', () => {
   it('finds a class by any spelling of its address, or by a unique short name', async () => {

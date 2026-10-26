@@ -1,15 +1,15 @@
-# The environments this service runs documents in, and how CI reads the process interfaces each one provides.
+# The environments this service runs documents in, and how the process interfaces each one provides are read.
 # Strategy decision 5, phase B; docs/plan-authoring.md.
 #
 # A manifest describes an environment, not a package: the classes are imported inside the image that runs the
-# document, by process-bigraph-lang's standalone describe script (standard library only, so it runs in any image).
-# `.github/workflows/registry-manifests.yml` runs `scripts/registry_manifests.py`, which writes
-# `manifests/<name>.json` in the shared interface-manifest format (`pbg-interfaces/1`) and opens a pull request when
-# one changes. The API serves them at /registry/environments.
+# document, by process-bigraph-lang's standalone describe script (standard library only, so it runs in any image),
+# when each version's image is built or registered. What it finds is stored on the version, in the shared
+# interface-manifest format (`pbg-interfaces/1`), and an environment's manifest is its default version's
+# (docs/plan-environment-composition.md, D8.4); the API serves them at /registry/environments.
 #
-# Which modules are described comes from manifest.yaml (and catalog.yaml): the module roots of every entry whose
-# `bundles` include the environment's name. The image comes from the deployment: the shared image is identified by
-# the hash of its generated definition, a prebuilt one by its pin in PREBUILT_SIMULATORS.
+# Which modules are described comes from manifest.yaml (and catalog.yaml): the module roots of a composed version's
+# entries, or of every entry whose `bundles` include the environment's name. A prebuilt environment's images are its
+# versions, registered by digest (D8.3).
 
 describe:
   source: https://github.com/biosimulations/process-bigraph-lang

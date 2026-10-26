@@ -7,10 +7,10 @@ import hashlib
 import json
 import tempfile
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field
 
-from compose_api.registry.environments import manifest_path
 from compose_api.sedml.translator import pblang_python
 
 # `headers <manifest> -o <dir>` writes one `<module>.pbl` per module
@@ -58,16 +58,15 @@ def _declaration(text: str) -> str:
     return "\n".join(lines[start:]).strip() + "\n"
 
 
-async def environment_headers(name: str) -> EnvironmentHeaders | None:
-    """The environment's header files, or None when no manifest has been generated for it."""
-    path = manifest_path(name)
-    if not path.exists():
+async def environment_headers(name: str, interfaces: dict[str, Any] | None) -> EnvironmentHeaders | None:
+    """The environment's header files, from its version's read-back (``interfaces``, D8.4), or None without one."""
+    if interfaces is None:
         return None
-    raw = path.read_bytes()
+    raw = json.dumps(interfaces, sort_keys=True).encode()
     key = (name, hashlib.sha256(raw).hexdigest())
     if key in _cache:
         return _cache[key]
-    manifest = json.loads(raw)
+    manifest = interfaces
     components: list[dict[str, object]] = manifest.get("components", [])
     version = manifest.get("schema_version")
     modules = await _print_headers(components, version)
