@@ -4,7 +4,7 @@
   "environment": {
     "name": "registry_env",
     "image": "ghcr.io/biosimulations/registry_env:0f31dda063001f72dab1f6a0c6b284f2",
-    "python": "3.12.15",
+    "python": "3.12.16",
     "process_bigraph": "1.0.5",
     "bigraph_schema": "1.0.14",
     "packages": {
