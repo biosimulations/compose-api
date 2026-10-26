@@ -22,8 +22,8 @@
 | 7b | Implicit mash-ups, proven with viva-basic-processes | done: #417–#419 (0.7.51), #421 (0.7.52); live 2026-10-26 |
 | 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | |
 | 8a | Versions come from the database only: the deployed (pbest) definition, `simulator_registry.json`, `shared_image()` retired | merged (#424), 0.7.53 |
-| 8b | Prebuilt images by their versions, not `PREBUILT_SIMULATORS` | in review; `api.env` cleanup after it is live |
-| 8c | Interface manifests from each environment's default version, not committed files | |
+| 8b | Prebuilt images by their versions, not `PREBUILT_SIMULATORS` | merged (#426), 0.7.54; the `api.env` line goes with 8c |
+| 8c | Interface manifests from each environment's default version, not committed files | in review |
 | 8d | The shared uv path, `preview` and custom library lists retired | |
 | 8e | pbest's types vendored; compose-api no longer depends on pbest | |
 
@@ -474,6 +474,24 @@
    - Production already had what this needs: viva-pde-particle@1, ready and its default, records the digest
      `PREBUILT_SIMULATORS` pins. `PREBUILT_SIMULATORS` leaves `api.env` once this is live (the running release still
      reads it).
+
+   *As built, 8c (2026-10-26):*
+   - Before it: viva-pde-particle@1 had nothing read back, so `environments inspect viva-pde-particle 1` was run in
+     production. It now lists the 14 classes its committed manifest did, and 139 packages (process-bigraph 1.9.1).
+   - `environments/manifests.py` serves a version's read-back as its environment's manifest, annotated with each
+     component's registry entry: `GET …/manifest` (ETag over the content), the headers, the environment summaries
+     and the catalog. A mash-up's manifest is served too.
+   - SED-ML archives are translated against the manifests of their solvers' environments' default versions, written
+     to files for process-bigraph-lang. registry_env@5's read-back and the committed `registry_env.json` (read from
+     @1's image) differ only in pbsim_common#21's `overwrite[...]` outputs on the comparison and statistics steps and
+     `CopasiUTCProcess`; BIOMD 12 translated against each gave byte-identical output.
+   - Gone: `registry/manifests/`, `registry/generate.py`, `registry-manifests.yml` (closing #403), the
+     `PREBUILT_SIMULATORS` line in `api.env`, and `shared_image()`. `simulator_registry.json` remains for
+     `environments/lock.py` (8d) and the test database's seed.
+   - Tests: the test database's registry_env default carries registry_env@5's read-back
+     (`tests/fixtures/resources/registry_env.interfaces.json`); @1's committed manifest is kept as a fixture for the
+     compliance test that needs the image before pbsim_common#21; the webapp's tests keep copies of the two
+     manifests under `webapp/test/fixtures/`.
 
    **Order:** 8a, 8b, 8c, 8d, 8e. Each is one PR, released and checked live before the next: a run with no version
    takes @5; viva-pde-particle runs by its version; the checker and SED-ML runs use read-back manifests; creating a

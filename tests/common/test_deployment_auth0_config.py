@@ -102,9 +102,6 @@ def test_rendered_overlays_merge_auth0_without_dropping_shared_config() -> None:
     assert production["AUTH0_SPA_CLIENT_ID"] == production_env["AUTH0_SPA_CLIENT_ID"]
     assert local["AUTH0_SPA_CLIENT_ID"] == local_env["AUTH0_SPA_CLIENT_ID"]
     assert local["INTERNAL_MOUNT_DIR"] == production_env["INTERNAL_MOUNT_DIR"]
-    # The Auth0 keys share api.env with the prebuilt simulators; both clusters must keep that setting too.
-    assert production["PREBUILT_SIMULATORS"] == production_env["PREBUILT_SIMULATORS"]
-    assert local["PREBUILT_SIMULATORS"] == production_env["PREBUILT_SIMULATORS"]
     for key, value in shared.items():
         assert production[key] == value
         assert local[key] == value

@@ -2,11 +2,12 @@
 one provides (docs/plan-sedml.md, "Concepts": the catalog is discovery and trust, an environment is execution).
 
 The web app's composite editor and viewer check `.pblang` text against the manifest of the environment the document
-runs in (docs/plan-authoring.md). The manifests are generated in CI inside each environment's image and ship with
-this service (compose_api/registry/manifests/); see compose_api/registry/environments.py.
+runs in (docs/plan-authoring.md). Each manifest is read back from the environment's default version's image
+(docs/plan-environment-composition.md, D8.4; compose_api/environments/manifests.py).
 """
 
 import hashlib
+import json
 import logging
 import random
 import string
@@ -27,6 +28,7 @@ from compose_api.dependencies import (
 from compose_api.environments import compliance_runs, lifecycle, pixi
 from compose_api.environments import service as environment_service
 from compose_api.environments.contents import record_contents
+from compose_api.environments.manifests import annotated, interfaces_of, manifests_of
 from compose_api.environments.service import VersionRequestError
 from compose_api.environments.versions import prebuilt_images, version_for
 from compose_api.registry.environments import (
@@ -36,8 +38,7 @@ from compose_api.registry.environments import (
     InterfaceManifest,
     catalog_entries,
     load_environments,
-    manifest_path,
-    read_manifest,
+    offered,
     summarize,
     summarize_mash_up,
 )
@@ -76,7 +77,9 @@ async def list_environments(principal: OptionalPrincipal) -> list[EnvironmentSum
     (docs/plan-environment-composition.md, D7.9). Public: the same for every caller."""
     database_service = get_database_service()
     images = await prebuilt_images(database_service)
-    declared = [s for s in (summarize(spec, images) for spec in load_environments().environments) if s is not None]
+    specs = load_environments().environments
+    manifests = await manifests_of(database_service, [spec.name for spec in specs])
+    declared = [s for s in (summarize(spec, images, manifests[spec.name]) for spec in specs) if s is not None]
     if database_service is None:
         return declared
     environments_db = database_service.get_environments_db()
@@ -103,22 +106,35 @@ async def list_environments(principal: OptionalPrincipal) -> list[EnvironmentSum
 async def get_environment_manifest(
     name: str, request: Request, response: Response, principal: OptionalPrincipal
 ) -> InterfaceManifest | Response:
+    """Its default version's read-back (docs/plan-environment-composition.md, D8.4); a mash-up's too."""
     # public: the same for every caller
-    spec = next((e for e in load_environments().environments if e.name == name), None)
-    if spec is None or summarize(spec, await prebuilt_images(get_database_service())) is None:
-        raise HTTPException(status_code=404, detail=f"no environment {name!r}")
-    path = manifest_path(name)
-    if not path.exists():
-        raise HTTPException(status_code=404, detail=f"no interface manifest has been generated for {name!r}")
-    etag = '"' + hashlib.sha256(path.read_bytes()).hexdigest()[:32] + '"'
+    interfaces = await _offered_interfaces(name)
+    etag = '"' + hashlib.sha256(json.dumps(interfaces, sort_keys=True).encode()).hexdigest()[:32] + '"'
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers={"ETag": etag})
-    manifest = read_manifest(name)
-    if manifest is None:
-        raise HTTPException(status_code=404, detail=f"no interface manifest has been generated for {name!r}")
+    manifest = annotated(interfaces)
     response.headers["ETag"] = etag
     response.headers["Cache-Control"] = "no-cache"
     return manifest
+
+
+async def _offered_interfaces(name: str) -> dict[str, Any]:
+    """What the environment's default version provides, read back; 404 for an environment this deployment does not
+    offer (a declared one, or a mash-up the database holds) or one with nothing read back yet."""
+    database_service = get_database_service()
+    spec = next((e for e in load_environments().environments if e.name == name), None)
+    offered_here = (spec is not None and offered(spec, await prebuilt_images(database_service))) or (
+        spec is None and name in {s.name for s in await _mash_ups(database_service)}
+    )
+    interfaces = await interfaces_of(database_service, name) if offered_here else None
+    if interfaces is None:
+        detail = f"no environment {name!r}" if not offered_here else f"nothing has been read back from {name}'s image"
+        raise HTTPException(status_code=404, detail=detail)
+    return interfaces
+
+
+async def _mash_ups(database_service: Any) -> list[Any]:
+    return await lifecycle.mash_up_specs(database_service) if database_service is not None else []
 
 
 @config.router.get(
@@ -134,11 +150,9 @@ async def get_environment_manifest(
 )
 async def get_environment_headers(name: str, principal: OptionalPrincipal) -> EnvironmentHeaders:
     # public: the same for every caller
-    spec = next((e for e in load_environments().environments if e.name == name), None)
-    if spec is None or summarize(spec, await prebuilt_images(get_database_service())) is None:
-        raise HTTPException(status_code=404, detail=f"no environment {name!r}")
+    interfaces = await _offered_interfaces(name)
     try:
-        headers = await environment_headers(name)
+        headers = await environment_headers(name, interfaces)
     except TranslatorUnavailableError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
     if headers is None:
@@ -156,7 +170,9 @@ async def get_environment_headers(name: str, principal: OptionalPrincipal) -> En
 )
 async def list_registry_entries(principal: OptionalPrincipal) -> list[CatalogEntry]:
     # public: the same for every caller
-    return catalog_entries(await prebuilt_images(get_database_service()))
+    database_service = get_database_service()
+    names = [spec.name for spec in load_environments().environments]
+    return catalog_entries(await prebuilt_images(database_service), await manifests_of(database_service, names))
 
 
 @config.router.get(

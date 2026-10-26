@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any
 
 from compose_api.config import get_settings
-from compose_api.registry.environments import manifest_path
 from compose_api.registry.solvers import Solver
 from compose_api.sedml.models import SedmlFinding
 
@@ -67,19 +66,19 @@ async def describe(source: Path) -> dict[str, Any]:
         return description
 
 
-async def translate(source: Path, solvers: list[Solver], workdir: Path) -> Translation:
-    """Every task of the archive, compiled per solver against its environment's manifest, into `workdir`."""
+async def translate(source: Path, solvers: list[Solver], workdir: Path, manifests: list[Path]) -> Translation:
+    """Every task of the archive, compiled per solver against its environment's manifest (``manifests``: the files
+    ``environments.manifests.manifest_files`` writes, D8.4), into `workdir`."""
     description = await describe(source)
     if not description.get("files"):
         raise ValueError("the archive holds no SED-ML file (its manifest declares none, and no member ends in .sedml)")
     solvers_file = workdir / "solvers.json"  # JSON: the CLI reads YAML only when PyYAML is installed
     solvers_file.write_text(json.dumps({"solvers": [s.as_translation_data() for s in solvers]}))
     out = workdir / "translated"
-    manifests = sorted({str(manifest_path(s.environment)) for s in solvers})
     args = ["sedml", "translate", str(source), "--solvers", str(solvers_file), "-o", str(out)]
     args += ["--output-dir", get_settings().containers_output_dir, "--addresses", "registered"]
     for m in manifests:
-        args += ["-i", m]
+        args += ["-i", str(m)]
     _code, output = await _run(*args)  # exit 1 when some task or solver was refused: the findings say which
     findings_file = out / "findings.json"
     if not findings_file.exists():

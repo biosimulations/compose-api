@@ -7,7 +7,6 @@ read comes from the registry entries whose `bundles` name the environment. The A
 app's editor and checker (`/registry/environments`).
 """
 
-import json
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal
@@ -18,7 +17,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from compose_api.registry.manifest import CurationLevel, Manifest, RegistryEntry, load_manifest
 
 ENVIRONMENTS_PATH = Path(__file__).parent / "environments.yaml"
-MANIFESTS_DIR = Path(__file__).parent / "manifests"
 INTERFACES_VERSION = "pbg-interfaces/1"
 
 
@@ -210,30 +208,15 @@ def summarize_mash_up(
     )
 
 
-def manifest_path(name: str) -> Path:
-    return MANIFESTS_DIR / f"{name}.json"
-
-
-def read_manifest(name: str, registry: Manifest | None = None) -> InterfaceManifest | None:
-    """An environment's manifest with each component's registry entry, or None when none has been generated."""
-    path = manifest_path(name)
-    if not path.exists():
-        return None
-    manifest = InterfaceManifest.model_validate(json.loads(path.read_text()))
-    registry = registry or load_manifest()
-    for component in manifest.components:
-        entry = registry.entry_for_module(component.module or component.address.split("!", 1)[-1])
-        component.registry_entry = None if entry is None else EntryRef(id=entry.id, level=entry.level)
-    return manifest
-
-
-def summarize(spec: EnvironmentSpec, prebuilt: Mapping[str, str]) -> EnvironmentSummary | None:
-    """The environment as the web app lists it; None for a prebuilt one this deployment does not offer."""
+def summarize(
+    spec: EnvironmentSpec, prebuilt: Mapping[str, str], manifest: "InterfaceManifest | None"
+) -> EnvironmentSummary | None:
+    """The environment as the web app lists it, with its default version's manifest (``environments.manifests``,
+    D8.4); None for a prebuilt one this deployment does not offer."""
     if not offered(spec, prebuilt):
         return None
     image = deployed_image(spec, prebuilt)
     registry = load_manifest()
-    manifest = read_manifest(spec.name, registry)
     recorded = (manifest.environment or {}).get("image") if manifest else None
     entries = [EntryRef(id=e.id, level=e.level) for e in registry.entries if spec.name in e.bundles]
     return EnvironmentSummary(
@@ -242,7 +225,7 @@ def summarize(spec: EnvironmentSpec, prebuilt: Mapping[str, str]) -> Environment
         simulator=spec.name if spec.kind == "prebuilt" else None,
         image=image,
         manifest_image=recorded,
-        stale=image is not None and manifest is not None and recorded != image,
+        stale=False,  # read back from the version that runs, so never from another image
         process_bigraph=(manifest.environment or {}).get("process_bigraph") if manifest else None,
         components=len(manifest.components) if manifest else 0,
         errors=len(manifest.errors) if manifest else 0,
@@ -274,15 +257,17 @@ class CatalogEntry(BaseModel):
     environments: list[EntryEnvironment] = Field(default_factory=list)
 
 
-def catalog_entries(prebuilt: Mapping[str, str]) -> list[CatalogEntry]:
+def catalog_entries(
+    prebuilt: Mapping[str, str], manifests: Mapping[str, "InterfaceManifest | None"]
+) -> list[CatalogEntry]:
     """Every registry entry (manifest.yaml over catalog.yaml), highest level first, then by id, each with the offered
-    environments whose manifest lists its classes."""
+    environments whose manifest (``manifests``, by environment) lists its classes."""
     registry = load_manifest()
     provided: dict[str, list[EntryEnvironment]] = {}
     for spec in load_environments().environments:
         if not offered(spec, prebuilt):
             continue
-        manifest = read_manifest(spec.name, registry)
+        manifest = manifests.get(spec.name)
         counts: dict[str, int] = {}
         for component in manifest.components if manifest else []:
             if component.registry_entry is not None:

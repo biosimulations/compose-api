@@ -205,7 +205,7 @@ watch(() => route.hash, hash => (highlighted.value = decodeURIComponent(hash.sli
       </UAlert>
       <template v-if="manifest">
         <h2 class="text-lg font-semibold">Classes</h2>
-        <p class="text-sm text-muted">As the committed interface manifest lists them; a version's page lists the classes its own image provides.</p>
+        <p class="text-sm text-muted">As the default version's image provides them, read back when it was built; each version's page lists its own.</p>
         <div class="flex flex-wrap items-center gap-3">
           <UInput v-model="filter" placeholder="Filter by name or address" icon="i-lucide-search" class="w-72" />
           <span class="text-sm text-muted">{{ components.length }} of {{ manifest.components.length }}</span>

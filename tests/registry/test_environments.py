@@ -1,5 +1,6 @@
 """The environments documents run in and their interface manifests (docs/plan-authoring.md): the configuration,
-the generator's docker command, the served summaries and manifests, and the manifests committed so far."""
+and the served summaries, manifests and catalog. A manifest is its default version's read-back
+(docs/plan-environment-composition.md, D8.4)."""
 
 import json
 from collections.abc import AsyncGenerator
@@ -15,19 +16,16 @@ from httpx import ASGITransport
 from compose_api.api.routers import registry as registry_router
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService
-from compose_api.registry import environments
+from compose_api.environments.manifests import annotated
 from compose_api.registry.environments import (
     INTERFACES_VERSION,
     EnvironmentsFile,
-    EnvironmentSpec,
     catalog_entries,
     composition_problems,
     load_environments,
     module_roots,
-    read_manifest,
     summarize,
 )
-from compose_api.registry.generate import describe_command, prebuilt_pins, shared_image
 from compose_api.registry.manifest import CurationLevel, Manifest, RegistryEntry, load_manifest
 from tests.fixtures.postgres_fixtures import register_prebuilt
 
@@ -61,13 +59,14 @@ def manifest_json(name: str, image: str | None, modules: list[str]) -> dict[str,
     }
 
 
-@pytest.fixture
-def manifests_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    monkeypatch.setattr(environments, "MANIFESTS_DIR", tmp_path)
-    (tmp_path / "viva-pde-particle.json").write_text(
-        json.dumps(manifest_json("viva-pde-particle", PDE_IMAGE, ["viva_pde_particle.processes.fv", "elsewhere.x"]))
-    )
-    return tmp_path
+PDE_MANIFEST = manifest_json("viva-pde-particle", PDE_IMAGE, ["viva_pde_particle.processes.fv", "elsewhere.x"])
+
+
+@pytest_asyncio.fixture
+async def pde_read_back(database_service: DatabaseService) -> None:
+    """viva-pde-particle offered here, its default version's image read back as ``PDE_MANIFEST``."""
+    version = await register_prebuilt(database_service, "viva-pde-particle", PDE_IMAGE)
+    await database_service.get_environments_db().set_contents(version.database_id, None, PDE_MANIFEST)
 
 
 def test_environments_file_names_each_environment_once_and_each_has_modules() -> None:
@@ -139,59 +138,33 @@ def test_the_viva_pde_particle_entry_is_runnable_only_in_its_own_image() -> None
     assert entry.bundles == ["viva-pde-particle"]
 
 
-def test_the_deployment_pins_every_prebuilt_environment() -> None:
-    pins = prebuilt_pins()
-    for spec in load_environments().environments:
-        if spec.kind == "prebuilt":
-            assert spec.name in pins and "@sha256:" in pins[spec.name], f"{spec.name} is not pinned by digest"
-
-
-def test_describe_command_runs_the_script_through_the_environments_python(tmp_path: Path) -> None:
-    spec = EnvironmentSpec(
-        name="viva-pde-particle", kind="prebuilt", python=["/bin/bash", "-c", 'exec python "$@"', "python"]
-    )
-    command = describe_command(spec, PDE_IMAGE, ["viva_pde_particle"], tmp_path)
-    assert command[:2] == ["docker", "run"]
-    assert command[command.index("-v") + 1] == f"{tmp_path}:/pblang:ro"
-    assert command[command.index("--entrypoint") + 1] == "/bin/bash"
-    image_at = command.index(PDE_IMAGE)
-    assert command[image_at + 1 :] == [
-        "-c", 'exec python "$@"', "python",
-        "/pblang/describe_env.py", "viva_pde_particle", "--env-name", "viva-pde-particle", "--image", PDE_IMAGE,
-    ]  # fmt: skip
-
-
-def test_read_manifest_adds_each_components_registry_entry(manifests_dir: Path) -> None:
-    manifest = read_manifest("viva-pde-particle")
-    assert manifest is not None
+def test_a_read_back_manifest_names_each_components_registry_entry() -> None:
+    manifest = annotated(PDE_MANIFEST)
     entries = {c.module: c.registry_entry for c in manifest.components}
     pde = entries["viva_pde_particle.processes.fv"]
     assert pde is not None and pde.id == "viva-pde-particle" and pde.level == CurationLevel.TESTED
     assert entries["elsewhere.x"] is None
-    assert read_manifest("registry_env") is None  # none generated in this directory
 
 
-def test_summaries_say_whether_the_manifest_matches_the_deployed_image(manifests_dir: Path) -> None:
+def test_summaries_describe_the_default_versions_manifest() -> None:
     spec = next(e for e in load_environments().environments if e.name == "viva-pde-particle")
-    assert summarize(spec, prebuilt={}) is None  # a prebuilt image this deployment does not offer is not listed
-    current = summarize(spec, prebuilt={"viva-pde-particle": PDE_IMAGE})
+    manifest = annotated(PDE_MANIFEST)
+    assert summarize(spec, {}, manifest) is None  # a prebuilt environment with no default here is not listed
+    current = summarize(spec, {"viva-pde-particle": PDE_IMAGE}, manifest)
     assert current is not None
     assert (current.simulator, current.components, current.errors, current.stale) == ("viva-pde-particle", 2, 1, False)
     assert current.process_bigraph == "1.8.5" and [e.id for e in current.entries] == ["viva-pde-particle"]
-    moved = summarize(spec, prebuilt={"viva-pde-particle": "ghcr.io/example/pde@sha256:2"})
-    assert moved is not None and moved.stale and moved.manifest_image == PDE_IMAGE
 
     shared = next(e for e in load_environments().environments if e.kind == "shared")
-    listed = summarize(shared, prebuilt={})
+    listed = summarize(shared, {}, None)
     assert listed is not None
     assert listed.simulator is None and listed.image is None and listed.components == 0 and not listed.stale
 
 
 @pytest_asyncio.fixture
-async def client(manifests_dir: Path, database_service: DatabaseService) -> AsyncGenerator[httpx.AsyncClient]:
+async def client(pde_read_back: None) -> AsyncGenerator[httpx.AsyncClient]:
     app = FastAPI()
     app.include_router(registry_router.config.router, prefix=registry_router.config.prefix)
-    await register_prebuilt(database_service, "viva-pde-particle", PDE_IMAGE)  # offered: it has a default (D8.3)
     async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as c:
         yield c
 
@@ -213,7 +186,9 @@ async def test_routes_list_environments_and_serve_manifests(client: httpx.AsyncC
     again = await client.get("/registry/environments/viva-pde-particle/manifest", headers={"If-None-Match": etag})
     assert again.status_code == 304
 
-    assert (await client.get("/registry/environments/registry_env/manifest")).status_code == 404  # not generated
+    # registry_env's default, read back from registry_env@5's image (tests/fixtures/postgres_fixtures.py)
+    shared = (await client.get("/registry/environments/registry_env/manifest")).json()
+    assert {c["module"].split(".")[0] for c in shared["components"]} >= {"pbsim_common", "biosim_toolkit"}
     assert (await client.get("/registry/environments/nope/manifest")).status_code == 404
 
 
@@ -234,25 +209,21 @@ async def test_headers_render_each_module_and_each_class(client: httpx.AsyncClie
     assert "module " not in declaration
     assert set(body["components"]) == {c["address"] for c in manifest["components"]}
 
-    assert (await client.get("/registry/environments/registry_env/headers")).status_code == 404  # not generated
     assert (await client.get("/registry/environments/nope/headers")).status_code == 404
 
 
-@pytest.mark.parametrize("path", sorted(environments.MANIFESTS_DIR.glob("*.json")), ids=lambda p: p.stem)
-def test_committed_manifests_are_current_and_their_components_are_registered(path: Path) -> None:
-    spec = next((e for e in load_environments().environments if e.name == path.stem), None)
-    assert spec is not None, f"{path.name} names no environment in environments.yaml"
-    manifest = read_manifest(spec.name)
-    assert manifest is not None and manifest.schema_version == INTERFACES_VERSION
-    assert manifest.components, f"{path.name} lists no components"
-    image = shared_image() if spec.kind == "shared" else prebuilt_pins().get(spec.name)
-    assert (manifest.environment or {}).get("image") == image, f"{path.name} was read from another image: regenerate it"
+def test_the_seeded_read_back_names_only_registered_components() -> None:
+    """The test database's registry_env manifest, read back from registry_env@5 (tests/fixtures/resources)."""
+    path = Path(__file__).parents[1] / "fixtures" / "resources" / "registry_env.interfaces.json"
+    manifest = annotated(json.loads(path.read_text()))
+    assert manifest.schema_version == INTERFACES_VERSION and manifest.components
     for component in manifest.components:
         assert component.registry_entry is not None, f"{component.address} belongs to no registry entry"
 
 
-def test_catalog_entries_carry_their_level_and_the_environments_that_provide_them(manifests_dir: Path) -> None:
-    entries = catalog_entries(prebuilt={"viva-pde-particle": PDE_IMAGE})
+def test_catalog_entries_carry_their_level_and_the_environments_that_provide_them() -> None:
+    manifests = {"viva-pde-particle": annotated(PDE_MANIFEST)}
+    entries = catalog_entries({"viva-pde-particle": PDE_IMAGE}, manifests)
     levels = [e.level.rank for e in entries]
     assert levels == sorted(levels, reverse=True)  # most trusted first
     pde = next(e for e in entries if e.id == "viva-pde-particle")
@@ -260,7 +231,7 @@ def test_catalog_entries_carry_their_level_and_the_environments_that_provide_the
         ("viva-pde-particle", 1)
     ]
     assert any(e.level == CurationLevel.LISTED and not e.environments for e in entries)  # catalog.yaml's, in none
-    offered_nowhere = catalog_entries(prebuilt={})
+    offered_nowhere = catalog_entries({}, manifests)
     assert not next(e for e in offered_nowhere if e.id == "viva-pde-particle").environments
 
 

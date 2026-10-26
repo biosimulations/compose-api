@@ -1,5 +1,9 @@
-"""registry/solvers.yaml: every solver names an environment this service has, and a class its committed manifest
-lists, so `sedml translate` can fill the role with it (docs/plan-sedml.md, phase 2)."""
+"""registry/solvers.yaml: every solver names an environment this service has, and a class that environment's image
+provides (its read-back, docs/plan-environment-composition.md D8.4), so `sedml translate` can fill the role with it
+(docs/plan-sedml.md, phase 2)."""
+
+import json
+from pathlib import Path
 
 import httpx
 import pytest
@@ -7,8 +11,16 @@ from fastapi import FastAPI
 from httpx import ASGITransport
 
 from compose_api.api.routers import registry as registry_router
-from compose_api.registry.environments import load_environments, read_manifest
+from compose_api.environments.manifests import annotated
+from compose_api.registry.environments import InterfaceManifest, load_environments
 from compose_api.registry.solvers import load_solvers, solver
+
+# what registry_env@5's image provides, as read back on 2026-10-26 (the test database's registry_env manifest)
+READ_BACK = Path(__file__).parents[1] / "fixtures" / "resources" / "registry_env.interfaces.json"
+
+
+def _manifest(environment: str) -> InterfaceManifest | None:
+    return annotated(json.loads(READ_BACK.read_text())) if environment == "registry_env" else None
 
 
 def _key(address: str) -> str:
@@ -21,7 +33,7 @@ def test_every_solver_is_a_class_its_environment_provides() -> None:
     assert {s.id for s in solvers} >= {"copasi", "tellurium"}
     for s in solvers:
         assert s.environment in environments, f"{s.id}: no environment {s.environment!r}"
-        manifest = read_manifest(s.environment)
+        manifest = _manifest(s.environment)
         assert manifest is not None, f"{s.id}: {s.environment} has no manifest"
         found = next((c for c in manifest.components if _key(c.address) == _key(s.address)), None)
         assert found is not None, f"{s.id}: {s.address} is not in {s.environment}'s manifest"
