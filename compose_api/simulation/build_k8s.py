@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import datetime
+import gzip
 import hashlib
 import logging
 import shlex
@@ -82,7 +83,9 @@ class BuildSite:
         )
 
 
-DEFINITION_ENV = "CONTAINER_DEFINITION_B64"
+# The definition, gzipped then base64: one environment string may not exceed 128 KiB (Linux's MAX_ARG_STRLEN), and a
+# composed version's definition carries its whole pixi.lock (registry_env's: 177 KB as base64, 50 KB gzipped first).
+DEFINITION_ENV = "CONTAINER_DEFINITION_GZ_B64"
 DESCRIBE_ENV = "DESCRIBE_SCRIPT_B64"
 #: what a build reads from the image it made, by file kind (docs/plan-environment-versions.md, V7)
 INSPECTIONS = ("installed.txt", "interfaces.json", "types.json")
@@ -372,7 +375,7 @@ def build_script() -> str:
         export APPTAINER_TMPDIR={WORK_DIR}/scratch APPTAINER_CACHEDIR={WORK_DIR}/cache
         mkdir -p "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"
         apptainer --version
-        echo "${DEFINITION_ENV}" | base64 -d > {WORK_DIR}/image.def
+        echo "${DEFINITION_ENV}" | base64 -d | gunzip > {WORK_DIR}/image.def
         apptainer build {WORK_DIR}/image.sif {WORK_DIR}/image.def
         ls -la {WORK_DIR}/image.sif
         """)
@@ -405,6 +408,12 @@ def publish_script(container: Path, inspections: dict[str, Path] | None = None) 
     )
 
 
+def encode_definition(definition: str) -> str:
+    """How the build Job carries a definition (``DEFINITION_ENV``): gzipped (no timestamp, so the same each time),
+    then base64."""
+    return base64.b64encode(gzip.compress(definition.encode(), compresslevel=9, mtime=0)).decode()
+
+
 def build_job(
     name: str, site: BuildSite, definition: str, container: Path, inspection: Inspection | None = None
 ) -> V1Job:
@@ -414,7 +423,7 @@ def build_job(
 
     script, env = (
         build_script(),
-        [k8s.V1EnvVar(name=DEFINITION_ENV, value=base64.b64encode(definition.encode()).decode())],
+        [k8s.V1EnvVar(name=DEFINITION_ENV, value=encode_definition(definition))],
     )
     inspections: dict[str, Path] = {}
     if inspection is not None:
