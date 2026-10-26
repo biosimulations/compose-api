@@ -18,7 +18,7 @@
 | 5b | Compliance runs: after a build, each member entry's cases run in the version; levels recorded per entry and version; API and CLI | merged (#390) |
 | 5c | Admission by what the version certifies: a refused component, a failed entry, members only | merged (#391) |
 | 6 | registry_env migrates to a composed version on a current process-bigraph | @4 (0.7.46) and @5 (0.7.50) ready; suite run 5 running; then the default |
-| 7a | Runs name an environment or have one inferred; environments listed from the database | 7a-1 (naming, inferring, membership) in review (#415); 7a-2 (listing from the database) next |
+| 7a | Runs name an environment or have one inferred; environments listed from the database | 7a-1 merged (#415); 7a-2 (listing from the database) in review |
 | 7b | Implicit mash-ups, proven with viva-basic-processes | decided |
 | 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | |
 | 8 | Retire the shared uv path, `simulator_registry.json`, `shared_image()`, pbest in images, `PREBUILT_SIMULATORS`, the committed interface manifests | |
@@ -326,6 +326,17 @@
      - The one behaviour change: a document using only viva-pde-particle's classes, sent with no `simulator`, now runs
        in its image when the deployment offers it, instead of being refused. A test pins that every class
        registry_env provides is still inferred to registry_env.
+
+     *As built, 7a-2 (2026-10-26):*
+     - `environment.entries` (JSONB, migration `f6b2c9d4e017`) holds a mash-up's sorted entries, its identity; the
+       `mash-up` kind sits beside `shared` and `prebuilt`. Declared environments keep their entries in
+       environments.yaml.
+     - `GET /registry/environments` lists the declared environments, then the database's mash-ups, each summarized
+       from its default version (the classes its image read back, its core). The read-only version routes (list,
+       one version, export, compliance) accept a mash-up's name; creating versions of one waits for 7b.
+     - `last_used_at` on every version (D7.8) is read from its newest simulation, not written by each run.
+     - The webapp lists mash-ups with their entries and an `info` badge; their page has no committed manifest or
+       deployment image, and their classes are on each version's page.
    - **7b. Implicit mash-ups, proven with a light component.**
      - Creation when nothing covers the set: the lock in the request (409 on a conflict), the build and compliance in
        the background, the run queued behind the image (D7.4–D7.6). Signed-in only, two builds at a time (D7.5).

@@ -481,6 +481,10 @@ async def test_a_ready_composed_version_runs_its_entries_cases_and_reports_their
     simulation_id = pending["pbsim-common"]["cases"][0]["simulation_id"]
     row = await database_service.get_simulator_db().get_simulation_row(simulation_id)
     assert row is not None and row.simulation.environment_version_id == version.database_id  # run in that version
+    async with _as(app, None) as anonymous:  # its runs say when it was last used (D7.8)
+        listed = (await anonymous.get("/registry/environments/registry_env/versions")).json()["versions"]
+    used = {v["number"]: v["last_used_at"] for v in listed}
+    assert used[number] is not None  # other tests share the database, so other versions may have runs too
     assert row.simulation.labels["source"] == "compliance" and row.simulation.labels["compliance"].startswith(
         "pbsim-common/"
     )
@@ -611,3 +615,28 @@ async def test_a_lock_whose_version_failed_to_build_can_be_made_again(
     assert first["state"] == "failed"
     assert retried["state"] == "ready" and retried["failure"] is None, retried["failure"]
     assert retried["lock_sha256"] == first["lock_sha256"]
+
+
+@pytest.mark.asyncio
+async def test_a_mash_up_the_database_holds_is_listed_with_its_entries(
+    app: FastAPI, database_service: DatabaseServiceSQL
+) -> None:
+    """D7.9: environments come from the database too; a mash-up, which no file declares, is listed with its entries
+    and its versions can be read. (Step 7b creates them; here one is made directly.)"""
+    from compose_api.api.routers import registry as registry_router_module
+    from compose_api.db.tables.environment_tables import ORMEnvironment
+
+    async with database_service.async_sessionmaker() as session, session.begin():
+        session.add(ORMEnvironment(name="mash-0123456789", kind="mash-up", entries=["pbsim-common", "tellurium"]))
+    listing = FastAPI()
+    listing.include_router(registry_router_module.config.router, prefix=registry_router_module.config.prefix)
+    async with _as(listing, None) as anonymous:
+        environments = {e["name"]: e for e in (await anonymous.get("/registry/environments")).json()}
+        versions = await anonymous.get("/registry/environments/mash-0123456789/versions")
+        unknown = await anonymous.get("/registry/environments/mash-nothing/versions")
+    mash_up = environments["mash-0123456789"]
+    assert mash_up["kind"] == "mash-up" and mash_up["components"] == 0  # no version built yet
+    assert [e["id"] for e in mash_up["entries"]] == ["pbsim-common", "tellurium"]
+    assert next(iter(environments)) == "registry_env"  # the declared ones come first, as before
+    assert versions.status_code == 200 and versions.json()["kind"] == "mash-up" and versions.json()["versions"] == []
+    assert unknown.status_code == 404

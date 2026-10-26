@@ -39,6 +39,8 @@ class EnvironmentVersion:
             created_at (datetime.datetime | None | Unset):
             note (None | str | Unset):
             failure (None | str | Unset): Why it failed: for a composed version, its lock's conflict
+            last_used_at (datetime.datetime | None | Unset): When a run last used it (its newest simulation); none if none
+                has
     """
 
     database_id: int
@@ -57,6 +59,7 @@ class EnvironmentVersion:
     created_at: datetime.datetime | None | Unset = UNSET
     note: None | str | Unset = UNSET
     failure: None | str | Unset = UNSET
+    last_used_at: datetime.datetime | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -137,6 +140,14 @@ class EnvironmentVersion:
         else:
             failure = self.failure
 
+        last_used_at: None | str | Unset
+        if isinstance(self.last_used_at, Unset):
+            last_used_at = UNSET
+        elif isinstance(self.last_used_at, datetime.datetime):
+            last_used_at = self.last_used_at.isoformat()
+        else:
+            last_used_at = self.last_used_at
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
@@ -167,6 +178,8 @@ class EnvironmentVersion:
             field_dict["note"] = note
         if failure is not UNSET:
             field_dict["failure"] = failure
+        if last_used_at is not UNSET:
+            field_dict["last_used_at"] = last_used_at
 
         return field_dict
 
@@ -299,6 +312,23 @@ class EnvironmentVersion:
 
         failure = _parse_failure(d.pop("failure", UNSET))
 
+        def _parse_last_used_at(data: object) -> datetime.datetime | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, str):
+                    raise TypeError()
+                last_used_at_type_0 = datetime.datetime.fromisoformat(data)
+
+                return last_used_at_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(datetime.datetime | None | Unset, data)
+
+        last_used_at = _parse_last_used_at(d.pop("last_used_at", UNSET))
+
         environment_version = cls(
             database_id=database_id,
             environment_id=environment_id,
@@ -316,6 +346,7 @@ class EnvironmentVersion:
             created_at=created_at,
             note=note,
             failure=failure,
+            last_used_at=last_used_at,
         )
 
         environment_version.additional_properties = d

@@ -40,6 +40,8 @@ class EnvironmentVersionDetail:
         created_at (datetime.datetime | None | Unset):
         note (None | str | Unset):
         failure (None | str | Unset): Why it failed: for a composed version, its lock's conflict
+        last_used_at (datetime.datetime | None | Unset): When a run last used it (its newest simulation); none if none
+            has
         lock (None | str | Unset): A shared version's lock: every PyPI package, pinned
         installed (None | str | Unset): What its image installed, read from the image
         interfaces (EnvironmentVersionDetailInterfacesType0 | None | Unset): Its process interfaces (pbg-interfaces/1)
@@ -64,6 +66,7 @@ class EnvironmentVersionDetail:
     created_at: datetime.datetime | None | Unset = UNSET
     note: None | str | Unset = UNSET
     failure: None | str | Unset = UNSET
+    last_used_at: datetime.datetime | None | Unset = UNSET
     lock: None | str | Unset = UNSET
     installed: None | str | Unset = UNSET
     interfaces: EnvironmentVersionDetailInterfacesType0 | None | Unset = UNSET
@@ -151,6 +154,14 @@ class EnvironmentVersionDetail:
         else:
             failure = self.failure
 
+        last_used_at: None | str | Unset
+        if isinstance(self.last_used_at, Unset):
+            last_used_at = UNSET
+        elif isinstance(self.last_used_at, datetime.datetime):
+            last_used_at = self.last_used_at.isoformat()
+        else:
+            last_used_at = self.last_used_at
+
         lock: None | str | Unset
         if isinstance(self.lock, Unset):
             lock = UNSET
@@ -213,6 +224,8 @@ class EnvironmentVersionDetail:
             field_dict["note"] = note
         if failure is not UNSET:
             field_dict["failure"] = failure
+        if last_used_at is not UNSET:
+            field_dict["last_used_at"] = last_used_at
         if lock is not UNSET:
             field_dict["lock"] = lock
         if installed is not UNSET:
@@ -359,6 +372,23 @@ class EnvironmentVersionDetail:
 
         failure = _parse_failure(d.pop("failure", UNSET))
 
+        def _parse_last_used_at(data: object) -> datetime.datetime | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, str):
+                    raise TypeError()
+                last_used_at_type_0 = datetime.datetime.fromisoformat(data)
+
+                return last_used_at_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(datetime.datetime | None | Unset, data)
+
+        last_used_at = _parse_last_used_at(d.pop("last_used_at", UNSET))
+
         def _parse_lock(data: object) -> None | str | Unset:
             if data is None:
                 return data
@@ -435,6 +465,7 @@ class EnvironmentVersionDetail:
             created_at=created_at,
             note=note,
             failure=failure,
+            last_used_at=last_used_at,
             lock=lock,
             installed=installed,
             interfaces=interfaces,

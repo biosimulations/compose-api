@@ -12,7 +12,7 @@ from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.db.db_utils import _ALEMBIC_INI, DeclarativeTableBase, create_db
 from compose_api.simulation.models import JobType, SimulationRequest, SimulatorVersion
 
-HEAD = "e5a8b3d1f926"
+HEAD = "f6b2c9d4e017"
 
 NEW_COLUMNS = {
     "hpcrun": {"trace_id", "events_cursor", "last_event_at", "exit_code", "backend", "external_id"},
@@ -27,7 +27,7 @@ NEW_COLUMNS = {
     },
     "comparison": {"collection", "suite_run"},
     "suite_run": {"sources", "next_source", "lease_owner", "lease_expires_at", "environment_version_ids"},
-    "environment": {"default_source"},
+    "environment": {"default_source", "entries"},
 }
 
 

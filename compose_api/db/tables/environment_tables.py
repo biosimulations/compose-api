@@ -24,7 +24,10 @@ class ORMEnvironment(DeclarativeTableBase):
     id: Mapped[int] = mapped_column(primary_key=True)
     # what requests and pages call it; renaming it changes no reference (they hold the id)
     name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    kind: Mapped[str] = mapped_column(String(16), nullable=False)  # shared, prebuilt
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)  # shared, prebuilt, mash-up
+    # a mash-up's registry entries, sorted: its identity (docs/plan-environment-composition.md, D7.6); a declared
+    # environment's are in environments.yaml, so none here
+    entries: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     # use_alter: the two tables reference each other
     default_version_id: Mapped[int | None] = mapped_column(
         ForeignKey("environment_version.id", use_alter=True, ondelete="SET NULL"), nullable=True

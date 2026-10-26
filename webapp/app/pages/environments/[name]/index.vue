@@ -88,9 +88,10 @@ onMounted(async () => {
     const [list, m] = await Promise.all([listEnvironments(), fetchManifest(name.value)])
     summary.value = list.find(e => e.name === name.value) ?? null
     if (!summary.value) error.value = `There is no environment named ${name.value}.`
-    else if (!m) error.value = `No interface manifest has been generated for ${name.value}.`
+    // a mash-up has no committed manifest: its versions' pages list the classes each image provides
+    else if (!m && summary.value.kind !== 'mash-up') error.value = `No interface manifest has been generated for ${name.value}.`
     manifest.value = m
-    if (summary.value) void refreshImage()
+    if (summary.value && summary.value.kind !== 'mash-up') void refreshImage() // a mash-up's image is its version's
     if (summary.value) fetchVersions(name.value).then(v => (versionList.value = v)).catch(() => {})
     // the headers are printed on the server; the page works without them
     if (m) fetchHeaders(name.value).then(h => (headers.value = h)).catch(() => {})
@@ -124,7 +125,8 @@ watch(() => route.hash, hash => (highlighted.value = decodeURIComponent(hash.sli
       <p v-if="loading" class="text-muted text-sm">Loading…</p>
       <div v-if="summary" class="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
         <span class="text-muted">Kind</span>
-        <span>{{ summary.kind }}{{ summary.simulator ? ` · run with simulator=${summary.simulator}` : ' · the default for runs that name no simulator' }}</span>
+        <span>{{ summary.kind }}{{ summary.kind === 'mash-up' ? ' · made on demand from its entries' : summary.kind === 'prebuilt' ? ` · run with environment=${summary.name}` : ' · the default for runs that name no environment' }}</span>
+        <template v-if="summary.kind !== 'mash-up'">
         <span class="text-muted">Image</span>
         <code class="text-xs break-all">{{ summary.image ?? '—' }}</code>
         <span class="text-muted">On the cluster</span>
@@ -141,6 +143,7 @@ watch(() => route.hash, hash => (highlighted.value = decodeURIComponent(hash.sli
           <span v-else-if="imageError" class="text-xs text-error">{{ imageError }}</span>
           <span v-else class="text-xs text-muted">…</span>
         </span>
+        </template>
         <template v-if="summary.stale">
           <span class="text-muted">Manifest read from</span>
           <span><code class="text-xs break-all">{{ summary.manifest_image }}</code> <UBadge color="warning" variant="subtle" size="sm">earlier image</UBadge></span>

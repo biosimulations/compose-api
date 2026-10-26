@@ -382,7 +382,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The environments documents run in, with what their interface manifests hold */
+        /**
+         * The environments documents run in, with what their interface manifests hold
+         * @description The environments this deployment declares (environments.yaml), then the mash-ups the database holds
+         *     (docs/plan-environment-composition.md, D7.9). Public: the same for every caller.
+         */
         get: operations["list-environments"];
         put?: never;
         post?: never;
@@ -1592,7 +1596,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "shared" | "prebuilt";
+            kind: "shared" | "prebuilt" | "mash-up";
             /**
              * Simulator
              * @description The value of /simulation/run's `simulator` for this environment
@@ -1685,6 +1689,11 @@ export interface components {
              * @description Why it failed: for a composed version, its lock's conflict
              */
             failure?: string | null;
+            /**
+             * Last Used At
+             * @description When a run last used it (its newest simulation); none if none has
+             */
+            last_used_at?: string | null;
         };
         /**
          * EnvironmentVersionDetail
@@ -1748,6 +1757,11 @@ export interface components {
              * @description Why it failed: for a composed version, its lock's conflict
              */
             failure?: string | null;
+            /**
+             * Last Used At
+             * @description When a run last used it (its newest simulation); none if none has
+             */
+            last_used_at?: string | null;
             /**
              * Lock
              * @description A shared version's lock: every PyPI package, pinned

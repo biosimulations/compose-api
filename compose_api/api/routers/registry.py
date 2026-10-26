@@ -19,6 +19,7 @@ from compose_api.authorization import EnvironmentAdmin
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.config import get_settings
 from compose_api.dependencies import (
+    get_database_service,
     get_required_database_service,
     get_required_job_monitor,
     get_required_simulation_service,
@@ -38,6 +39,7 @@ from compose_api.registry.environments import (
     manifest_path,
     read_manifest,
     summarize,
+    summarize_mash_up,
 )
 from compose_api.registry.headers import EnvironmentHeaders, environment_headers
 from compose_api.registry.solvers import Solver, load_solvers
@@ -70,8 +72,23 @@ config = RouterConfig(router=APIRouter(), prefix="/registry", dependencies=[Depe
     summary="The environments documents run in, with what their interface manifests hold",
 )
 async def list_environments(principal: OptionalPrincipal) -> list[EnvironmentSummary]:
-    # public: the same for every caller
-    return [s for s in (summarize(spec) for spec in load_environments().environments) if s is not None]
+    """The environments this deployment declares (environments.yaml), then the mash-ups the database holds
+    (docs/plan-environment-composition.md, D7.9). Public: the same for every caller."""
+    declared = [s for s in (summarize(spec) for spec in load_environments().environments) if s is not None]
+    database_service = get_database_service()
+    if database_service is None:
+        return declared
+    environments_db = database_service.get_environments_db()
+    mash_ups = []
+    for record in await environments_db.environments():
+        if record.kind != "mash-up":
+            continue
+        default = await environments_db.get_default_detail(record.name)
+        core = (default.spec or {}).get("core") if default is not None else None
+        mash_ups.append(
+            summarize_mash_up(record.name, record.entries or [], default.interfaces if default else None, core)
+        )
+    return [*declared, *mash_ups]
 
 
 @config.router.get(
@@ -245,6 +262,19 @@ def _known_environment(name: str) -> EnvironmentSpec:
     return spec
 
 
+async def _readable_kind(name: str) -> str:
+    """The kind of an environment whose versions may be read: one environments.yaml declares, or a mash-up the
+    database holds (D7.9). 404 otherwise."""
+    spec = environment_service.environment_spec(name)
+    if spec is not None:
+        return spec.kind
+    records = await get_required_database_service().get_environments_db().environments()
+    record = next((r for r in records if r.name == name and r.kind == "mash-up"), None)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"no environment {name!r}")
+    return record.kind
+
+
 async def _version(name: str, number: int) -> EnvironmentVersionDetail:
     version = await get_required_database_service().get_environments_db().get_by_number(name, number)
     if version is None:
@@ -333,8 +363,8 @@ async def _read_back(version: EnvironmentVersion, reread: bool = False) -> None:
 )
 async def list_environment_versions(name: str, principal: OptionalPrincipal) -> EnvironmentVersions:
     # public: the same for every caller
-    spec = _known_environment(name)
-    return await get_required_database_service().get_environments_db().describe(name, spec.kind)
+    kind = await _readable_kind(name)
+    return await get_required_database_service().get_environments_db().describe(name, kind)
 
 
 @config.router.get(
@@ -347,7 +377,7 @@ async def list_environment_versions(name: str, principal: OptionalPrincipal) -> 
 )
 async def get_environment_version(name: str, number: int, principal: OptionalPrincipal) -> EnvironmentVersionDetail:
     # public: the same for every caller
-    _known_environment(name)
+    await _readable_kind(name)
     version = await _version(name, number)
     pending = version.installed is None and version.interfaces is None
     if pending and version.state == VersionState.READY:  # built by a run, or before this service read images back
@@ -377,7 +407,7 @@ async def export_environment_version(
     ] = None,
 ) -> EnvironmentExport:
     # public: the same for every caller
-    _known_environment(name)
+    await _readable_kind(name)
     version = await _version(name, number)
     exports = await get_required_database_service().get_environments_db().get_exports(version.database_id)
     try:
@@ -396,7 +426,7 @@ async def export_environment_version(
 )
 async def get_environment_version_compliance(name: str, number: int, principal: OptionalPrincipal) -> ComplianceReport:
     # public: the same for every caller; finished runs are evaluated as this is read
-    _known_environment(name)
+    await _readable_kind(name)
     database_service = get_required_database_service()
     version = await _version(name, number)
     await compliance_runs.refresh(database_service, version)

@@ -10,6 +10,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from compose_api.db.tables.environment_tables import ORMComplianceRun, ORMEnvironment, ORMEnvironmentVersion
+from compose_api.db.tables.simulator_tables import ORMSimulation
 from compose_api.simulation.models import (
     EnvironmentVersion,
     EnvironmentVersionDetail,
@@ -34,6 +35,16 @@ class VersionSource:
     created_by: str | None = None
     note: str | None = None
     runtime_contract: int = 1
+
+
+@dataclass(frozen=True)
+class EnvironmentRecord:
+    """An environment the database holds: its identity, name, kind, and (a mash-up's) entries."""
+
+    id: int
+    name: str
+    kind: str
+    entries: list[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -145,6 +156,10 @@ class EnvironmentsDatabaseService(ABC):
 
     @abstractmethod
     async def get_default_detail(self, environment: str) -> EnvironmentVersionDetail | None: ...
+
+    @abstractmethod
+    async def environments(self) -> list[EnvironmentRecord]:
+        """Every environment the database holds, by name (docs/plan-environment-composition.md, D7.9)."""
 
     @abstractmethod
     async def list_versions(self, environment: str) -> list[EnvironmentVersion]:
@@ -445,10 +460,24 @@ class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
             return version.to_environment_version_detail() if version is not None else None
 
     @override
+    async def environments(self) -> list[EnvironmentRecord]:
+        async with self.async_session_maker() as session:
+            rows = (await session.execute(select(ORMEnvironment).order_by(ORMEnvironment.name))).scalars()
+            return [EnvironmentRecord(id=e.id, name=e.name, kind=e.kind, entries=e.entries) for e in rows]
+
+    @override
     async def list_versions(self, environment: str) -> list[EnvironmentVersion]:
         async with self.async_session_maker() as session:
             query = self._named(environment).order_by(ORMEnvironmentVersion.number.desc())
-            return [v.to_environment_version() for v in (await session.execute(query)).unique().scalars()]
+            versions = [v.to_environment_version() for v in (await session.execute(query)).unique().scalars()]
+            # when a run last used each one (D7.8), read from the runs rather than written by each of them
+            rows = await session.execute(
+                select(ORMSimulation.environment_version_id, func.max(ORMSimulation.created_at))
+                .where(ORMSimulation.environment_version_id.in_([v.database_id for v in versions]))
+                .group_by(ORMSimulation.environment_version_id)
+            )
+            last_used: dict[int | None, datetime.datetime] = dict(rows.tuples().all())
+        return [v.model_copy(update={"last_used_at": last_used.get(v.database_id)}) for v in versions]
 
     @override
     async def describe(self, environment: str, kind: str) -> EnvironmentVersions:
