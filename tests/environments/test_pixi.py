@@ -39,7 +39,12 @@ def test_registry_env_becomes_a_pixi_workspace_pinned_to_releases_and_commits() 
     assert 'platforms = ["linux-64"]' in toml
     assert '"python" = "3.12.*"' in toml and '"readdy" = "==2.0.13"' in toml  # conda-forge
     assert '"process-bigraph" = "==1.9.1"' in toml and '"bigraph-schema" = "==1.8.1"' in toml  # the common core
-    assert '"pbsim-common" = { "git" = "https://github.com/biosimulations/pbsim_common", "rev" = "26fa156c' in toml
+    pbsim = next(e for e in load_manifest().entries if e.id == "pbsim-common").install
+    assert pbsim is not None and pbsim.commit is not None
+    assert (
+        f'"pbsim-common" = {{ "git" = "https://github.com/biosimulations/pbsim_common", "rev" = "{pbsim.commit}" }}'
+        in toml
+    )
     assert '"pyvcell" = { "version" = "==0.5.2", "extras" = ["native", "ode"] }' in toml
     assert '"tellurium" = "==2.2.13.1"' in toml and '"libvcell" = "==0.0.24"' in toml
     assert toml.index("[dependencies]") < toml.index("[pypi-dependencies]")
