@@ -88,6 +88,8 @@ class RegistryEntry(BaseModel):
     install: Install | None = None
     # conda-forge requirements, name -> version spec, for what PyPI cannot supply (MPI, PETSc, a C++ engine)
     conda: dict[str, str] = Field(default_factory=dict)
+    # type tables the runner registers before a run, `module:attribute` (pbsim_common:standard_types)
+    types: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
     reviewer: str | None = None
 

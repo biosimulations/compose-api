@@ -10,8 +10,8 @@
 | 0 | This document | in review |
 | 1 | Manifest entries declare how they install; environments declare their member entries | in review |
 | 2 | The runner (runtime contract 2), in place of pbest's | in review |
-| 3 | pixi: generated from entries, locked in an unprivileged Job; the `composed` version kind | |
-| 4 | Build, read back, record; export as pixi or uv | |
+| 3 | pixi: generated from entries, locked in an unprivileged Job; the definition that installs the lock | in review |
+| 4 | The `composed` version kind: create (lock, build), read back, record; export as pixi or uv | |
 | 5 | Compliance: composites per entry, generic interface checks, levels computed per version | |
 | 6 | registry_env migrates to a composed version on a current process-bigraph | |
 | 7 | The per-composite resolver: mash-ups built on demand from a run | |
@@ -90,6 +90,19 @@
    - Lock it in an **unprivileged** Kubernetes Job: the pixi image, no service-account token, nothing mounted but scratch. The lock comes back between log markers, as the inspection Job does (`build_k8s.inspection_job`, `read_inspection_log`). Dependency metadata, which can run package code, therefore never builds in the API pod.
    - A new version kind, `composed`: its spec is the entries, its lock is `pixi.lock` and its sha256.
    - The Apptainer definition bootstraps the pixi image, runs `pixi install --frozen`, then adds the runner and the runscript.
+   *As built, 3 (2026-10-25):*
+   - **Generation and definition:** `environments/pixi.py` makes `ComposedSpec.of(...)`, `pixi_toml(...)` and `composed_definition(...)`.
+     - `exclude-newer` is the resolution date, to the second.
+     - The common core and the pixi image, pinned by digest, live in `environments.yaml` under `composition`.
+     - Entries declare `types`, the runner's type tables.
+   - **Locking:** `build_k8s.lock_job` and `lock_composed` run in the generic unprivileged scratch Job (`_scratch_job`, now shared with the prebuilt inspection Job). A conflict comes back as pixi's own explanation (`LockFailedError`).
+   - **Checked by hand in the real pixi image (Docker, linux/amd64, as the service user):**
+     - registry_env's generated workspace locks: 2,782 lines, with process-bigraph 1.9.1, bigraph-schema 1.8.1, libvcell 0.0.24, pyvcell 0.5.2, tellurium 2.2.13.1, python-copasi 4.48.311, pbsim-common at `26fa156`, and readdy 2.0.13 from conda-forge.
+     - `pixi install --frozen` installs that lock.
+     - The runner then runs pbsim-common's `CopasiUTCStep` on process-bigraph 1.9.1 (phase_cycle, 11 points, `numeric_result` registered from pbsim-common's own table). This is an early sign for step 6.
+   - **Two findings, now in the definition:**
+     - `pixi install` needs the `git` executable for a git source, and the pixi image has none, so the definition installs it.
+     - libroadrunner's wheel links `libpython3.12.so.1.0`, which conda-forge ships in the environment's `lib` with no rpath to it. The definition therefore puts that directory on `LD_LIBRARY_PATH`.
 4. **Build, read back, record, export.**
    - Reuse the Kubernetes build Job and the read-back.
    - `POST …/versions` creates composed versions (admin), with the CLI to match.

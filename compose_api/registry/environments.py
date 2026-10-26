@@ -44,8 +44,18 @@ class EnvironmentSpec(BaseModel):
     python_version: str | None = None
 
 
+class Composition(BaseModel):
+    """How composed environments are built: the pixi image that locks and builds them, the platform they are locked
+    for, and the common core every one of them pins (EV3)."""
+
+    pixi_image: str
+    platform: str = "linux-64"
+    core: dict[str, str] = Field(default_factory=dict)
+
+
 class EnvironmentsFile(BaseModel):
     describe: DescribeSource
+    composition: Composition | None = None
     environments: list[EnvironmentSpec]
 
 
