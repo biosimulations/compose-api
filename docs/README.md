@@ -62,6 +62,7 @@ run at a time; enforcing the CSP), then [plan-verify-oracle](plan-verify-oracle.
 | [plan-vcell-ode](plan-vcell-ode.md) | 1–4 | report VCell bugs: BIOMD 112 (`null`), 175 (unknown identifier), 56 and 168 (disagree), 137 (solve error); 235 (out of memory) and 255 (timeout) |
 | [plan-observability](plan-observability.md) | 0–4 | 5: an owner stamped at submit |
 | [plan-environment-builds](plan-environment-builds.md) | phases 1–4 | publishing |
+| Emitters in submitted documents | | `local:RAMEmitter` is refused as a short name and no registry entry covers `process_bigraph`, so a submitted document cannot use process-bigraph's own emitters (SED-ML runs report through biosim-toolkit's steps). Found by composition 7b-4, 2026-10-26 |
 | Test isolation | | `tests/environments/test_contents.py::test_the_reread_job_scripts_leave_what_they_read_beside_the_image` fails when run after `tests/registry tests/api tests/environments` (a settings layer left active: `simulation_store_base_path`); passes alone and in CI's order |
 | Open PRs | | #403 (regenerated manifests; moot after composition step 8), #345 (vivarium-workbench plan), dependency bumps |
 

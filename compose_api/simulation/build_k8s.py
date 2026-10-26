@@ -772,23 +772,25 @@ async def describe_script() -> str | None:
 
 
 async def inspection_of(version: EnvironmentVersion) -> Inspection | None:
-    """How to read back a version's image: its environment's Python and module roots (None for an environment
-    ``environments.yaml`` does not list). A prebuilt manifest names the image; a shared one, the version."""
+    """How to read back a version's image: its Python and module roots. A composed version (runtime contract 2) is
+    entered through pixi's activation and provides its own entries' roots, so a mash-up, which ``environments.yaml``
+    does not list, is read back too; another version takes both from its environment there (None when it is not
+    listed). A prebuilt manifest names the image; a shared one, the version."""
+    from compose_api.environments import pixi
+    from compose_api.environments.contents import version_roots
     from compose_api.registry.environments import load_environments, module_roots
 
     spec = next((e for e in load_environments().environments if e.name == version.environment), None)
-    if spec is None:
+    composed = version.runtime_contract == pixi.RUNTIME_CONTRACT
+    if spec is None and not composed:
         return None
-    from compose_api.environments import pixi
-
-    roots = tuple(module_roots(spec.name))
-    # a composed image (runtime contract 2) is entered through pixi's activation, whatever the environment's other
-    # versions use
-    python = pixi.PYTHON if version.runtime_contract == pixi.RUNTIME_CONTRACT else tuple(spec.python)
+    roots = tuple(version_roots(version)) if composed else tuple(module_roots(version.environment))
+    # a composed image is entered through pixi's activation, whatever the environment's other versions use
+    python = pixi.PYTHON if composed else tuple(spec.python if spec is not None else ())
     return Inspection(
         python=python,
         roots=roots,
-        environment=spec.name,
+        environment=version.environment,
         label=version.image or version.label,
         describe_script=await describe_script() if roots else None,
     )

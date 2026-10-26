@@ -333,6 +333,17 @@ async def test_a_composed_version_is_read_back_through_pixis_activation(monkeypa
     shared = await build_k8s.inspection_of(version.model_copy(update={"runtime_contract": 1}))
     assert composed is not None and composed.python == pixi.PYTHON
     assert shared is not None and shared.python[0] == "micromamba"  # @1, built the old way, keeps its own
+    # a mash-up, which environments.yaml does not list, is read back too, over its own entries' module roots (the
+    # first live mash-up, mash-0a364f43c1@1 on 2026-10-26, was built with nothing read back)
+    entries = ["pbsim-common", "tellurium", "viva-basic-processes"]
+    mash_up = version.model_copy(
+        update={"environment": "mash-0a364f43c1", "spec": {"entries": [{"id": e} for e in entries]}}
+    )
+    inspection = await build_k8s.inspection_of(mash_up)
+    assert inspection is not None and inspection.python == pixi.PYTHON
+    assert set(inspection.roots) == {"pbsim_common", "viva_basic_processes"}  # tellurium is a library: no roots
+    undeclared = mash_up.model_copy(update={"runtime_contract": 1})
+    assert await build_k8s.inspection_of(undeclared) is None  # an uncomposed version needs its environment listed
 
 
 @pytest.mark.asyncio
