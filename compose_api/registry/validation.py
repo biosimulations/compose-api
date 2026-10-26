@@ -125,7 +125,9 @@ def _unsafe_reason(protocol: str, target: str | None) -> str | None:
     return None
 
 
-def _registry_reason(target: str, manifest: Manifest, standing: Standing | None = None) -> str | None:
+def _registry_reason(
+    target: str, manifest: Manifest, standing: Standing | None = None, environment: str = SERVICE_BUNDLE
+) -> str | None:
     """Why the registry does not allow this class on the service, if it does not. With the ``standing`` of the version
     the run will use, that version decides first: a component a generic check refused there is refused alone; an
     entry that failed its cases there is refused, one that passed them is accepted; otherwise the manifest's level
@@ -150,45 +152,73 @@ def _registry_reason(target: str, manifest: Manifest, standing: Standing | None 
         return (
             f"registry entry `{entry.id}` is at level `{entry.level}`; the service runs `{HPC_MINIMUM_LEVEL}` or higher"
         )
-    if (standing is None or standing.members is None) and SERVICE_BUNDLE not in entry.bundles:
-        return f"registry entry `{entry.id}` is not installed in the service image `{SERVICE_BUNDLE}`"
+    # the environment the run will use provides it (D7.10): a composed version's members decide above; otherwise its
+    # bundle does
+    if (standing is None or standing.members is None) and environment not in entry.bundles:
+        return f"registry entry `{entry.id}` is not installed in the environment `{environment}`"
     return None
 
 
 def check_address(
-    address: Any, document: str, manifest: Manifest, standing: Standing | None = None
+    address: Any,
+    document: str,
+    manifest: Manifest,
+    standing: Standing | None = None,
+    environment: str = SERVICE_BUNDLE,
 ) -> AddressViolation | None:
     protocol, target = _split_address(address)
     unsafe = _unsafe_reason(protocol, target)
     if unsafe is not None or target is None:
         reason = unsafe or "address data must be a string naming a registered class"
         return AddressViolation(document=document, address=str(address), reason=reason, always_rejected=True)
-    refused = _registry_reason(target, manifest, standing)
+    refused = _registry_reason(target, manifest, standing, environment)
     if refused is not None:
         return AddressViolation(document=document, address=str(address), reason=refused)
     return None
 
 
-def find_violations(
-    path: Path, file_type: SimulationFileType, manifest: Manifest, standing: Standing | None = None
-) -> list[AddressViolation]:
-    """Check every address in a submitted file. Raises SubmissionRejectedError if the file cannot be read."""
+def _documents(path: Path, file_type: SimulationFileType) -> list[tuple[str, Any]]:
+    """Every composite document in a submitted file, by name. Raises SubmissionRejectedError if it cannot be read."""
     data = path.read_bytes()
     match file_type:
         case SimulationFileType.OMEX:
             documents = list(_documents_in_archive(data, path.name))
             if not documents:
                 raise SubmissionRejectedError(f"{path.name} contains no composite document (.pbg or .json)")
+            return documents
         case SimulationFileType.PBG:
-            documents = [(path.name, _parse_document(data, path.name))]
+            return [(path.name, _parse_document(data, path.name))]
         case SimulationFileType.SBML:
             # A bare model carries no process addresses; the service chooses the simulator.
             return []
+
+
+def class_targets(path: Path, file_type: SimulationFileType) -> list[str]:
+    """The `<module>.<Class>` every safe `local:` address in a submitted file names, which is what an environment is
+    inferred from (docs/plan-environment-composition.md, D7.2); the unsafe forms are `check_address`'s to refuse."""
+    targets = []
+    for _, document in _documents(path, file_type):
+        for address in _addresses(document):
+            protocol, target = _split_address(address)
+            if _unsafe_reason(protocol, target) is None and target is not None:
+                targets.append(target)
+    return targets
+
+
+def find_violations(
+    path: Path,
+    file_type: SimulationFileType,
+    manifest: Manifest,
+    standing: Standing | None = None,
+    environment: str = SERVICE_BUNDLE,
+) -> list[AddressViolation]:
+    """Check every address in a submitted file against what ``environment`` provides. Raises SubmissionRejectedError
+    if the file cannot be read."""
     return [
         violation
-        for name, document in documents
+        for name, document in _documents(path, file_type)
         for address in _addresses(document)
-        if (violation := check_address(address, name, manifest, standing)) is not None
+        if (violation := check_address(address, name, manifest, standing, environment)) is not None
     ]
 
 
@@ -199,6 +229,7 @@ def validate_submission(
     *,
     registry: bool = True,
     standing: Standing | None = None,
+    environment: str = SERVICE_BUNDLE,
 ) -> list[AddressViolation]:
     """Raise SubmissionRejectedError if the submission may not run; return any violations tolerated under `warn`.
 
@@ -207,7 +238,7 @@ def validate_submission(
     `registry=False` is for a prebuilt simulator's image, which brings processes this registry does not describe:
     only the addresses the container would do something unsafe with (`local:!`, any other protocol) are refused.
     """
-    violations = find_violations(path, file_type, load_manifest(), standing)
+    violations = find_violations(path, file_type, load_manifest(), standing, environment)
     if not registry:
         violations = [v for v in violations if v.always_rejected]
     if not violations:

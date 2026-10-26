@@ -151,7 +151,7 @@
           "Simulation"
         ],
         "summary": "Run a simulation",
-        "description": "`simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);\nthe job then runs in that image instead of the shared container. Omitted: the shared container.\n`environment_version` picks a version of that environment (docs/plan-environment-versions.md); the run is labelled\n`environment_version=<environment>@<number>` either way.\n\nThe run is labelled `source=upload` and `environment=<simulator or registry_env>`; `tags` and `description` are\nstored with it as given (compose_api/simulation/labels.py) and filter `GET /simulations`.",
+        "description": "`environment` names the environment to run in; `simulator` is the older way to name a prebuilt one (an\nowner-published image this deployment lists, settings.prebuilt_simulators). With neither, and no\n`environment_version`, the environment is inferred from the classes the documents name\n(docs/plan-environment-composition.md, step 7a): the shared environment for everything it provides, as before;\notherwise the smallest offered environment that provides them all.\n`environment_version` picks a version of that environment (docs/plan-environment-versions.md); the run is labelled\n`environment_version=<environment>@<number>` either way.\n\nThe run is labelled `source=upload` and `environment=<simulator or registry_env>`; `tags` and `description` are\nstored with it as given (compose_api/simulation/labels.py) and filter `GET /simulations`.",
         "operationId": "run-simulation",
         "parameters": [
           {
@@ -228,6 +228,24 @@
               "title": "Description"
             },
             "description": "What the run is for; up to 2000 characters"
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The environment to run in, by name (GET /registry/environments lists them). Omitted with `simulator` and `environment_version`: inferred from the classes the documents name",
+              "title": "Environment"
+            },
+            "description": "The environment to run in, by name (GET /registry/environments lists them). Omitted with `simulator` and `environment_version`: inferred from the classes the documents name"
           },
           {
             "name": "environment_version",

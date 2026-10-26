@@ -49,8 +49,11 @@ export interface paths {
         put?: never;
         /**
          * Run a simulation
-         * @description `simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);
-         *     the job then runs in that image instead of the shared container. Omitted: the shared container.
+         * @description `environment` names the environment to run in; `simulator` is the older way to name a prebuilt one (an
+         *     owner-published image this deployment lists, settings.prebuilt_simulators). With neither, and no
+         *     `environment_version`, the environment is inferred from the classes the documents name
+         *     (docs/plan-environment-composition.md, step 7a): the shared environment for everything it provides, as before;
+         *     otherwise the smallest offered environment that provides them all.
          *     `environment_version` picks a version of that environment (docs/plan-environment-versions.md); the run is labelled
          *     `environment_version=<environment>@<number>` either way.
          *
@@ -2829,6 +2832,8 @@ export interface operations {
                 tags?: string[] | null;
                 /** @description What the run is for; up to 2000 characters */
                 description?: string | null;
+                /** @description The environment to run in, by name (GET /registry/environments lists them). Omitted with `simulator` and `environment_version`: inferred from the classes the documents name */
+                environment?: string | null;
                 /** @description The version of the environment to run in (registry_env@3 is 3, or of the prebuilt simulator named); omitted: its default. GET /registry/environments/{name}/versions lists them */
                 environment_version?: number | null;
             };

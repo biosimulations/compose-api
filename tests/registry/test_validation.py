@@ -132,7 +132,7 @@ def test_entry_outside_the_service_bundle_is_refused(tmp_path: Path) -> None:
     path = tmp_path / "doc.pbg"
     path.write_bytes(document("local:viva_example.processes.Example"))
     (violation,) = find_violations(path, SimulationFileType.PBG, manifest)
-    assert "not installed in the service image" in violation.reason
+    assert "not installed in the environment `registry_env`" in violation.reason
 
 
 def test_bad_address_in_a_nested_bundle_is_found(tmp_path: Path) -> None:

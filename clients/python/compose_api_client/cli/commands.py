@@ -1003,7 +1003,15 @@ def _omex_archive(path: Path) -> None:
 def run(
     ctx: typer.Context,
     document: Annotated[Path, typer.Argument(help="The .omex (or .pbg) to run.", exists=True, dir_okay=False)],
-    simulator: Annotated[str | None, typer.Option(help="A prebuilt simulator image by name.")] = None,
+    simulator: Annotated[
+        str | None, typer.Option(help="A prebuilt simulator image by name (the older form of --environment).")
+    ] = None,
+    environment: Annotated[
+        str | None,
+        typer.Option(
+            help="The environment to run in (`environments list`); omitted: inferred from the document's classes."
+        ),
+    ] = None,
     interval: Annotated[
         float, typer.Option(callback=_positive_finite, help="Simulation interval passed to the runner.")
     ] = 1.0,
@@ -1036,6 +1044,7 @@ def run(
             tags=tag or (),
             description=description,
             environment_version=environment_version,
+            environment=environment,
         )
         if not wait:
             emit(settings.output, sim)

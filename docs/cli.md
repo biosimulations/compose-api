@@ -363,7 +363,8 @@ $ compose-api run [OPTIONS] DOCUMENT
 
 **Options**:
 
-* `--simulator TEXT`: A prebuilt simulator image by name.
+* `--simulator TEXT`: A prebuilt simulator image by name (the older form of --environment).
+* `--environment TEXT`: The environment to run in (`environments list`); omitted: inferred from the document's classes.
 * `--interval FLOAT`: Simulation interval passed to the runner.  [default: 1.0]
 * `--batch / --no-batch`: Submit as a batch job (smaller partition, 1 CPU).  [default: no-batch]
 * `-t, --tag TEXT`: A tag to find the run by later (repeatable).

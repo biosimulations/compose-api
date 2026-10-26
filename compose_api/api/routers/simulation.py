@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, UploadFile
@@ -15,8 +16,15 @@ from compose_api.dependencies import (
 )
 from compose_api.environments.admission import standing_for
 from compose_api.environments.versions import VersionUnavailableError, chosen_version, environment_of
-from compose_api.registry.manifest import SERVICE_BUNDLE
-from compose_api.registry.validation import AddressPolicy, SubmissionRejectedError, validate_submission
+from compose_api.registry.environments import EnvironmentSpec, deployed_image, load_environments
+from compose_api.registry.manifest import SERVICE_BUNDLE, load_manifest
+from compose_api.registry.resolver import choose_environment, needed_entries
+from compose_api.registry.validation import (
+    AddressPolicy,
+    SubmissionRejectedError,
+    class_targets,
+    validate_submission,
+)
 from compose_api.simulation.handlers import (
     run_simulation,
 )
@@ -30,6 +38,7 @@ from compose_api.simulation.labels import (
 )
 from compose_api.simulation.models import (
     SimulationExperiment,
+    SimulationFileType,
 )
 from compose_api.simulation.prebuilt import UnknownSimulatorError, prebuilt_image
 
@@ -45,6 +54,38 @@ REJECTED_RESPONSE = {
     "interval out of range) `detail` is a string. For a problem with its contents (unreadable archive, or processes "
     "the registry does not allow) `detail` is an object with a `message` and a `violations` list naming each address."
 }
+
+
+def _named_environment(environment: str | None, simulator: str | None) -> str | None:
+    """The prebuilt simulator a request's `environment` and `simulator` name (None: the shared environment, or none
+    named). `environment` names any environment this deployment offers; `simulator` is the older name for a prebuilt
+    one, kept for a release (docs/plan-environment-composition.md, D7.1). A 400 when they disagree."""
+    if environment is None:
+        return simulator
+    spec = next((e for e in load_environments().environments if e.name == environment), None)
+    if spec is None or deployed_image(spec) is None:
+        raise HTTPException(status_code=400, detail=f"No environment {environment!r} is offered here.")
+    named = spec.name if spec.kind == "prebuilt" else None
+    if simulator is not None and simulator != named:
+        raise HTTPException(
+            status_code=400, detail=f"`environment={environment}` and `simulator={simulator}` disagree."
+        )
+    return named
+
+
+def _inferred_simulator(path: Path, file_type: SimulationFileType) -> str | None:
+    """The prebuilt simulator a run that names no environment uses (None: the shared environment), from the classes
+    its documents name (step 7a: the shared environment for everything it covers, as before; registry/resolver.py).
+    An unreadable submission infers nothing: validation refuses it."""
+    manifest = load_manifest()
+    try:
+        needed = needed_entries(class_targets(path, file_type), manifest)
+    except SubmissionRejectedError:
+        return None
+    chosen: EnvironmentSpec = choose_environment(
+        needed, manifest, load_environments(), offered=lambda spec: deployed_image(spec) is not None
+    )
+    return chosen.name if chosen.kind == "prebuilt" else None
 
 
 def _checked_options(
@@ -88,6 +129,13 @@ async def submit_simulation(
     description: Annotated[
         str | None, Query(description=f"What the run is for; up to {MAX_DESCRIPTION} characters")
     ] = None,
+    environment: Annotated[
+        str | None,
+        Query(
+            description="The environment to run in, by name (GET /registry/environments lists them). Omitted with"
+            " `simulator` and `environment_version`: inferred from the classes the documents name"
+        ),
+    ] = None,
     environment_version: Annotated[
         int | None,
         Query(
@@ -97,8 +145,11 @@ async def submit_simulation(
         ),
     ] = None,
 ) -> SimulationExperiment:
-    """`simulator` names an owner-published image this deployment lists (settings.prebuilt_simulators);
-    the job then runs in that image instead of the shared container. Omitted: the shared container.
+    """`environment` names the environment to run in; `simulator` is the older way to name a prebuilt one (an
+    owner-published image this deployment lists, settings.prebuilt_simulators). With neither, and no
+    `environment_version`, the environment is inferred from the classes the documents name
+    (docs/plan-environment-composition.md, step 7a): the shared environment for everything it provides, as before;
+    otherwise the smallest offered environment that provides them all.
     `environment_version` picks a version of that environment (docs/plan-environment-versions.md); the run is labelled
     `environment_version=<environment>@<number>` either way.
 
@@ -106,6 +157,8 @@ async def submit_simulation(
     stored with it as given (compose_api/simulation/labels.py) and filter `GET /simulations`."""
     logger.info("Simulation submission from %s", describe_caller(principal))
     run_tags, run_description = _checked_options(simulator, interval_time, tags, description)
+    simulator = _named_environment(environment, simulator)
+    named = environment is not None or simulator is not None or environment_version is not None
     if environment_version is not None:
         try:
             await chosen_version(get_required_database_service(), environment_of(simulator), environment_version)
@@ -115,6 +168,8 @@ async def submit_simulation(
     simulation_request = await get_simulation_request_from_uploaded_file(
         uploaded_file=uploaded_file, batch_submission=batch_submission
     )
+    if not named:  # D7.1: the environment inferred from the documents
+        simulator = _inferred_simulator(simulation_request.request_file_path, simulation_request.simulation_file_type)
     simulation_request.end_time_point = interval_time
     simulation_request.simulator = simulator
     simulation_request.environment_version = environment_version
@@ -141,6 +196,7 @@ async def submit_simulation(
             AddressPolicy(get_settings().address_policy),
             registry=simulator is None,
             standing=standing,
+            environment=environment_of(simulator),
         )
     except SubmissionRejectedError as e:
         simulation_request.request_file_path.unlink(missing_ok=True)

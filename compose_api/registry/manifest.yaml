@@ -31,6 +31,12 @@ entries:
     # numeric_result and the other types its steps' ports use (pbest's core registered them)
     types:
       - pbsim_common:standard_types
+    # its steps import these engines, which its package metadata leaves to extras (D7.2)
+    requires:
+      - tellurium
+      - python-copasi
+      - pyvcell
+      - libvcell
     level: tested
     bundles:
       - registry_env
