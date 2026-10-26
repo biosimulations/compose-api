@@ -24,10 +24,9 @@ from compose_api.registry.environments import (
     load_environments,
     module_roots,
     read_manifest,
-    shared_image,
     summarize,
 )
-from compose_api.registry.generate import describe_command, prebuilt_pins
+from compose_api.registry.generate import describe_command, prebuilt_pins, shared_image
 from compose_api.registry.manifest import CurationLevel, Manifest, RegistryEntry, load_manifest
 
 needs_pblang = pytest.mark.skipif(
@@ -183,7 +182,7 @@ def test_summaries_say_whether_the_manifest_matches_the_deployed_image(manifests
     shared = next(e for e in load_environments().environments if e.kind == "shared")
     listed = summarize(shared)
     assert listed is not None
-    assert listed.simulator is None and listed.image == shared_image() and listed.components == 0 and not listed.stale
+    assert listed.simulator is None and listed.image is None and listed.components == 0 and not listed.stale
 
 
 @pytest_asyncio.fixture

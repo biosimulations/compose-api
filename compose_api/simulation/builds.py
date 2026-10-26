@@ -19,8 +19,7 @@ from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService
 from compose_api.db.services.hpc_db import HPCDatabaseService
 from compose_api.db.services.simulators_db import SimulatorDatabaseService
-from compose_api.environments.versions import deployed_definition
-from compose_api.registry.environments import EnvironmentSpec, deployed_image, load_environments
+from compose_api.registry.environments import EnvironmentSpec, load_environments, offered
 from compose_api.simulation import images
 from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.models import EnvironmentImage, HpcRun, JobStatus, JobType, SimulatorVersion
@@ -61,12 +60,7 @@ class ImageStatus(BaseModel):
 def find_environment(name: str) -> EnvironmentSpec | None:
     """An environment this deployment offers, by name."""
     spec = next((e for e in load_environments().environments if e.name == name), None)
-    return spec if spec is not None and deployed_image(spec) is not None else None
-
-
-def environment_definition(spec: EnvironmentSpec) -> ContainerizationFileRepr:
-    """The definition this deployment runs the environment from, as a run's dispatch generates it."""
-    return deployed_definition(None if spec.kind == "shared" else spec.name)[0]
+    return spec if spec is not None and offered(spec) else None
 
 
 async def simulator_for(

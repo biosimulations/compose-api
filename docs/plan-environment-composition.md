@@ -21,7 +21,7 @@
 | 7a | Runs name an environment or have one inferred; environments listed from the database | merged (#415, #416) |
 | 7b | Implicit mash-ups, proven with viva-basic-processes | done: #417–#419 (0.7.51), #421 (0.7.52); live 2026-10-26 |
 | 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | |
-| 8a | Versions come from the database only: the deployed (pbest) definition, `simulator_registry.json`, `shared_image()` retired | decided; in progress |
+| 8a | Versions come from the database only: the deployed (pbest) definition, `simulator_registry.json`, `shared_image()` retired | in review |
 | 8b | Prebuilt images by their versions, not `PREBUILT_SIMULATORS` | |
 | 8c | Interface manifests from each environment's default version, not committed files | |
 | 8d | The shared uv path, `preview` and custom library lists retired | |
@@ -447,6 +447,18 @@
    - **D8.6 compose-api stops depending on pbest.** The two types are copied into compose-api, with the same fields,
      so stored simulator rows read unchanged; the git pin and `[tool.uv.sources]` entry go. pbest keeps calling
      compose-api over HTTP through `compose-api-client`, so its `operation_id`s stay as they are.
+
+   *As built, 8a (2026-10-26):*
+   - `versions.version_for` takes the shared environment's default from the database; with none it raises
+     `NoDefaultVersionError`, which the app answers 503 with the command that makes one. Nothing adopts pbest's
+     definition any more; a prebuilt environment still adopts its pinned image until 8b.
+   - `shared_image()` leaves `registry/environments.py`: an environment is offered when it is the shared one or a pinned
+     prebuilt (`offered`), and the shared one's summary names no image (`stale` only compares a prebuilt's).
+     `builds.environment_definition`, unused, is gone. `shared_image()` lives on in `registry/generate.py`, the
+     committed-manifest generator, which 8c retires; `simulator_registry.json` keeps two users until then (that
+     generator and `environments/lock.py`, 8d), so it goes with the last of them.
+   - The test database seeds registry_env with a ready default running pbest's definition, which the SLURM tests
+     build and run (`tests/fixtures/postgres_fixtures.seed_shared_default`), and the `simulator` fixture reuses it.
 
    **Order:** 8a, 8b, 8c, 8d, 8e. Each is one PR, released and checked live before the next: a run with no version
    takes @5; viva-pde-particle runs by its version; the checker and SED-ML runs use read-back manifests; creating a

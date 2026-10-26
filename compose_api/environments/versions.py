@@ -4,24 +4,21 @@ A run may name its version (step 5): ``registry_env@3``, or ``registry_env@defau
 default's number when the run is recorded, so what is stored is always a number. A suite run must name one for every
 environment its solvers use (``default`` names them all at their defaults).
 
-Until versions are created through the API (step 4), the deployment decides, as it decided the image before: the
-shared environment runs the definition generated from the pinned library list (``simulator_registry.json``), a
-prebuilt one the definition of its pinned image (``settings.prebuilt_simulators``). That definition's version is
-made the environment's default, and is created, as the next number, the first time it is seen. So a deploy that
-changes either still changes what runs, a rollback returns to the earlier version rather than adding one, and every
-run records the version it used.
+A version is a database record (docs/plan-environment-composition.md, D8.1): a run that names none takes its
+environment's default, which an administrator chose; a shared environment with none yet (a fresh deployment) refuses
+the run until one is made (`compose-api environments create registry_env`). Versions made before, pbest's
+registry_env@1 among them, stay runnable by number (D8.2). A prebuilt environment's default is still the definition of
+its pinned image (``settings.prebuilt_simulators``), created the first time it is seen, until step 8b.
 """
 
 from typing import TYPE_CHECKING
 
-from pbest.containerization.container_constructor import generate_container_def_file
-from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
+from pbest.utils.input_types import ContainerizationFileRepr
 
 from compose_api.registry.environments import load_environments
 from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.models import EnvironmentVersion, SimulatorVersion, VersionState
 from compose_api.simulation.prebuilt import prebuilt_definition, prebuilt_image
-from compose_api.simulation.simulator_registry import registry_dependencies, registry_libraries
 
 if TYPE_CHECKING:
     from compose_api.db.database_service import DatabaseService
@@ -32,17 +29,19 @@ def shared_environment() -> str:
     return next(e.name for e in load_environments().environments if e.kind == "shared")
 
 
-def deployed_definition(simulator: str | None) -> tuple[ContainerizationFileRepr, str | None]:
-    """The definition this deployment runs ``simulator`` from (a prebuilt simulator's name, or None for the shared
-    environment), and a prebuilt one's image. `UnknownSimulatorError` for a name the deployment does not list."""
-    if simulator is None:
-        return generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER), None
+def deployed_definition(simulator: str) -> tuple[ContainerizationFileRepr, str]:
+    """The definition this deployment runs a prebuilt simulator from, and its pinned image. `UnknownSimulatorError`
+    for a name the deployment does not list."""
     image = prebuilt_image(simulator)
     return prebuilt_definition(image), image
 
 
 class VersionUnavailableError(LookupError):
     """A run names a version that does not exist, or that cannot run (failed, retired)."""
+
+
+class NoDefaultVersionError(VersionUnavailableError):
+    """An environment has no default version yet (a fresh deployment, D8.1): an administrator makes one."""
 
 
 #: the states a run may use: a version still building is waited for, like any image
@@ -98,31 +97,30 @@ async def version_for(
     environment: str | None = None,
 ) -> tuple[EnvironmentVersion, SimulatorVersion]:
     """The version a run of ``simulator`` uses (None: the shared environment), and its simulator row: ``number`` when
-    the run names one; otherwise the default an administrator chose, or else the deployment's own definition, both
-    created the first time it is seen. ``environment`` names an undeclared composed environment (a mash-up) instead."""
+    the run names one; otherwise the environment's default (D8.1; a prebuilt one's is still adopted from its pinned
+    image until step 8b). ``environment`` names an undeclared composed environment (a mash-up) instead.
+    `NoDefaultVersionError` when the shared environment has no version yet."""
     if environment is not None and not declared(environment):
         return await composed_version(database_service, environment, number)
     if environment is not None and simulator is None and environment != shared_environment():
         simulator = environment  # a declared prebuilt environment, named as an environment
     if number is not None:
         return await chosen_version(database_service, environment_of(simulator), number)
+    if simulator is None:
+        shared = shared_environment()
+        default = await database_service.get_environments_db().get_default(shared)
+        if default is None:
+            raise NoDefaultVersionError(
+                f"{shared} has no version yet: an administrator makes its first one"
+                f" (`compose-api environments create {shared}`)"
+            )
+        return await chosen_version(database_service, shared, default.number)
     definition, image = deployed_definition(simulator)
     simulator_db = database_service.get_simulator_db()
     found = await simulator_db.get_simulator_by_def_hash(get_singularity_hash(definition))
     simulator_version = found if found is not None else await simulator_db.insert_simulator(definition)
     environments_db = database_service.get_environments_db()
-    if simulator is None:
-        version = await environments_db.adopt_deployed(
-            shared_environment(),
-            "shared",
-            simulator_version.database_id,
-            spec={"libraries": registry_libraries()},
-            origin="registry",
-        )
-    else:
-        version = await environments_db.adopt_deployed(
-            simulator, "prebuilt", simulator_version.database_id, image=image
-        )
+    version = await environments_db.adopt_deployed(simulator, "prebuilt", simulator_version.database_id, image=image)
     if version.simulator_id != simulator_version.database_id:  # an administrator chose another version
         if version.simulator_id is None:  # a default is ready, so it has one
             raise LookupError(f"the default {version.label} has no simulator")
