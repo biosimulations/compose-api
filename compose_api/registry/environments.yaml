@@ -17,6 +17,16 @@ describe:
   ref: bd130969fb02a3d52800abf969f700c16bda3c20
   path: process_bigraph_lang/v2/describe_env.py
 
+# How composed environments are built (docs/plan-environment-composition.md, C2): pixi, in this image, for this
+# platform, on this common core (EV3: process-bigraph and bigraph-schema at releases, never commits).
+composition:
+  # 0.68.1-bookworm, by digest
+  pixi_image: ghcr.io/prefix-dev/pixi@sha256:17e1043a38e45b12db5c5339815de0d8973886fd76c922d705d823e146fff4d8
+  platform: linux-64
+  core:
+    process-bigraph: "1.9.1"
+    bigraph-schema: "1.8.1"
+
 environments:
   - name: registry_env
     kind: shared

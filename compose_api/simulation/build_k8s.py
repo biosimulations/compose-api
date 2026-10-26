@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import datetime
+import hashlib
 import logging
 import shlex
 from dataclasses import dataclass
@@ -172,19 +173,27 @@ def read_inspection_log(log: str) -> dict[str, str]:
 def inspection_job(name: str, site: BuildSite, image: str, inspection: Inspection) -> V1Job:
     """A Job that runs a prebuilt image to read it back: unprivileged, as the service user, no service account token,
     nothing mounted but scratch (the image is an owner's; it is trusted to run documents, nothing more)."""
+    env = {INSTALLED_ENV: base64.b64encode(_INSTALLED.encode()).decode()}
+    if inspection.describe_script is not None:
+        env[DESCRIBE_ENV] = base64.b64encode(inspection.describe_script.encode()).decode()
+    return _scratch_job(name, site, image, prebuilt_inspect_script(inspection), env, deadline_seconds=900)
+
+
+def _scratch_job(
+    name: str, site: BuildSite, image: str, script: str, env: dict[str, str], deadline_seconds: int
+) -> V1Job:
+    """A Job of one unprivileged container: the service user, no service account token, nothing mounted but an
+    emptyDir at ``SCRATCH_DIR``; what it produces it prints, between ``INSPECT_MARKER`` lines (``read_inspection_log``),
+    since its log is all it leaves."""
     from kubernetes import client as k8s
 
-    env = [k8s.V1EnvVar(name=INSTALLED_ENV, value=base64.b64encode(_INSTALLED.encode()).decode())]
-    if inspection.describe_script is not None:
-        encoded = base64.b64encode(inspection.describe_script.encode()).decode()
-        env.append(k8s.V1EnvVar(name=DESCRIBE_ENV, value=encoded))
     labels = {"app": LABEL, "compose-api-build": name}
     return k8s.V1Job(
         metadata=k8s.V1ObjectMeta(name=name, labels=labels),
         spec=k8s.V1JobSpec(
             backoff_limit=0,
             ttl_seconds_after_finished=3600,
-            active_deadline_seconds=900,
+            active_deadline_seconds=deadline_seconds,
             template=k8s.V1PodTemplateSpec(
                 metadata=k8s.V1ObjectMeta(labels=labels),
                 spec=k8s.V1PodSpec(
@@ -195,8 +204,8 @@ def inspection_job(name: str, site: BuildSite, image: str, inspection: Inspectio
                         k8s.V1Container(
                             name=INSPECT_CONTAINER,
                             image=image,
-                            command=["/bin/bash", "-c", prebuilt_inspect_script(inspection)],
-                            env=env,
+                            command=["/bin/bash", "-c", script],
+                            env=[k8s.V1EnvVar(name=k, value=v) for k, v in env.items()],
                             security_context=k8s.V1SecurityContext(
                                 privileged=False,
                                 run_as_user=site.run_as_uid or None,
@@ -212,6 +221,60 @@ def inspection_job(name: str, site: BuildSite, image: str, inspection: Inspectio
             ),
         ),
     )
+
+
+PIXI_TOML_ENV = "PIXI_TOML_B64"
+LOCKED = "pixi.lock"
+LOCK_ERROR = "lock.err"
+
+
+def lock_script() -> str:
+    """Inside the pixi image, unprivileged, in scratch: lock the workspace the Job carries (base64, in the env) and
+    print the lock, or why it did not resolve. Locking reads packages' metadata, which can run their build code: it
+    happens here, never in the API pod."""
+    return dedent(f"""        set -u
+        cd {SCRATCH_DIR}
+        export HOME={SCRATCH_DIR} PIXI_CACHE_DIR={SCRATCH_DIR}/cache RATTLER_CACHE_DIR={SCRATCH_DIR}/cache \
+          UV_CACHE_DIR={SCRATCH_DIR}/uv
+        echo "${PIXI_TOML_ENV}" | base64 -d > pixi.toml
+        if pixi lock > lock.out 2> {LOCK_ERROR}; then kind={LOCKED}; else kind={LOCK_ERROR}; fi
+        echo "{INSPECT_MARKER} $kind"
+        cat "$kind"
+        echo
+        echo "{INSPECT_MARKER} end"
+        """)
+
+
+def lock_job(name: str, site: BuildSite, pixi_image: str, toml: str) -> V1Job:
+    """The Job that locks a composed environment's ``pixi.toml`` (docs/plan-environment-composition.md, step 3)."""
+    env = {PIXI_TOML_ENV: base64.b64encode(toml.encode()).decode()}
+    return _scratch_job(name, site, pixi_image, lock_script(), env, deadline_seconds=1800)
+
+
+class LockFailedError(Exception):
+    """The workspace did not resolve; the message is pixi's explanation (the conflicting requirements)."""
+
+
+async def lock_composed(toml: str, pixi_image: str, suffix: str, poll_seconds: float = 5.0) -> str:
+    """Lock ``toml`` in a Job of its own and wait for it: the ``pixi.lock`` text. `LockFailedError` when it does not
+    resolve, with pixi's explanation; `RuntimeError` when the Job failed without saying."""
+    site = BuildSite.from_settings(get_settings())
+    name = f"lock-{hashlib.sha256(toml.encode()).hexdigest()[:12]}-{suffix.lower()[:5]}"
+    builds = k8s_builds()
+    await asyncio.to_thread(builds.create, lock_job(name, site, pixi_image, toml))
+    deadline = asyncio.get_running_loop().time() + 1860
+    state = "running"
+    while state == "running" and asyncio.get_running_loop().time() < deadline:
+        await asyncio.sleep(poll_seconds)
+        state, why = await asyncio.to_thread(builds.state, name)
+        if state == "failed":
+            logger.warning(f"Lock Job {name} failed: {why}")
+    found = read_inspection_log(await asyncio.to_thread(builds.container_log, name, INSPECT_CONTAINER))
+    if LOCKED in found:
+        return found[LOCKED]
+    if LOCK_ERROR in found:
+        raise LockFailedError(found[LOCK_ERROR].strip()[-4000:])
+    raise RuntimeError(f"lock Job {name} ended ({state}) without a lock or an explanation")
 
 
 async def inspect_prebuilt(

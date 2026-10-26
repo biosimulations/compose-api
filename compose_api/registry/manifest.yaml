@@ -26,6 +26,9 @@ entries:
       commit: 26fa156cfab2c309150be818774be4a0c307ce3b
     module_roots:
       - pbsim_common
+    # numeric_result and the other types its steps' ports use (pbest's core registered them)
+    types:
+      - pbsim_common:standard_types
     level: tested
     bundles:
       - registry_env
