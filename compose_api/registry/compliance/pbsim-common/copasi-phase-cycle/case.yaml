@@ -1,0 +1,9 @@
+description: >-
+  CopasiUTCStep runs a uniform time course of the phase-cycle model (SBML, public) and its species match COPASI's own
+  report (pbsim-common's tests/resources/copasi_report.csv) at times 0, 2, ..., 10.
+document: document.pbg
+files: [phase_cycle.sbml]
+interval: 1
+expect:
+  - {kind: rows, emitter: emitter, min: 1}
+  - {kind: reference, emitter: emitter, reference: reference.csv, rel: 1.0e-6, abs: 1.0e-4}

@@ -1,0 +1,17 @@
+{
+  "state": {
+    "time_course": {
+      "_type": "step",
+      "address": "local:pbsim_common.simulators.tellurium_process.TelluriumUTCStep",
+      "config": {"model_source": "phase_cycle.sbml", "time": 10, "n_points": 51, "output_dir": ""},
+      "inputs": {},
+      "outputs": {"result": ["result"]}
+    },
+    "emitter": {
+      "_type": "step",
+      "address": "local:RAMEmitter",
+      "config": {"emit": {"result": "numeric_result"}},
+      "inputs": {"result": ["result"]}
+    }
+  }
+}

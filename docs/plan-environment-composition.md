@@ -14,7 +14,9 @@
 | 4a | Environments get a stable id; versions and suite runs refer to it, never to a name | merged (#386) |
 | 4 | Composed versions: created `resolving`, locked in the background, built, read back; exported as pixi | merged (#387) |
 | 4b | The uv export (`pyproject.toml` and `uv.lock`) for a composed version that needs no conda | in review |
-| 5 | Compliance: composites per entry, generic interface checks, levels computed per version | |
+| 5a | Compliance checks: the generic `step-outputs-replace` check, cases kept with an entry, their evaluation; pbsim-common's first cases | in review |
+| 5b | Compliance runs: after a build, each member entry's cases run in the version; levels recorded per entry and version; API and CLI | |
+| 5c | Admission by computed level: a component runs only where its entry is `tested` in the version that will run it | |
 | 6 | registry_env migrates to a composed version on a current process-bigraph | |
 | 7 | The per-composite resolver: mash-ups built on demand from a run | |
 | 8 | Retire the shared uv path, `simulator_registry.json`, `shared_image()`, pbest in images, `PREBUILT_SIMULATORS`, the committed interface manifests | |
@@ -173,6 +175,24 @@
    - `compose_api/registry/compliance/<entry>/` holds composites and expectations; the generic checks are shared.
    - When a version is ready, compose-api submits its members' compliance runs (label `source=compliance`), evaluates them, and stores each entry's level per version (a new `entry_level` table).
    - Admission (`validate_submission`) accepts an entry at `tested` in the version that will run.
+   *As built, 5a (2026-10-25):*
+   - **The generic check** (`environments/compliance.py`), `step-outputs-replace`, works from a version's interfaces
+     and its entries' type tables, with no run. A step whose output ports would *add* (`float`, `integer`, `array`)
+     or *append* (`list`) its result into the store, instead of replacing it, fails, with the paths that accumulate.
+     Processes are exempt: their updates are changes over an interval.
+   - **On today's registry_env it fails:**
+     - pbsim-common's three time-course steps and `TelluriumSteadyStateStep`, which pbsim_common#21 fixes;
+     - `ComparisonTool`, `MSEComparison`, `StatsTool` and `SumOfSquaresTool`, the same bug, which #21 does not cover
+       yet.
+
+     biosim-toolkit's steps already overwrite.
+   - **Cases** (`registry/compliance/<entry>/<case>/case.yaml`, with the document and the files it reads) expect
+     `rows`, a `value` at a time, or agreement with a `reference` CSV.
+   - **pbsim-common's first two cases:** `CopasiUTCStep` and `TelluriumUTCStep` on the public phase-cycle model,
+     against COPASI's own report at t = 0, 2, …, 10. Both passed in the real pixi image on process-bigraph 1.9.1, run
+     by the runner from an omex as step 5b will.
+5b. **Compliance runs** (`entry_level`, the runs after a build, the API and CLI).
+5c. **Admission by computed level.**
 6. **registry_env migrates.**
    - pbsim-common and biosim-toolkit move to process-bigraph ≥1.9.1. pbsim_common is changed only with Jim's go-ahead.
    - Create the first composed version, run Ciliberto and biomodels-curated-300 on it, and compare with run 3. Make it the default when it holds.

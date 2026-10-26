@@ -1,0 +1,9 @@
+description: >-
+  TelluriumUTCStep runs the same time course of the phase-cycle model, and its species agree with COPASI's report
+  at times 0, 2, ..., 10 within a solver-to-solver tolerance.
+document: document.pbg
+files: [phase_cycle.sbml]
+interval: 1
+expect:
+  - {kind: rows, emitter: emitter, min: 1}
+  - {kind: reference, emitter: emitter, reference: reference.csv, rel: 1.0e-3, abs: 1.0e-3}
