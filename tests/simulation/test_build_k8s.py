@@ -7,6 +7,7 @@ import base64
 import contextlib
 import dataclasses
 import gzip
+import hashlib
 import os
 import subprocess
 import uuid
@@ -193,3 +194,31 @@ def test_a_composed_definition_fits_one_environment_string_and_decodes_as_the_jo
     )  # fmt: skip
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "image.def").read_text() == definition
+
+
+def test_a_composed_definitions_files_are_carried_in_chunks_and_unpacked_where_it_copies_them_from(
+    tmp_path: Path,
+) -> None:
+    """A composed definition copies its pixi.toml, pixi.lock and runner in from the build's work directory: the Job
+    carries them as a gzipped tar, in chunks, each under Linux's limit for one environment string."""
+    lock = "".join(hashlib.sha256(str(i).encode()).hexdigest() for i in range(6000)) + "\n"  # barely compresses
+    files = {"pixi.lock": lock, "pixi.toml": "[workspace]\n", "runner.py": "print(1)\n"}
+    chunks = build_k8s.encode_files(files)
+    assert len(chunks) > 1 and all(len(c) <= 96 * 1024 for c in chunks)
+    assert build_k8s.encode_files(files) == chunks  # no timestamps: the same Job each time
+    job: Any = build_job("build-abc-x", SITE, "Bootstrap: docker\nFrom: busybox\n", Path("/p/abc.sif"), None, files)
+    (build,) = job.spec.template.spec.init_containers
+    env = {e.name: e.value for e in build.env}
+    assert [env[f"{build_k8s.FILES_ENV}{i}"] for i in range(len(chunks))] == chunks
+    script = build.command[-1]
+    assert script.index("tar -xz -C /work/files") < script.index("apptainer build")
+    unpack = build_k8s.unpack_files_script(len(chunks), str(tmp_path / "files"))
+    result = subprocess.run(  # noqa: S603 the build script's unpacking lines, run as the Job runs them
+        ["/bin/bash", "-c", "set -eu\n" + unpack],
+        env={**os.environ, **{f"{build_k8s.FILES_ENV}{i}": c for i, c in enumerate(chunks)}},
+        capture_output=True, text=True, check=False,
+    )  # fmt: skip
+    assert result.returncode == 0, result.stderr
+    assert {p.name: p.read_text() for p in (tmp_path / "files").iterdir()} == files
+    plain: Any = build_job("build-abc-x", SITE, "Bootstrap: docker\nFrom: busybox\n", Path("/p/abc.sif"))
+    assert "tar -xz" not in plain.spec.template.spec.init_containers[0].command[-1]  # other definitions have none

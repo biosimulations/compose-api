@@ -140,9 +140,25 @@ class PixiLock:
         return hashlib.sha256(self.text.encode()).hexdigest()
 
 
+# Where the build puts the files a composed definition copies in (``build_k8s.build_job``'s ``files``): they are not in
+# the definition itself, which Apptainer reads one section at a time and refuses past 64 KiB a section (a pixi.lock
+# is larger). The definition records each file's sha256 instead, so its hash still changes exactly when they do.
+BUILD_FILES = "/work/files"
+TOML_FILE, LOCK_FILE, RUNNER_FILE = "pixi.toml", "pixi.lock", "runner.py"
+
 _TEMPLATE = """\
 Bootstrap: docker
 From: {pixi_image}
+
+%labels
+    org.biosimulations.compose.pixi-toml.sha256 {toml_sha256}
+    org.biosimulations.compose.pixi-lock.sha256 {lock_sha256}
+    org.biosimulations.compose.runner.sha256 {runner_sha256}
+
+%files
+    {files}/{toml_file} {workspace}/pixi.toml
+    {files}/{lock_file} {workspace}/pixi.lock
+    {files}/{runner_file} {runner}
 
 %post
 
@@ -150,18 +166,11 @@ From: {pixi_image}
 apt-get update
 apt-get install -y --no-install-recommends git ca-certificates
 rm -rf /var/lib/apt/lists/*
-mkdir -p {workspace} {runner_dir}
 cd {workspace}
-cat > pixi.toml <<'COMPOSE_API_PIXI_TOML'
-{toml}COMPOSE_API_PIXI_TOML
-cat > pixi.lock <<'COMPOSE_API_PIXI_LOCK'
-{lock}COMPOSE_API_PIXI_LOCK
 # exactly the lock: --frozen never re-solves
 pixi install --frozen
 pixi shell-hook --frozen > {shell_hook}
 rm -rf /root/.cache/rattler /root/.cache/uv
-cat > {runner} <<'COMPOSE_API_RUNNER'
-{runner_source}COMPOSE_API_RUNNER
 
 %environment
 export COMPOSE_RUNNER_TYPES={types}
@@ -171,8 +180,8 @@ export LD_LIBRARY_PATH={workspace}/.pixi/envs/default/lib${{LD_LIBRARY_PATH:+:$L
 export TMPDIR=/tmp MPLCONFIGDIR=/tmp XDG_CACHE_HOME=/tmp
 
 %runscript
-source {shell_hook}
-exec python {runner} "$@"
+# run by /bin/sh, which has no `source`: pixi's activation is a bash script
+exec /bin/bash -c 'source {shell_hook} && exec python {runner} "$@"' runner "$@"
 """
 
 
@@ -180,24 +189,45 @@ def _terminated(text: str) -> str:
     return text if text.endswith("\n") else text + "\n"
 
 
-def composed_definition(spec: ComposedSpec, lock: PixiLock, pixi_image: str) -> ContainerizationFileRepr:
-    """The definition of a composed version made from ``spec`` and locked as ``lock``, built from ``pixi_image``."""
-    return definition_of(pixi_toml(spec), spec.types, lock, pixi_image)
+def _sha256(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
 
 
-def definition_of(toml: str, types: list[str], lock: PixiLock, pixi_image: str) -> ContainerizationFileRepr:
-    """The definition from what a composed version records: its workspace, its runner types, its lock, its image."""
+def runner_source() -> str:
+    """compose-api's runner as it is now: a composed version records it when it is created, and builds with that."""
     from compose_api.environments import runner
 
+    return _terminated(Path(runner.__file__).read_text())
+
+
+def composed_files(toml: str, lock: PixiLock, runner: str) -> dict[str, str]:
+    """The files a composed definition copies in, by name under ``BUILD_FILES``."""
+    return {TOML_FILE: _terminated(toml), LOCK_FILE: _terminated(lock.text), RUNNER_FILE: _terminated(runner)}
+
+
+def composed_definition(spec: ComposedSpec, lock: PixiLock, pixi_image: str) -> ContainerizationFileRepr:
+    """The definition of a composed version made from ``spec`` and locked as ``lock``, built from ``pixi_image``."""
+    return definition_of(pixi_toml(spec), spec.types, lock, pixi_image, runner_source())
+
+
+def definition_of(
+    toml: str, types: list[str], lock: PixiLock, pixi_image: str, runner: str
+) -> ContainerizationFileRepr:
+    """The definition from what a composed version records: its workspace, its runner types, its lock, its image, and
+    the runner it was made with (its files are built beside it: ``composed_files``)."""
+    files = composed_files(toml, lock, runner)
     representation = _TEMPLATE.format(
         pixi_image=pixi_image,
+        toml_sha256=_sha256(files[TOML_FILE]),
+        lock_sha256=_sha256(files[LOCK_FILE]),
+        runner_sha256=_sha256(files[RUNNER_FILE]),
+        files=BUILD_FILES,
+        toml_file=TOML_FILE,
+        lock_file=LOCK_FILE,
+        runner_file=RUNNER_FILE,
         workspace=WORKSPACE,
-        runner_dir=str(Path(RUNNER).parent),
-        toml=_terminated(toml),
-        lock=_terminated(lock.text),
         shell_hook=SHELL_HOOK,
         runner=RUNNER,
-        runner_source=_terminated(Path(runner.__file__).read_text()),
         types=json.dumps(",".join(types)),
     )
     return ContainerizationFileRepr(

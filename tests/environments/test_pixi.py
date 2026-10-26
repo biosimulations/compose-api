@@ -4,6 +4,7 @@ stand-in for pixi."""
 
 import base64
 import datetime
+import hashlib
 import os
 import subprocess
 from pathlib import Path
@@ -82,20 +83,32 @@ def test_a_mash_up_names_its_own_entries_and_an_unknown_one_is_refused() -> None
         ComposedSpec.of(spec, manifest, COMPOSITION, WHEN, entries=["ghost"])
 
 
-def test_the_definition_installs_the_lock_frozen_and_runs_the_runner() -> None:
+def test_the_definition_copies_its_files_in_records_their_hashes_and_installs_the_lock_frozen() -> None:
+    """The lock and the runner are files beside the definition, not in it: Apptainer reads a definition one section
+    at a time and refuses a section past 64 KiB (registry_env@3's %post, holding a 124 KB lock, failed so). The
+    definition records each file's sha256, so its hash, the version's identity, still follows them."""
     spec = _registry_env()
-    definition = composed_definition(spec, PixiLock("version: 7\n"), COMPOSITION.pixi_image).representation
+    lock = PixiLock("version: 7\n")
+    definition = composed_definition(spec, lock, COMPOSITION.pixi_image).representation
     assert definition.startswith(f"Bootstrap: docker\nFrom: {COMPOSITION.pixi_image}\n")
     assert "pixi install --frozen" in definition and "pixi lock" not in definition  # installs, never re-solves
-    assert "<<'COMPOSE_API_PIXI_LOCK'\nversion: 7\nCOMPOSE_API_PIXI_LOCK\n" in definition
-    assert pixi_toml(spec) in definition
-    assert "def run(path: Path, output: Path, interval: float)" in definition  # the runner, written in whole
+    assert "version: 7" not in definition and "def run(" not in definition  # the files are not in it
+    files = pixi.composed_files(pixi_toml(spec), lock, pixi.runner_source())
+    assert files["pixi.lock"] == "version: 7\n" and "def run(path: Path" in files["runner.py"]
+    for name, target in (("pixi.toml", "/opt/environment/pixi.toml"), ("pixi.lock", "/opt/environment/pixi.lock")):
+        assert f"{pixi.BUILD_FILES}/{name} {target}" in definition
+    assert f"{pixi.BUILD_FILES}/runner.py {pixi.RUNNER}" in definition
+    lock_hash = hashlib.sha256(files["pixi.lock"].encode()).hexdigest()
+    assert f"org.biosimulations.compose.pixi-lock.sha256 {lock_hash}" in definition
     assert 'export COMPOSE_RUNNER_TYPES="pbsim_common:standard_types"' in definition
     assert "apt-get install -y --no-install-recommends git" in definition  # git sources need the executable
     assert f"LD_LIBRARY_PATH={pixi.WORKSPACE}/.pixi/envs/default/lib" in definition  # libroadrunner finds libpython
-    assert definition.rstrip().endswith(f'exec python {pixi.RUNNER} "$@"')
+    # the runscript is run by /bin/sh, which has no `source`: it hands pixi's activation to bash
+    assert f'exec /bin/bash -c \'source {pixi.SHELL_HOOK} && exec python {pixi.RUNNER} "$@"\' runner "$@"' in definition
     other = composed_definition(spec, PixiLock("version: 7\n# another\n"), COMPOSITION.pixi_image).representation
-    assert other != definition  # the lock is in the definition, so its hash is the version's identity
+    assert other != definition  # the lock's hash is in the definition, so its hash is the version's identity
+    for section in definition.split("\n%"):
+        assert len(section) < 64 * 1024
 
 
 def test_the_lock_job_runs_pixi_unprivileged_with_nothing_mounted() -> None:

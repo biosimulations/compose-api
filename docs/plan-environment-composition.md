@@ -236,6 +236,20 @@
      findings or case runs. The standing starts to decide when a composed version is the default (step 6), or is
      named.
 6. **registry_env migrates.**
+   *Live, 2026-10-26 (0.7.43–0.7.46):*
+   - **registry_env@2:** the lock Job worked on the cluster at once (15 s, a 124 KB `pixi.lock`), but the build Job
+     could not start. Its definition, passed in one environment variable, exceeded Linux's 128 KiB limit
+     (`argument list too long`). Fixed in #394 by gzipping the definition.
+   - **@3:** a failed version's lock could not be made again; fixed in #396. Then Apptainer refused @3's
+     definition: each section is read as one token of at most 64 KiB, and `%post` held the lock. Fixed (0.7.46):
+     - the definition copies `pixi.toml`, `pixi.lock` and the runner in through `%files`, and records their sha256
+       as labels, so its hash still follows them;
+     - the build Job carries the files as a gzipped tar, in chunks of under 96 KiB;
+     - a version records its runner's source when it is created, and is rebuilt with it;
+     - `%runscript` runs under `/bin/sh`, which has no `source`, so it hands pixi's activation to bash.
+   - **Checked before release, with real Apptainer 1.3.6 in Docker:** the build Job's own script built registry_env
+     from its real lock into a 480 MB SIF (@1's is 1.0 GB), with the labels. `apptainer run --compat` with
+     `/experiment` bound then ran the COPASI compliance case through the runner, and it passed.
    - pbsim-common and biosim-toolkit move to process-bigraph ≥1.9.1. pbsim_common is changed only with Jim's go-ahead.
    - Create the first composed version, run Ciliberto and biomodels-curated-300 on it, and compare with run 3. Make it the default when it holds.
 7. **The per-composite resolver.**
