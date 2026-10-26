@@ -35,6 +35,7 @@ Several documents answer different questions. Start with the one that matches yo
 | the web UI's sign-in switched on, capabilities from `/auth/me`, environment version pages and admin actions, one suite run at a time | [plan-webapp-admin.md](plan-webapp-admin.md) | plan, decided; steps 1–2 under way | 2026-10-25 |
 | runs recorded as `requested` and dispatched by a worker that survives restarts; caps, priorities, resumable suite runs | [plan-durable-submission.md](plan-durable-submission.md) | plan, implemented (0.7.31) | 2026-10-22 |
 | checking SED-ML comparisons against BioSimulators: legacy runs as references, and biosim's `/verify` API as an oracle | [plan-verify-oracle.md](plan-verify-oracle.md) | plan, proposed | 2026-10-22 |
+| vivarium-workbench dispatching to compose-api in place of viva-api: detection, adapter, landing, cancel, onboarding workspaces | [plan-compose-api-on-workbench.md](plan-compose-api-on-workbench.md) | plan, proposed; Phase 3 waits on review | 2026-10-22 |
 | the web UI at `/ui`: pages, viewers, composite authoring, how it is built | [webapp.md](webapp.md) | user documentation | 2026-10-13 |
 | the `compose-api` command line, with its generated reference | [cli.md](cli.md) | user documentation | 2026-10-13 |
 
