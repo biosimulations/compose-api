@@ -220,7 +220,7 @@ class EnvironmentVersion(BaseModel):
     environment: str = Field(description="Its environment's current name")
     number: int
     state: VersionState
-    simulator_id: int
+    simulator_id: int | None = Field(description="Its simulator: none while a composed version is resolving")
     image: str | None = Field(default=None, description="A prebuilt version's image, by digest")
     spec: dict[str, Any] | None = Field(default=None, description="What a shared version was made from")
     origin: str | None = Field(default=None, description="registry, or custom for libraries no review has seen")
@@ -230,6 +230,7 @@ class EnvironmentVersion(BaseModel):
     created_by: str | None = None
     created_at: datetime.datetime | None = None
     note: str | None = None
+    failure: str | None = Field(default=None, description="Why it failed: for a composed version, its lock's conflict")
 
     @property
     def label(self) -> str:
@@ -259,13 +260,26 @@ class EnvironmentVersions(BaseModel):
 
 
 class NewEnvironmentVersion(BaseModel):
-    """What to make a version from. A shared environment: a date to resolve its spec at (default now), and optionally
-    a library list other than the registry's (an unreviewed, `custom` version). A prebuilt one: its image by digest."""
+    """What to make a version from. A composed environment (one that lists its registry entries): a date to resolve
+    its entries at (default now); a mash-up is an environment of its own, never a version of another. A shared one
+    without entries: a date, and optionally a library list other than the registry's (an unreviewed, `custom`
+    version). A prebuilt one: its image by digest."""
 
     resolved_at: datetime.datetime | None = None
     libraries: list[dict[str, str]] | None = None
     image: str | None = None
     note: str | None = None
+
+
+class EnvironmentExport(BaseModel):
+    """A version's environment as files to recreate it with locally (docs/plan-environment-composition.md, C2a):
+    `pixi` (pixi.toml and pixi.lock, `pixi install --frozen`) for a composed version, `requirements` (the uv lock,
+    `uv pip install -r`) for a shared one."""
+
+    environment: str
+    number: int
+    format: str
+    files: dict[str, str] = Field(description="File name -> contents")
 
 
 class PackageChange(BaseModel):

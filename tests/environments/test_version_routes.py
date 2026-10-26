@@ -67,6 +67,13 @@ def builds(monkeypatch: pytest.MonkeyPatch) -> Iterator[Builds]:
         yield fake
 
 
+@pytest.fixture
+def uv_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """registry_env as it was before it listed its entries: a shared environment whose versions are uv locks (the path
+    docs/plan-environment-composition.md retires in step 8)."""
+    monkeypatch.setattr(environment_service, "is_composed", lambda spec: False)
+
+
 @pytest_asyncio.fixture
 async def app(database_service: DatabaseServiceSQL) -> AsyncGenerator[FastAPI]:
     app = FastAPI()
@@ -192,7 +199,7 @@ async def test_the_chosen_default_is_what_runs_get_and_it_cannot_be_retired(
 
 @pytest.mark.asyncio
 async def test_a_default_made_before_locks_is_compared_by_what_its_image_installed(
-    app: FastAPI, builds: Builds, database_service: DatabaseServiceSQL, monkeypatch: pytest.MonkeyPatch
+    app: FastAPI, builds: Builds, database_service: DatabaseServiceSQL, monkeypatch: pytest.MonkeyPatch, uv_path: None
 ) -> None:
     lock = "numpy==2.5.4\npbest @ git+https://github.com/biosimulations/pbest@a4713e9\n"
 
@@ -219,7 +226,7 @@ async def test_a_default_made_before_locks_is_compared_by_what_its_image_install
 
 @pytest.mark.asyncio
 async def test_a_shared_version_is_its_lock_and_a_preview_shows_what_would_change(
-    app: FastAPI, builds: Builds, monkeypatch: pytest.MonkeyPatch
+    app: FastAPI, builds: Builds, monkeypatch: pytest.MonkeyPatch, uv_path: None
 ) -> None:
     locks = {"old": "numpy==2.4.0\nsix==1.10.0\n", "new": "numpy==2.5.4\nsix==1.10.0\nlibvcell==0.0.24\n"}
     use = {"lock": locks["old"]}
@@ -258,3 +265,127 @@ async def test_a_shared_version_is_its_lock_and_a_preview_shows_what_would_chang
         assert custom.status_code == 201 and custom.json()["origin"] == "custom"
         refused = await admin.post("/registry/environments/registry_env/versions", json={"image": _digest()})
         assert refused.status_code == 422
+
+
+# --- composed versions (docs/plan-environment-composition.md, step 4) ---------------------------------------------
+
+
+@dataclass
+class Locks:
+    """The lock Job, replaced: returns ``text`` (a distinct lock per request unless ``same``), or refuses."""
+
+    refuse: str | None = None
+    same: bool = False
+    asked: list[str] = field(default_factory=list)
+
+    async def __call__(self, toml: str, pixi_image: str, suffix: str) -> str:
+        from compose_api.simulation.build_k8s import LockFailedError
+
+        self.asked.append(toml)
+        if self.refuse is not None:
+            raise LockFailedError(self.refuse)
+        return "version: 7\n" + ("" if self.same else f"# {uuid.uuid4().hex}\n")
+
+
+@pytest.fixture
+def locks(monkeypatch: pytest.MonkeyPatch) -> Locks:
+    from compose_api.simulation import build_k8s
+
+    fake = Locks()
+    monkeypatch.setattr(build_k8s, "lock_composed", fake)
+    return fake
+
+
+@pytest.mark.asyncio
+async def test_a_composed_version_resolves_in_the_background_then_builds(
+    app: FastAPI, builds: Builds, locks: Locks, database_service: DatabaseServiceSQL
+) -> None:
+    async with _as(app, ADMIN) as admin:
+        created = await admin.post("/registry/environments/registry_env/versions", json={"note": "pixi"})
+        assert created.status_code == 201, created.text
+        version = created.json()
+        # answered before the lock: resolving, with no simulator yet, runtime contract 2
+        assert (version["state"], version["simulator_id"], version["runtime_contract"]) == ("resolving", None, 2)
+        assert version["spec"]["pixi_image"].startswith("ghcr.io/prefix-dev/pixi@sha256:")
+        assert '"libvcell" = "==0.0.24"' in version["spec"]["pixi_toml"]
+        assert {e["id"] for e in version["spec"]["entries"]} >= {"pbsim-common", "readdy"}
+        detail = (await admin.get(f"/registry/environments/registry_env/versions/{version['number']}")).json()
+    # the background task has run: locked, defined, built
+    assert locks.asked == [version["spec"]["pixi_toml"]]
+    assert detail["state"] == "ready" and detail["simulator_id"] is not None
+    assert detail["lock"].startswith("version: 7\n") and detail["lock_sha256"]
+    assert builds.started == [detail["simulator_id"]]
+    simulator = await database_service.get_simulator_db().get_simulator(detail["simulator_id"])
+    assert (
+        simulator is not None and detail["lock"] in simulator.container_def.representation
+    )  # the lock is its identity
+
+
+@pytest.mark.asyncio
+async def test_a_composition_that_does_not_resolve_fails_with_pixis_explanation(
+    app: FastAPI, builds: Builds, locks: Locks
+) -> None:
+    locks.refuse = "No solution: process-bigraph ==1.9.1 conflicts with process-bigraph ==1.0.5"
+    async with _as(app, ADMIN) as admin:
+        number = (await admin.post("/registry/environments/registry_env/versions", json={})).json()["number"]
+        detail = (await admin.get(f"/registry/environments/registry_env/versions/{number}")).json()
+    assert detail["state"] == "failed" and detail["simulator_id"] is None
+    assert "do not resolve together" in detail["failure"] and "conflicts with" in detail["failure"]
+    assert builds.started == []
+
+
+@pytest.mark.asyncio
+async def test_a_version_that_resolves_to_an_existing_lock_says_which(
+    app: FastAPI, builds: Builds, locks: Locks
+) -> None:
+    locks.same = True
+    async with _as(app, ADMIN) as admin:
+        # different dates (so different workspaces and definitions) that lock the same: the lock is the identity
+        first = (
+            await admin.post(
+                "/registry/environments/registry_env/versions", json={"resolved_at": "2026-10-20T00:00:00"}
+            )
+        ).json()["number"]
+        again = (
+            await admin.post(
+                "/registry/environments/registry_env/versions", json={"resolved_at": "2026-10-21T00:00:00"}
+            )
+        ).json()["number"]
+        detail = (await admin.get(f"/registry/environments/registry_env/versions/{again}")).json()
+    assert again == first + 1
+    assert detail["state"] == "failed" and f"same lock as registry_env@{first}" in detail["failure"]
+    assert len(builds.started) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_composed_environment_takes_a_date_not_libraries_images_or_a_preview(
+    app: FastAPI, builds: Builds, locks: Locks
+) -> None:
+    async with _as(app, ADMIN) as admin:
+        for body in ({"libraries": [{"name": "six", "package_registry": "pypi"}]}, {"image": _digest()}):
+            refused = await admin.post("/registry/environments/registry_env/versions", json=body)
+            assert refused.status_code == 422 and "composed from its registry entries" in refused.json()["detail"]
+        preview = await admin.post("/registry/environments/registry_env/versions/preview", json={})
+        assert preview.status_code == 422 and "resolved in a Job" in preview.json()["detail"]
+    assert locks.asked == []
+
+
+@pytest.mark.asyncio
+async def test_a_version_exports_the_files_that_recreate_it(app: FastAPI, builds: Builds, locks: Locks) -> None:
+    async with _as(app, ADMIN) as admin:
+        number = (await admin.post("/registry/environments/registry_env/versions", json={})).json()["number"]
+    async with _as(app, None) as anonymous:  # public, as reading a version is
+        exported = await anonymous.get(f"/registry/environments/registry_env/versions/{number}/export")
+        assert exported.status_code == 200, exported.text
+        body = exported.json()
+        assert body["format"] == "pixi" and set(body["files"]) == {"pixi.toml", "pixi.lock"}
+        assert body["files"]["pixi.lock"].startswith("version: 7\n") and "[workspace]" in body["files"]["pixi.toml"]
+        wrong = await anonymous.get(f"/registry/environments/registry_env/versions/{number}/export?format=requirements")
+        assert wrong.status_code == 409 and "exports as pixi" in wrong.json()["detail"]
+        unknown = await anonymous.get(f"/registry/environments/registry_env/versions/{number}/export?format=conda")
+        assert unknown.status_code == 409
+    async with _as(app, ADMIN) as admin:
+        image = (await admin.post(f"/registry/environments/{PREBUILT}/versions", json={"image": _digest()})).json()
+    async with _as(app, None) as anonymous:
+        prebuilt = await anonymous.get(f"/registry/environments/{PREBUILT}/versions/{image['number']}/export")
+        assert prebuilt.status_code == 409 and "no lock to export" in prebuilt.json()["detail"]

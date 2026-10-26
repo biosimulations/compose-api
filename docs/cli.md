@@ -957,6 +957,7 @@ $ compose-api environments [OPTIONS] COMMAND [ARGS]...
 * `build`: Make an environment's current image...
 * `versions`: An environment's versions, newest first,...
 * `version`: One version: what it was made from, its...
+* `export`: Write the files that recreate a version...
 * `preview`: Resolve a shared environment's spec now...
 * `create`: Make a new version (or answer the existing...
 * `default`: Make a ready version the one runs get when...
@@ -1098,6 +1099,29 @@ $ compose-api environments version [OPTIONS] NAME NUMBER
 
 **Options**:
 
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api environments export`
+
+Write the files that recreate a version locally: a composed version's pixi.toml and pixi.lock (then
+`pixi install --frozen`), or a shared one's uv lock as requirements.txt (then `uv pip install -r`).
+
+**Usage**:
+
+```console
+$ compose-api environments export [OPTIONS] NAME NUMBER
+```
+
+**Arguments**:
+
+* `NAME`: The environment, e.g. registry_env.  [required]
+* `NUMBER`: The version's number (registry_env@3 is 3).  [required]
+
+**Options**:
+
+* `-o, --out PATH`: Directory to write the files into.  [default: .]
+* `--format TEXT`: pixi (pixi.toml, pixi.lock) or requirements; the version's own by default.
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 

@@ -33,6 +33,7 @@ class VersionSource:
     lock_sha256: str | None = None
     created_by: str | None = None
     note: str | None = None
+    runtime_contract: int = 1
 
 
 class EnvironmentsDatabaseService(ABC):
@@ -61,6 +62,22 @@ class EnvironmentsDatabaseService(ABC):
     @abstractmethod
     async def rename(self, environment: str, new_name: str) -> None:
         """Call the environment something else. Its id, and every reference to it or its versions, are unchanged."""
+
+    @abstractmethod
+    async def create_resolving(self, environment: str, kind: str, source: VersionSource) -> EnvironmentVersion:
+        """A new composed version, `resolving`, as the next number, with no simulator until its lock exists
+        (docs/plan-environment-composition.md, step 4)."""
+
+    @abstractmethod
+    async def set_resolved(
+        self, version_id: int, simulator_id: int, lock: str, lock_sha256: str
+    ) -> EnvironmentVersion | None:
+        """Give a resolving version its lock and simulator, and make it `building`; or, when another version of the
+        environment already has that simulator (the same lock), leave it and return that other version."""
+
+    @abstractmethod
+    async def set_failure(self, version_id: int, failure: str) -> None:
+        """Mark the version `failed`, with why."""
 
     @abstractmethod
     async def set_state(self, version_id: int, state: VersionState) -> None: ...
@@ -213,6 +230,7 @@ class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
                 lock_sha256=source.lock_sha256,
                 created_by=source.created_by,
                 note=source.note,
+                runtime_contract=source.runtime_contract,
             )
             session.add(version)
             await session.flush()
@@ -225,6 +243,52 @@ class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
             query = update(ORMEnvironment).where(ORMEnvironment.name == environment).values(name=new_name)
             if (await session.execute(query)).rowcount == 0:  # type: ignore[attr-defined]
                 raise LookupError(f"no environment {environment!r}")
+
+    @override
+    async def create_resolving(self, environment: str, kind: str, source: VersionSource) -> EnvironmentVersion:
+        async with self.async_session_maker() as session, session.begin():
+            env = await self._lock_environment(session, environment, kind)
+            version = ORMEnvironmentVersion(
+                environment_id=env.id,
+                env=env,
+                number=await self._next_number(session, env.id),
+                state=VersionState.RESOLVING.value,
+                simulator_id=None,
+                spec=source.spec,
+                origin=source.origin,
+                resolved_at=source.resolved_at,
+                runtime_contract=source.runtime_contract,
+                created_by=source.created_by,
+                note=source.note,
+            )
+            session.add(version)
+            await session.flush()
+            await session.refresh(version)
+            return version.to_environment_version()
+
+    @override
+    async def set_resolved(
+        self, version_id: int, simulator_id: int, lock: str, lock_sha256: str
+    ) -> EnvironmentVersion | None:
+        async with self.async_session_maker() as session, session.begin():
+            version = await session.get(ORMEnvironmentVersion, version_id)
+            if version is None:
+                raise LookupError(f"no environment version {version_id}")
+            await self._lock_environment(session, version.env.name, version.env.kind)
+            existing = await self._of_simulator(session, version.environment_id, simulator_id)
+            if existing is not None and existing.id != version_id:
+                return existing.to_environment_version()
+            version.simulator_id = simulator_id
+            version.lock = lock
+            version.lock_sha256 = lock_sha256
+            version.state = VersionState.BUILDING.value
+            return None
+
+    @override
+    async def set_failure(self, version_id: int, failure: str) -> None:
+        async with self.async_session_maker() as session, session.begin():
+            query = update(ORMEnvironmentVersion).where(ORMEnvironmentVersion.id == version_id)
+            await session.execute(query.values(state=VersionState.FAILED.value, failure=failure))
 
     @override
     async def set_state(self, version_id: int, state: VersionState) -> None:

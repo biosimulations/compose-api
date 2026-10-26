@@ -28,7 +28,7 @@ class EnvironmentVersion:
             environment (str): Its environment's current name
             number (int):
             state (VersionState): An environment version's state (docs/plan-environment-versions.md).
-            simulator_id (int):
+            simulator_id (int | None): Its simulator: none while a composed version is resolving
             image (None | str | Unset): A prebuilt version's image, by digest
             spec (EnvironmentVersionSpecType0 | None | Unset): What a shared version was made from
             origin (None | str | Unset): registry, or custom for libraries no review has seen
@@ -38,6 +38,7 @@ class EnvironmentVersion:
             created_by (None | str | Unset):
             created_at (datetime.datetime | None | Unset):
             note (None | str | Unset):
+            failure (None | str | Unset): Why it failed: for a composed version, its lock's conflict
     """
 
     database_id: int
@@ -45,7 +46,7 @@ class EnvironmentVersion:
     environment: str
     number: int
     state: VersionState
-    simulator_id: int
+    simulator_id: int | None
     image: None | str | Unset = UNSET
     spec: EnvironmentVersionSpecType0 | None | Unset = UNSET
     origin: None | str | Unset = UNSET
@@ -55,6 +56,7 @@ class EnvironmentVersion:
     created_by: None | str | Unset = UNSET
     created_at: datetime.datetime | None | Unset = UNSET
     note: None | str | Unset = UNSET
+    failure: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -70,6 +72,7 @@ class EnvironmentVersion:
 
         state = self.state.value
 
+        simulator_id: int | None
         simulator_id = self.simulator_id
 
         image: None | str | Unset
@@ -128,6 +131,12 @@ class EnvironmentVersion:
         else:
             note = self.note
 
+        failure: None | str | Unset
+        if isinstance(self.failure, Unset):
+            failure = UNSET
+        else:
+            failure = self.failure
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
@@ -156,6 +165,8 @@ class EnvironmentVersion:
             field_dict["created_at"] = created_at
         if note is not UNSET:
             field_dict["note"] = note
+        if failure is not UNSET:
+            field_dict["failure"] = failure
 
         return field_dict
 
@@ -174,7 +185,12 @@ class EnvironmentVersion:
 
         state = VersionState(d.pop("state"))
 
-        simulator_id = d.pop("simulator_id")
+        def _parse_simulator_id(data: object) -> int | None:
+            if data is None:
+                return data
+            return cast(int | None, data)
+
+        simulator_id = _parse_simulator_id(d.pop("simulator_id"))
 
         def _parse_image(data: object) -> None | str | Unset:
             if data is None:
@@ -274,6 +290,15 @@ class EnvironmentVersion:
 
         note = _parse_note(d.pop("note", UNSET))
 
+        def _parse_failure(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        failure = _parse_failure(d.pop("failure", UNSET))
+
         environment_version = cls(
             database_id=database_id,
             environment_id=environment_id,
@@ -290,6 +315,7 @@ class EnvironmentVersion:
             created_by=created_by,
             created_at=created_at,
             note=note,
+            failure=failure,
         )
 
         environment_version.additional_properties = d

@@ -63,10 +63,12 @@ def composition_problems(environments: EnvironmentsFile, manifest: Manifest) -> 
     """What keeps each environment's `entries` from being composed: an entry that is unknown or has no `install`, two
     entries installing one distribution, and a disagreement with the entries' own `bundles` (both say where an entry is
     installed until `bundles` is retired). Empty when every composition is sound."""
-    return [p for spec in environments.environments if spec.entries for p in _spec_problems(spec, manifest)]
+    return [p for spec in environments.environments if spec.entries for p in spec_problems(spec, manifest)]
 
 
-def _spec_problems(spec: EnvironmentSpec, manifest: Manifest) -> list[str]:
+def spec_problems(spec: EnvironmentSpec, manifest: Manifest, *, bundled: bool = True) -> list[str]:
+    """What keeps one environment's `entries` from being composed (`composition_problems`); without ``bundled``, a
+    mash-up's: its entries are not bundled in the environment it is a version of."""
     by_id = {e.id: e for e in manifest.entries}
     problems: list[str] = []
     if spec.kind == "prebuilt":
@@ -86,11 +88,11 @@ def _spec_problems(spec: EnvironmentSpec, manifest: Manifest) -> list[str]:
                 other = installs.setdefault(name, entry_id)
                 if other != entry_id:
                     problems.append(f"{spec.name}: {other!r} and {entry_id!r} both install {name}")
-    bundled = {e.id for e in manifest.entries if spec.name in e.bundles}
-    if bundled != set(spec.entries):
+    in_bundle = {e.id for e in manifest.entries if spec.name in e.bundles}
+    if bundled and in_bundle != set(spec.entries):
         problems.append(
             f"{spec.name}: its entries {sorted(set(spec.entries))} differ from the entries bundled in it"
-            f" {sorted(bundled)}"
+            f" {sorted(in_bundle)}"
         )
     return problems
 

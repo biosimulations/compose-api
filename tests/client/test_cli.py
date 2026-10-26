@@ -546,3 +546,31 @@ def test_a_queued_runs_place_is_shown_while_it_is_submitting() -> None:
     )
     assert queued({"status": "running", "submission": {"state": "submitted"}}) == ""
     assert queued({"status": "submitting", "submission": None}) == ""  # recorded before the queue
+
+
+def test_environments_export_writes_the_files_and_nothing_outside_out(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    exported = {
+        "environment": "registry_env",
+        "number": 3,
+        "format": "pixi",
+        "files": {"pixi.toml": "[workspace]\n", "../pixi.lock": "version: 7\n"},  # a hostile name stays inside --out
+    }
+    seen: list[httpx.Request] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=exported)
+
+    monkeypatch.setattr(
+        cli_module, "make_session", lambda s: ComposeSession(s.url, transport=httpx.MockTransport(answer))
+    )
+    out = tmp_path / "env"
+    r = invoke("environments", "export", "registry_env", "3", "--out", str(out), "--format", "pixi")
+    assert r.exit_code == 0, r.output
+    assert json.loads(r.stdout) == {"format": "pixi", "files": ["../pixi.lock", "pixi.toml"], "out": str(out)}
+    assert (out / "pixi.toml").read_text() == "[workspace]\n" and (out / "pixi.lock").read_text() == "version: 7\n"
+    assert not (tmp_path / "pixi.lock").exists()
+    assert seen[0].url.path == "/registry/environments/registry_env/versions/3/export"
+    assert dict(seen[0].url.params) == {"format": "pixi"}
