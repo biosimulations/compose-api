@@ -18,8 +18,8 @@
 | 5b | Compliance runs: after a build, each member entry's cases run in the version; levels recorded per entry and version; API and CLI | merged (#390) |
 | 5c | Admission by what the version certifies: a refused component, a failed entry, members only | merged (#391) |
 | 6 | registry_env migrates to a composed version on a current process-bigraph | @4 (0.7.46) and @5 (0.7.50) ready; suite run 5 running; then the default |
-| 7a | Runs name an environment or have one inferred; environments listed from the database | 7a-1 merged (#415); 7a-2 (listing from the database) in review |
-| 7b | Implicit mash-ups, proven with viva-basic-processes | decided |
+| 7a | Runs name an environment or have one inferred; environments listed from the database | merged (#415, #416) |
+| 7b | Implicit mash-ups, proven with viva-basic-processes | 7b-1 (the entry and its case) in review; then 7b-2 (runs in any composed environment), 7b-3 (implicit creation), 7b-4 (live) |
 | 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | |
 | 8 | Retire the shared uv path, `simulator_registry.json`, `shared_image()`, pbest in images, `PREBUILT_SIMULATORS`, the committed interface manifests | |
 
@@ -348,6 +348,11 @@
      - Why it: its classes exchange state with an ODE, so a mash-up tests that two entries' ports fit, not only that
        they install together. The document: pbsim-common's `CopasiUTCProcess` steps an ODE, `Intervention` changes a
        species partway through, `MathExpressionStep` derives a readout; its compliance case checks the step change.
+     - *As built, 7b-1 (2026-10-26):* the manifest entry (git `9a1a624`, `tested`, in no declared environment) and
+       its compliance case `intervention-and-expression`: Intervention adds 2 per step to x (from 1), MathExpressionStep
+       writes y = 3x + 1, Clock ticks; after five steps x = 11, y = 34, tick = 5, and x = 5 after two. Run locally through
+       compose-api's runner on process-bigraph 1.9.1, the case passed. Compliance gains a `scalar` expectation (a
+       plain number in an emitted row), since these stores are floats, not a `numeric_result`.
      - Second, later: viva-emitters (PyPI 0.4.3; `SQLiteEmitter` needs no extras). viva-torch is too heavy for a first
        test. Pinning viva-basic-processes changes nothing in vivarium-collective.
      - Live: a document using it with a pbsim-common step creates `mash-…`, builds it, runs, and a second identical

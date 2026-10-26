@@ -136,9 +136,11 @@ class Expectation(BaseModel):
     - ``value``: ``column`` at ``time`` (the final row's result when omitted) is ``expected`` within the tolerance.
     - ``reference``: every column of ``reference`` (a CSV in the case, with a time column first) matches the result
       at the reference's times, within the tolerance.
+    - ``scalar``: the emitted number ``field`` in row ``row`` (the last when omitted) is ``expected``, within the
+      tolerance: for a component whose stores are plain numbers rather than a ``numeric_result``.
     """
 
-    kind: Literal["rows", "value", "reference"]
+    kind: Literal["rows", "value", "reference", "scalar"]
     emitter: str
     field: str = "result"
     min: int = 1
@@ -148,6 +150,7 @@ class Expectation(BaseModel):
     reference: str | None = None
     rel: float = 1e-6
     abs: float = 1e-9
+    row: int = -1
 
 
 class Case(BaseModel):
@@ -218,6 +221,8 @@ def _check(case: Case, expectation: Expectation, results: dict[str, Any]) -> lis
         return [f"emitter {expectation.emitter!r} emitted nothing"]
     if expectation.kind == "rows":
         return [] if len(rows) >= expectation.min else [f"{expectation.emitter}: {len(rows)} rows, < {expectation.min}"]
+    if expectation.kind == "scalar":
+        return _check_scalar(expectation, rows)
     try:
         result = _result(rows, expectation)
         if expectation.kind == "value":
@@ -225,6 +230,20 @@ def _check(case: Case, expectation: Expectation, results: dict[str, Any]) -> lis
         return _check_reference(case, expectation, result)
     except (LookupError, ValueError, IndexError, KeyError) as e:
         return [f"{expectation.emitter}: {e}"]
+
+
+def _check_scalar(expectation: Expectation, rows: list[Any]) -> list[str]:
+    where = f"{expectation.emitter}.{expectation.field} in row {expectation.row}"
+    if expectation.expected is None:
+        return ["a scalar expectation needs `expected`"]
+    try:
+        row = rows[expectation.row]
+        actual = float(row[expectation.field])
+    except (IndexError, KeyError, TypeError, ValueError) as e:
+        return [f"{where}: no number ({type(e).__name__}: {e})"]
+    if _close(actual, expectation.expected, expectation.rel, expectation.abs):
+        return []
+    return [f"{where}: {actual}, expected {expectation.expected}"]
 
 
 def _check_value(expectation: Expectation, result: dict[str, Any]) -> list[str]:

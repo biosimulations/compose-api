@@ -112,6 +112,27 @@ entries:
         solvers agree. The gate here, as for pbsim-common, is this repository's cluster test inside the built
         registry_env image (tests/simulators/test_sedml.py).
 
+  # The first component composed only into mash-ups (docs/plan-environment-composition.md, step 7b): no declared
+  # environment lists it, so a run that uses its classes beside another entry's gets an environment made for both.
+  - id: viva-basic-processes
+    package: viva-basic-processes
+    # not on PyPI; its v0.3.0 tag predates the pbg -> viva rename (it installs as pbg-basic-processes), so a commit
+    source: https://github.com/vivarium-collective/viva-basic-processes/tree/9a1a624dc925cf700c3f89a8cc008a8fa4b4e5d4
+    commit: 9a1a624dc925cf700c3f89a8cc008a8fa4b4e5d4
+    install:
+      git: https://github.com/vivarium-collective/viva-basic-processes
+      commit: 9a1a624dc925cf700c3f89a8cc008a8fa4b4e5d4
+    module_roots:
+      - viva_basic_processes
+    level: tested
+    evidence:
+      - >-
+        Added at tested on 2026-10-26 for composition step 7b (Jim chose it from the catalog). Its compliance case
+        (registry/compliance/viva-basic-processes/intervention-and-expression) runs Intervention, MathExpressionStep
+        and Clock together through compose-api's runner on process-bigraph 1.9.1 and bigraph-schema 1.8.1 and matches
+        values computed by hand; it passed locally on 2026-10-26. MathExpressionStep's outputs are overwrite[float],
+        so the generic step-outputs-replace check passes. In a composed version, the case run there decides its level.
+
   # --- libraries: installed for the components above, with no process classes of their own ------------------------
   # Pinned to what registry_env@1 actually ran (read back from its image, 2026-10-25), not to the old library list,
   # which said tellurium 2.2.11.1 and python-copasi 4.46.300 while the image held these.

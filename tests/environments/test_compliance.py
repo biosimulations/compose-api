@@ -127,3 +127,17 @@ def test_a_case_names_plain_files_that_exist(tmp_path: Path) -> None:
     problems = compliance.case_problems(case)
     assert "e/c: '../escape.sbml' is not a plain file name" in problems
     assert "e/c: d.pbg is missing" in problems and "e/c: absent.sbml is missing" in problems
+
+
+def test_viva_basic_processes_case_checks_plain_numbers() -> None:
+    """Its stores are floats, not a numeric_result: `scalar` expectations, here against the rows compose-api's runner
+    emitted for this document on 2026-10-26 (x: 1 + 2 per step; y = 3x + 1; one tick per step)."""
+    (case,) = load_cases("viva-basic-processes")
+    assert compliance.case_problems(case) == []
+    rows = [{"x": 1.0 + 2 * t, "y": 3 * (1.0 + 2 * t) + 1, "tick": t, "global_time": float(t)} for t in range(6)]
+    assert evaluate(case, {"emitter": rows}).passed
+    wrong = [*rows[:-1], {**rows[-1], "y": 33.0}]
+    outcome = evaluate(case, {"emitter": wrong})
+    assert not outcome.passed and outcome.failures == ["emitter.y in row -1: 33.0, expected 34.0"]
+    missing = evaluate(case, {"emitter": [{"x": 1.0}]})
+    assert any("no number" in f for f in missing.failures)
