@@ -5,11 +5,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from pbest.utils.input_types import ContainerizationFileRepr
 from pydantic import BaseModel as _BaseModel
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 
 @dataclass
@@ -269,12 +269,13 @@ class EnvironmentVersions(BaseModel):
 
 class NewEnvironmentVersion(BaseModel):
     """What to make a version from. A composed environment (one that lists its registry entries): a date to resolve
-    its entries at (default now); a mash-up is an environment of its own, never a version of another. A shared one
-    without entries: a date, and optionally a library list other than the registry's (an unreviewed, `custom`
-    version). A prebuilt one: its image by digest."""
+    its entries at (default now); a mash-up is an environment of its own, never a version of another. A prebuilt one:
+    its image by digest. (Library lists, the shared uv path's `custom` versions, are retired:
+    docs/plan-environment-composition.md, D8.5; versions made that way stay readable.)"""
+
+    model_config = ConfigDict(extra="forbid")  # a library list is refused, not ignored
 
     resolved_at: datetime.datetime | None = None
-    libraries: list[dict[str, str]] | None = None
     image: str | None = None
     note: str | None = None
 
@@ -319,32 +320,6 @@ class EnvironmentExport(BaseModel):
     number: int
     format: str
     files: dict[str, str] = Field(description="File name -> contents")
-
-
-class PackageChange(BaseModel):
-    name: str
-    before: str | None = None
-    after: str | None = None
-
-
-class LockPreview(BaseModel):
-    """What a shared version would be: its lock, and how it differs from the default version's."""
-
-    environment: str
-    resolved_at: datetime.datetime
-    origin: str
-    lock_sha256: str
-    lock: str
-    existing: int | None = Field(default=None, description="The number of a version with this very lock, if any")
-    against: int | None = Field(
-        default=None, description="The default version compared with, if it has a lock or a list of installed packages"
-    )
-    against_basis: Literal["lock", "installed"] | None = Field(
-        default=None,
-        description="What of the default version was compared: its lock, or (a version made before locks, such as one"
-        " built by a run) the packages its image installed, which name a package installed from git by its version",
-    )
-    changes: list[PackageChange] = Field(default_factory=list)
 
 
 class DefaultVersion(BaseModel):

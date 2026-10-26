@@ -44,7 +44,6 @@ from compose_api_client.api.registry import (
     list_environments,
     list_registry_entries,
     list_solvers,
-    preview_environment_version,
     retire_environment_version,
     run_environment_version_compliance,
     set_environment_default,
@@ -159,7 +158,6 @@ from compose_api_client.models import (
     KnownProblemEdit,
     KnownProblemMark,
     ListSimulationsStatusType0,
-    LockPreview,
     NewEnvironmentVersion,
     ProjectInfo,
     RegisteredSimulators,
@@ -652,14 +650,6 @@ class ComposeSession:
         administrator role."""
         op = Operation("POST", f"/registry/environments/{name}/versions/{number}/compliance", replayable=False)
         r, _ = self._send(op, lambda c: run_environment_version_compliance.sync_detailed(name, number, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
-
-    def preview_environment_version(self, name: str, *, resolved_at: datetime.datetime | None = None) -> LockPreview:
-        """A shared environment's spec resolved at ``resolved_at`` (default now), and its changes from the default;
-        nothing is created. Needs the environment administrator role."""
-        op = Operation("POST", f"/registry/environments/{name}/versions/preview", replayable=True)
-        body = NewEnvironmentVersion(resolved_at=resolved_at if resolved_at is not None else UNSET)
-        r, _ = self._send(op, lambda c: preview_environment_version.sync_detailed(name, client=c, body=body))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def create_environment_version(
@@ -1564,16 +1554,6 @@ class AsyncComposeSession:
         r, _ = await self._send(
             op, lambda c: run_environment_version_compliance.asyncio_detailed(name, number, client=c)
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
-
-    async def preview_environment_version(
-        self, name: str, *, resolved_at: datetime.datetime | None = None
-    ) -> LockPreview:
-        """A shared environment's spec resolved at ``resolved_at`` (default now), and its changes from the default;
-        nothing is created. Needs the environment administrator role."""
-        op = Operation("POST", f"/registry/environments/{name}/versions/preview", replayable=True)
-        body = NewEnvironmentVersion(resolved_at=resolved_at if resolved_at is not None else UNSET)
-        r, _ = await self._send(op, lambda c: preview_environment_version.asyncio_detailed(name, client=c, body=body))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def create_environment_version(

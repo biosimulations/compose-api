@@ -850,41 +850,6 @@ def environments_compliance(
         print(f"refused: {component}")
 
 
-@environments_app.command("preview")
-@claims("environments preview", "preview-environment-version")
-@handled
-def environments_preview(
-    ctx: typer.Context,
-    name: _ENV_ARG,
-    resolved_at: Annotated[
-        datetime.datetime | None, typer.Option(help="Resolve with nothing newer than this (UTC); default now.")
-    ] = None,
-) -> None:
-    """Resolve a shared environment's spec now (or at --resolved-at) and show how its lock differs from the default
-    version's. Creates nothing. Needs the environment administrator role."""
-    settings = _settings(ctx)
-    with make_session(settings) as s:
-        preview = s.preview_environment_version(name, resolved_at=resolved_at)
-    if resolve(settings.output) is Output.JSON:
-        emit(settings.output, preview)
-        return
-    same = f"; the same lock as @{preview.existing}" if preview.existing else ""
-    print(f"{preview.environment} resolved at {preview.resolved_at}: lock {preview.lock_sha256[:12]}{same}")
-    if preview.against is None:
-        print("the default version has no lock, and no installed packages read back, to compare with")
-        return
-    if preview.against_basis == "installed":
-        print(f"compared with the packages @{preview.against} installed (it has no lock; git installs show versions)")
-    rows = [
-        {"package": c.name, "@" + str(preview.against): c.before, "new": c.after}
-        for c in (preview.changes if isinstance(preview.changes, list) else [])
-    ]
-    if rows:
-        emit(settings.output, rows, ["package", "@" + str(preview.against), "new"])
-    else:
-        print("no changes")
-
-
 @environments_app.command("create")
 @claims("environments create", "create-environment-version")
 @handled

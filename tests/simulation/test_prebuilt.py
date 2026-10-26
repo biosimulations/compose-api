@@ -27,9 +27,9 @@ from compose_api.simulation.prebuilt import (
     prebuilt_image_of,
 )
 from compose_api.simulation.simulation_service import SimulationService
-from compose_api.simulation.simulator_registry import registry_dependencies
 from tests.fixtures.mocks import TestBackgroundTask
 from tests.fixtures.postgres_fixtures import register_prebuilt, unregister_prebuilt
+from tests.fixtures.simulator_registry import registry_dependencies
 
 PREBUILT = "viva-pde-particle"  # the prebuilt environment environments.yaml declares
 IMAGE = "ghcr.io/example/simulator@sha256:" + "0" * 64

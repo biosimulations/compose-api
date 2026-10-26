@@ -176,7 +176,8 @@ a registered entry at level `tested` or higher in the `registry_env` bundle, wit
 Non-`local` protocols and the arbitrary-import `local:!` form are refused even under `address_policy=warn`, and
 for a prebuilt simulator (`?simulator=`), whose classes are not looked up (`validate_submission(..., registry=False)`). The
 container would otherwise run whatever it is sent, so this is the only check. Adding a simulator to what the service
-runs means a manifest entry *and* the library in `simulation/simulator_registry.json`. `registry/catalog.yaml` is
+runs means a manifest entry that says how it installs, listed in its environment's `entries` (`environments.yaml`;
+`docs/plan-environment-composition.md`). `registry/catalog.yaml` is
 generated (`uv run python -m compose_api.registry.catalog`, read-only against GitHub) and lists every vivarium-collective
 catalog wrapper at `listed`; never hand-edit it — raising an entry means adding it to `manifest.yaml`, which wins.
 
@@ -256,13 +257,9 @@ This service is one side of a three-package loop. `../pbest` is checked out next
 
 - **compose-api imports pbest at runtime.** `pbest.utils.input_types` supplies domain types used here directly —
   `ContainerizationFileRepr` (persisted in `db/tables/simulator_tables.py` and carried on `Simulator`),
-  `ContainerizationEngine`, `ExperimentPrimaryDependencies`. `handlers.run_simulation` calls
-  `generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)`; that def file's md5 is the
-  `SimulatorVersion` identity, so **bumping the `pbest==0.6.5` pin changes the hash and triggers a fresh container
-  build** on the next run (pbest's release script rewrites the `pbest_tag` baked into the generated def file). So
-  does editing `compose_api/simulation/simulator_registry.json`, the library list baked into that image: a copy of
-  `biosimulations/registry`'s `registry.json` pinned at the commit in `simulator_registry.py`, deliberately not
-  pbest's `_default_registry_deps()`, which fetches the file live from that repo's `dev` branch.
+  `ContainerizationEngine`. Since composition step 8 no image is made from pbest's definition: registry_env's versions
+  are composed with pixi, and its old pbest-built `@1` stays runnable by number. The library list that image was made
+  from survives only as a test fixture (`tests/fixtures/simulator_registry.py`), for the test database's seed.
   **Temporarily (since 2026-10-23) pbest resolves from git, not PyPI:** `[tool.uv.sources]` pins tag 0.6.5's commit
   (branch `release/0.6.5`), which installs pbsim-common from a `biosimulations/pbsim_common` commit, until PyPI
   ownership of both moves; go back to PyPI pins then. The definition clones the same tag. The library list also

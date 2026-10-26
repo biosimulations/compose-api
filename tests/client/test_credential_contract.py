@@ -14,7 +14,6 @@ def test_every_post_has_an_explicit_submission_policy() -> None:
     # POSTs that change nothing, or set a state, so a retry is safe (replayable)
     idempotent_operations = {
         "preview-sedml",
-        "preview-environment-version",
         "retire-environment-version",
         "inspect-environment-version",
         "clear-suite-problem",  # a second clear answers 409
