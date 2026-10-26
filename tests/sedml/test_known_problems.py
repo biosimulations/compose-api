@@ -69,6 +69,15 @@ def test_a_known_problem_excuses_only_its_solver() -> None:
     # the solvers without a problem disagree with each other: not excused (BIOMD 206 and 248)
     others_differ = _result({"copasi|tellurium": False, "copasi|vcell": None, "tellurium|vcell": None})
     assert judge(False, done, others_differ, {"vcell"}) == (False, [])
+    # a label neither of a pair reports is not a disagreement (run 4: reaction rates no solver reports); one that only
+    # one of them reports is
+    unreported = _result({"copasi|tellurium": True, "copasi|vcell": None, "tellurium|vcell": None})
+    unreported["reports"]["r"]["labels"]["v1"] = {
+        "copasi|tellurium": {"close": None, "missing": ["copasi", "tellurium"]}
+    }
+    assert judge(False, done, unreported, {"vcell"}) == (True, [])
+    unreported["reports"]["r"]["labels"]["v1"] = {"copasi|tellurium": {"close": None, "missing": ["tellurium"]}}
+    assert judge(False, done, unreported, {"vcell"}) == (False, [])
     # a solver without a problem failed: not excused
     assert judge(False, {**done, "tellurium": "failed"}, vcell_failed, {"vcell"}) == (False, [])
     # only one solver left without a problem: nothing to compare, excused

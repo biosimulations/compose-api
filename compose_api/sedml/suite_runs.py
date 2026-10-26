@@ -287,13 +287,17 @@ def _problems_for(suite: Suite, known: list[KnownProblem], number: int) -> dict[
 
 
 def _pairs(result: dict[str, Any] | None) -> list[tuple[set[str], bool]]:
-    """Every solver pair's verdict on every label, references left out: (the two solvers, close)."""
+    """Every solver pair's verdict on every label, references left out: (the two solvers, close). A label neither
+    solver of a pair reports (often a reaction rate the SED-ML asks for) says nothing about whether they agree, so it
+    is left out too; one that only one of them reports counts against them."""
     pairs = []
     for report in ((result or {}).get("reports") or {}).values():
         for by_pair in (report.get("labels") or {}).values():
             for pair, verdict in by_pair.items():
-                if not verdict.get("reference"):
-                    pairs.append((set(pair.split("|")), verdict.get("close") is True))
+                solvers = set(pair.split("|"))
+                if verdict.get("reference") or solvers <= set(verdict.get("missing") or []):
+                    continue
+                pairs.append((solvers, verdict.get("close") is True))
     return pairs
 
 
