@@ -199,7 +199,7 @@ async def view(suite: Suite, number: int) -> SuiteRunView | None:
         baseline = {
             (r.comparison.source, r.comparison.task): r for r in await db.suite_comparisons(suite.name, suite.baseline)
         }
-    problems = _problems_for(suite, await db.known_problems(suite.name), number)
+    problems = _problems_for(await db.known_problems(suite.name), number)
     found = await db.suite_comparisons(suite.name, number)
     statuses = await service.member_statuses(found)
     for row in found:
@@ -275,15 +275,10 @@ async def verify(suite: Suite, number: int, which: str) -> SuiteVerifyResult | N
     return result
 
 
-def _problems_for(suite: Suite, known: list[KnownProblem], number: int) -> dict[tuple[str, str | None], str]:
+def _problems_for(known: list[KnownProblem], number: int) -> dict[tuple[str, str | None], str]:
     """The known problems that apply to run ``number`` (docs/plan-known-problems.md, K2): those not cleared, or cleared
-    by a later run; by (source, solver), each one's reason. The suite file's ``expected:`` entries count as open
-    problems until they are moved to records (K8)."""
-    applies: dict[tuple[str, str | None], str] = {(e.source, e.solver): e.reason for e in suite.expected}
-    for p in known:
-        if p.cleared_run is None or p.cleared_run > number:
-            applies[(p.source, p.solver)] = p.reason
-    return applies
+    by a later run; by (source, solver), each one's reason."""
+    return {(p.source, p.solver): p.reason for p in known if p.cleared_run is None or p.cleared_run > number}
 
 
 def _pairs(result: dict[str, Any] | None) -> list[tuple[set[str], bool]]:

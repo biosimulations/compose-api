@@ -1793,15 +1793,6 @@ export interface components {
             /** Versions */
             versions?: components["schemas"]["EnvironmentVersion"][];
         };
-        /** ExpectedFailure */
-        ExpectedFailure: {
-            /** Source */
-            source: string;
-            /** Solver */
-            solver?: string | null;
-            /** Reason */
-            reason: string;
-        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -2513,11 +2504,6 @@ export interface components {
              * @description the accepted suite run that later runs are compared with
              */
             baseline?: number | null;
-            /**
-             * Expected
-             * @description known problems not yet moved to records (docs/plan-known-problems.md, K8); read as open ones
-             */
-            expected?: components["schemas"]["ExpectedFailure"][];
             /**
              * Verify
              * @description check comparisons against biosim's /verify once they finish: those that differ, are incomplete or have no reference that agrees (failing), or every one (docs/plan-verify-oracle.md, D3)

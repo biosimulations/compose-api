@@ -10,7 +10,6 @@ from ..models.suite_verify import SuiteVerify
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
-    from ..models.expected_failure import ExpectedFailure
     from ..models.tolerances import Tolerances
 
 
@@ -29,8 +28,6 @@ class Suite:
             with
             `atol = max(abs_tol_min, max|a|*abs_tol_scale, max|b|*abs_tol_scale)` (docs/plan-sedml.md, D4).
         baseline (int | None | Unset): the accepted suite run that later runs are compared with
-        expected (list[ExpectedFailure] | Unset): known problems not yet moved to records (docs/plan-known-problems.md,
-            K8); read as open ones
         verify (SuiteVerify | Unset): check comparisons against biosim's /verify once they finish: those that differ,
             are incomplete or have no reference that agrees (failing), or every one (docs/plan-verify-oracle.md, D3)
             Default: SuiteVerify.NONE.
@@ -42,7 +39,6 @@ class Suite:
     solvers: list[str] | None | Unset = UNSET
     tolerances: Tolerances | Unset = UNSET
     baseline: int | None | Unset = UNSET
-    expected: list[ExpectedFailure] | Unset = UNSET
     verify: SuiteVerify | Unset = SuiteVerify.NONE
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -72,13 +68,6 @@ class Suite:
         else:
             baseline = self.baseline
 
-        expected: list[dict[str, Any]] | Unset = UNSET
-        if not isinstance(self.expected, Unset):
-            expected = []
-            for expected_item_data in self.expected:
-                expected_item = expected_item_data.to_dict()
-                expected.append(expected_item)
-
         verify: str | Unset = UNSET
         if not isinstance(self.verify, Unset):
             verify = self.verify.value
@@ -96,8 +85,6 @@ class Suite:
             field_dict["tolerances"] = tolerances
         if baseline is not UNSET:
             field_dict["baseline"] = baseline
-        if expected is not UNSET:
-            field_dict["expected"] = expected
         if verify is not UNSET:
             field_dict["verify"] = verify
 
@@ -105,7 +92,6 @@ class Suite:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.expected_failure import ExpectedFailure  # noqa: PLC0415
         from ..models.tolerances import Tolerances  # noqa: PLC0415
 
         d = dict(src_dict)
@@ -148,15 +134,6 @@ class Suite:
 
         baseline = _parse_baseline(d.pop("baseline", UNSET))
 
-        _expected = d.pop("expected", UNSET)
-        expected: list[ExpectedFailure] | Unset = UNSET
-        if _expected is not UNSET:
-            expected = []
-            for expected_item_data in _expected:
-                expected_item = ExpectedFailure.from_dict(expected_item_data)
-
-                expected.append(expected_item)
-
         _verify = d.pop("verify", UNSET)
         verify: SuiteVerify | Unset
         if isinstance(_verify, Unset):
@@ -171,7 +148,6 @@ class Suite:
             solvers=solvers,
             tolerances=tolerances,
             baseline=baseline,
-            expected=expected,
             verify=verify,
         )
 

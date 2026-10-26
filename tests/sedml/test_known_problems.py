@@ -18,7 +18,7 @@ from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.sedml import service, suite_runs, suites
 from compose_api.sedml.models import Comparison, ComparisonMember, KnownProblem
 from compose_api.sedml.suite_runs import judge
-from compose_api.sedml.suites import ExpectedFailure, Suite
+from compose_api.sedml.suites import Suite
 
 ROLE = "curator"
 SUITE = Suite(
@@ -106,16 +106,11 @@ def _problem(problem_id: int, solver: str | None, cleared_run: int | None = None
 
 def test_a_problem_applies_to_the_runs_before_the_one_that_cleared_it() -> None:
     known = [_problem(1, "vcell", cleared_run=4), _problem(2, None)]
-    assert suite_runs._problems_for(SUITE, known, 3) == {
+    assert suite_runs._problems_for(known, 3) == {
         ("biomodels:A1", "vcell"): "reason 1",
         ("biomodels:A1", None): "reason 2",
     }
-    assert suite_runs._problems_for(SUITE, known, 4) == {("biomodels:A1", None): "reason 2"}
-    # the suite file's entries count as open problems until they are moved
-    legacy = SUITE.model_copy(
-        update={"expected": [ExpectedFailure(source="biomodels:B2", solver="tellurium", reason="delay")]}
-    )
-    assert suite_runs._problems_for(legacy, [], 9) == {("biomodels:B2", "tellurium"): "delay"}
+    assert suite_runs._problems_for(known, 4) == {("biomodels:A1", None): "reason 2"}
 
 
 @pytest.mark.asyncio

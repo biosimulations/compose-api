@@ -5806,35 +5806,6 @@
         "title": "EnvironmentVersions",
         "description": "An environment's versions, newest first, and which one a run that names none gets."
       },
-      "ExpectedFailure": {
-        "properties": {
-          "source": {
-            "type": "string",
-            "title": "Source"
-          },
-          "solver": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Solver"
-          },
-          "reason": {
-            "type": "string",
-            "title": "Reason"
-          }
-        },
-        "type": "object",
-        "required": [
-          "source",
-          "reason"
-        ],
-        "title": "ExpectedFailure"
-      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -7909,14 +7880,6 @@
             ],
             "title": "Baseline",
             "description": "the accepted suite run that later runs are compared with"
-          },
-          "expected": {
-            "items": {
-              "$ref": "#/components/schemas/ExpectedFailure"
-            },
-            "type": "array",
-            "title": "Expected",
-            "description": "known problems not yet moved to records (docs/plan-known-problems.md, K8); read as open ones"
           },
           "verify": {
             "type": "string",

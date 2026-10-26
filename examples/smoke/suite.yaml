@@ -7,7 +7,6 @@ solvers: [copasi, tellurium]
 tolerances: {rel_tol: 1.0e-4, abs_tol_min: 1.0e-3, abs_tol_scale: 1.0e-5}
 # the accepted suite run each new run's results are compared with, solver by solver
 baseline: 1  # 2026-10-13, compose-api 0.7.21: the first run on the cluster
-expected: []
 sources:
   - biomodels:BIOMD0000000012  # Elowitz2000 - Repressilator
   - biosimulations:Morphogenesis-checkpoint-continuous-Ciliberto-J-Cell-Biol-2003  # tellurium 2.2.1
