@@ -13,6 +13,7 @@ from compose_api.dependencies import (
     get_required_database_service,
     get_simulation_service,
 )
+from compose_api.environments.admission import standing_for
 from compose_api.environments.versions import VersionUnavailableError, chosen_version, environment_of
 from compose_api.registry.manifest import SERVICE_BUNDLE
 from compose_api.registry.validation import AddressPolicy, SubmissionRejectedError, validate_submission
@@ -125,12 +126,21 @@ async def submit_simulation(
     # image brings its own processes, which this registry does not describe, so its classes are not looked up (the
     # deployment vouches for the image by listing it in settings.prebuilt_simulators); the unsafe forms, `local:!`
     # and any other protocol, are refused for it all the same.
+    # what the version it will run in certifies (docs/plan-environment-composition.md, step 5c): a component refused
+    # there, or an entry whose compliance cases failed there, is refused before the manifest's level is consulted
+    database_service = get_database_service()  # none: no version to consult, so the manifest alone decides
+    standing = (
+        await standing_for(database_service, environment_of(None), environment_version)
+        if simulator is None and database_service is not None
+        else None
+    )
     try:
         validate_submission(
             simulation_request.request_file_path,
             simulation_request.simulation_file_type,
             AddressPolicy(get_settings().address_policy),
             registry=simulator is None,
+            standing=standing,
         )
     except SubmissionRejectedError as e:
         simulation_request.request_file_path.unlink(missing_ok=True)
