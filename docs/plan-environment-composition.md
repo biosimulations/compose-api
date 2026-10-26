@@ -1,6 +1,6 @@
 # Composed environments: built by compose-api from curated entries, certified by compliance composites
 
-**Status (2026-10-26): the active plan. Steps 0–5 merged; step 6 finishing (registry_env@5, suite run 5); step 7's decisions proposed below (D7.1–D7.10), for Jim to confirm.**
+**Status (2026-10-26): the active plan. Steps 0–5 merged; step 6 finishing (registry_env@5, suite run 5); step 7's decisions confirmed (D7.1–D7.10); 7a next.**
 - One PR per step, each merged with a merge commit; each PR updates the table below.
 - This plan supersedes the open parts of [plan-environment-versions](plan-environment-versions.md): step 5b's solver check, step 6, and the shared uv build path.
 - The rest of that plan stays: versions as database records, defaults, retirement, read-back, every run recording its version, suites naming theirs, the admin role, and the prebuilt kind.
@@ -18,8 +18,8 @@
 | 5b | Compliance runs: after a build, each member entry's cases run in the version; levels recorded per entry and version; API and CLI | merged (#390) |
 | 5c | Admission by what the version certifies: a refused component, a failed entry, members only | merged (#391) |
 | 6 | registry_env migrates to a composed version on a current process-bigraph | @4 (0.7.46) and @5 (0.7.50) ready; suite run 5 running; then the default |
-| 7a | Runs name an environment or have one inferred; environments listed from the database | decisions proposed |
-| 7b | Implicit mash-ups, proven with a light pure-PyPI component | |
+| 7a | Runs name an environment or have one inferred; environments listed from the database | decided |
+| 7b | Implicit mash-ups, proven with viva-basic-processes | decided |
 | 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | |
 | 8 | Retire the shared uv path, `simulator_registry.json`, `shared_image()`, pbest in images, `PREBUILT_SIMULATORS`, the committed interface manifests | |
 
@@ -104,7 +104,7 @@
 6. **Every run records the version it got.** An inferred choice can change later; to reproduce a run, name that
    version.
 
-### Step 7's decisions (proposed 2026-10-26, for Jim to confirm)
+### Step 7's decisions (Jim, 2026-10-26: D7.1–D7.10 confirmed as recommended)
 
 **What exists today, which step 7 starts from:**
 - A run names a prebuilt image (`simulator=`) or goes to `registry_env`, with an optional `environment_version=`. No
@@ -134,7 +134,7 @@
   runs while the request waits (about 15 s), so a conflict is a **409 with pixi's explanation** before anything is
   recorded. The build and the compliance runs follow in the background, and the run waits in the queue until the
   image is ready, as a run on a new version of `registry_env` would.
-- **D7.5 Who may cause a mash-up build.** *Recommended:* only a signed-in caller, while anyone may *use* a mash-up that
+- **D7.5 Who may cause a mash-up build.** Only a signed-in caller, while anyone may *use* a mash-up that
   exists. A build runs registry code as root on the privileged builder for a few minutes, so an anonymous request
   should not be able to start one; C5 said anyone, so this narrows it. At most two implicit builds run at a time, and
   the same entry set is never built twice (the identity is the set).
@@ -312,8 +312,16 @@
    - **7b. Implicit mash-ups, proven with a light component.**
      - Creation when nothing covers the set: the lock in the request (409 on a conflict), the build and compliance in
        the background, the run queued behind the image (D7.4–D7.6). Signed-in only, two builds at a time (D7.5).
-     - The first real member: a catalog component that installs from PyPI alone (no conda, no build step), raised to
-       a manifest entry with an `install` pin and a compliance case, at `tested`. Chosen with Jim.
+     - The first real member (Jim, 2026-10-26): **viva-basic-processes**, pinned by commit (`9a1a624`; it is not on
+       PyPI, and its `v0.3.0` tag predates the rename and installs as `pbg-basic-processes`). Its dependencies are
+       process-bigraph ≥1.4.12, bigraph-schema, sympy and numpy; on our core (process-bigraph 1.9.1, bigraph-schema
+       1.8.1) it installs and provides `Clock`, `Tick`, `Intervention` (processes) and `MathExpressionStep` (a step),
+       checked 2026-10-26. Raised to a manifest entry with an `install` pin and a compliance case, at `tested`.
+     - Why it: its classes exchange state with an ODE, so a mash-up tests that two entries' ports fit, not only that
+       they install together. The document: pbsim-common's `CopasiUTCProcess` steps an ODE, `Intervention` changes a
+       species partway through, `MathExpressionStep` derives a readout; its compliance case checks the step change.
+     - Second, later: viva-emitters (PyPI 0.4.3; `SQLiteEmitter` needs no extras). viva-torch is too heavy for a first
+       test. Pinning viva-basic-processes changes nothing in vivarium-collective.
      - Live: a document using it with a pbsim-common step creates `mash-…`, builds it, runs, and a second identical
        run reuses it. A deliberately conflicting pair answers 409.
      - The webapp shows mash-ups on the environments page.
