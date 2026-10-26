@@ -1,6 +1,6 @@
 # Known problems: each solver's expected failures in a suite, curated by an admin, cleared when fixed
 
-**Status (2026-10-26): step 1 released (0.7.47, 0.7.48); VCell's import failures seeded; step 2a under way.** It follows run 4 of biomodels-curated-300 on `registry_env@4`
+**Status (2026-10-26): steps 1, 2a and 3 done (0.7.47–0.7.49); step 2b (curating in the webapp) waits for the CSP.** It follows run 4 of biomodels-curated-300 on `registry_env@4`
 ([plan-environment-composition](plan-environment-composition.md), step 6) and borrows the known-faults pattern of
 VCell's regression tests. One PR per step, each merged with a merge commit.
 
@@ -103,12 +103,18 @@ VCell's regression tests. One PR per step, each merged with a merge commit.
    - **2b, curating:** with `suites:curate`, "Mark known problem" (solver, category, reason) on a solver that failed
      or differs, and "Clear" on a resolved one. Each opens a confirmation dialog, after the CSP is enforced
      (plan-webapp-admin A3). Vitest tests for the gating and the dialogs.
-3. **Seed and remove `expected:`.**
-   - Mark the 11 `expected:` entries, solver-scoped, through the CLI.
-   - Mark run 4's VCell import failures, with categories from the logs and VCell's `knownFaults()`.
-   - Leave BIOMD 112 (`null` cause) and 175 (unknown identifier) as new failures until they are reported to VCell.
-     The same goes for 56 and 168 (VCell disagrees), 235 (out of memory) and 255 (timeout).
-   - Remove `expected:` and `ExpectedFailure` from `suites.py` and the suite files.
+3. **Seed and remove `expected:`.** Done 2026-10-26.
+   - Run 4's VCell import failures: 24 problems (ids 1–24), seen in run 4, each with VCell's own message as its
+     reason and the category VCell's `knownFaults()` would give it: non-integer stoichiometry 9, delay 6, lumped
+     kinetics units (`INCONSISTENT_UNIT_SYSTEM`) 5, expression binding 3, non-numeric stoichiometry
+     (`NONCONSTANT_STOICH`) 1.
+   - The 11 `expected:` entries became problems 25–35 (seen in run 1). Tellurium's on BIOMD 123 (CVODE convergence)
+     and 152 (CVODE error test) were cleared at run 2, the first run in which Tellurium completes and agrees there.
+   - Left as new failures: BIOMD 112 (`null` cause) and 175 (unknown identifier) until they are reported to VCell; 56
+     and 168 (VCell disagrees), 137 (VCell's solve error), 235 (out of memory) and 255 (timeout).
+   - `expected:` and `ExpectedFailure` are gone from `suites.py`, the suite files and `scripts/biomodels_suite.py`.
+   - Seeding found one rule to fix (#404): a label neither solver of a pair reports (mostly reaction rates the SED-ML
+     asks for) is not a disagreement between them. With it, run 4 reads 15 rows excused instead of 6.
 
 ## Verification
 

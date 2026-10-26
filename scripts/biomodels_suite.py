@@ -4,8 +4,8 @@
 
 Walks BIOMD0000000001 upward and keeps every entry BioModels has that is manually curated and in SBML, until it has
 ``--count``. Every one goes in: an entry that does not translate, or that a solver cannot run, shows up as a failure of
-the suite's first run, which is the point at this scale. Known disagreements become `expected` entries afterwards,
-as they did for biomodels-ode-sample.
+the suite's first run, which is the point at this scale. Known problems are recorded afterwards, through the API
+(docs/plan-known-problems.md).
 """
 
 import argparse
@@ -18,27 +18,16 @@ from compose_api.sedml import sources
 HEADER = """# A regression and reproducibility suite (docs/plan-sedml.md, phase 6): the first {count} curated SBML
 # models in EBI BioModels (BIOMD0000000001 upward), each run on every solver and compared. Generated on {date} by
 # scripts/biomodels_suite.py; regenerate rather than edit the sources. Every curated SBML entry is included, whether or
-# not it translates: the first run's failures are its findings, and known disagreements become `expected` entries.
+# not it translates: the first run's failures are its findings, and known problems are recorded through the API
+# (docs/plan-known-problems.md).
 # Its runs are queued behind interactive ones, at most half of submission_max_active_jobs at a time
 # (docs/plan-durable-submission.md, Q3).
 name: {name}
 description: The first {count} curated SBML models in BioModels, each run on COPASI, Tellurium and VCell and compared.
 solvers: [copasi, tellurium, vcell]
 tolerances: {{rel_tol: 1.0e-4, abs_tol_min: 1.0e-3, abs_tol_scale: 1.0e-5}}
-{expected}sources:
+sources:
 """
-
-
-def _expected_block(path: Path) -> str:
-    """The suite's `expected` entries, kept from the file being regenerated: they are findings, not generated."""
-    if not path.exists():
-        return "expected: []\n"
-    lines = path.read_text().splitlines(keepends=True)
-    start = next((i for i, line in enumerate(lines) if line.startswith("expected:")), None)
-    if start is None:
-        return "expected: []\n"
-    end = next((i for i in range(start + 1, len(lines)) if lines[i][:1] not in (" ", "#", "\n")), len(lines))
-    return "".join(lines[start:end])
 
 
 async def curated(model_number: int, gate: asyncio.Semaphore) -> sources.BiomodelInfo | None:
@@ -65,9 +54,7 @@ async def main(count: int, name: str, start: int) -> None:
     lines = [f"  - biomodels:{info.id}  # {info.name.replace('#', '')[:90]}" for info in found]
     path = Path("examples") / name / "suite.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
-    header = HEADER.format(
-        count=count, name=name, date=datetime.date.today().isoformat(), expected=_expected_block(path)
-    )
+    header = HEADER.format(count=count, name=name, date=datetime.date.today().isoformat())
     path.write_text(header + "\n".join(lines) + "\n")
     print(f"{path}: {len(found)} models, {found[0].id} to {found[-1].id} (checked up to BIOMD{number - 1:010d})")
 

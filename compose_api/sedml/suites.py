@@ -16,12 +16,6 @@ from compose_api.sedml.models import Tolerances
 SUITES_DIR = Path(REPO_ROOT) / "examples"
 
 
-class ExpectedFailure(BaseModel):
-    source: str
-    solver: str | None = None
-    reason: str
-
-
 class Suite(BaseModel):
     name: str = Field(pattern=r"^[a-z0-9][a-z0-9-]*$")
     description: str
@@ -29,10 +23,6 @@ class Suite(BaseModel):
     solvers: list[str] | None = None
     tolerances: Tolerances = Field(default_factory=Tolerances)
     baseline: int | None = Field(default=None, description="the accepted suite run that later runs are compared with")
-    expected: list[ExpectedFailure] = Field(
-        default_factory=list,
-        description="known problems not yet moved to records (docs/plan-known-problems.md, K8); read as open ones",
-    )
     verify: Literal["none", "failing", "all"] = Field(
         default="none",
         description="check comparisons against biosim's /verify once they finish: those that differ, are incomplete "
