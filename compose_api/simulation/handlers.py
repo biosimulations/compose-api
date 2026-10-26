@@ -77,7 +77,10 @@ async def run_simulation(
     (docs/plan-durable-submission.md, Q3); ``requested_by`` is the caller's subject, kept for fair scheduling."""
     # the environment version it runs in (docs/plan-environment-versions.md): the one it names, or the default
     version, simulator_version = await version_for(
-        database_service, simulation_request.simulator, simulation_request.environment_version
+        database_service,
+        simulation_request.simulator,
+        simulation_request.environment_version,
+        simulation_request.environment,
     )
     simulation_request = simulation_request.model_copy(
         update={"labels": {**simulation_request.labels, "environment_version": version.label}}

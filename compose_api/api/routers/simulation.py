@@ -56,13 +56,18 @@ REJECTED_RESPONSE = {
 }
 
 
-def _named_environment(environment: str | None, simulator: str | None) -> str | None:
+async def _named_environment(environment: str | None, simulator: str | None) -> tuple[str | None, str | None]:
     """The prebuilt simulator a request's `environment` and `simulator` name (None: the shared environment, or none
-    named). `environment` names any environment this deployment offers; `simulator` is the older name for a prebuilt
-    one, kept for a release (docs/plan-environment-composition.md, D7.1). A 400 when they disagree."""
+    named), and the undeclared composed environment it names (a mash-up), if it does. `environment` names any
+    environment this deployment offers or the database holds; `simulator` is the older name for a prebuilt one, kept
+    for a release (docs/plan-environment-composition.md, D7.1). A 400 when they disagree or the name is unknown."""
     if environment is None:
-        return simulator
+        return simulator, None
     spec = next((e for e in load_environments().environments if e.name == environment), None)
+    if spec is None and await _is_mash_up(environment):
+        if simulator is not None:
+            raise HTTPException(status_code=400, detail=f"`environment={environment}` is a mash-up, not `{simulator}`.")
+        return None, environment
     if spec is None or deployed_image(spec) is None:
         raise HTTPException(status_code=400, detail=f"No environment {environment!r} is offered here.")
     named = spec.name if spec.kind == "prebuilt" else None
@@ -70,7 +75,15 @@ def _named_environment(environment: str | None, simulator: str | None) -> str | 
         raise HTTPException(
             status_code=400, detail=f"`environment={environment}` and `simulator={simulator}` disagree."
         )
-    return named
+    return named, None
+
+
+async def _is_mash_up(name: str) -> bool:
+    database_service = get_database_service()
+    if database_service is None:
+        return False
+    records = await database_service.get_environments_db().environments()
+    return any(r.name == name and r.kind == "mash-up" for r in records)
 
 
 def _inferred_simulator(path: Path, file_type: SimulationFileType) -> str | None:
@@ -157,11 +170,13 @@ async def submit_simulation(
     stored with it as given (compose_api/simulation/labels.py) and filter `GET /simulations`."""
     logger.info("Simulation submission from %s", describe_caller(principal))
     run_tags, run_description = _checked_options(simulator, interval_time, tags, description)
-    simulator = _named_environment(environment, simulator)
+    simulator, composed = await _named_environment(environment, simulator)
     named = environment is not None or simulator is not None or environment_version is not None
     if environment_version is not None:
         try:
-            await chosen_version(get_required_database_service(), environment_of(simulator), environment_version)
+            await chosen_version(
+                get_required_database_service(), composed or environment_of(simulator), environment_version
+            )
         except VersionUnavailableError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -173,7 +188,8 @@ async def submit_simulation(
     simulation_request.end_time_point = interval_time
     simulation_request.simulator = simulator
     simulation_request.environment_version = environment_version
-    simulation_request.labels = labels(source="upload", environment=simulator or SERVICE_BUNDLE)
+    simulation_request.environment = composed
+    simulation_request.labels = labels(source="upload", environment=composed or simulator or SERVICE_BUNDLE)
     simulation_request.tags = run_tags
     simulation_request.description = run_description
     # Checked before anything is recorded or submitted: the container resolves addresses itself, and will import
@@ -185,7 +201,7 @@ async def submit_simulation(
     # there, or an entry whose compliance cases failed there, is refused before the manifest's level is consulted
     database_service = get_database_service()  # none: no version to consult, so the manifest alone decides
     standing = (
-        await standing_for(database_service, environment_of(None), environment_version)
+        await standing_for(database_service, composed or environment_of(None), environment_version)
         if simulator is None and database_service is not None
         else None
     )
@@ -196,7 +212,7 @@ async def submit_simulation(
             AddressPolicy(get_settings().address_policy),
             registry=simulator is None,
             standing=standing,
-            environment=environment_of(simulator),
+            environment=composed or environment_of(simulator),
         )
     except SubmissionRejectedError as e:
         simulation_request.request_file_path.unlink(missing_ok=True)

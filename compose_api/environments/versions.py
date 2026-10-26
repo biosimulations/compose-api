@@ -72,12 +72,38 @@ async def chosen_version(
     return EnvironmentVersion.model_validate(plain), simulator
 
 
+def declared(environment: str) -> bool:
+    """Whether environments.yaml declares the environment (the shared one, a prebuilt image); a mash-up it does not."""
+    return any(spec.name == environment for spec in load_environments().environments)
+
+
+async def composed_version(
+    database_service: "DatabaseService", environment: str, number: int | None = None
+) -> tuple[EnvironmentVersion, SimulatorVersion]:
+    """The version a run in an undeclared composed environment (a mash-up) uses: ``number``, or its default. The
+    deployment has no definition of it, so there is nothing to adopt: its versions are made by composing its entries
+    (docs/plan-environment-composition.md, step 7b)."""
+    if number is None:
+        default = await database_service.get_environments_db().get_default(environment)
+        if default is None:
+            raise VersionUnavailableError(f"{environment} has no default version yet")
+        number = default.number
+    return await chosen_version(database_service, environment, number)
+
+
 async def version_for(
-    database_service: "DatabaseService", simulator: str | None, number: int | None = None
+    database_service: "DatabaseService",
+    simulator: str | None,
+    number: int | None = None,
+    environment: str | None = None,
 ) -> tuple[EnvironmentVersion, SimulatorVersion]:
     """The version a run of ``simulator`` uses (None: the shared environment), and its simulator row: ``number`` when
     the run names one; otherwise the default an administrator chose, or else the deployment's own definition, both
-    created the first time it is seen."""
+    created the first time it is seen. ``environment`` names an undeclared composed environment (a mash-up) instead."""
+    if environment is not None and not declared(environment):
+        return await composed_version(database_service, environment, number)
+    if environment is not None and simulator is None and environment != shared_environment():
+        simulator = environment  # a declared prebuilt environment, named as an environment
     if number is not None:
         return await chosen_version(database_service, environment_of(simulator), number)
     definition, image = deployed_definition(simulator)

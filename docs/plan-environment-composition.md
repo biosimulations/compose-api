@@ -19,7 +19,7 @@
 | 5c | Admission by what the version certifies: a refused component, a failed entry, members only | merged (#391) |
 | 6 | registry_env migrates to a composed version on a current process-bigraph | @4 (0.7.46) and @5 (0.7.50) ready; suite run 5 running; then the default |
 | 7a | Runs name an environment or have one inferred; environments listed from the database | merged (#415, #416) |
-| 7b | Implicit mash-ups, proven with viva-basic-processes | 7b-1 (the entry and its case) in review; then 7b-2 (runs in any composed environment), 7b-3 (implicit creation), 7b-4 (live) |
+| 7b | Implicit mash-ups, proven with viva-basic-processes | 7b-1 (the entry and its case, #417) and 7b-2 (runs in any composed environment) in review; then 7b-3 (implicit creation), 7b-4 (live) |
 | 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | |
 | 8 | Retire the shared uv path, `simulator_registry.json`, `shared_image()`, pbest in images, `PREBUILT_SIMULATORS`, the committed interface manifests | |
 
@@ -353,6 +353,13 @@
        writes y = 3x + 1, Clock ticks; after five steps x = 11, y = 34, tick = 5, and x = 5 after two. Run locally through
        compose-api's runner on process-bigraph 1.9.1, the case passed. Compliance gains a `scalar` expectation (a
        plain number in an emitted row), since these stores are floats, not a `numeric_result`.
+     - *As built, 7b-2 (2026-10-26):* a run can name a composed environment the deployment does not declare.
+       `SimulationRequest.environment` carries a mash-up's name, and `version_for` takes its named version or its
+       default from the database (`composed_version`; there is no deployed definition to adopt). `/simulation/run`'s
+       `environment=` accepts a mash-up the database holds (`simulator=` with it is a 400). Admission uses that
+       version's standing, so its members are admitted and anything else is refused, and the run is labelled with it.
+       A version's compliance cases now name its environment, so a mash-up's run in the mash-up (before, they would
+       have run in registry_env). Mash-ups are still made only directly; 7b-3 makes them from a run.
      - Second, later: viva-emitters (PyPI 0.4.3; `SQLiteEmitter` needs no extras). viva-torch is too heavy for a first
        test. Pinning viva-basic-processes changes nothing in vivarium-collective.
      - Live: a document using it with a pbsim-common step creates `mash-…`, builds it, runs, and a second identical
