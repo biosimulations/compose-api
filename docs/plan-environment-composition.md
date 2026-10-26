@@ -15,8 +15,8 @@
 | 4 | Composed versions: created `resolving`, locked in the background, built, read back; exported as pixi | merged (#387) |
 | 4b | The uv export (`pyproject.toml` and `uv.lock`) for a composed version that needs no conda | merged (#388) |
 | 5a | Compliance checks: the generic `step-outputs-replace` check, cases kept with an entry, their evaluation; pbsim-common's first cases | merged (#389) |
-| 5b | Compliance runs: after a build, each member entry's cases run in the version; levels recorded per entry and version; API and CLI | in review |
-| 5c | Admission by computed level: a component runs only where its entry is `tested` in the version that will run it | |
+| 5b | Compliance runs: after a build, each member entry's cases run in the version; levels recorded per entry and version; API and CLI | merged (#390) |
+| 5c | Admission by what the version certifies: a refused component, a failed entry, members only | in review |
 | 6 | registry_env migrates to a composed version on a current process-bigraph | |
 | 7 | The per-composite resolver: mash-ups built on demand from a run | |
 | 8 | Retire the shared uv path, `simulator_registry.json`, `shared_image()`, pbest in images, `PREBUILT_SIMULATORS`, the committed interface manifests | |
@@ -217,7 +217,24 @@
    - **CLI:** `environments compliance NAME N [--run]`.
    - **A bug the tests caught:** the type-table script was first called `types.py`, which shadowed Python's `types`
      module for the describe script beside it. It is `type_tables.py`.
-5c. **Admission by computed level.**
+5c. **Admission by what the version certifies.**
+   *As built (2026-10-26):*
+   - **The standing** (`environments/admission.py`): `standing_for(environment, number)` gives the standing of the
+     version a run will use, the named one or the default. It holds:
+     - its members, for a composed version;
+     - each entry's level, from its case runs as recorded;
+     - the components a generic check refused there.
+   - **Who passes it:** `/simulation/run` (registry path) and SED-ML submissions, per solver environment. Without a
+     database there is no version, and the manifest alone decides.
+   - **The order** (`registry/validation.py`, `_registry_reason`):
+     1. a component refused in the version is refused alone, with the check's detail;
+     2. a composed version runs only its own entries;
+     3. an entry that **failed** its cases there is refused;
+     4. one that **passed** them (`tested`) is admitted, whatever the manifest asserts;
+     5. one with cases `pending`, or no cases yet, keeps the manifest's level, as today.
+   - **What changes in production now:** nothing. registry_env's default is @1, which is not composed and has no
+     findings or case runs. The standing starts to decide when a composed version is the default (step 6), or is
+     named.
 6. **registry_env migrates.**
    - pbsim-common and biosim-toolkit move to process-bigraph ≥1.9.1. pbsim_common is changed only with Jim's go-ahead.
    - Create the first composed version, run Ciliberto and biomodels-curated-300 on it, and compare with run 3. Make it the default when it holds.

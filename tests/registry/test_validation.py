@@ -12,6 +12,7 @@ from jinja2 import Template
 from compose_api.registry.manifest import CurationLevel, Manifest, RegistryEntry, load_manifest
 from compose_api.registry.validation import (
     AddressPolicy,
+    Standing,
     SubmissionRejectedError,
     find_violations,
     validate_submission,
@@ -188,3 +189,54 @@ def test_sbml_carries_no_addresses(tmp_path: Path) -> None:
     path = tmp_path / "model.sbml"
     path.write_text("<sbml/>")
     assert find_violations(path, SimulationFileType.SBML, load_manifest()) == []
+
+
+# --- admission by what the version certifies (docs/plan-environment-composition.md, step 5c) --------------------
+
+MSE = "local:pbsim_common.comparison.MSEComparison"
+
+
+def _violations(tmp_path: Path, standing: Standing | None, *addresses: Any) -> list[str]:
+    path = tmp_path / "doc.pbg"
+    path.write_bytes(document(*addresses))
+    return [v.reason for v in find_violations(path, SimulationFileType.PBG, load_manifest(), standing)]
+
+
+def test_a_component_refused_in_the_version_is_refused_alone(tmp_path: Path) -> None:
+    standing = Standing(
+        label="registry_env@3",
+        levels={"pbsim-common": "tested"},
+        refused={MSE.removeprefix("local:"): "a step's results must replace"},
+    )
+    (reason,) = _violations(tmp_path, standing, COPASI, MSE)  # its sibling from the same entry still runs
+    assert (
+        reason == "`pbsim_common.comparison.MSEComparison` is refused in registry_env@3: a step's results must replace"
+    )
+
+
+def test_an_entry_runs_as_its_cases_went_in_the_version(tmp_path: Path) -> None:
+    failed = Standing(label="registry_env@3", levels={"pbsim-common": "failed"})
+    (reason,) = _violations(tmp_path, failed, COPASI)
+    assert reason == "registry entry `pbsim-common` failed its compliance cases in registry_env@3"
+    for level in ("tested", "pending", "untested"):  # passed, still running, or none yet: the manifest's level stands
+        assert _violations(tmp_path, Standing(label="registry_env@3", levels={"pbsim-common": level}), COPASI) == []
+
+
+def test_tested_in_the_version_admits_an_entry_the_manifest_lists_lower(tmp_path: Path) -> None:
+    listed = RegistryEntry(
+        id="viva-example", package="viva-example", source="https://github.com/vivarium-collective/viva-example",
+        commit="0" * 40, module_roots=["viva_example"], level=CurationLevel.LISTED,
+    )  # fmt: skip
+    manifest = Manifest(entries=[listed])
+    path = tmp_path / "doc.pbg"
+    path.write_bytes(document("local:viva_example.Step"))
+    composed = Standing(label="mash-1@1", members=frozenset({"viva-example"}), levels={"viva-example": "tested"})
+    assert find_violations(path, SimulationFileType.PBG, manifest, composed) == []
+    (refused,) = find_violations(path, SimulationFileType.PBG, manifest, None)  # without the version: its level
+    assert "at level `listed`" in refused.reason
+
+
+def test_a_composed_version_runs_only_its_own_entries(tmp_path: Path) -> None:
+    composed = Standing(label="mash-1@1", members=frozenset({"biosim-toolkit"}))
+    (reason,) = _violations(tmp_path, composed, COPASI)
+    assert reason == "registry entry `pbsim-common` is not part of mash-1@1"

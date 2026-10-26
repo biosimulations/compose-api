@@ -578,6 +578,11 @@ def fake_compose_api(auth0_verifier: Auth0Verifier, monkeypatch: pytest.MonkeyPa
         monkeypatch.setattr(simulation_router, name, object)
     monkeypatch.setattr(simulation_router, "get_simulation_request_from_uploaded_file", fake.request_from_upload)
     monkeypatch.setattr(simulation_router, "validate_submission", lambda *_args, **_kwargs: None)
+
+    async def no_standing(*_args: object) -> None:  # no versions here: the stand-in validation decides
+        return None
+
+    monkeypatch.setattr(simulation_router, "standing_for", no_standing)
     monkeypatch.setattr(simulation_router, "wrap_document_in_omex", lambda req: req)
     monkeypatch.setattr(simulation_router, "run_simulation", fake.run_simulation)
     try:

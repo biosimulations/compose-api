@@ -19,8 +19,9 @@ from compose_api.dependencies import (
     get_required_job_monitor,
     get_required_simulation_service,
 )
+from compose_api.environments.admission import standing_for
 from compose_api.registry.solvers import Solver, load_solvers
-from compose_api.registry.validation import AddressPolicy, validate_submission
+from compose_api.registry.validation import AddressPolicy, Standing, validate_submission
 from compose_api.sedml.compare import compare, read_report
 from compose_api.sedml.models import Comparison, ComparisonMember, SedmlFinding, Tolerances
 from compose_api.sedml.translator import Translation, translate
@@ -88,6 +89,7 @@ async def submit(
         else {}
     )
     created: list[int] = []
+    standings: dict[str, Standing | None] = {}  # the version each solver's environment will run, by environment
     for task in translation.tasks:
         if tasks and task.task not in tasks:
             continue
@@ -116,8 +118,18 @@ async def submit(
             source_file = run_dir / "source.omex"
             shutil.copyfile(archive, input_file)
             shutil.copyfile(source, source_file)
-            # the same check as any upload: the translation's addresses must be registered at `tested`
-            validate_submission(input_file, SimulationFileType.OMEX, AddressPolicy(get_settings().address_policy))
+            # the same check as any upload: the translation's addresses must be registered at `tested`, and not
+            # refused by the version the solver's environment will run (docs/plan-environment-composition.md, 5c)
+            environment = by_id[solver_id].environment
+            if environment not in standings:
+                number = (environment_versions or {}).get(environment)
+                standings[environment] = await standing_for(db, environment, number)
+            validate_submission(
+                input_file,
+                SimulationFileType.OMEX,
+                AddressPolicy(get_settings().address_policy),
+                standing=standings[environment],
+            )
             request = SimulationRequest(
                 request_file_path=input_file,
                 simulation_file_type=SimulationFileType.OMEX,

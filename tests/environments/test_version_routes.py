@@ -543,3 +543,48 @@ async def test_compliance_runs_only_for_a_ready_composed_version(app: FastAPI, b
         image = (await admin.post(f"/registry/environments/{PREBUILT}/versions", json={"image": _digest()})).json()
         refused = await admin.post(f"/registry/environments/{PREBUILT}/versions/{image['number']}/compliance")
     assert refused.status_code == 409 and "not a ready composed version" in refused.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_admission_follows_what_the_version_certifies(
+    app: FastAPI, builds: Builds, locks: Locks, database_service: DatabaseServiceSQL, tmp_path: Path
+) -> None:
+    """Step 5c: the standing of the version a run will use, from its findings and its case runs, decides first."""
+    import json
+
+    from compose_api.environments.admission import standing_for
+    from compose_api.registry.validation import AddressPolicy, SubmissionRejectedError, validate_submission
+    from compose_api.simulation.models import SimulationFileType
+
+    async with _as(app, ADMIN) as admin:
+        number = (await admin.post("/registry/environments/registry_env/versions", json={})).json()["number"]
+    environments_db = database_service.get_environments_db()
+    version = await environments_db.get_by_number("registry_env", number)
+    assert version is not None
+    mse = "pbsim_common.comparison.MSEComparison"
+    await environments_db.set_findings(
+        version.database_id, [{"component": mse, "check": "step-outputs-replace", "severity": "fail", "detail": "sums"}]
+    )
+    standing = await standing_for(database_service, "registry_env", number)
+    assert standing is not None and standing.label == f"registry_env@{number}"
+    assert standing.members is not None and {"pbsim-common", "readdy"} <= standing.members
+    assert standing.levels["pbsim-common"] == "pending" and standing.refused == {mse: "sums"}
+
+    def submit(*addresses: str) -> None:
+        state = {f"s{i}": {"_type": "step", "address": a} for i, a in enumerate(addresses)}
+        path = tmp_path / "doc.pbg"
+        path.write_text(json.dumps({"state": state}))
+        validate_submission(path, SimulationFileType.PBG, AddressPolicy.ENFORCE, standing=standing)
+
+    submit("local:pbsim_common.simulators.copasi_process.CopasiUTCStep")  # pending: the manifest's level stands
+    with pytest.raises(SubmissionRejectedError) as refused:
+        submit(f"local:{mse}")
+    assert f"refused in registry_env@{number}: sums" in refused.value.violations[0].reason
+
+    for run in await environments_db.compliance_runs(version.database_id):
+        await environments_db.set_compliance_outcome(run.id, "failed", ["off"])
+    standing = await standing_for(database_service, "registry_env", number)
+    assert standing is not None and standing.levels["pbsim-common"] == "failed"
+    with pytest.raises(SubmissionRejectedError) as failed:
+        submit("local:pbsim_common.simulators.copasi_process.CopasiUTCStep")
+    assert "failed its compliance cases" in failed.value.violations[0].reason
