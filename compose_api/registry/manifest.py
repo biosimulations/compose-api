@@ -5,7 +5,9 @@ registry of record described by strategy decision 5; the database tables that pr
 """
 
 import enum
+import re
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field, model_validator
@@ -41,15 +43,51 @@ class CurationLevel(enum.StrEnum):
 HPC_MINIMUM_LEVEL = CurationLevel.TESTED
 
 
+_COMMIT = re.compile(r"^[0-9a-f]{40}$")
+
+
+class Install(BaseModel):
+    """How an entry is installed into a composed environment (docs/plan-environment-composition.md, C2): a release
+    from PyPI, or a git repository at a full commit, with any extras."""
+
+    pypi: str | None = None
+    version: str | None = None
+    git: str | None = None
+    commit: str | None = None
+    extras: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _one_source_pinned(self) -> "Install":
+        if (self.pypi is None) == (self.git is None):
+            raise ValueError("an install names exactly one of `pypi` and `git`")
+        if self.pypi is not None and not self.version:
+            raise ValueError(f"`pypi: {self.pypi}` needs its exact `version`")
+        if self.git is not None and not (self.commit and _COMMIT.match(self.commit)):
+            raise ValueError(f"`git: {self.git}` needs a full 40-character `commit`, never a branch")
+        return self
+
+    @property
+    def name(self) -> str:
+        """The distribution's name, normalized, from PyPI's name or the repository's."""
+        raw = self.pypi or (self.git or "").rstrip("/").removesuffix(".git").rsplit("/", 1)[-1]
+        return re.sub(r"[-_.]+", "-", raw).lower()
+
+
 class RegistryEntry(BaseModel):
     id: str
     package: str
     source: str
+    # a `component` provides process classes (its module roots) and is what admission and compliance are about; a
+    # `library` is installed for a component's sake (an engine, or a pin on a component's floating dependency)
+    kind: Literal["component", "library"] = "component"
     version: str | None = None
     commit: str | None = None
-    module_roots: list[str] = Field(min_length=1)
+    module_roots: list[str] = Field(default_factory=list)
     level: CurationLevel
     bundles: list[str] = Field(default_factory=list)
+    install: Install | None = None
+    # conda-forge requirements, name -> version spec, for what PyPI cannot supply (MPI, PETSc, a C++ engine)
+    conda: dict[str, str] = Field(default_factory=dict)
     evidence: list[str] = Field(default_factory=list)
     reviewer: str | None = None
 
@@ -57,6 +95,8 @@ class RegistryEntry(BaseModel):
     def _pinned(self) -> "RegistryEntry":
         if self.version is None and self.commit is None:
             raise ValueError(f"registry entry {self.id!r} must be pinned by version or commit")
+        if self.kind == "component" and not self.module_roots:
+            raise ValueError(f"registry entry {self.id!r} is a component, so it needs `module_roots`")
         return self
 
 

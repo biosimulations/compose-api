@@ -22,6 +22,17 @@ environments:
     kind: shared
     # the image's ENTRYPOINT runs pbest; its Python is the micromamba env
     python: [micromamba, run, -p, /micromamba_env/runtime_env, python3]
+    # what it is composed of (docs/plan-environment-composition.md): each entry says how it installs in manifest.yaml
+    python_version: "3.12"
+    entries:
+      - pbsim-common
+      - pb-multiscale-actin
+      - biosim-toolkit
+      - tellurium
+      - python-copasi
+      - pyvcell
+      - libvcell
+      - readdy
 
   - name: viva-pde-particle
     kind: prebuilt

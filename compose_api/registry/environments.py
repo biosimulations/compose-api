@@ -38,11 +38,51 @@ class EnvironmentSpec(BaseModel):
     name: str
     kind: Literal["shared", "prebuilt"]
     python: list[str] = Field(min_length=1)
+    # the registry entries composed into it (docs/plan-environment-composition.md, C2): each declares how it installs.
+    # A prebuilt image's contents are its owner's, so it lists none.
+    entries: list[str] = Field(default_factory=list)
+    python_version: str | None = None
 
 
 class EnvironmentsFile(BaseModel):
     describe: DescribeSource
     environments: list[EnvironmentSpec]
+
+
+def composition_problems(environments: EnvironmentsFile, manifest: Manifest) -> list[str]:
+    """What keeps each environment's `entries` from being composed: an entry that is unknown or has no `install`, two
+    entries installing one distribution, and a disagreement with the entries' own `bundles` (both say where an entry is
+    installed until `bundles` is retired). Empty when every composition is sound."""
+    return [p for spec in environments.environments if spec.entries for p in _spec_problems(spec, manifest)]
+
+
+def _spec_problems(spec: EnvironmentSpec, manifest: Manifest) -> list[str]:
+    by_id = {e.id: e for e in manifest.entries}
+    problems: list[str] = []
+    if spec.kind == "prebuilt":
+        problems.append(f"{spec.name}: a prebuilt image is its owner's, so it lists no entries")
+    if len(set(spec.entries)) != len(spec.entries):
+        problems.append(f"{spec.name}: an entry is listed twice")
+    installs: dict[str, str] = {}
+    for entry_id in spec.entries:
+        entry = by_id.get(entry_id)
+        if entry is None:
+            problems.append(f"{spec.name}: no registry entry {entry_id!r}")
+        elif entry.install is None and not entry.conda:
+            problems.append(f"{spec.name}: entry {entry_id!r} does not say how it installs (`install` or `conda`)")
+        else:
+            names = [entry.install.name] if entry.install is not None else []
+            for name in [*names, *(f"conda:{c}" for c in entry.conda)]:
+                other = installs.setdefault(name, entry_id)
+                if other != entry_id:
+                    problems.append(f"{spec.name}: {other!r} and {entry_id!r} both install {name}")
+    bundled = {e.id for e in manifest.entries if spec.name in e.bundles}
+    if bundled != set(spec.entries):
+        problems.append(
+            f"{spec.name}: its entries {sorted(set(spec.entries))} differ from the entries bundled in it"
+            f" {sorted(bundled)}"
+        )
+    return problems
 
 
 def load_environments(path: Path = ENVIRONMENTS_PATH) -> EnvironmentsFile:
