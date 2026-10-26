@@ -98,3 +98,40 @@ export async function requestBuild(name: string): Promise<ImageStatus> {
   if (error || !data) throw new Error(errorMessage(error, `Could not start the build of ${name}`))
   return data
 }
+
+export type EnvironmentVersions = Schemas['EnvironmentVersions']
+export type EnvironmentVersion = Schemas['EnvironmentVersion']
+export type EnvironmentVersionDetail = Schemas['EnvironmentVersionDetail']
+export type ComplianceReport = Schemas['ComplianceReport']
+
+/** An environment's versions, newest first, and which is its default (docs/plan-environment-versions.md). */
+export async function fetchVersions(name: string): Promise<EnvironmentVersions> {
+  const { data, error } = await useApi().GET('/registry/environments/{name}/versions', { params: { path: { name } } })
+  if (error || !data) throw new Error(errorMessage(error, `Could not list the versions of ${name}`))
+  return data
+}
+
+/** One version: what it was made from, its lock, and what it installed and provides. */
+export async function fetchVersion(name: string, number: number): Promise<EnvironmentVersionDetail> {
+  const { data, error } = await useApi().GET('/registry/environments/{name}/versions/{number}', {
+    params: { path: { name, number } }
+  })
+  if (error || !data) throw new Error(errorMessage(error, `Could not read ${name}@${number}`))
+  return data
+}
+
+/** Where each of a composed version's entries stands there (its compliance cases), and what the checks refuse. */
+export async function fetchCompliance(name: string, number: number): Promise<ComplianceReport | null> {
+  const { data } = await useApi().GET('/registry/environments/{name}/versions/{number}/compliance', {
+    params: { path: { name, number } }
+  })
+  return data ?? null
+}
+
+/** The files that recreate a version locally (pixi.toml and pixi.lock, or a uv project), or null when it has none. */
+export async function fetchExport(name: string, number: number, format: 'pixi' | 'uv'): Promise<Record<string, string> | null> {
+  const { data } = await useApi().GET('/registry/environments/{name}/versions/{number}/export', {
+    params: { path: { name, number }, query: { format } }
+  })
+  return (data?.files as Record<string, string> | undefined) ?? null
+}

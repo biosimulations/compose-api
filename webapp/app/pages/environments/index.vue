@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import type { EnvironmentSummary } from '~/composables/useRegistry'
+import type { EnvironmentSummary, EnvironmentVersions } from '~/composables/useRegistry'
 
 // The environments composites run in, each with the interface manifest generated inside its image
 // (docs/plan-authoring.md): what the checker, the viewer and the editor resolve a document's classes against.
 const environments = ref<EnvironmentSummary[]>([])
+const versions = ref<Record<string, EnvironmentVersions>>({})
 const loading = ref(true)
 const error = ref<string | null>(null)
 
 onMounted(async () => {
   try {
     environments.value = await listEnvironments()
+    for (const e of environments.value) {
+      fetchVersions(e.name).then(v => (versions.value = { ...versions.value, [e.name]: v })).catch(() => {})
+    }
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -40,6 +44,11 @@ onMounted(async () => {
                 {{ e.components }} component{{ e.components === 1 ? '' : 's' }}
                 <span v-if="e.errors" class="text-warning">· {{ e.errors }} module{{ e.errors === 1 ? '' : 's' }} failed to import</span>
                 <span v-if="e.process_bigraph" class="text-muted">· process-bigraph {{ e.process_bigraph }}</span>
+              </div>
+              <div v-if="versions[e.name]?.versions?.length" class="flex flex-wrap items-center gap-2">
+                <span>{{ versions[e.name]!.versions!.length }} version{{ versions[e.name]!.versions!.length === 1 ? '' : 's' }}</span>
+                <span class="text-muted">· {{ versions[e.name]!.versions!.filter(v => v.state === 'ready').length }} ready</span>
+                <UBadge v-if="versions[e.name]!.default != null" color="primary" variant="subtle" size="sm">default @{{ versions[e.name]!.default }}</UBadge>
               </div>
               <div class="text-muted">
                 Run with <code>{{ e.simulator ? `simulator=${e.simulator}` : 'no simulator (the default)' }}</code>
