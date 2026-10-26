@@ -5,6 +5,7 @@ The image work is the run path's own function (handlers.ensure_image), replaced 
 replaced too, so nothing reaches PyPI or a cluster."""
 
 import datetime
+import hashlib
 import uuid
 from collections.abc import AsyncGenerator, Iterator
 from dataclasses import dataclass, field
@@ -321,9 +322,10 @@ async def test_a_composed_version_resolves_in_the_background_then_builds(
     assert detail["lock"].startswith("version: 7\n") and detail["lock_sha256"]
     assert builds.started == [detail["simulator_id"]]
     simulator = await database_service.get_simulator_db().get_simulator(detail["simulator_id"])
-    assert (
-        simulator is not None and detail["lock"] in simulator.container_def.representation
-    )  # the lock is its identity
+    lock_hash = hashlib.sha256(detail["lock"].encode()).hexdigest()
+    # the lock's hash is in its definition (the lock itself is built beside it): the lock is the version's identity
+    assert simulator is not None and lock_hash in simulator.container_def.representation
+    assert detail["spec"]["runner"].startswith('"""The entry point')  # it is built, and rebuilt, with this runner
 
 
 @pytest.mark.asyncio

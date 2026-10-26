@@ -157,7 +157,12 @@ async def create_composed(
         raise VersionRequestError("; ".join(problems))
     resolved_at = request.resolved_at or datetime.datetime.now(datetime.UTC)
     spec = pixi.ComposedSpec.of(environment, manifest, composition, resolved_at)
-    recorded = {**spec.as_json(), "pixi_toml": pixi.pixi_toml(spec), "pixi_image": composition.pixi_image}
+    recorded = {
+        **spec.as_json(),
+        "pixi_toml": pixi.pixi_toml(spec),
+        "pixi_image": composition.pixi_image,
+        "runner": pixi.runner_source(),  # what it is built and rebuilt with, whatever compose-api's runner becomes
+    }
     source = VersionSource(
         spec=recorded,
         origin="registry",
@@ -195,7 +200,8 @@ async def resolve_composed(
         await environments_db.set_failure(version.database_id, f"it resolves to the same lock as {same.label}")
         return None
     types = list(recorded.get("types", []))
-    definition = pixi.definition_of(recorded["pixi_toml"], types, lock, recorded["pixi_image"])
+    runner = str(recorded.get("runner") or pixi.runner_source())
+    definition = pixi.definition_of(recorded["pixi_toml"], types, lock, recorded["pixi_image"], runner)
     simulator = await builds.simulator_for(database_service.get_simulator_db(), definition)
     repeated = await environments_db.set_resolved(version.database_id, simulator.database_id, lock.text, lock.sha256)
     if repeated is not None:
@@ -267,3 +273,18 @@ async def export_uv(database_service: DatabaseService, version: EnvironmentVersi
         return False
     await environments_db.set_export(version.database_id, "uv", {"pyproject.toml": project, "uv.lock": locked})
     return True
+
+
+async def build_files(database_service: DatabaseService, simulator_id: int) -> dict[str, str] | None:
+    """The files a composed version's definition copies in (``pixi.composed_files``), for the simulator its build is
+    of; None for any other simulator (its definition is self-contained)."""
+    environments_db = database_service.get_environments_db()
+    version = await environments_db.of_simulator(simulator_id)
+    if version is None or version.runtime_contract != pixi.RUNTIME_CONTRACT:
+        return None
+    detail = await environments_db.get_by_number(version.environment, version.number)
+    if detail is None or detail.lock is None:
+        return None
+    recorded = detail.spec or {}
+    runner = str(recorded.get("runner") or pixi.runner_source())
+    return pixi.composed_files(str(recorded.get("pixi_toml", "")), pixi.PixiLock(detail.lock), runner)

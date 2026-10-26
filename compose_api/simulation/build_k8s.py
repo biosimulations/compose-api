@@ -24,8 +24,10 @@ import base64
 import datetime
 import gzip
 import hashlib
+import io
 import logging
 import shlex
+import tarfile
 from dataclasses import dataclass
 from pathlib import Path
 from textwrap import dedent
@@ -366,6 +368,30 @@ async def inspect_prebuilt(
     return read_inspection_log(log)
 
 
+FILES_ENV = "COMPOSE_FILES_GZ_B64_"  # + the chunk's index
+_CHUNK = 96 * 1024  # each environment string stays under Linux's 128 KiB
+
+
+def encode_files(files: dict[str, str]) -> list[str]:
+    """The files beside a definition (``pixi.composed_files``) as the build Job carries them: a gzipped tar (no
+    timestamps, so the same each time), base64, in chunks of at most 96 KiB, one per environment string."""
+    buffer = io.BytesIO()
+    with gzip.GzipFile(fileobj=buffer, mode="wb", mtime=0) as zipped, tarfile.open(fileobj=zipped, mode="w") as tar:
+        for name, text in sorted(files.items()):
+            data = text.encode()
+            info = tarfile.TarInfo(name)
+            info.size, info.mtime, info.mode = len(data), 0, 0o644
+            tar.addfile(info, io.BytesIO(data))
+    encoded = base64.b64encode(buffer.getvalue()).decode()
+    return [encoded[i : i + _CHUNK] for i in range(0, len(encoded), _CHUNK)] or [""]
+
+
+def unpack_files_script(chunks: int, directory: str) -> str:
+    """The build script's lines that rebuild the files from their chunks, into ``directory``."""
+    joined = " ".join(f'"${FILES_ENV}{i}"' for i in range(chunks))
+    return f"mkdir -p {directory}\nprintf '%s' {joined} | base64 -d | tar -xz -C {directory}\n"
+
+
 def build_script() -> str:
     """PRIVILEGED, as root, in scratch: the image built from the definition the Job carries (base64, in the env).
     Apptainer's temporary sandbox and its cache go in the scratch volume too, not the container's own /tmp and /root,
@@ -415,7 +441,12 @@ def encode_definition(definition: str) -> str:
 
 
 def build_job(
-    name: str, site: BuildSite, definition: str, container: Path, inspection: Inspection | None = None
+    name: str,
+    site: BuildSite,
+    definition: str,
+    container: Path,
+    inspection: Inspection | None = None,
+    files: dict[str, str] | None = None,
 ) -> V1Job:
     """The build Job, as a value (what a test reads). With ``inspection``, the image is read back once built, and
     what was read is placed beside it (``get_image_inspection_file``)."""
@@ -425,6 +456,13 @@ def build_job(
         build_script(),
         [k8s.V1EnvVar(name=DEFINITION_ENV, value=encode_definition(definition))],
     )
+    if files:  # a composed definition's files, written where it copies them from (pixi.BUILD_FILES)
+        from compose_api.environments.pixi import BUILD_FILES
+
+        chunks = encode_files(files)
+        env += [k8s.V1EnvVar(name=f"{FILES_ENV}{i}", value=chunk) for i, chunk in enumerate(chunks)]
+        unpack = unpack_files_script(len(chunks), BUILD_FILES)
+        script = script.replace("apptainer build ", unpack + "apptainer build ", 1)
     inspections: dict[str, Path] = {}
     if inspection is not None:
         script += inspect_script(inspection)
@@ -767,6 +805,17 @@ async def inspection_for(simulator_version: SimulatorVersion) -> Inspection | No
     return await inspection_of(version) if version is not None else None
 
 
+async def files_for(simulator_version: SimulatorVersion) -> dict[str, str] | None:
+    """The files a composed version's definition copies in, for its simulator's build (None for any other)."""
+    from compose_api.dependencies import get_database_service  # late: dependencies imports the simulation modules
+    from compose_api.environments.service import build_files
+
+    database_service = get_database_service()
+    if database_service is None:
+        return None
+    return await build_files(database_service, simulator_version.database_id)
+
+
 async def submit_build(simulator_version: SimulatorVersion, hpc_db: HPCDatabaseService, suffix: str) -> HpcRun:
     """Create the build Job, carrying the definition, and record it as the simulator's build run: backend ``k8s``,
     external id the Job's name; the monitor polls it. An environment version's image is read back once built."""
@@ -774,7 +823,8 @@ async def submit_build(simulator_version: SimulatorVersion, hpc_db: HPCDatabaseS
     container = get_slurm_singularity_container_file(singularity_hash=simulator_version.container_def_hash)
     name = job_name(simulator_version, suffix)
     inspection = await inspection_for(simulator_version)
-    job = build_job(name, site, simulator_version.container_def.representation, container, inspection)
+    files = await files_for(simulator_version)
+    job = build_job(name, site, simulator_version.container_def.representation, container, inspection, files)
     await asyncio.to_thread(k8s_builds().create, job)
     logger.info("Submitted container build %s as a Kubernetes Job (-> %s)", name, container)
     return await hpc_db.insert_hpcrun(
