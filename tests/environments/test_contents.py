@@ -275,8 +275,11 @@ async def test_a_prebuilt_version_is_read_back_after_it_is_ready_and_on_request(
     monkeypatch.setattr(build_k8s, "reread_shared", reread_shared)
     monkeypatch.setattr(build_k8s, "describe_script", no_script)
     monkeypatch.setattr(handlers, "ensure_image", ensure_image)
+    from compose_api import dependencies
+
     for name in ("get_required_simulation_service", "get_required_job_monitor"):
         monkeypatch.setattr(registry_router, name, lambda: None)
+        monkeypatch.setattr(dependencies, name, lambda: None)  # the version's build (environments/lifecycle.py)
     app = FastAPI()
     app.include_router(registry_router.config.router, prefix=registry_router.config.prefix)
 

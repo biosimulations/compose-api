@@ -1,10 +1,16 @@
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, UploadFile
 
-from compose_api.authentication import OptionalPrincipal, describe_caller, get_optional_principal
+from compose_api.authentication import (
+    AuthenticatedPrincipal,
+    OptionalPrincipal,
+    describe_caller,
+    get_optional_principal,
+)
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.common.gateway.utils import get_simulation_request_from_uploaded_file, wrap_document_in_omex
 from compose_api.config import get_settings
@@ -14,15 +20,17 @@ from compose_api.dependencies import (
     get_required_database_service,
     get_simulation_service,
 )
+from compose_api.environments import lifecycle
 from compose_api.environments.admission import standing_for
 from compose_api.environments.versions import VersionUnavailableError, chosen_version, environment_of
-from compose_api.registry.environments import EnvironmentSpec, deployed_image, load_environments
+from compose_api.registry.environments import deployed_image, load_environments
 from compose_api.registry.manifest import SERVICE_BUNDLE, load_manifest
-from compose_api.registry.resolver import choose_environment, needed_entries
+from compose_api.registry.resolver import covering_environment, needed_entries
 from compose_api.registry.validation import (
     AddressPolicy,
     SubmissionRejectedError,
     class_targets,
+    find_violations,
     validate_submission,
 )
 from compose_api.simulation.handlers import (
@@ -86,19 +94,60 @@ async def _is_mash_up(name: str) -> bool:
     return any(r.name == name and r.kind == "mash-up" for r in records)
 
 
-def _inferred_simulator(path: Path, file_type: SimulationFileType) -> str | None:
-    """The prebuilt simulator a run that names no environment uses (None: the shared environment), from the classes
-    its documents name (step 7a: the shared environment for everything it covers, as before; registry/resolver.py).
-    An unreadable submission infers nothing: validation refuses it."""
+@dataclass(frozen=True)
+class _Inferred:
+    """Where a run that names no environment goes: a prebuilt simulator, a mash-up (and the version of it made for
+    this run), or neither (the shared environment)."""
+
+    simulator: str | None = None
+    mash_up: str | None = None
+    version: int | None = None
+
+
+async def _inferred(
+    path: Path,
+    file_type: SimulationFileType,
+    principal: AuthenticatedPrincipal | None,
+    background_tasks: BackgroundTasks,
+) -> _Inferred:
+    """The environment a run that names none uses, from the classes its documents name (registry/resolver.py): the
+    shared environment for everything it covers, as before, then the smallest declared one, then a mash-up that
+    covers them. Nothing covering entries that can be composed, the mash-up of exactly those is made for the run
+    (step 7b, D7.4): only for a signed-in caller (D7.5); its build follows in the background. Anything else (an
+    unreadable submission, an entry that cannot be composed) goes to the shared environment, whose validation says
+    why it cannot run."""
     manifest = load_manifest()
     try:
-        needed = needed_entries(class_targets(path, file_type), manifest)
+        targets = class_targets(path, file_type)
+        refused = any(v.always_rejected for v in find_violations(path, file_type, manifest))
     except SubmissionRejectedError:
-        return None
-    chosen: EnvironmentSpec = choose_environment(
-        needed, manifest, load_environments(), offered=lambda spec: deployed_image(spec) is not None
+        return _Inferred()
+    needed = needed_entries(targets, manifest)
+    database_service = get_database_service()
+    mash_ups = await lifecycle.mash_up_specs(database_service) if database_service is not None else []
+    covering = covering_environment(
+        needed, manifest, load_environments(), offered=lambda spec: deployed_image(spec) is not None, mash_ups=mash_ups
     )
-    return chosen.name if chosen.kind == "prebuilt" else None
+    if covering is not None:
+        if covering.kind == "prebuilt":
+            return _Inferred(simulator=covering.name)
+        return _Inferred(mash_up=covering.name) if covering.kind == "mash-up" else _Inferred()
+    # nothing is made for a run validation will refuse anyway: an unsafe address, or a class under no entry
+    unregistered = any(manifest.entry_for_module(t.rpartition(".")[0]) is None for t in targets)
+    if not needed or refused or unregistered or database_service is None or lifecycle.composable(needed, manifest):
+        return _Inferred()
+    if principal is None:
+        raise HTTPException(
+            status_code=401,
+            detail=f"no environment provides all of {', '.join(sorted(needed))}; sign in to have one made for this run",
+        )
+    try:
+        version, simulator = await lifecycle.mash_up_for(database_service, needed, principal.subject)
+    except lifecycle.MashUpError as e:
+        raise HTTPException(status_code=e.status, detail=e.message) from e
+    if simulator is not None:
+        background_tasks.add_task(lifecycle.build_and_export, version, simulator)
+    return _Inferred(mash_up=version.environment, version=version.number)
 
 
 def _checked_options(
@@ -183,8 +232,11 @@ async def submit_simulation(
     simulation_request = await get_simulation_request_from_uploaded_file(
         uploaded_file=uploaded_file, batch_submission=batch_submission
     )
-    if not named:  # D7.1: the environment inferred from the documents
-        simulator = _inferred_simulator(simulation_request.request_file_path, simulation_request.simulation_file_type)
+    if not named:  # D7.1: the environment inferred from the documents, a mash-up made for it if need be (7b)
+        inferred = await _inferred(
+            simulation_request.request_file_path, simulation_request.simulation_file_type, principal, background_tasks
+        )
+        simulator, composed, environment_version = inferred.simulator, inferred.mash_up, inferred.version
     simulation_request.end_time_point = interval_time
     simulation_request.simulator = simulator
     simulation_request.environment_version = environment_version

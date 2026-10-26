@@ -19,7 +19,7 @@
 | 5c | Admission by what the version certifies: a refused component, a failed entry, members only | merged (#391) |
 | 6 | registry_env migrates to a composed version on a current process-bigraph | @4 (0.7.46) and @5 (0.7.50) ready; suite run 5 running; then the default |
 | 7a | Runs name an environment or have one inferred; environments listed from the database | merged (#415, #416) |
-| 7b | Implicit mash-ups, proven with viva-basic-processes | 7b-1 (the entry and its case, #417) and 7b-2 (runs in any composed environment) in review; then 7b-3 (implicit creation), 7b-4 (live) |
+| 7b | Implicit mash-ups, proven with viva-basic-processes | 7b-1 (#417) and 7b-2 (#418) merged; 7b-3 (implicit creation) in review; then 7b-4 (live, after a release) |
 | 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | |
 | 8 | Retire the shared uv path, `simulator_registry.json`, `shared_image()`, pbest in images, `PREBUILT_SIMULATORS`, the committed interface manifests | |
 
@@ -360,6 +360,17 @@
        version's standing, so its members are admitted and anything else is refused, and the run is labelled with it.
        A version's compliance cases now name its environment, so a mash-up's run in the mash-up (before, they would
        have run in registry_env). Mash-ups are still made only directly; 7b-3 makes them from a run.
+     - *As built, 7b-3 (2026-10-26):* a run naming no environment whose entries nothing covers gets a mash-up
+       (`environments/lifecycle.py`, which also now holds the build, read-back and compliance steps the admin routes
+       used). The resolver ranks the database's mash-ups (default ready or building) after the declared environments.
+       Nothing covering, the mash-up of exactly the needed entries is made when they are composable: each says how
+       it installs and each component is `tested` (a library's level gates nothing, as in registry_env). Only for a
+       signed-in caller (anonymous: 401), at most two being locked or built at once (429). Its lock runs while the
+       request waits, so a conflict is a 409 with pixi's explanation; its build follows in the background, and the
+       version is made its environment's default at once, so runs use it while it builds. The same set is never made
+       twice: a later run uses it, or is told it failed (409). Nothing is made for a run validation would refuse (an
+       unsafe address, a class under no entry). An administrator makes a mash-up's later versions with
+       `environments create` (D7.7).
      - Second, later: viva-emitters (PyPI 0.4.3; `SQLiteEmitter` needs no extras). viva-torch is too heavy for a first
        test. Pinning viva-basic-processes changes nothing in vivarium-collective.
      - Live: a document using it with a pbsim-common step creates `mash-…`, builds it, runs, and a second identical

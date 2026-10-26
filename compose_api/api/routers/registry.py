@@ -24,9 +24,9 @@ from compose_api.dependencies import (
     get_required_job_monitor,
     get_required_simulation_service,
 )
-from compose_api.environments import compliance_runs, pixi
+from compose_api.environments import compliance_runs, lifecycle, pixi
 from compose_api.environments import service as environment_service
-from compose_api.environments.contents import inspect_prebuilt_version, inspect_shared_version, record_contents
+from compose_api.environments.contents import record_contents
 from compose_api.environments.service import VersionRequestError
 from compose_api.environments.versions import version_for
 from compose_api.registry.environments import (
@@ -282,77 +282,6 @@ async def _version(name: str, number: int) -> EnvironmentVersionDetail:
     return version
 
 
-async def _build_version(version: EnvironmentVersion, simulator: SimulatorVersion) -> None:
-    """Make the version's image available through the run path's own function; its state follows the outcome."""
-    environments_db = get_required_database_service().get_environments_db()
-    try:
-        await handlers.ensure_image(
-            simulator,
-            database_service=get_required_database_service(),
-            simulation_service_slurm=get_required_simulation_service(),
-            job_monitor=get_required_job_monitor(),
-            random_string="".join(random.choices(string.hexdigits, k=7)),  # noqa: S311 a name, not a secret
-        )
-    except Exception:
-        logger.exception(f"The image of {version.label} (simulator {simulator.database_id}) failed")
-        await environments_db.set_state(version.database_id, VersionState.FAILED)
-        return
-    await environments_db.set_state(version.database_id, VersionState.READY)
-    logger.info(f"{version.label} is ready")
-    await _read_back(version)
-    await _start_compliance(version)
-
-
-async def _start_compliance(version: EnvironmentVersion) -> None:
-    """Run the cases of a composed version's entries in it (docs/plan-environment-composition.md, step 5b). Never
-    fails the version: an entry whose cases did not run stays untested there."""
-    try:
-        await compliance_runs.start(get_required_database_service(), version)
-    except Exception:
-        logger.exception(f"The compliance cases of {version.label} could not be started")
-
-
-async def _resolve_and_build(version: EnvironmentVersion) -> None:
-    """Lock a composed version, then build its image as any version's (``_build_version``)."""
-    suffix = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 a name, not a secret
-    try:
-        resolved = await environment_service.resolve_composed(get_required_database_service(), version, suffix)
-    except Exception:
-        logger.exception(f"Resolving {version.label} failed")
-        await (
-            get_required_database_service()
-            .get_environments_db()
-            .set_failure(version.database_id, "resolving failed unexpectedly; see the service log")
-        )
-        return
-    if resolved is None:
-        logger.info(f"{version.label} did not resolve")
-        return
-    await _build_version(*resolved)
-    if await environment_service.export_uv(get_required_database_service(), resolved[0], suffix):
-        logger.info(f"{version.label} has a uv form")
-
-
-async def _read_back(version: EnvironmentVersion, reread: bool = False) -> None:
-    """Store what the version's image installed and provides: left beside a built image by its build (or, with
-    ``reread``, by a Job that reads the built image again), or read from a pulled (prebuilt) one by a Job of its own.
-    Never fails the version."""
-    database_service = get_required_database_service()
-    k8s = get_settings().build_backend == "k8s"
-    try:
-        if version.image is not None:
-            recorded = k8s and await inspect_prebuilt_version(database_service, version)
-        elif reread:
-            recorded = k8s and await inspect_shared_version(database_service, version)
-        else:
-            recorded = await record_contents(database_service, version)
-    except Exception:
-        logger.exception(f"Reading back {version.label} failed")
-        return
-    if not recorded:
-        logger.info(f"Nothing was read back from {version.label}'s image")
-
-
 @config.router.get(
     path="/environments/{name}/versions",
     response_model=EnvironmentVersions,
@@ -451,7 +380,7 @@ async def run_environment_version_compliance(
         raise HTTPException(status_code=409, detail=f"{version.label} is not a ready composed version")
     detail_only = {"lock", "installed", "interfaces", "findings"}
     plain = EnvironmentVersion.model_validate(version.model_dump(exclude=detail_only))
-    background_tasks.add_task(_start_compliance, plain)
+    background_tasks.add_task(lifecycle.start_compliance, plain)
     logger.info(f"{version.label}: compliance run again for {caller.subject}")
     return await compliance_runs.report(get_required_database_service(), version)
 
@@ -499,12 +428,17 @@ async def create_environment_version(
     become the default: runs get it once an administrator makes it so (`PUT …/default`). A composed environment's
     version is `resolving` first, while its entries are locked together in a Job of their own; one that does not
     resolve is `failed`, with pixi's explanation in `failure` (docs/plan-environment-composition.md, step 4)."""
-    spec = _known_environment(name)
     database_service = get_required_database_service()
+    declared = environment_service.environment_spec(name)
+    spec = declared or await lifecycle.mash_up_spec(database_service, name)  # a mash-up's later versions (D7.7)
+    if spec is None:
+        raise HTTPException(status_code=404, detail=f"no environment {name!r}")
     try:
         if environment_service.is_composed(spec):
-            composed = await environment_service.create_composed(database_service, spec, request, caller.subject)
-            background_tasks.add_task(_resolve_and_build, composed)
+            composed = await environment_service.create_composed(
+                database_service, spec, request, caller.subject, bundled=declared is not None
+            )
+            background_tasks.add_task(lifecycle.resolve_and_build, composed)
             logger.info(f"{composed.label} created by {caller.subject}, resolving")
             return composed
         version, created = await environment_service.create(database_service, spec, request, caller.subject)
@@ -515,7 +449,7 @@ async def create_environment_version(
     if (created or version.state in (VersionState.BUILDING, VersionState.FAILED)) and version.simulator_id is not None:
         simulator = await database_service.get_simulator_db().get_simulator(version.simulator_id)
         if simulator is not None:
-            background_tasks.add_task(_build_version, version, simulator)
+            background_tasks.add_task(lifecycle.build_version, version, simulator)
             if version.state == VersionState.FAILED:
                 await database_service.get_environments_db().set_state(version.database_id, VersionState.BUILDING)
                 version = version.model_copy(update={"state": VersionState.BUILDING})
@@ -548,7 +482,7 @@ async def inspect_environment_version(
     if get_settings().build_backend != "k8s":
         raise HTTPException(status_code=409, detail="reading an image back needs the k8s build backend")
     plain = EnvironmentVersion.model_validate(version.model_dump(exclude={"lock", "installed", "interfaces"}))
-    background_tasks.add_task(_read_back, plain, reread=True)
+    background_tasks.add_task(lifecycle.read_back, plain, reread=True)
     logger.info(f"{version.label} read back again, for {caller.subject}")
     return plain
 
