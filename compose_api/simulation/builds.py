@@ -13,7 +13,6 @@ import logging
 from collections.abc import Mapping
 from enum import StrEnum
 
-from pbest.utils.input_types import ContainerizationFileRepr
 from pydantic import BaseModel, Field
 
 from compose_api.config import get_settings
@@ -22,6 +21,7 @@ from compose_api.db.services.hpc_db import HPCDatabaseService
 from compose_api.db.services.simulators_db import SimulatorDatabaseService
 from compose_api.registry.environments import EnvironmentSpec, load_environments, offered
 from compose_api.simulation import images
+from compose_api.simulation.containerization import ContainerizationFileRepr
 from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.models import EnvironmentImage, HpcRun, JobStatus, JobType, SimulatorVersion
 

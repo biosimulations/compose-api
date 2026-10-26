@@ -30,12 +30,10 @@ dependencies = [
     "tqdm>=4.67.1,<5",
     "seaborn>=0.13.2,<0.14",
     "python-dateutil>=2.9.0.post0,<3",
-    "spython",
     "jinja2>=3.1.6",
     "python-libsedml>=2.0.33",
     "biosimulators-utils>=0.2.3",
     "python-libsbml>=5.20.5",
-    "pbest==0.6.5",
     "pyjwt[crypto]>=2.15.0,<3",
     "kubernetes>=31",
 ]
@@ -62,6 +60,10 @@ dev = [
     "types-python-dateutil>=2.9.0.20250708,<3",
     # The client is a workspace package (clients/python): the service never calls it, its tests do.
     "compose-api-client[auth,cli]",
+    # The runner composed images run (environments/runner.py) is tested on the engine they install; the service
+    # itself never imports process-bigraph.
+    "process-bigraph==1.9.1",
+    "bigraph-schema==1.8.1",
 ]
 docs = [
     "mkdocs>=1.4.2,<2",
@@ -74,20 +76,12 @@ default-groups = [
     "dev",
     "docs",
 ]
-# pbest pins compose-api-client==0.2.0, the release of the package that now lives at clients/python. Resolve every
-# requirement on it to the workspace copy (docs/plan-cli.md, decision C6). The service imports none of pbest's
-# client-using code (pbest.execution.remote), and the workspace copy keeps every name that code uses.
-override-dependencies = ["compose-api-client[auth,cli]"]
 
 [tool.uv.workspace]
 members = ["clients/python"]
 
 [tool.uv.sources]
 compose-api-client = { workspace = true }
-# pbest 0.6.5 is a git tag, not a PyPI release: it installs pbsim-common from biosimulations/pbsim_common@26fa156
-# (0.1.3.dev1: the BioModels-suite adapter fixes and VCellUTCStep) until PyPI ownership of pbest and pbsim-common
-# moves. The container definition clones the same tag, so registry_env gets them too. Back to PyPI once they are there.
-pbest = { git = "https://github.com/biosimulations/pbest", rev = "a4713e9f552b3ff223db3034491afcdde19fa70d" }
 
 
 [tool.hatch.build.targets.sdist]

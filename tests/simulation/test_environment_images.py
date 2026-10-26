@@ -9,11 +9,11 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
 
 from compose_api.config import get_settings, override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation import handlers, images
+from compose_api.simulation.containerization import ContainerizationEngine, ContainerizationFileRepr
 from compose_api.simulation.models import HpcRun, ImageKind, JobType, SimulatorVersion
 
 

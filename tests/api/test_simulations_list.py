@@ -6,7 +6,6 @@ from collections.abc import AsyncGenerator
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from pbest.utils.input_types import ContainerizationEngine
 
 from compose_api.api.main import app
 from compose_api.authorization import get_caller
@@ -14,6 +13,7 @@ from compose_api.common.hpc.models import SlurmJob
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.observability.datasets import ORIGIN_MANIFEST, ArtifactRecord
 from compose_api.observability.events import RunEvent
+from compose_api.simulation.containerization import ContainerizationEngine
 from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.models import JobType, SimulationRequest, SubmissionSpec, Visibility
 from compose_api.simulation.prebuilt import prebuilt_definition

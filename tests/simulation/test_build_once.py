@@ -7,11 +7,11 @@ import uuid
 from typing import Any, cast
 
 import pytest
-from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
 
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation import handlers
+from compose_api.simulation.containerization import ContainerizationEngine, ContainerizationFileRepr
 from compose_api.simulation.models import HpcRun, ImageKind, JobStatus, JobType, SimulatorVersion
 
 

@@ -12,11 +12,9 @@ FROM python:3.14.7-slim-bookworm AS base
 ARG APP_GID=10000
 ARG APP_UID=16997
 
-# git: uv fetches pbest and pbsim-common from git commits while their PyPI releases are blocked (pyproject.toml,
-# [tool.uv.sources]); drop it with that pin
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    openssh-client libexpat1 git && \
+    openssh-client libexpat1 && \
     rm -rf /var/lib/apt/lists/*
 
 # Set environment variables
@@ -49,7 +47,7 @@ COPY --chown=appuser:appgroup . /app
 RUN uv sync --frozen
 
 # process-bigraph-lang in its own environment (.pblang, settings.pblang_python): SED-ML translation runs its CLI there,
-# since it needs bigraph-schema 1.6 and this environment has pbest's 1.0 (docs/plan-sedml.md, phase 3)
+# since it needs bigraph-schema 1.6 and this environment's tests use 1.8 (docs/plan-sedml.md, phase 3)
 RUN uv venv --python /usr/local/bin/python3 /app/.pblang && \
     uv pip install --python /app/.pblang/bin/python -r compose_api/sedml/pblang-requirements.txt
 

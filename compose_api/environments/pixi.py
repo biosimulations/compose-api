@@ -15,10 +15,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
-
 from compose_api.registry.environments import Composition, EnvironmentSpec
 from compose_api.registry.manifest import Manifest, RegistryEntry
+from compose_api.simulation.containerization import ContainerizationEngine, ContainerizationFileRepr
 
 RUNTIME_CONTRACT = 2  # compose-api's runner (environments/runner.py) answers the job; a change to it is a new contract
 WORKSPACE = "/opt/environment"

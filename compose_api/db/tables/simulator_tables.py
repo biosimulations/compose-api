@@ -1,13 +1,13 @@
 import datetime
 import logging
 
-from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
 from sqlalchemy import BigInteger, ForeignKey, Index, String, Text, func, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from compose_api.db.db_utils import DeclarativeTableBase, package_table_name
 from compose_api.db.tables.environment_tables import ORMEnvironmentVersion
+from compose_api.simulation.containerization import ContainerizationEngine, ContainerizationFileRepr
 from compose_api.simulation.models import (
     ContainerEngine,
     DownloadedContainerImage,

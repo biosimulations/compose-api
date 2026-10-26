@@ -3,13 +3,7 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from pbest.containerization.container_constructor import generate_container_def_file
-from pbest.utils.input_types import (
-    ContainerizationEngine,
-    ContainerizationFileRepr,
-)
 
-from compose_api.api.introspect_package import introspect_package
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.db.database_service import DatabaseService
@@ -19,11 +13,12 @@ from compose_api.dependencies import (
     set_job_monitor,
     set_simulation_service,
 )
+from compose_api.simulation.containerization import ContainerizationEngine, ContainerizationFileRepr
 from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import JobStatus, JobType, SimulatorVersion
 from compose_api.simulation.simulation_service import SimulationServiceHpc
-from tests.fixtures.simulator_registry import registry_dependencies
+from tests.fixtures.postgres_fixtures import shared_definition
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -72,20 +67,12 @@ def production_simulator_def() -> ContainerizationFileRepr:
 
 @pytest_asyncio.fixture(scope="function")
 async def simulator(database_service: DatabaseService) -> AsyncGenerator[SimulatorVersion]:
-    experiment_dep = registry_dependencies()
-    singularity_def = generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)
+    singularity_def = shared_definition()
 
     # registry_env's default already runs this definition (postgres_fixtures.seed_shared_default): the same simulator
     simulator_db = database_service.get_simulator_db()
     found = await simulator_db.get_simulator_by_def_hash(get_singularity_hash(singularity_def))
-    if found is not None:
-        simulator = found
-    else:
-        packages = [
-            await database_service.get_package_db().insert_package(outline)
-            for outline in introspect_package(experiment_dep)
-        ]
-        simulator = await simulator_db.insert_simulator(singularity_def, packages)
+    simulator = found if found is not None else await simulator_db.insert_simulator(singularity_def)
     fake_hpc_run = await database_service.get_hpc_db().insert_hpcrun(
         40, JobType.BUILD_CONTAINER, simulator.database_id, "jfldsjaljl"
     )

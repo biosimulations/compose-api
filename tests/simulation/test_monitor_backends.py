@@ -4,10 +4,10 @@ squeue and sacct as before, a run on another backend through that backend's poll
 import uuid
 
 import pytest
-from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
 
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.db.database_service import DatabaseServiceSQL
+from compose_api.simulation.containerization import ContainerizationEngine, ContainerizationFileRepr
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import JobStatus, JobType
 

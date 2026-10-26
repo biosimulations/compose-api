@@ -59,7 +59,7 @@ def _iso(value: datetime.datetime | None) -> str | None:
 def _simulator_label(container_def: str, names: Mapping[str, str]) -> str | None:
     """The prebuilt environment's name if one of its versions has the image (``names``: image to name), else the
     image; None for a built container."""
-    from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
+    from compose_api.simulation.containerization import ContainerizationEngine, ContainerizationFileRepr
 
     image = prebuilt_image_of(
         ContainerizationFileRepr(representation=container_def, containerization_engine=ContainerizationEngine.APPTAINER)

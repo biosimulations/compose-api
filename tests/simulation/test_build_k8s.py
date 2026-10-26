@@ -16,13 +16,13 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
 
 from compose_api.config import get_settings, override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation import build_k8s, builds, handlers
 from compose_api.simulation.build_k8s import BuildSite, K8sPoller, build_job, job_name
 from compose_api.simulation.builds import BuildFailedError
+from compose_api.simulation.containerization import ContainerizationEngine, ContainerizationFileRepr
 from compose_api.simulation.models import ImageKind, JobStatus, JobType
 
 SITE = BuildSite(

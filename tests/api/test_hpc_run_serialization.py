@@ -13,10 +13,10 @@ from pathlib import Path
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
 
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.db.database_service import DatabaseService
+from compose_api.simulation.containerization import ContainerizationEngine, ContainerizationFileRepr
 from compose_api.simulation.models import JobType, SimulationFileType, SimulationRequest
 
 _FIXTURE_PATH = Path(__file__).parent.parent / "fixtures" / "resources" / "hpc_run_response.json"

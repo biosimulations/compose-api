@@ -1,10 +1,9 @@
 import hashlib
 from pathlib import Path
 
-from pbest.utils.input_types import ContainerizationFileRepr
-
 from compose_api.common.gateway.models import Namespace
 from compose_api.config import get_settings
+from compose_api.simulation.containerization import ContainerizationFileRepr
 from compose_api.simulation.models import (
     JobType,
     SimulatorVersion,

@@ -7,7 +7,6 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass, field
 from typing import override
 
-from pbest.utils.input_types import ContainerizationFileRepr
 from sqlalchemy import (
     ColumnElement,
     Result,
@@ -35,6 +34,7 @@ from compose_api.db.tables.simulator_tables import (
     ORMSimulator,
     ORMSimulatorToPackage,
 )
+from compose_api.simulation.containerization import ContainerizationFileRepr
 from compose_api.simulation.hpc_utils import get_singularity_hash, get_slurm_sim_experiment_dir
 from compose_api.simulation.models import (
     ContainerEngine,
