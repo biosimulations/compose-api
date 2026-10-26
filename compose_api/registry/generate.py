@@ -29,7 +29,6 @@ from compose_api.registry.environments import (
     load_environments,
     manifest_path,
     module_roots,
-    shared_image,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -45,6 +44,20 @@ def prebuilt_pins(api_env: Path = API_ENV) -> dict[str, str]:
             pins: dict[str, str] = json.loads(value)
             return pins
     return {}
+
+
+def shared_image() -> str:
+    """The shared image's reference as pbest's definition made it: the repository plus the hash of that definition.
+    The committed manifests are retired in step 8c; until then this generator alone still makes it."""
+    from pbest.containerization.container_constructor import generate_container_def_file
+    from pbest.utils.input_types import ContainerizationEngine
+
+    from compose_api.config import get_settings
+    from compose_api.simulation.hpc_utils import get_singularity_hash
+    from compose_api.simulation.simulator_registry import registry_dependencies
+
+    definition = generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)
+    return f"{get_settings().simulator_image_repository}:{get_singularity_hash(definition)}"
 
 
 def image_for(spec: EnvironmentSpec, pins: dict[str, str]) -> str:

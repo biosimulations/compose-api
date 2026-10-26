@@ -22,6 +22,7 @@ from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation import builds, handlers
 from compose_api.simulation.builds import ImageState
 from compose_api.simulation.models import ImageKind, JobType, SimulatorVersion
+from tests.fixtures.postgres_fixtures import shared_definition
 
 
 @pytest.fixture
@@ -159,7 +160,7 @@ async def test_an_environments_images_are_those_of_its_current_definition(
     response = await client.get("/registry/environments/registry_env/images")
     assert response.status_code == 200
     body = response.json()
-    expected = builds.environment_definition(cast(Any, builds.find_environment("registry_env")))
+    expected = shared_definition()  # registry_env's default here (tests/fixtures/postgres_fixtures.py)
     simulator = await database_service.get_simulator_db().get_simulator(body["simulator_id"])
     assert simulator is not None and simulator.container_def.representation == expected.representation
     assert body["environment"] == "registry_env"

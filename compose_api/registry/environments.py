@@ -7,7 +7,6 @@ read comes from the registry entries whose `bundles` name the environment. The A
 app's editor and checker (`/registry/environments`).
 """
 
-import functools
 import json
 from pathlib import Path
 from typing import Any, Literal
@@ -126,25 +125,18 @@ def module_roots(environment: str, manifest: Manifest | None = None) -> list[str
     return sorted({root for e in manifest.entries if environment in e.bundles for root in e.module_roots})
 
 
-@functools.cache
-def shared_image() -> str:
-    """The shared image's reference: the repository plus the hash of the definition the service generates."""
-    from pbest.containerization.container_constructor import generate_container_def_file
-    from pbest.utils.input_types import ContainerizationEngine
-
-    from compose_api.simulation.hpc_utils import get_singularity_hash
-    from compose_api.simulation.simulator_registry import registry_dependencies
-
-    definition = generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)
-    return f"{get_settings().simulator_image_repository}:{get_singularity_hash(definition)}"
-
-
 def deployed_image(spec: EnvironmentSpec, prebuilt: dict[str, str] | None = None) -> str | None:
-    """The image this deployment runs the environment in; None for a prebuilt one it does not list."""
-    if spec.kind == "shared":
-        return shared_image()
+    """The image a prebuilt environment is pinned to here; None for the shared one (its versions are database
+    records, D8.1) and for a prebuilt one this deployment does not list."""
+    if spec.kind != "prebuilt":
+        return None
     pins = get_settings().prebuilt_simulators if prebuilt is None else prebuilt
     return pins.get(spec.name)
+
+
+def offered(spec: EnvironmentSpec, prebuilt: dict[str, str] | None = None) -> bool:
+    """Whether this deployment runs the environment: the shared one always, a prebuilt one when it is pinned."""
+    return spec.kind == "shared" or deployed_image(spec, prebuilt) is not None
 
 
 # --- the served form --------------------------------------------------------------------------------------------
@@ -240,9 +232,9 @@ def read_manifest(name: str, registry: Manifest | None = None) -> InterfaceManif
 
 def summarize(spec: EnvironmentSpec, prebuilt: dict[str, str] | None = None) -> EnvironmentSummary | None:
     """The environment as the web app lists it; None for a prebuilt one this deployment does not offer."""
-    image = deployed_image(spec, prebuilt)
-    if image is None:
+    if not offered(spec, prebuilt):
         return None
+    image = deployed_image(spec, prebuilt)
     registry = load_manifest()
     manifest = read_manifest(spec.name, registry)
     recorded = (manifest.environment or {}).get("image") if manifest else None
@@ -253,7 +245,7 @@ def summarize(spec: EnvironmentSpec, prebuilt: dict[str, str] | None = None) -> 
         simulator=spec.name if spec.kind == "prebuilt" else None,
         image=image,
         manifest_image=recorded,
-        stale=manifest is not None and recorded != image,
+        stale=image is not None and manifest is not None and recorded != image,
         process_bigraph=(manifest.environment or {}).get("process_bigraph") if manifest else None,
         components=len(manifest.components) if manifest else 0,
         errors=len(manifest.errors) if manifest else 0,
@@ -291,7 +283,7 @@ def catalog_entries(prebuilt: dict[str, str] | None = None) -> list[CatalogEntry
     registry = load_manifest()
     provided: dict[str, list[EntryEnvironment]] = {}
     for spec in load_environments().environments:
-        if deployed_image(spec, prebuilt) is None:
+        if not offered(spec, prebuilt):
             continue
         manifest = read_manifest(spec.name, registry)
         counts: dict[str, int] = {}

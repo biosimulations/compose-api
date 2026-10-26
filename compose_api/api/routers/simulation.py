@@ -23,7 +23,7 @@ from compose_api.dependencies import (
 from compose_api.environments import lifecycle
 from compose_api.environments.admission import standing_for
 from compose_api.environments.versions import VersionUnavailableError, chosen_version, environment_of
-from compose_api.registry.environments import deployed_image, load_environments
+from compose_api.registry.environments import load_environments, offered
 from compose_api.registry.manifest import SERVICE_BUNDLE, load_manifest
 from compose_api.registry.resolver import covering_environment, needed_entries
 from compose_api.registry.validation import (
@@ -76,7 +76,7 @@ async def _named_environment(environment: str | None, simulator: str | None) -> 
         if simulator is not None:
             raise HTTPException(status_code=400, detail=f"`environment={environment}` is a mash-up, not `{simulator}`.")
         return None, environment
-    if spec is None or deployed_image(spec) is None:
+    if spec is None or not offered(spec):
         raise HTTPException(status_code=400, detail=f"No environment {environment!r} is offered here.")
     named = spec.name if spec.kind == "prebuilt" else None
     if simulator is not None and simulator != named:
@@ -125,9 +125,7 @@ async def _inferred(
     needed = needed_entries(targets, manifest)
     database_service = get_database_service()
     mash_ups = await lifecycle.mash_up_specs(database_service) if database_service is not None else []
-    covering = covering_environment(
-        needed, manifest, load_environments(), offered=lambda spec: deployed_image(spec) is not None, mash_ups=mash_ups
-    )
+    covering = covering_environment(needed, manifest, load_environments(), offered=offered, mash_ups=mash_ups)
     if covering is not None:
         if covering.kind == "prebuilt":
             return _Inferred(simulator=covering.name)

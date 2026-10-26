@@ -6,20 +6,16 @@ import uuid
 from typing import cast
 
 import pytest
-from pbest.containerization.container_constructor import generate_container_def_file
-from pbest.utils.input_types import ContainerizationEngine
 
 from compose_api.config import override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.db.tables.simulator_tables import ORMSimulation
 from compose_api.environments.versions import version_for
 from compose_api.simulation import handlers
-from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.job_monitor import JobMonitor
-from compose_api.simulation.models import SimulationRequest, VersionState
+from compose_api.simulation.models import SimulationRequest
 from compose_api.simulation.prebuilt import UnknownSimulatorError, prebuilt_definition
 from compose_api.simulation.simulation_service import SimulationService
-from compose_api.simulation.simulator_registry import registry_dependencies, registry_libraries
 from tests.fixtures.mocks import TestBackgroundTask
 
 
@@ -33,19 +29,38 @@ def _name() -> str:
 
 
 @pytest.mark.asyncio
-async def test_the_shared_environment_runs_its_deployed_definition_as_its_default_version(
+async def test_the_shared_environment_runs_its_default_and_without_one_refuses(
     database_service: DatabaseServiceSQL,
 ) -> None:
+    """D8.1: a version is a database record. The shared environment's default (here the one the test database seeds)
+    is what a run that names none takes; with no default (a fresh deployment) the run is refused with what to do,
+    rather than adopting a definition the service generates."""
+    from sqlalchemy import select, update
+
+    from compose_api.db.tables.environment_tables import ORMEnvironment
+    from compose_api.environments.versions import NoDefaultVersionError
+
+    environments_db = database_service.get_environments_db()
+    default = await environments_db.get_default("registry_env")
+    assert default is not None
     version, simulator = await version_for(database_service, None)
-    expected = generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)
-    assert simulator.container_def_hash == get_singularity_hash(expected)  # the same image as before versions
-    assert (version.environment, version.state, version.origin) == ("registry_env", VersionState.READY, "registry")
-    assert version.simulator_id == simulator.database_id
-    assert version.spec == {"libraries": registry_libraries()}
-    assert version.label == f"registry_env@{version.number}"
-    assert await database_service.get_environments_db().get_default("registry_env") == version
-    again, _ = await version_for(database_service, None)
-    assert again == version
+    assert version == default and simulator.database_id == default.simulator_id
+    async with database_service.async_sessionmaker() as session, session.begin():
+        kept = (
+            await session.execute(
+                select(ORMEnvironment.default_version_id).where(ORMEnvironment.name == "registry_env")
+            )
+        ).scalar_one()
+        await session.execute(
+            update(ORMEnvironment).where(ORMEnvironment.name == "registry_env").values(default_version_id=None)
+        )
+    try:
+        with pytest.raises(NoDefaultVersionError, match="environments create registry_env"):
+            await version_for(database_service, None)
+    finally:
+        async with database_service.async_sessionmaker() as session, session.begin():
+            query = update(ORMEnvironment).where(ORMEnvironment.name == "registry_env")
+            await session.execute(query.values(default_version_id=kept))
 
 
 @pytest.mark.asyncio
@@ -110,3 +125,14 @@ async def test_a_run_records_its_environment_version(
     async with database_service.async_sessionmaker() as session:
         simulation = await session.get(ORMSimulation, experiment.simulation_database_id)
     assert simulation is not None and simulation.environment_version_id == version.database_id
+
+
+@pytest.mark.asyncio
+async def test_a_run_with_no_default_to_take_is_unavailable_not_an_error() -> None:
+    """Whichever route started it, the app answers 503 with what an administrator does (D8.1)."""
+    from compose_api.api import main
+    from compose_api.environments.versions import NoDefaultVersionError
+
+    assert main.app.exception_handlers[NoDefaultVersionError] is main._no_default_version
+    response = await main._no_default_version(None, NoDefaultVersionError("registry_env has no version yet"))  # type: ignore[arg-type]
+    assert response.status_code == 503 and b"registry_env has no version yet" in response.body

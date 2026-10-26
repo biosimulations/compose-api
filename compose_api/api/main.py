@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
 from compose_api.api.webapp import mount_webapp
@@ -23,6 +24,7 @@ from compose_api.dependencies import (
     init_standalone,
     shutdown_standalone,
 )
+from compose_api.environments.versions import NoDefaultVersionError
 from compose_api.simulation import images
 from compose_api.version import __version__
 
@@ -109,6 +111,15 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
 
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION, servers=APP_SERVERS, lifespan=lifespan)
+
+
+@app.exception_handler(NoDefaultVersionError)
+async def _no_default_version(_request: Request, error: NoDefaultVersionError) -> JSONResponse:
+    """A run that needs a default version on a deployment that has none yet (D8.1): unavailable until an
+    administrator makes one, whichever route started the run."""
+    return JSONResponse(status_code=503, content={"detail": str(error)})
+
+
 app.add_middleware(
     CORSMiddleware, allow_origins=APP_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"]
 )
