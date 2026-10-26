@@ -14,6 +14,7 @@ from compose_api.db.tables.comparison_tables import (
     ORMSuiteRun,
     ORMVerification,
 )
+from compose_api.db.tables.environment_tables import ORMEnvironment, ORMEnvironmentVersion
 from compose_api.db.tables.simulator_tables import ORMSimulation
 
 
@@ -99,6 +100,10 @@ class ComparisonsDatabaseService(ABC):
     @abstractmethod
     async def suite_source_submitted(self, collection: str, number: int, source: str) -> bool:
         """Whether the run already has a comparison for ``source`` (submitted before a restart)."""
+
+    @abstractmethod
+    async def environment_versions_of(self, runs: list[ORMSuiteRun]) -> dict[int, dict[str, int]]:
+        """Each suite run's environment versions, by run id, as {environment's current name: number}."""
 
     @abstractmethod
     async def suite_runs(self, collection: str) -> list[ORMSuiteRun]:
@@ -193,11 +198,12 @@ class ComparisonsORMExecutor(ComparisonsDatabaseService):
             last = (
                 await session.execute(select(func.max(ORMSuiteRun.number)).where(ORMSuiteRun.collection == collection))
             ).scalar_one()
+            ids = await _version_ids(session, environment_versions or {})
             run = ORMSuiteRun(
                 collection=collection,
                 number=(last or 0) + 1,
                 sources=list(sources or []),
-                environment_versions=dict(environment_versions or {}),
+                environment_version_ids=ids,
             )
             session.add(run)
             await session.flush()
@@ -226,6 +232,8 @@ class ComparisonsORMExecutor(ComparisonsDatabaseService):
                 .values(lease_owner=owner, lease_expires_at=now + func.make_interval(0, 0, 0, 0, 0, 0, lease_seconds))
             )
             rows = await session.execute(select(ORMSuiteRun).where(ORMSuiteRun.id.in_(ids)).order_by(ORMSuiteRun.id))
+            claimed = list(rows.scalars())
+            names = await _versions_by_name(session, claimed)
             return [
                 ClaimedSuiteRun(
                     r.id,
@@ -233,9 +241,9 @@ class ComparisonsORMExecutor(ComparisonsDatabaseService):
                     r.number,
                     list(r.sources or []),
                     r.next_source,
-                    dict(r.environment_versions or {}),
+                    names.get(r.id, {}),
                 )
-                for r in rows.scalars()
+                for r in claimed
             ]
 
     @override
@@ -291,6 +299,11 @@ class ComparisonsORMExecutor(ComparisonsDatabaseService):
                 update(ORMSuiteRun).where(ORMSuiteRun.id == run_id, ORMSuiteRun.lease_owner == owner).values(**values)
             )
             return bool(result.rowcount)  # type: ignore[attr-defined]
+
+    @override
+    async def environment_versions_of(self, runs: list[ORMSuiteRun]) -> dict[int, dict[str, int]]:
+        async with self.session_maker() as session:
+            return await _versions_by_name(session, runs)
 
     @override
     async def suite_runs(self, collection: str) -> list[ORMSuiteRun]:
@@ -511,3 +524,33 @@ async def _members(session: AsyncSession, comparison_id: int) -> list[ORMCompari
         .order_by(ORMComparisonMember.id)
     )
     return list(rows.scalars())
+
+
+async def _version_ids(session: AsyncSession, versions: dict[str, int]) -> list[int]:
+    """The ids of {environment name: number}: what a suite run stores, so a rename does not lose it."""
+    if not versions:
+        return []
+    query = (
+        select(ORMEnvironmentVersion.id, ORMEnvironment.name, ORMEnvironmentVersion.number)
+        .join(ORMEnvironment, ORMEnvironment.id == ORMEnvironmentVersion.environment_id)
+        .where(ORMEnvironment.name.in_(versions))
+    )
+    found = {(name, number): version_id for version_id, name, number in (await session.execute(query)).all()}
+    missing = [f"{name}@{number}" for name, number in versions.items() if (name, number) not in found]
+    if missing:
+        raise LookupError(f"no environment versions {missing}")
+    return sorted(found[(name, number)] for name, number in versions.items())
+
+
+async def _versions_by_name(session: AsyncSession, runs: list[ORMSuiteRun]) -> dict[int, dict[str, int]]:
+    """Each run's version ids as {environment's current name: number}, by run id."""
+    ids = {i for r in runs for i in (r.environment_version_ids or [])}
+    if not ids:
+        return {}
+    query = (
+        select(ORMEnvironmentVersion.id, ORMEnvironment.name, ORMEnvironmentVersion.number)
+        .join(ORMEnvironment, ORMEnvironment.id == ORMEnvironmentVersion.environment_id)
+        .where(ORMEnvironmentVersion.id.in_(ids))
+    )
+    by_id = {version_id: (name, number) for version_id, name, number in (await session.execute(query)).all()}
+    return {r.id: dict(by_id[i] for i in (r.environment_version_ids or []) if i in by_id) for r in runs}

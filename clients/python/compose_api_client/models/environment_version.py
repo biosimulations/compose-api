@@ -24,7 +24,8 @@ class EnvironmentVersion:
 
         Attributes:
             database_id (int):
-            environment (str):
+            environment_id (int): Its environment's identity; the name below may change
+            environment (str): Its environment's current name
             number (int):
             state (VersionState): An environment version's state (docs/plan-environment-versions.md).
             simulator_id (int):
@@ -40,6 +41,7 @@ class EnvironmentVersion:
     """
 
     database_id: int
+    environment_id: int
     environment: str
     number: int
     state: VersionState
@@ -59,6 +61,8 @@ class EnvironmentVersion:
         from ..models.environment_version_spec_type_0 import EnvironmentVersionSpecType0  # noqa: PLC0415
 
         database_id = self.database_id
+
+        environment_id = self.environment_id
 
         environment = self.environment
 
@@ -128,6 +132,7 @@ class EnvironmentVersion:
         field_dict.update(self.additional_properties)
         field_dict.update({
             "database_id": database_id,
+            "environment_id": environment_id,
             "environment": environment,
             "number": number,
             "state": state,
@@ -160,6 +165,8 @@ class EnvironmentVersion:
 
         d = dict(src_dict)
         database_id = d.pop("database_id")
+
+        environment_id = d.pop("environment_id")
 
         environment = d.pop("environment")
 
@@ -269,6 +276,7 @@ class EnvironmentVersion:
 
         environment_version = cls(
             database_id=database_id,
+            environment_id=environment_id,
             environment=environment,
             number=number,
             state=state,

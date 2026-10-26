@@ -148,3 +148,36 @@ async def test_a_suite_run_must_name_its_versions_and_records_them_as_numbers(
 
     refused = await suites_client.post("/suites/smoke/run", params={"environment_version": f"{SHARED}@99999"})
     assert refused.status_code == 400 and "no version" in refused.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_a_renamed_environment_keeps_its_versions_runs_and_suite_runs(
+    suites_client: httpx.AsyncClient, database_service: DatabaseServiceSQL, simulation_request: SimulationRequest
+) -> None:
+    """Everything refers to an environment by id: after a rename, its versions, a run recorded in one, and a suite
+    run that named one all resolve under the new name; the old name finds nothing."""
+    chosen = await _another_version(database_service, VersionState.READY)
+    experiment = await handlers.run_simulation(
+        simulation_request=simulation_request.model_copy(update={"environment_version": chosen.number}),
+        database_service=database_service,
+        simulation_service_slurm=cast(SimulationService, None),
+        job_monitor=cast(JobMonitor, None),
+        background_tasks=TestBackgroundTask(),
+    )
+    started = await suites_client.post("/suites/smoke/run", params={"environment_version": f"{SHARED}@{chosen.number}"})
+    assert started.status_code == 200, started.text
+    number = started.json()["number"]
+    environments_db = database_service.get_environments_db()
+    renamed = f"renamed-{uuid.uuid4().hex[:8]}"
+    await environments_db.rename(SHARED, renamed)
+    try:
+        moved = await environments_db.get_by_number(renamed, chosen.number)
+        assert moved is not None and moved.database_id == chosen.database_id
+        assert moved.environment == renamed and moved.environment_id == chosen.environment_id
+        assert await environments_db.get_by_number(SHARED, chosen.number) is None
+        row = await database_service.get_simulator_db().get_simulation_row(experiment.simulation_database_id)
+        assert row is not None and row.simulation.environment_version_id == chosen.database_id
+        listed = (await suites_client.get("/suites/smoke/runs")).json()
+        assert next(r for r in listed if r["number"] == number)["environment_versions"] == {renamed: chosen.number}
+    finally:
+        await environments_db.rename(renamed, SHARED)

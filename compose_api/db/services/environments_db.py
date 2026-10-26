@@ -59,6 +59,10 @@ class EnvironmentsDatabaseService(ABC):
         (the same definition, so the same lock). The default does not move."""
 
     @abstractmethod
+    async def rename(self, environment: str, new_name: str) -> None:
+        """Call the environment something else. Its id, and every reference to it or its versions, are unchanged."""
+
+    @abstractmethod
     async def set_state(self, version_id: int, state: VersionState) -> None: ...
 
     @abstractmethod
@@ -102,34 +106,48 @@ class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
         self.async_session_maker = async_session_maker
 
     @staticmethod
+    def _named(environment: str) -> Any:
+        """The versions of the environment currently called ``environment`` (a join on its id)."""
+        return (
+            select(ORMEnvironmentVersion)
+            .join(ORMEnvironment, ORMEnvironment.id == ORMEnvironmentVersion.environment_id)
+            .where(ORMEnvironment.name == environment)
+        )
+
+    @staticmethod
     async def _default(session: AsyncSession, environment: str) -> tuple[ORMEnvironmentVersion | None, str | None]:
         """The default version and where it came from."""
         query = select(ORMEnvironmentVersion, ORMEnvironment.default_source).join(
             ORMEnvironment, ORMEnvironment.default_version_id == ORMEnvironmentVersion.id
         )
-        row = (await session.execute(query.where(ORMEnvironment.name == environment))).one_or_none()
+        row = (await session.execute(query.where(ORMEnvironment.name == environment))).unique().one_or_none()
         return (row[0], row[1]) if row is not None else (None, None)
 
     @staticmethod
-    async def _lock_environment(session: AsyncSession, environment: str, kind: str) -> None:
-        """One writer at a time per environment, across API processes (released at commit); its row created."""
+    async def _lock_environment(session: AsyncSession, environment: str, kind: str) -> ORMEnvironment:
+        """One writer at a time per environment, across API processes (released at commit); its row, created if it
+        is new."""
         await session.execute(select(func.pg_advisory_xact_lock(func.hashtext(f"environment:{environment}"))))
         new_environment = insert(ORMEnvironment).values(name=environment, kind=kind)
         await session.execute(new_environment.on_conflict_do_nothing(index_elements=["name"]))
+        query = select(ORMEnvironment).where(ORMEnvironment.name == environment).with_for_update()
+        return (await session.execute(query)).scalar_one()
 
     @staticmethod
-    async def _next_number(session: AsyncSession, environment: str) -> int:
+    async def _next_number(session: AsyncSession, environment_id: int) -> int:
         last = await session.scalar(
-            select(func.max(ORMEnvironmentVersion.number)).where(ORMEnvironmentVersion.environment == environment)
+            select(func.max(ORMEnvironmentVersion.number)).where(ORMEnvironmentVersion.environment_id == environment_id)
         )
         return (last or 0) + 1
 
     @staticmethod
-    async def _of_simulator(session: AsyncSession, environment: str, simulator_id: int) -> ORMEnvironmentVersion | None:
+    async def _of_simulator(
+        session: AsyncSession, environment_id: int, simulator_id: int
+    ) -> ORMEnvironmentVersion | None:
         query = select(ORMEnvironmentVersion).where(
-            ORMEnvironmentVersion.environment == environment, ORMEnvironmentVersion.simulator_id == simulator_id
+            ORMEnvironmentVersion.environment_id == environment_id, ORMEnvironmentVersion.simulator_id == simulator_id
         )
-        return (await session.execute(query)).scalar_one_or_none()
+        return (await session.execute(query)).unique().scalar_one_or_none()
 
     @override
     async def adopt_deployed(
@@ -146,17 +164,17 @@ class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
             current, source = await self._default(session, environment)
             if current is not None and (source == API or current.simulator_id == simulator_id):
                 return current.to_environment_version()  # every run but the first after a deploy
-            await self._lock_environment(session, environment, kind)
-            env = await session.get(ORMEnvironment, environment, with_for_update=True)
-            if env is not None and env.default_source == API and env.default_version_id is not None:
+            env = await self._lock_environment(session, environment, kind)
+            if env.default_source == API and env.default_version_id is not None:
                 chosen = await session.get(ORMEnvironmentVersion, env.default_version_id)
                 if chosen is not None:  # chosen while this one waited for the lock
                     return chosen.to_environment_version()
-            version = await self._of_simulator(session, environment, simulator_id)
+            version = await self._of_simulator(session, env.id, simulator_id)
             if version is None:
                 version = ORMEnvironmentVersion(
-                    environment=environment,
-                    number=await self._next_number(session, environment),
+                    environment_id=env.id,
+                    env=env,
+                    number=await self._next_number(session, env.id),
                     state=VersionState.READY.value,
                     simulator_id=simulator_id,
                     image=image,
@@ -165,7 +183,7 @@ class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
                 )
                 session.add(version)
                 await session.flush()
-            if env is not None and env.default_version_id != version.id:
+            if env.default_version_id != version.id:
                 env.default_version_id = version.id
                 env.default_source = DEPLOYMENT
             await session.flush()
@@ -177,13 +195,14 @@ class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
         self, environment: str, kind: str, simulator_id: int, source: VersionSource
     ) -> tuple[EnvironmentVersion, bool]:
         async with self.async_session_maker() as session, session.begin():
-            await self._lock_environment(session, environment, kind)
-            existing = await self._of_simulator(session, environment, simulator_id)
+            env = await self._lock_environment(session, environment, kind)
+            existing = await self._of_simulator(session, env.id, simulator_id)
             if existing is not None:
                 return existing.to_environment_version(), False
             version = ORMEnvironmentVersion(
-                environment=environment,
-                number=await self._next_number(session, environment),
+                environment_id=env.id,
+                env=env,
+                number=await self._next_number(session, env.id),
                 state=VersionState.BUILDING.value,
                 simulator_id=simulator_id,
                 image=source.image,
@@ -199,6 +218,13 @@ class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
             await session.flush()
             await session.refresh(version)
             return version.to_environment_version(), True
+
+    @override
+    async def rename(self, environment: str, new_name: str) -> None:
+        async with self.async_session_maker() as session, session.begin():
+            query = update(ORMEnvironment).where(ORMEnvironment.name == environment).values(name=new_name)
+            if (await session.execute(query)).rowcount == 0:  # type: ignore[attr-defined]
+                raise LookupError(f"no environment {environment!r}")
 
     @override
     async def set_state(self, version_id: int, state: VersionState) -> None:
@@ -227,7 +253,7 @@ class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
                 .order_by(ORMEnvironmentVersion.id.desc())
                 .limit(1)
             )
-            version = (await session.execute(query)).scalar_one_or_none()
+            version = (await session.execute(query)).unique().scalar_one_or_none()
             return version.to_environment_version() if version is not None else None
 
     @override
@@ -239,19 +265,15 @@ class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
     @override
     async def get_by_number(self, environment: str, number: int) -> EnvironmentVersionDetail | None:
         async with self.async_session_maker() as session:
-            query = select(ORMEnvironmentVersion).where(
-                ORMEnvironmentVersion.environment == environment, ORMEnvironmentVersion.number == number
-            )
-            version = (await session.execute(query)).scalar_one_or_none()
+            query = self._named(environment).where(ORMEnvironmentVersion.number == number)
+            version = (await session.execute(query)).unique().scalar_one_or_none()
             return version.to_environment_version_detail() if version is not None else None
 
     @override
     async def find_by_lock(self, environment: str, lock_sha256: str) -> EnvironmentVersion | None:
         async with self.async_session_maker() as session:
-            query = select(ORMEnvironmentVersion).where(
-                ORMEnvironmentVersion.environment == environment, ORMEnvironmentVersion.lock_sha256 == lock_sha256
-            )
-            version = (await session.execute(query.limit(1))).scalar_one_or_none()
+            query = self._named(environment).where(ORMEnvironmentVersion.lock_sha256 == lock_sha256)
+            version = (await session.execute(query.limit(1))).unique().scalar_one_or_none()
             return version.to_environment_version() if version is not None else None
 
     @override
@@ -269,12 +291,8 @@ class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
     @override
     async def list_versions(self, environment: str) -> list[EnvironmentVersion]:
         async with self.async_session_maker() as session:
-            query = (
-                select(ORMEnvironmentVersion)
-                .where(ORMEnvironmentVersion.environment == environment)
-                .order_by(ORMEnvironmentVersion.number.desc())
-            )
-            return [v.to_environment_version() for v in (await session.execute(query)).scalars()]
+            query = self._named(environment).order_by(ORMEnvironmentVersion.number.desc())
+            return [v.to_environment_version() for v in (await session.execute(query)).unique().scalars()]
 
     @override
     async def describe(self, environment: str, kind: str) -> EnvironmentVersions:

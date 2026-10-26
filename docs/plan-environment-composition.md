@@ -11,6 +11,7 @@
 | 1 | Manifest entries declare how they install; environments declare their member entries | in review |
 | 2 | The runner (runtime contract 2), in place of pbest's | in review |
 | 3 | pixi: generated from entries, locked in an unprivileged Job; the definition that installs the lock | in review |
+| 4a | Environments get a stable id; versions and suite runs refer to it, never to a name | in review |
 | 4 | The `composed` version kind: create (lock, build), read back, record; export as pixi or uv | |
 | 5 | Compliance: composites per entry, generic interface checks, levels computed per version | |
 | 6 | registry_env migrates to a composed version on a current process-bigraph | |
@@ -66,6 +67,35 @@
   - A run whose composite uses entries from several environments is resolved to the set of entries it needs.
   - It reuses a ready version that covers them, or creates a mash-up named by its sorted entries and builds it implicitly. The inputs are registry-derived, so anyone may trigger it (V5 of plan-environment-versions), within the submission queue's caps.
   - A conflict (`pixi lock` refuses) is reported to the submitter with the packages that conflict.
+
+### Identity: environments, versions, mash-ups (Jim, 2026-10-25)
+- **An environment's identity is its database id.** Its name (`registry_env`) is what requests and pages use, and it
+  may change; nothing stores it as a reference:
+  - every version refers to its environment by `environment_id`;
+  - a run records its `environment_version_id`;
+  - a suite run stores the ids of the versions it ran in.
+  `env@n` is accepted as input and resolved to ids when a run or suite run is recorded. A run's `environment_version`
+  label is a snapshot of the name at run time, for search, not a reference. (PR "environment ids", before step 4.)
+- **What a named environment's versions share** is its declared composition (its `entries`). They differ in pins and
+  resolution date. A version is identified by its lock hash, then its image digest.
+- **A mash-up is an environment of its own, whose identity is its exact set of entries.** Its name is derived from
+  that set (`mash-<hash>`). Two mash-ups with different sets are different environments.
+  - Giving one a curated name is a rename.
+  - Adding an entry makes another environment, never a version of the same one.
+  - Mash-ups are never versions of a named environment: version creation takes no `entries` override.
+
+### Choosing an environment for a run (step 7, proposed 2026-10-25)
+1. **A named environment, or a named version, is used as given.** It is refused (400, listing what is missing) if it
+   lacks a component the document uses. Suite runs always name theirs.
+2. **Otherwise the service infers what the run needs:** the document's addresses mapped to entries through their
+   module roots, plus the libraries those entries `require` (a manifest field added in step 7).
+3. **It reuses a ready environment that covers that set** (a superset will do): named environments before mash-ups,
+   then the smallest set, then that environment's default version.
+4. **If none covers it,** the service creates a mash-up of exactly that set and builds it implicitly, the run waiting
+   in the queue. Every entry must be `tested` or higher.
+5. **If the entries cannot share an environment,** the request is refused with a 409 and pixi's explanation.
+6. **Every run records the version it got.** An inferred choice can change later; to reproduce a run, name that
+   version.
 
 ### What is a safe component
 - An entry in `manifest.yaml`, pinned to a release or a commit, whose compliance composites pass **in the environment version that will run it**.

@@ -216,7 +216,8 @@ class EnvironmentVersion(BaseModel):
     (docs/plan-environment-versions.md, V1)."""
 
     database_id: int
-    environment: str
+    environment_id: int = Field(description="Its environment's identity; the name below may change")
+    environment: str = Field(description="Its environment's current name")
     number: int
     state: VersionState
     simulator_id: int

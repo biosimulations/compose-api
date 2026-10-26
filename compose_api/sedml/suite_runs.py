@@ -163,13 +163,15 @@ async def _submit_source(
 
 
 async def runs(suite: Suite) -> list[SuiteRunInfo]:
-    found = await get_required_database_service().get_comparisons_db().suite_runs(suite.name)
+    db = get_required_database_service().get_comparisons_db()
+    found = await db.suite_runs(suite.name)
+    versions = await db.environment_versions_of(found)
     return [
         SuiteRunInfo(
             number=r.number,
             created_at=service._iso(r.created_at),
             status=r.status,
-            environment_versions=dict(r.environment_versions or {}),
+            environment_versions=versions.get(r.id, {}),
         )
         for r in found
     ]
@@ -229,7 +231,7 @@ async def view(suite: Suite, number: int) -> SuiteRunView | None:
     return SuiteRunView(
         suite=suite.name, number=number, created_at=service._iso(run.created_at), status=run.status,
         baseline=suite.baseline, rows=rows, summary=summary,
-        environment_versions=dict(run.environment_versions or {}),
+        environment_versions=(await db.environment_versions_of([run])).get(run.id, {}),
     )  # fmt: skip
 
 
