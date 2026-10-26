@@ -21,7 +21,7 @@
 | 7a | Runs name an environment or have one inferred; environments listed from the database | merged (#415, #416) |
 | 7b | Implicit mash-ups, proven with viva-basic-processes | done: #417–#419 (0.7.51), #421 (0.7.52); live 2026-10-26 |
 | 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | |
-| 8a | Versions come from the database only: the deployed (pbest) definition, `simulator_registry.json`, `shared_image()` retired | decisions proposed (D8.1–D8.6) |
+| 8a | Versions come from the database only: the deployed (pbest) definition, `simulator_registry.json`, `shared_image()` retired | decided; in progress |
 | 8b | Prebuilt images by their versions, not `PREBUILT_SIMULATORS` | |
 | 8c | Interface manifests from each environment's default version, not committed files | |
 | 8d | The shared uv path, `preview` and custom library lists retired | |
@@ -424,7 +424,7 @@
      `ContainerizationEngine` (types; the first is stored with every simulator row), and
      `generate_container_def_file`, used only by the deployed definition above.
 
-   **Decisions (proposed 2026-10-26, for Jim to confirm):**
+   **Decisions (Jim, 2026-10-26: D8.1–D8.6 confirmed):**
    - **D8.1 A version is always a database record.** A run that names no version takes its environment's default;
      with none (a fresh deployment), the run is refused (503, "an administrator creates its first version") instead
      of adopting a definition. A fresh deployment's first step is `environments create registry_env`. Test fixtures
