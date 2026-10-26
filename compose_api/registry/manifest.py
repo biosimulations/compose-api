@@ -90,6 +90,9 @@ class RegistryEntry(BaseModel):
     conda: dict[str, str] = Field(default_factory=dict)
     # type tables the runner registers before a run, `module:attribute` (pbsim_common:standard_types)
     types: list[str] = Field(default_factory=list)
+    # the library entries a component needs installed beside it (an engine its package does not declare), which join
+    # the entries a document is inferred to need (docs/plan-environment-composition.md, D7.2)
+    requires: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
     reviewer: str | None = None
 
@@ -111,7 +114,23 @@ class Manifest(BaseModel):
         duplicates = sorted({i for i in ids if ids.count(i) > 1})
         if duplicates:
             raise ValueError(f"duplicate registry entry ids: {duplicates}")
+        unknown = sorted({r for e in self.entries for r in e.requires if r not in ids})
+        if unknown:
+            raise ValueError(f"`requires` names entries the manifest does not have: {unknown}")
         return self
+
+    def with_requirements(self, entry_ids: set[str]) -> set[str]:
+        """The entries, and every entry they require, transitively."""
+        by_id = {entry.id: entry for entry in self.entries}
+        found, pending = set(), list(entry_ids)
+        while pending:
+            entry_id = pending.pop()
+            if entry_id in found:
+                continue
+            found.add(entry_id)
+            entry = by_id.get(entry_id)
+            pending.extend(entry.requires if entry is not None else [])
+        return found
 
     def entry_for_module(self, module: str) -> RegistryEntry | None:
         """The entry whose longest module root contains `module`, so a nested root wins over its parent."""

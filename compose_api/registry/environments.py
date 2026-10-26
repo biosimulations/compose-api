@@ -16,7 +16,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 from compose_api.config import get_settings
-from compose_api.registry.manifest import CurationLevel, Manifest, load_manifest
+from compose_api.registry.manifest import CurationLevel, Manifest, RegistryEntry, load_manifest
 
 ENVIRONMENTS_PATH = Path(__file__).parent / "environments.yaml"
 MANIFESTS_DIR = Path(__file__).parent / "manifests"
@@ -88,12 +88,30 @@ def spec_problems(spec: EnvironmentSpec, manifest: Manifest, *, bundled: bool = 
                 other = installs.setdefault(name, entry_id)
                 if other != entry_id:
                     problems.append(f"{spec.name}: {other!r} and {entry_id!r} both install {name}")
+    problems.extend(_unlisted_requirements(spec, by_id))
     in_bundle = {e.id for e in manifest.entries if spec.name in e.bundles}
     if bundled and in_bundle != set(spec.entries):
         problems.append(
             f"{spec.name}: its entries {sorted(set(spec.entries))} differ from the entries bundled in it"
             f" {sorted(in_bundle)}"
         )
+    return problems
+
+
+def members_of(spec: EnvironmentSpec, manifest: Manifest) -> frozenset[str]:
+    """The registry entries an environment provides: those it is composed of, or, for a prebuilt image (which lists
+    none), the entries bundled in it."""
+    return frozenset(spec.entries) or frozenset(e.id for e in manifest.entries if spec.name in e.bundles)
+
+
+def _unlisted_requirements(spec: EnvironmentSpec, by_id: dict[str, RegistryEntry]) -> list[str]:
+    """An entry the environment lists that `requires` one it does not (D7.2: what a component needs comes with it)."""
+    problems = []
+    for entry_id in spec.entries:
+        entry = by_id.get(entry_id)
+        missing = sorted(set(entry.requires) - set(spec.entries)) if entry is not None else []
+        if missing:
+            problems.append(f"{spec.name}: entry {entry_id!r} requires {missing}, which it does not list")
     return problems
 
 

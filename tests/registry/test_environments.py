@@ -123,10 +123,19 @@ def test_a_composition_that_cannot_be_built_is_explained() -> None:
     assert prebuilt == ["env: a prebuilt image is its owner's, so it lists no entries"]
 
 
+def test_a_composition_must_list_what_its_entries_require() -> None:
+    pinned = {"pypi": "a", "version": "1"}
+    needs_b = _entry("a", install=pinned).model_copy(update={"requires": ["b"]})
+    manifest = Manifest(entries=[needs_b, _entry("b", install={"pypi": "b", "version": "1"})])
+    assert any("'a' requires ['b']" in p for p in composition_problems(_composition(["a"]), manifest))
+    assert not any("requires" in p for p in composition_problems(_composition(["a", "b"]), manifest))
+
+
 def test_the_viva_pde_particle_entry_is_runnable_only_in_its_own_image() -> None:
     entry = next(e for e in load_manifest().entries if e.id == "viva-pde-particle")
     assert entry.level == CurationLevel.TESTED and entry.evidence
-    assert entry.bundles == ["viva-pde-particle"]  # not registry_env: submissions without `simulator` still refuse it
+    # not registry_env: a run naming no environment is inferred to its image (step 7a), and registry_env refuses it
+    assert entry.bundles == ["viva-pde-particle"]
 
 
 def test_the_deployment_pins_every_prebuilt_environment() -> None:

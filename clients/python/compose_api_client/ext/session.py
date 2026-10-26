@@ -726,10 +726,12 @@ class ComposeSession:
         tags: Sequence[str] = (),
         description: str | None = None,
         environment_version: int | None = None,
+        environment: str | None = None,
     ) -> SimulationExperiment:
-        """Submit an ``.omex`` (or ``.pbg``). ``simulator`` names a prebuilt simulator image; ``environment_version``
-        a version of that environment (its default when omitted); ``tags`` and ``description`` are stored with the run
-        and filter ``simulations()``."""
+        """Submit an ``.omex`` (or ``.pbg``). ``environment`` names the environment to run in (``simulator`` is the
+        older name for a prebuilt one); with neither, the service infers it from the document's classes.
+        ``environment_version`` is a version of that environment (its default when omitted); ``tags`` and
+        ``description`` are stored with the run and filter ``simulations()``."""
         op = Operation("POST", "/simulation/run", replayable=False)
         r, _ = self._send(
             op,
@@ -742,6 +744,7 @@ class ComposeSession:
                 tags=list(tags) if tags else UNSET,
                 description=description if description is not None else UNSET,
                 environment_version=environment_version if environment_version is not None else UNSET,
+                environment=environment if environment is not None else UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -1635,6 +1638,7 @@ class AsyncComposeSession:
         tags: Sequence[str] = (),
         description: str | None = None,
         environment_version: int | None = None,
+        environment: str | None = None,
     ) -> SimulationExperiment:
         op = Operation("POST", "/simulation/run", replayable=False)
         r, _ = await self._send(
@@ -1648,6 +1652,7 @@ class AsyncComposeSession:
                 tags=list(tags) if tags else UNSET,
                 description=description if description is not None else UNSET,
                 environment_version=environment_version if environment_version is not None else UNSET,
+                environment=environment if environment is not None else UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]

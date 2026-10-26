@@ -109,3 +109,49 @@ async def test_a_malformed_tag_or_overlong_description_is_a_400(http_api_client:
     assert bad_tag.status_code == 400 and "-starts-badly" in bad_tag.json()["detail"]
     long = await http_api_client.post("/simulation/run", files=files, params={"description": "x" * 2001})
     assert long.status_code == 400 and "description" in long.json()["detail"]
+
+
+PDE_IMAGE = "ghcr.io/example/pde@sha256:" + "1" * 64
+PDE = "local:viva_pde_particle.processes.fenicsx_reaction_diffusion.FenicsxReactionDiffusion"
+
+
+@pytest.mark.asyncio
+async def test_a_run_naming_no_environment_goes_where_its_classes_are(http_api_client: httpx.AsyncClient) -> None:
+    """Step 7a (D7.1): a document using only viva-pde-particle's classes is inferred to run in its image when the
+    deployment offers it, as if it had named it; offered nowhere, the shared environment refuses it as before."""
+    with override_settings(prebuilt_simulators={"viva-pde-particle": PDE_IMAGE}):
+        inferred = await http_api_client.post(
+            "/simulation/run", files={"uploaded_file": ("doc.pbg", pbg(PDE), "application/json")}
+        )
+    assert not (inferred.status_code == 400 and "violations" in inferred.text), inferred.text
+    with override_settings(prebuilt_simulators={}):
+        refused = await http_api_client.post(
+            "/simulation/run", files={"uploaded_file": ("doc.pbg", pbg(PDE), "application/json")}
+        )
+    assert refused.status_code == 400
+    (violation,) = refused.json()["detail"]["violations"]
+    assert "not installed in the environment `registry_env`" in violation["reason"]
+
+
+@pytest.mark.asyncio
+async def test_a_named_environment_is_used_as_given(http_api_client: httpx.AsyncClient) -> None:
+    """`environment=` names any offered environment; the shared one checks the registry, whatever was inferable."""
+    with override_settings(prebuilt_simulators={"viva-pde-particle": PDE_IMAGE}):
+        shared = await http_api_client.post(
+            "/simulation/run",
+            params={"environment": "registry_env"},
+            files={"uploaded_file": ("doc.pbg", pbg(PDE), "application/json")},
+        )
+        disagreeing = await http_api_client.post(
+            "/simulation/run",
+            params={"environment": "registry_env", "simulator": "viva-pde-particle"},
+            files={"uploaded_file": ("doc.pbg", pbg(PDE), "application/json")},
+        )
+        unknown = await http_api_client.post(
+            "/simulation/run",
+            params={"environment": "nowhere"},
+            files={"uploaded_file": ("doc.pbg", pbg(PDE), "application/json")},
+        )
+    assert shared.status_code == 400 and "registry_env" in shared.json()["detail"]["violations"][0]["reason"]
+    assert disagreeing.status_code == 400 and "disagree" in disagreeing.json()["detail"]
+    assert unknown.status_code == 400 and "No environment 'nowhere'" in unknown.json()["detail"]
