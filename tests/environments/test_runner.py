@@ -103,9 +103,16 @@ def test_a_document_is_found_by_name_without_partial_replacements(tmp_path: Path
         runner.load_document(tmp_path / "a.sedml", unpacked)
 
 
-def test_type_tables_are_registered_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(runner.TYPES_ENV, "pbsim_common:standard_types")
-    assert "numeric_result" in runner.build_core().registry
+def test_type_tables_are_registered_from_the_environment(tmp_path: Path) -> None:
+    """In a subprocess: building a core discovers every installed package, pbsim-common's COPASI included, which sets
+    the process's locale to C (and this test process's reads to ASCII)."""
+    (tmp_path / "runner_types.py").write_text('standard_types = {"pair_of_floats": {"a": "float", "b": "float"}}\n')
+    check = "import runner; assert 'pair_of_floats' in runner.build_core().registry"
+    result = subprocess.run(  # noqa: S603 the runner's own function, in a process of its own
+        [sys.executable, "-c", check], cwd=tmp_path, capture_output=True, text=True, check=False,
+        env={**os.environ, "PYTHONPATH": f"{tmp_path}:{RUNNER.parent}", runner.TYPES_ENV: "runner_types"},
+    )  # fmt: skip
+    assert result.returncode == 0, result.stderr[-2000:]
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="needs uv to fetch the composed environments' engine")
