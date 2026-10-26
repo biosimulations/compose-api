@@ -6,6 +6,9 @@ import asyncio
 import base64
 import contextlib
 import dataclasses
+import gzip
+import os
+import subprocess
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
@@ -38,8 +41,8 @@ def test_the_build_runs_privileged_in_scratch_and_copies_as_the_service_user() -
     # the privileged container sees scratch only: the definition comes with the Job, not from the shared filesystem
     assert [m.mount_path for m in build.volume_mounts] == ["/work"]
     (env,) = build.env
-    assert base64.b64decode(env.value).decode() == definition
-    assert f'echo "${env.name}" | base64 -d > /work/image.def' in build.command[-1]
+    assert gzip.decompress(base64.b64decode(env.value)).decode() == definition
+    assert f'echo "${env.name}" | base64 -d | gunzip > /work/image.def' in build.command[-1]
     assert "apptainer build /work/image.sif /work/image.def" in build.command[-1]
     # all of the build's scratch (Apptainer's sandbox and cache) is the volume it requests disk for
     assert "export APPTAINER_TMPDIR=/work/scratch APPTAINER_CACHEDIR=/work/cache" in build.command[-1]
@@ -170,3 +173,23 @@ async def test_a_build_is_a_k8s_run_the_monitor_updates_and_its_image_is_recorde
         assert image is not None and image.hpcrun_id == run.database_id
     else:
         assert run.status == JobStatus.FAILED and image is None
+
+
+def test_a_composed_definition_fits_one_environment_string_and_decodes_as_the_job_decodes_it(tmp_path: Path) -> None:
+    """A composed version's definition carries its whole pixi.lock (registry_env's: 177 KB as base64), over Linux's
+    128 KiB limit for one environment string, which stopped the build container from starting at all
+    (`exec /bin/bash: argument list too long`). Gzipped first, it fits, and the Job's own line restores it."""
+    lock = "".join(
+        f"- pypi: https://files.pythonhosted.org/packages/{i:04d}/pkg-{i}.whl\n  name: pkg{i}\n" for i in range(2500)
+    )
+    definition = f"Bootstrap: docker\nFrom: busybox\n%post\ncat > pixi.lock <<'L'\n{lock}L\n"
+    assert len(base64.b64encode(definition.encode())) > 128 * 1024  # what failed
+    encoded = build_k8s.encode_definition(definition)
+    assert len(encoded) < 128 * 1024
+    assert build_k8s.encode_definition(definition) == encoded  # no timestamp: the same Job each time
+    result = subprocess.run(  # noqa: S603 the build script's decoding line, run as the Job runs it
+        ["/bin/bash", "-c", f'echo "${build_k8s.DEFINITION_ENV}" | base64 -d | gunzip > {tmp_path}/image.def'],
+        env={**os.environ, build_k8s.DEFINITION_ENV: encoded}, capture_output=True, text=True, check=False,
+    )  # fmt: skip
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "image.def").read_text() == definition
