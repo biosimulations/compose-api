@@ -644,6 +644,12 @@ SUBMISSIONS: list[tuple[str, str, tuple[Any, ...], dict[str, Any]]] = [
     ("run_suite", "/suites/{name}/run", ("suite",), {"environment_versions": ["default"]}),
     ("verify_comparison", "/comparisons/{comparison_id}/verify", (354,), {}),
     ("verify_suite_run", "/suites/{name}/runs/{number}/verify", ("suite", 1), {}),
+    (
+        "mark_suite_problem",
+        "/suites/{name}/problems",
+        ("suite", "biomodels:BIOMD0000000039"),
+        {"category": "NONINTEGER_STOICH", "reason": "0.25 for CaER"},
+    ),
     ("build_environment", "/registry/environments/{name}/build", ("environment",), {}),
     ("build_simulator", "/registry/simulators/{simulator_id}/build", (7,), {}),
     ("create_environment_version", "/registry/environments/{name}/versions", ("environment",), {}),

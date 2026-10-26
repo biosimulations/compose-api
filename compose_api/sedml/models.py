@@ -132,3 +132,48 @@ class SuiteVerifyResult(BaseModel):
     queued: list[int] = Field(description="comparisons a verification was queued for")
     already: list[int] = Field(description="comparisons with a verification already queued or running")
     running: int = Field(description="comparisons still running, not yet looked at")
+
+
+class KnownProblem(BaseModel):
+    """A known problem of one solver on one source of a suite (docs/plan-known-problems.md): excused in the suite's
+    runs numbered below `cleared_run` (every run while it is open). No solver: the whole source is excused."""
+
+    problem_id: int
+    suite: str
+    source: str
+    solver: str | None = None
+    category: str = Field(description="what kind of problem, e.g. VCell's fault names (NONINTEGER_STOICH, DELAY)")
+    reason: str
+    seen_run: int | None = Field(default=None, description="the suite run it was first seen in")
+    marked_by: str
+    marked_at: str | None = None
+    cleared_run: int | None = Field(default=None, description="the suite run that showed it fixed")
+    cleared_by: str | None = None
+    cleared_at: str | None = None
+
+
+_CATEGORY = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)]
+_REASON = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
+
+
+class KnownProblemMark(BaseModel):
+    """A known problem to record: the source and solver (none for the whole source), and why."""
+
+    source: str
+    solver: str | None = None
+    category: _CATEGORY
+    reason: _REASON
+    seen_run: int | None = Field(default=None, description="the suite run it was first seen in")
+
+
+class KnownProblemEdit(BaseModel):
+    """A new category or reason for a known problem; what is not given stays."""
+
+    category: _CATEGORY | None = None
+    reason: _REASON | None = None
+
+
+class KnownProblemClear(BaseModel):
+    """Clear a known problem: the suite run that shows it fixed. Runs before it still excuse it."""
+
+    run: int

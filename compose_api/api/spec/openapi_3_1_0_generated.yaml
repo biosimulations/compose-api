@@ -2480,6 +2480,180 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /suites/{name}/problems:
+    get:
+      tags:
+      - Suites
+      summary: 'A suite''s known problems: each solver''s expected failures, open
+        and cleared'
+      operationId: list-suite-problems
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      - name: cleared
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          description: only cleared (true) or only open (false) ones
+          title: Cleared
+        description: only cleared (true) or only open (false) ones
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KnownProblem'
+                title: Response List-Suite-Problems
+        '404':
+          description: No such suite
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Suites
+      summary: Record a known problem of a solver on one of the suite's sources
+      operationId: mark-suite-problem
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnownProblemMark'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnownProblem'
+        '401':
+          description: Anonymous
+        '403':
+          description: Not a suite curator, or suite curation is not configured
+        '404':
+          description: No such suite, problem or run
+        '400':
+          description: A source or solver the suite does not have
+        '409':
+          description: A problem is already open for that source and solver
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /suites/{name}/problems/{problem_id}:
+    patch:
+      tags:
+      - Suites
+      summary: Change a known problem's category or reason
+      operationId: edit-suite-problem
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      - name: problem_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Problem Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnownProblemEdit'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnownProblem'
+        '401':
+          description: Anonymous
+        '403':
+          description: Not a suite curator, or suite curation is not configured
+        '404':
+          description: No such suite, problem or run
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /suites/{name}/problems/{problem_id}/clear:
+    post:
+      tags:
+      - Suites
+      summary: Clear a known problem at the suite run that shows it fixed; earlier
+        runs still excuse it
+      operationId: clear-suite-problem
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      - name: problem_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Problem Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnownProblemClear'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnownProblem'
+        '401':
+          description: Anonymous
+        '403':
+          description: Not a suite curator, or suite curation is not configured
+        '404':
+          description: No such suite, problem or run
+        '409':
+          description: Already cleared
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /auth/me:
     get:
       tags:
@@ -3901,6 +4075,139 @@ components:
       - simulation
       - build_container
       title: JobType
+    KnownProblem:
+      properties:
+        problem_id:
+          type: integer
+          title: Problem Id
+        suite:
+          type: string
+          title: Suite
+        source:
+          type: string
+          title: Source
+        solver:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Solver
+        category:
+          type: string
+          title: Category
+          description: what kind of problem, e.g. VCell's fault names (NONINTEGER_STOICH,
+            DELAY)
+        reason:
+          type: string
+          title: Reason
+        seen_run:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Seen Run
+          description: the suite run it was first seen in
+        marked_by:
+          type: string
+          title: Marked By
+        marked_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Marked At
+        cleared_run:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Cleared Run
+          description: the suite run that showed it fixed
+        cleared_by:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cleared By
+        cleared_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cleared At
+      type: object
+      required:
+      - problem_id
+      - suite
+      - source
+      - category
+      - reason
+      - marked_by
+      title: KnownProblem
+      description: 'A known problem of one solver on one source of a suite (docs/plan-known-problems.md):
+        excused in the suite''s
+
+        runs numbered below `cleared_run` (every run while it is open). No solver:
+        the whole source is excused.'
+    KnownProblemClear:
+      properties:
+        run:
+          type: integer
+          title: Run
+      type: object
+      required:
+      - run
+      title: KnownProblemClear
+      description: 'Clear a known problem: the suite run that shows it fixed. Runs
+        before it still excuse it.'
+    KnownProblemEdit:
+      properties:
+        category:
+          anyOf:
+          - type: string
+            maxLength: 64
+            minLength: 1
+          - type: 'null'
+          title: Category
+        reason:
+          anyOf:
+          - type: string
+            maxLength: 2000
+            minLength: 1
+          - type: 'null'
+          title: Reason
+      type: object
+      title: KnownProblemEdit
+      description: A new category or reason for a known problem; what is not given
+        stays.
+    KnownProblemMark:
+      properties:
+        source:
+          type: string
+          title: Source
+        solver:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Solver
+        category:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Category
+        reason:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Reason
+        seen_run:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Seen Run
+          description: the suite run it was first seen in
+      type: object
+      required:
+      - source
+      - category
+      - reason
+      title: KnownProblemMark
+      description: 'A known problem to record: the source and solver (none for the
+        whole source), and why.'
     LockPreview:
       properties:
         environment:
@@ -4821,6 +5128,8 @@ components:
             $ref: '#/components/schemas/ExpectedFailure'
           type: array
           title: Expected
+          description: known problems not yet moved to records (docs/plan-known-problems.md,
+            K8); read as open ones
         verify:
           type: string
           enum:
@@ -4915,6 +5224,26 @@ components:
           - type: string
           - type: 'null'
           title: Expected
+          description: why the whole source is excused, if it is
+        known_problems:
+          additionalProperties:
+            type: string
+          type: object
+          title: Known Problems
+          description: 'each solver''s known problem here, by solver: its reason'
+        excused:
+          type: boolean
+          title: Excused
+          description: the row fails or differs only through solvers with a known
+            problem; the others agree
+          default: false
+        resolved:
+          items:
+            type: string
+          type: array
+          title: Resolved
+          description: 'solvers with a known problem here that completed and agree:
+            clear it'
         failure:
           anyOf:
           - type: string

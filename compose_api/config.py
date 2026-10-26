@@ -184,6 +184,9 @@ class Settings(BaseSettings):
     # (docs/plan-environment-versions.md, "Authorization"). Empty disables those actions; runs still build and use an
     # environment's versions. DEFAULT_ROLE is refused, as for admin_role.
     environment_admin_role: str = ""
+    # Role name allowed to mark, edit and clear a suite's known problems (docs/plan-known-problems.md, K6). Empty
+    # disables those actions; suite runs still read every problem. DEFAULT_ROLE is refused, as for admin_role.
+    suite_curator_role: str = ""
 
     # The static web UI build served at /ui (webapp/, `npm run generate`). Absent: the API runs without a UI.
     webapp_dist_dir: str = f"{REPO_ROOT}/webapp/.output/public"
@@ -191,7 +194,7 @@ class Settings(BaseSettings):
     # /webapp/csp-report. Turn on once the reports show the policy matches what the UI loads.
     webapp_csp_enforce: bool = False
 
-    @field_validator("admin_role", "environment_admin_role")
+    @field_validator("admin_role", "environment_admin_role", "suite_curator_role")
     @classmethod
     def _admin_role_is_not_everyone(cls, value: str, info: ValidationInfo) -> str:
         # Fails the deployment at startup (settings load at import) rather than granting every signed-in caller.
@@ -199,6 +202,7 @@ class Settings(BaseSettings):
             what = {
                 "admin_role": "read every private simulation",
                 "environment_admin_role": "create and change environment versions",
+                "suite_curator_role": "mark and clear suites' known problems",
             }[str(info.field_name)]
             raise ValueError(
                 f"{str(info.field_name).upper()} must not be {DEFAULT_ROLE!r}: every signed-in caller holds that role,"

@@ -17,6 +17,7 @@ def test_every_post_has_an_explicit_submission_policy() -> None:
         "preview-environment-version",
         "retire-environment-version",
         "inspect-environment-version",
+        "clear-suite-problem",  # a second clear answers 409
     }
     idempotent = {
         path

@@ -1034,6 +1034,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/suites/{name}/problems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A suite's known problems: each solver's expected failures, open and cleared */
+        get: operations["list-suite-problems"];
+        put?: never;
+        /** Record a known problem of a solver on one of the suite's sources */
+        post: operations["mark-suite-problem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/suites/{name}/problems/{problem_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change a known problem's category or reason */
+        patch: operations["edit-suite-problem"];
+        trace?: never;
+    };
+    "/suites/{name}/problems/{problem_id}/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Clear a known problem at the suite run that shows it fixed; earlier runs still excuse it */
+        post: operations["clear-suite-problem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me": {
         parameters: {
             query?: never;
@@ -1899,6 +1951,83 @@ export interface components {
          */
         JobType: "simulation" | "build_container";
         /**
+         * KnownProblem
+         * @description A known problem of one solver on one source of a suite (docs/plan-known-problems.md): excused in the suite's
+         *     runs numbered below `cleared_run` (every run while it is open). No solver: the whole source is excused.
+         */
+        KnownProblem: {
+            /** Problem Id */
+            problem_id: number;
+            /** Suite */
+            suite: string;
+            /** Source */
+            source: string;
+            /** Solver */
+            solver?: string | null;
+            /**
+             * Category
+             * @description what kind of problem, e.g. VCell's fault names (NONINTEGER_STOICH, DELAY)
+             */
+            category: string;
+            /** Reason */
+            reason: string;
+            /**
+             * Seen Run
+             * @description the suite run it was first seen in
+             */
+            seen_run?: number | null;
+            /** Marked By */
+            marked_by: string;
+            /** Marked At */
+            marked_at?: string | null;
+            /**
+             * Cleared Run
+             * @description the suite run that showed it fixed
+             */
+            cleared_run?: number | null;
+            /** Cleared By */
+            cleared_by?: string | null;
+            /** Cleared At */
+            cleared_at?: string | null;
+        };
+        /**
+         * KnownProblemClear
+         * @description Clear a known problem: the suite run that shows it fixed. Runs before it still excuse it.
+         */
+        KnownProblemClear: {
+            /** Run */
+            run: number;
+        };
+        /**
+         * KnownProblemEdit
+         * @description A new category or reason for a known problem; what is not given stays.
+         */
+        KnownProblemEdit: {
+            /** Category */
+            category?: string | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * KnownProblemMark
+         * @description A known problem to record: the source and solver (none for the whole source), and why.
+         */
+        KnownProblemMark: {
+            /** Source */
+            source: string;
+            /** Solver */
+            solver?: string | null;
+            /** Category */
+            category: string;
+            /** Reason */
+            reason: string;
+            /**
+             * Seen Run
+             * @description the suite run it was first seen in
+             */
+            seen_run?: number | null;
+        };
+        /**
          * LockPreview
          * @description What a shared version would be: its lock, and how it differs from the default version's.
          */
@@ -2384,7 +2513,10 @@ export interface components {
              * @description the accepted suite run that later runs are compared with
              */
             baseline?: number | null;
-            /** Expected */
+            /**
+             * Expected
+             * @description known problems not yet moved to records (docs/plan-known-problems.md, K8); read as open ones
+             */
             expected?: components["schemas"]["ExpectedFailure"][];
             /**
              * Verify
@@ -2432,8 +2564,29 @@ export interface components {
             drift?: {
                 [key: string]: components["schemas"]["Drift"];
             } | null;
-            /** Expected */
+            /**
+             * Expected
+             * @description why the whole source is excused, if it is
+             */
             expected?: string | null;
+            /**
+             * Known Problems
+             * @description each solver's known problem here, by solver: its reason
+             */
+            known_problems?: {
+                [key: string]: string;
+            };
+            /**
+             * Excused
+             * @description the row fails or differs only through solvers with a known problem; the others agree
+             * @default false
+             */
+            excused: boolean;
+            /**
+             * Resolved
+             * @description solvers with a known problem here that completed and agree: clear it
+             */
+            resolved?: string[];
             /** Failure */
             failure?: string | null;
             /** Verification */
@@ -5121,6 +5274,238 @@ export interface operations {
             };
             /** @description No such suite or run */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "list-suite-problems": {
+        parameters: {
+            query?: {
+                /** @description only cleared (true) or only open (false) ones */
+                cleared?: boolean | null;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnownProblem"][];
+                };
+            };
+            /** @description No such suite */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "mark-suite-problem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnownProblemMark"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnownProblem"];
+                };
+            };
+            /** @description A source or solver the suite does not have */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Anonymous */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a suite curator, or suite curation is not configured */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such suite, problem or run */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A problem is already open for that source and solver */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "edit-suite-problem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                problem_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnownProblemEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnownProblem"];
+                };
+            };
+            /** @description Anonymous */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a suite curator, or suite curation is not configured */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such suite, problem or run */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "clear-suite-problem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                problem_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnownProblemClear"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnownProblem"];
+                };
+            };
+            /** @description Anonymous */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a suite curator, or suite curation is not configured */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such suite, problem or run */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Already cleared */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -1,6 +1,7 @@
 """Running a suite and reading a suite run (compose_api/sedml/suites.py; docs/plan-sedml.md, phase 6)."""
 
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 from fastapi import BackgroundTasks
@@ -10,7 +11,7 @@ from compose_api.db.services.comparisons_db import ClaimedSuiteRun
 from compose_api.dependencies import get_required_database_service
 from compose_api.sedml import service, sources, suites
 from compose_api.sedml.compare import compare
-from compose_api.sedml.models import SuiteVerifyResult
+from compose_api.sedml.models import KnownProblem, SuiteVerifyResult
 from compose_api.sedml.suites import Suite
 from compose_api.sedml.translator import TranslatorUnavailableError
 
@@ -35,7 +36,17 @@ class SuiteRunRow(BaseModel):
     worst_label: str | None = None
     worst_score: float | str | None = None
     drift: dict[str, Drift] | None = None
-    expected: str | None = None
+    expected: str | None = Field(default=None, description="why the whole source is excused, if it is")
+    known_problems: dict[str, str] = Field(
+        default_factory=dict, description="each solver's known problem here, by solver: its reason"
+    )
+    excused: bool = Field(
+        default=False,
+        description="the row fails or differs only through solvers with a known problem; the others agree",
+    )
+    resolved: list[str] = Field(
+        default_factory=list, description="solvers with a known problem here that completed and agree: clear it"
+    )
     failure: str | None = None
     verification: str | None = None  # the newest verification's state (docs/plan-verify-oracle.md)
     verify_close: bool | None = None
@@ -188,6 +199,7 @@ async def view(suite: Suite, number: int) -> SuiteRunView | None:
         baseline = {
             (r.comparison.source, r.comparison.task): r for r in await db.suite_comparisons(suite.name, suite.baseline)
         }
+    problems = _problems_for(suite, await db.known_problems(suite.name), number)
     found = await db.suite_comparisons(suite.name, number)
     statuses = await service.member_statuses(found)
     for row in found:
@@ -198,8 +210,14 @@ async def view(suite: Suite, number: int) -> SuiteRunView | None:
             source=c.source, task=c.task, comparison_id=c.comparison_id, status=c.status, close=c.close,
             close_to_references=result.get("close_to_references"), worst_label=worst[0], worst_score=worst[1],
         )  # fmt: skip
-        expected = suite.expected_for(c.source)
-        entry.expected = expected.reason if expected else None
+        whole = problems.get((c.source, None))
+        entry.expected = whole
+        entry.known_problems = {
+            solver: reason for (source, solver), reason in problems.items() if source == c.source and solver
+        }
+        if entry.known_problems and c.status != "running":
+            members = {m.solver: m.status for m in c.members}
+            entry.excused, entry.resolved = judge(c.close, members, c.result, set(entry.known_problems))
         before = baseline.get((c.source, c.task))
         if before is not None and c.status != "running":
             entry.drift = await _drift(row, before)
@@ -210,17 +228,16 @@ async def view(suite: Suite, number: int) -> SuiteRunView | None:
         if v is not None:
             entry.verification, entry.verify_close = v.state, v.verify_close
     for source, why in (run.failures or {}).items():
-        expected = suite.expected_for(source)
         rows.append(
-            SuiteRunRow(
-                source=source, status="failed", failure=str(why), expected=expected.reason if expected else None
-            )
+            SuiteRunRow(source=source, status="failed", failure=str(why), expected=problems.get((source, None)))
         )
     summary = {
         "comparisons": sum(1 for r in rows if r.comparison_id is not None),
         "agree": sum(1 for r in rows if r.close is True),
-        "differ": sum(1 for r in rows if r.close is False and not r.expected),
+        "differ": sum(1 for r in rows if r.close is False and not r.expected and not r.excused),
         "expected": sum(1 for r in rows if r.expected),
+        "excused": sum(1 for r in rows if r.excused and not r.expected),
+        "resolved": sum(1 for r in rows if r.resolved),
         "running": sum(1 for r in rows if r.status == "running"),
         "failed": sum(1 for r in rows if r.failure and not r.expected),
         "drifted": sum(1 for r in rows if r.drift and any(d.close is False for d in r.drift.values())),
@@ -256,6 +273,52 @@ async def verify(suite: Suite, number: int, which: str) -> SuiteVerifyResult | N
         _, created = await verifications.queue(full or row)
         (result.queued if created else result.already).append(c.comparison_id)
     return result
+
+
+def _problems_for(suite: Suite, known: list[KnownProblem], number: int) -> dict[tuple[str, str | None], str]:
+    """The known problems that apply to run ``number`` (docs/plan-known-problems.md, K2): those not cleared, or cleared
+    by a later run; by (source, solver), each one's reason. The suite file's ``expected:`` entries count as open
+    problems until they are moved to records (K8)."""
+    applies: dict[tuple[str, str | None], str] = {(e.source, e.solver): e.reason for e in suite.expected}
+    for p in known:
+        if p.cleared_run is None or p.cleared_run > number:
+            applies[(p.source, p.solver)] = p.reason
+    return applies
+
+
+def _pairs(result: dict[str, Any] | None) -> list[tuple[set[str], bool]]:
+    """Every solver pair's verdict on every label, references left out: (the two solvers, close)."""
+    pairs = []
+    for report in ((result or {}).get("reports") or {}).values():
+        for by_pair in (report.get("labels") or {}).values():
+            for pair, verdict in by_pair.items():
+                if not verdict.get("reference"):
+                    pairs.append((set(pair.split("|")), verdict.get("close") is True))
+    return pairs
+
+
+def judge(
+    close: bool | None, members: Mapping[str, str | None], result: dict[str, Any] | None, known: set[str]
+) -> tuple[bool, list[str]]:
+    """A finished row's standing against its solvers' known problems (docs/plan-known-problems.md, K3 and K4): whether
+    it is excused (it fails or differs, but every solver without a known problem completed and they agree with each
+    other), and which solvers with a known problem completed and agree with every solver they were compared with
+    (resolved: the problem no longer occurs)."""
+    pairs = _pairs(result)
+    resolved = sorted(
+        s
+        for s in known
+        if members.get(s) == "completed"
+        and any(s in pair for pair, _ in pairs)
+        and all(ok for pair, ok in pairs if s in pair)
+    )
+    if close is True:
+        return False, resolved
+    others = {s: status for s, status in members.items() if s not in known}
+    excused = all(status == "completed" for status in others.values()) and all(
+        ok for pair, ok in pairs if not pair & known
+    )
+    return excused, resolved
 
 
 def _worst(result: dict[str, Any]) -> tuple[str | None, float | str | None]:

@@ -77,6 +77,10 @@ from .interface_manifest_environment_type_0 import InterfaceManifestEnvironmentT
 from .interface_manifest_errors_item import InterfaceManifestErrorsItem
 from .job_status import JobStatus
 from .job_type import JobType
+from .known_problem import KnownProblem
+from .known_problem_clear import KnownProblemClear
+from .known_problem_edit import KnownProblemEdit
+from .known_problem_mark import KnownProblemMark
 from .list_simulations_status_type_0 import ListSimulationsStatusType0
 from .lock_preview import LockPreview
 from .lock_preview_against_basis_type_0 import LockPreviewAgainstBasisType0
@@ -118,6 +122,7 @@ from .suite_run_info import SuiteRunInfo
 from .suite_run_info_environment_versions import SuiteRunInfoEnvironmentVersions
 from .suite_run_row import SuiteRunRow
 from .suite_run_row_drift_type_0 import SuiteRunRowDriftType0
+from .suite_run_row_known_problems import SuiteRunRowKnownProblems
 from .suite_run_view import SuiteRunView
 from .suite_run_view_environment_versions import SuiteRunViewEnvironmentVersions
 from .suite_run_view_summary import SuiteRunViewSummary
@@ -206,6 +211,10 @@ __all__ = (
     "InterfaceManifestErrorsItem",
     "JobStatus",
     "JobType",
+    "KnownProblem",
+    "KnownProblemClear",
+    "KnownProblemEdit",
+    "KnownProblemMark",
     "ListSimulationsStatusType0",
     "LockPreview",
     "LockPreviewAgainstBasisType0",
@@ -247,6 +256,7 @@ __all__ = (
     "SuiteRunInfoEnvironmentVersions",
     "SuiteRunRow",
     "SuiteRunRowDriftType0",
+    "SuiteRunRowKnownProblems",
     "SuiteRunView",
     "SuiteRunViewEnvironmentVersions",
     "SuiteRunViewSummary",

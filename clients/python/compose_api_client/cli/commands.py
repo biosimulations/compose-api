@@ -2072,11 +2072,15 @@ def suites_show(
             "worst": r.get("worst_label"),
             "drift": ", ".join(f"{k}:{'ok' if v.get('close') else 'DRIFT'}" for k, v in (r.get("drift") or {}).items())
             or None,
+            "known": ", ".join(sorted(r.get("known_problems") or {})) or None,
+            "excused": r.get("excused") or None,
+            "resolved": ", ".join(r.get("resolved") or []) or None,
             "note": r.get("expected") or r.get("failure"),
         }
         for r in view.to_dict()["rows"]
     ]
-    emit(settings.output, rows, ["source", "task", "status", "agree", "references", "worst", "drift", "note"])
+    columns = ["source", "task", "status", "agree", "references", "worst", "drift", "known", "excused", "resolved"]
+    emit(settings.output, rows, [*columns, "note"])
 
 
 @suites_app.command("run")
@@ -2119,6 +2123,83 @@ def suites_verify(
     settings = _settings(ctx)
     with make_session(settings) as s:
         emit(settings.output, s.verify_suite_run(name, number, which="all" if all_ else "failing").to_dict())
+
+
+ProblemId = Annotated[int, typer.Argument(help="The problem's id (suites problems).")]
+_PROBLEM_COLUMNS = ["problem_id", "source", "solver", "category", "reason", "seen_run", "cleared_run"]
+
+
+@suites_app.command("problems")
+@claims("suites problems", "list-suite-problems")
+@handled
+def suites_problems_list(
+    ctx: typer.Context,
+    name: SuiteName,
+    open_: Annotated[bool, typer.Option("--open", help="Only the open ones.")] = False,
+    cleared: Annotated[bool, typer.Option("--cleared", help="Only the cleared ones.")] = False,
+) -> None:
+    """A suite's known problems, oldest first: each solver's expected failures, excused in its runs until cleared."""
+    if open_ and cleared:
+        raise UsageError("--open and --cleared exclude each other")
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        found = s.suite_problems(name, cleared=True if cleared else False if open_ else None)
+    emit(settings.output, [p.to_dict() for p in found], _PROBLEM_COLUMNS)
+
+
+@suites_app.command("mark-problem")
+@claims("suites mark-problem", "mark-suite-problem")
+@handled
+def suites_problems_mark(
+    ctx: typer.Context,
+    name: SuiteName,
+    source: Annotated[str, typer.Argument(help="The suite's source, e.g. biomodels:BIOMD0000000039.")],
+    category: Annotated[str, typer.Option(help="What kind of problem, e.g. NONINTEGER_STOICH.")],
+    reason: Annotated[str, typer.Option(help="Why it fails or differs.")],
+    solver: Annotated[
+        str | None, typer.Option(help="The solver it applies to; omit for a problem of the whole source.")
+    ] = None,
+    seen_run: Annotated[int | None, typer.Option(help="The suite run it was first seen in.")] = None,
+) -> None:
+    """Record a known problem: the solver's failure or disagreement on the source is excused until it is cleared.
+    Needs the suite curator role."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        found = s.mark_suite_problem(name, source, category=category, reason=reason, solver=solver, seen_run=seen_run)
+    emit(settings.output, found.to_dict())
+
+
+@suites_app.command("edit-problem")
+@claims("suites edit-problem", "edit-suite-problem")
+@handled
+def suites_problems_edit(
+    ctx: typer.Context,
+    name: SuiteName,
+    problem_id: ProblemId,
+    category: Annotated[str | None, typer.Option(help="A new category.")] = None,
+    reason: Annotated[str | None, typer.Option(help="A new reason.")] = None,
+) -> None:
+    """Change a known problem's category or reason. Needs the suite curator role."""
+    if category is None and reason is None:
+        raise UsageError("give --category, --reason or both")
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.edit_suite_problem(name, problem_id, category=category, reason=reason).to_dict())
+
+
+@suites_app.command("clear-problem")
+@claims("suites clear-problem", "clear-suite-problem")
+@handled
+def suites_problems_clear(
+    ctx: typer.Context,
+    name: SuiteName,
+    problem_id: ProblemId,
+    run: Annotated[int, typer.Option(help="The suite run that shows it fixed; earlier runs still excuse it.")],
+) -> None:
+    """Clear a known problem that no longer occurs (a suite run lists it as resolved). Needs the suite curator role."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.clear_suite_problem(name, problem_id, run).to_dict())
 
 
 @app.command("build-log")

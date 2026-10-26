@@ -86,6 +86,11 @@ def test_the_role_every_caller_holds_is_refused_as_the_admin_role(value: str, mo
         Settings()
 
 
+def test_the_role_every_caller_holds_is_refused_as_the_suite_curator_role() -> None:
+    with pytest.raises(ValidationError, match=f"SUITE_CURATOR_ROLE must not be '{DEFAULT_ROLE}'"):
+        Settings(suite_curator_role=DEFAULT_ROLE)
+
+
 @pytest.mark.parametrize("value", ["", "admin", "compose-admin", "User"])
 def test_other_admin_roles_are_accepted(value: str) -> None:
     assert Settings(admin_role=value).admin_role == value
