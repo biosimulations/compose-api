@@ -17,8 +17,10 @@ from compose_api.config import get_settings, override_settings
 from compose_api.registry import environments
 from compose_api.registry.environments import (
     INTERFACES_VERSION,
+    EnvironmentsFile,
     EnvironmentSpec,
     catalog_entries,
+    composition_problems,
     load_environments,
     module_roots,
     read_manifest,
@@ -26,7 +28,7 @@ from compose_api.registry.environments import (
     summarize,
 )
 from compose_api.registry.generate import describe_command, prebuilt_pins
-from compose_api.registry.manifest import CurationLevel, load_manifest
+from compose_api.registry.manifest import CurationLevel, Manifest, RegistryEntry, load_manifest
 
 needs_pblang = pytest.mark.skipif(
     not Path(get_settings().pblang_python).exists(), reason="process-bigraph-lang is not installed (make pblang)"
@@ -77,6 +79,48 @@ def test_environments_file_names_each_environment_once_and_each_has_modules() ->
     assert module_roots("viva-pde-particle") == ["viva_pde_particle"]
     assert config.describe.raw_url.startswith("https://raw.githubusercontent.com/biosimulations/process-bigraph-lang/")
     assert config.describe.raw_url.endswith("/process_bigraph_lang/v2/describe_env.py")
+
+
+def test_registry_env_is_composed_of_entries_that_say_how_they_install() -> None:
+    assert composition_problems(load_environments(), load_manifest()) == []
+    spec = next(e for e in load_environments().environments if e.name == "registry_env")
+    assert {"pbsim-common", "pb-multiscale-actin", "biosim-toolkit", "readdy"} <= set(spec.entries)
+
+
+def _composition(entries: list[str], *, kind: str = "shared") -> EnvironmentsFile:
+    return EnvironmentsFile.model_validate({
+        "describe": {"source": "https://github.com/o/r", "ref": "a" * 40, "path": "d.py"},
+        "environments": [{"name": "env", "kind": kind, "python": ["python"], "entries": entries}],
+    })
+
+
+def _entry(entry_id: str, **fields: object) -> RegistryEntry:
+    return RegistryEntry.model_validate({
+        "id": entry_id, "package": entry_id, "source": "https://example.org", "version": "1", "level": "tested",
+        "module_roots": [entry_id.replace("-", "_")], "bundles": ["env"], **fields,
+    })  # fmt: skip
+
+
+def test_a_composition_that_cannot_be_built_is_explained() -> None:
+    pinned = {"pypi": "a", "version": "1"}
+    manifest = Manifest(
+        entries=[
+            _entry("a", install=pinned),
+            _entry("a-again", install={"pypi": "A", "version": "2"}),  # the same distribution, by another name
+            _entry("loose"),  # no `install`
+            _entry("elsewhere", install={"pypi": "e", "version": "1"}, bundles=[]),
+        ]
+    )
+    problems = composition_problems(_composition(["a", "a-again", "loose", "elsewhere", "ghost"]), manifest)
+    assert any("'a' and 'a-again' both install a" in p for p in problems)
+    assert any("'loose' does not say how it installs" in p for p in problems)
+    assert any("no registry entry 'ghost'" in p for p in problems)
+    assert any("differ from the entries bundled in it" in p for p in problems)  # `elsewhere` is not bundled in env
+    assert composition_problems(_composition(["a"]), Manifest(entries=[_entry("a", install=pinned)])) == []
+    prebuilt = composition_problems(
+        _composition(["a"], kind="prebuilt"), Manifest(entries=[_entry("a", install=pinned)])
+    )
+    assert prebuilt == ["env: a prebuilt image is its owner's, so it lists no entries"]
 
 
 def test_the_viva_pde_particle_entry_is_runnable_only_in_its_own_image() -> None:

@@ -65,3 +65,38 @@ def test_longest_module_root_wins() -> None:
     assert (found := manifest.entry_for_module("pkg.sub.mod")) is not None and found.id == "inner"
     assert (found := manifest.entry_for_module("pkg.other")) is not None and found.id == "outer"
     assert manifest.entry_for_module("pkgx.mod") is None
+
+
+@pytest.mark.parametrize(
+    ("install", "why"),
+    [
+        ({"pypi": "x"}, "exact `version`"),
+        ({"git": "https://github.com/o/x", "commit": "main"}, "never a branch"),
+        ({"git": "https://github.com/o/x", "commit": "26fa156"}, "40-character"),
+        ({"pypi": "x", "version": "1", "git": "https://github.com/o/x", "commit": "a" * 40}, "exactly one"),
+        ({}, "exactly one"),
+    ],
+)
+def test_an_install_is_one_pinned_source(install: dict[str, object], why: str) -> None:
+    with pytest.raises(ValidationError, match=why):
+        entry("x", ["x"], install=install)
+
+
+def test_an_install_names_its_distribution() -> None:
+    pypi = entry("x", ["x"], install={"pypi": "Pb_Multiscale.Actin", "version": "1.3.1"}).install
+    git = entry("y", ["y"], install={"git": "https://github.com/biosimulations/pbsim_common.git", "commit": "a" * 40})
+    assert pypi is not None and pypi.name == "pb-multiscale-actin"
+    assert git.install is not None and git.install.name == "pbsim-common"
+
+
+def test_a_component_needs_module_roots_and_a_library_does_not() -> None:
+    with pytest.raises(ValidationError, match="needs `module_roots`"):
+        entry("x", [])
+    library = entry("readdy", [], kind="library", conda={"readdy": "==2.0.13"})
+    assert library.kind == "library" and library.install is None
+
+
+def test_every_library_says_how_it_installs() -> None:
+    for e in load_manifest().entries:
+        if e.kind == "library":
+            assert e.install is not None or e.conda, f"library {e.id} says nothing about how it installs"

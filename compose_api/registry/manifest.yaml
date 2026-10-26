@@ -8,6 +8,11 @@
 # `bundles` names the environments an entry is installed in (environments.yaml): `registry_env`, or a prebuilt
 # image's simulator name. CI reads the interfaces each environment provides, over the module roots of its entries,
 # into manifests/<environment>.json (docs/plan-authoring.md); every component there must belong to an entry here.
+#
+# Composed environments (docs/plan-environment-composition.md): `install` says how an entry goes into one, a PyPI
+# release (`pypi` + exact `version`) or a git repository at a full `commit`, with `extras`; `conda` lists what only
+# conda-forge supplies. A `library` entry provides no process classes: it is installed for a component's sake (an
+# engine, or a pin on a component's floating dependency), and its level says only that it installs.
 
 entries:
   - id: pbsim-common
@@ -16,6 +21,9 @@ entries:
     # pbsim_common#20's VCellUTCStep, which needs pyvcell[native,ode] from simulator_registry.json)
     source: https://github.com/biosimulations/pbsim_common/tree/26fa156cfab2c309150be818774be4a0c307ce3b
     version: "0.1.3.dev1"
+    install:
+      git: https://github.com/biosimulations/pbsim_common
+      commit: 26fa156cfab2c309150be818774be4a0c307ce3b
     module_roots:
       - pbsim_common
     level: tested
@@ -32,6 +40,9 @@ entries:
     package: pb-multiscale-actin
     source: https://pypi.org/project/pb-multiscale-actin/1.3.1/
     version: "1.3.1"
+    install:
+      pypi: pb-multiscale-actin
+      version: "1.3.1"
     module_roots:
       - pb_multiscale_actin
     level: tested
@@ -66,6 +77,9 @@ entries:
     package: biosim-toolkit
     source: https://github.com/biosimulations/biosim-toolkit
     version: "0.1.0"
+    install:
+      pypi: biosim-toolkit
+      version: "0.1.0"
     module_roots:
       - biosim_toolkit
     level: tested
@@ -78,3 +92,77 @@ entries:
         Tellurium steps, with registry_env's process-bigraph 1.0.5 and bigraph-schema 1.0.14, and checks that the two
         solvers agree. The gate here, as for pbsim-common, is this repository's cluster test inside the built
         registry_env image (tests/simulators/test_sedml.py).
+
+  # --- libraries: installed for the components above, with no process classes of their own ------------------------
+  # Pinned to what registry_env@1 actually ran (read back from its image, 2026-10-25), not to the old library list,
+  # which said tellurium 2.2.11.1 and python-copasi 4.46.300 while the image held these.
+
+  - id: tellurium
+    kind: library
+    package: tellurium
+    source: https://pypi.org/project/tellurium/2.2.13.1/
+    version: "2.2.13.1"
+    install:
+      pypi: tellurium
+      version: "2.2.13.1"
+    level: installable
+    bundles:
+      - registry_env
+    evidence:
+      - Installed in registry_env@1 (its image read back on 2026-10-25), under TelluriumUTCStep.
+
+  - id: python-copasi
+    kind: library
+    package: python-copasi
+    source: https://pypi.org/project/python-copasi/4.48.311/
+    version: "4.48.311"
+    install:
+      pypi: python-copasi
+      version: "4.48.311"
+    level: installable
+    bundles:
+      - registry_env
+    evidence:
+      - Installed in registry_env@1 (its image read back on 2026-10-25), under CopasiUTCStep.
+
+  - id: pyvcell
+    kind: library
+    package: pyvcell
+    source: https://pypi.org/project/pyvcell/0.5.2/
+    version: "0.5.2"
+    install:
+      pypi: pyvcell
+      version: "0.5.2"
+      extras: [native, ode]
+    level: installable
+    bundles:
+      - registry_env
+    evidence:
+      - Installed in registry_env@1 (its image read back on 2026-10-25), under VCellUTCStep (docs/plan-vcell-ode.md).
+
+  - id: libvcell
+    kind: library
+    package: libvcell
+    source: https://pypi.org/project/libvcell/0.0.24/
+    # pyvcell's own dependency, pinned for its fix: 0.0.24 registers the jsbml Annotation classes native-image
+    # reflection needs (libvcell#31), which six biomodels failed to import without; registry_env@1 has 0.0.23
+    version: "0.0.24"
+    install:
+      pypi: libvcell
+      version: "0.0.24"
+    level: listed
+    bundles:
+      - registry_env
+
+  - id: readdy
+    kind: library
+    package: readdy
+    source: https://anaconda.org/conda-forge/readdy
+    version: "2.0.13"
+    conda:
+      readdy: "==2.0.13"
+    level: installable
+    bundles:
+      - registry_env
+    evidence:
+      - Installed in registry_env@1 from conda-forge, under pb-multiscale-actin's ReaddyActinMembrane.
