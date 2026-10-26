@@ -76,6 +76,7 @@ async def start(database_service: DatabaseService, version: EnvironmentVersion) 
                     end_time_point=case.interval,
                     is_batch=True,
                     environment_version=version.number,
+                    environment=version.environment,  # its own: a mash-up's cases run in the mash-up
                     labels=labels(
                         source="compliance", environment=version.environment, compliance=f"{entry}/{case.name}"
                     ),

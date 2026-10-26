@@ -395,6 +395,9 @@ class SimulationRequest(BaseModel):
     simulator: str | None = None
     # The version of that environment to run in (docs/plan-environment-versions.md, step 5); None: its default.
     environment_version: int | None = None
+    # A composed environment the deployment does not declare, by name: a mash-up (docs/plan-environment-composition.md,
+    # step 7b). None: the environment `simulator` decides (the shared one, or a prebuilt image).
+    environment: str | None = None
     # Stored on the simulation (compose_api/simulation/labels.py): the service's labels, the submitter's tags and text.
     labels: dict[str, str] = Field(default_factory=dict)
     tags: list[str] = Field(default_factory=list)
