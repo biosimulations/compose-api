@@ -1,6 +1,9 @@
 # Environment versions: locked, built and chosen through the API
 
-**Status (2026-10-25): steps 1–4 merged (#369–#374); step 5a in review.** One PR per step, merged with a merge commit; each PR updates the table below. A
+**Status (2026-10-25): steps 1–5a merged (#369–#375, 0.7.41; read-back of a shared image in 0.7.42). The open parts
+(5b's solver check, 6, and the shared uv build path) are superseded by
+[plan-environment-composition](plan-environment-composition.md): environments composed from curated entries, built
+with pixi, certified by compliance composites.** One PR per step, merged with a merge commit; each PR updates the table below. A
 merge deploys nothing by itself: the next release's image ships it (CLAUDE.md, "Deploys are GitOps").
 
 | Step | What | State |
@@ -9,7 +12,7 @@ merge deploys nothing by itself: the next release's image ships it (CLAUDE.md, "
 | 2 | `environment` and `environment_version` tables; today's two environments seeded as version 1 and made the defaults; one function chooses a run's version. No change in behavior | merged (#370) |
 | 3 | A shared version is a **lock**: compiled by the API with uv, its hash the identity; the definition installs from it | merged (#371) |
 | 4 | Creating versions through the API (refresh, prebuilt registration), with the lock diff, the installed packages and the interfaces recorded; the admin role | merged (#372, #373, #374) |
-| 5 | Choosing them: `environment_version` on runs, required on suite runs; recorded on every simulation and suite run | 5a (runs, SED-ML, suites, CLI, workflow) in review; 5a merged (#375, 0.7.41); 5b: the web app pages are planned in [plan-webapp-admin](plan-webapp-admin.md) (steps 5–6), solvers checked against interfaces to do |
+| 5 | Choosing them: `environment_version` on runs, required on suite runs; recorded on every simulation and suite run | 5a merged (#375, 0.7.41); 5b: the web app pages are planned in [plan-webapp-admin](plan-webapp-admin.md) (steps 5–6), solvers checked against interfaces to do |
 | 6 | Retire the hard-coding: `PREBUILT_SIMULATORS`, `shared_image()`, the committed interface manifests | |
 
 This is the first concrete step of the epoch-2 environments plan

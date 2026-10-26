@@ -227,6 +227,10 @@ that will be migrated to the process bigraph standard"*, which is this decision'
 
 ## 6. Decision 5 — bring the simulator wrappers in as tiered registry entries
 
+> **2026-10-25:** rule 1 (one environment per composite, from pinned entries) is being built in
+> [plan-environment-composition](plan-environment-composition.md): compose-api composes environments from manifest
+> entries with pixi, certifies each entry per environment with compliance composites, and builds mash-ups on demand.
+
 **Decided 2026-09-22.** The `viva-*` simulator wrappers in `vivarium-collective` enter this service's registry as
 pinned, built and tested *entries*, each at a stated curation level. They are not merged into this repository and
 not forked. Composites of several of them get an environment built for that composite.
