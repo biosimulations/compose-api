@@ -108,6 +108,9 @@ webapp's environment version pages. One PR per step, each merged with a merge co
      needed.
    - Then repeat the smoke test, and open each viewer (Plotly, the composite viewer, zarr).
 5. **Read-only version pages (step 5b of plan-environment-versions).**
+   - *2026-10-26:* the Versions section and the version view are built: packages with a diff against another
+     ready version, entries with their compliance level and cases, classes, and the pixi/uv files. The suite page's
+     version picker and the simulation and comparison pages are still to do.
    - **The environment page's Versions section:** each version's number, state, the default badge, origin, the
      resolution date or image digest, who created it, and its note.
    - **A version view (`/environments/{name}/versions/{n}`):** installed packages, the lock (downloadable), a diff

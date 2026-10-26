@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { EnvironmentHeaders, EnvironmentSummary, ImageStatus, InterfaceManifest } from '~/composables/useRegistry'
+import type { EnvironmentHeaders, EnvironmentSummary, EnvironmentVersions, ImageStatus, InterfaceManifest } from '~/composables/useRegistry'
 import type { Component } from '~/viewers/composite/interfaces'
 
-// One environment: its image, the versions its manifest was read with, and every class it provides with its config
-// and ports. `#Name` opens on a class (the viewer's hovers link here).
+// One environment: its versions (each a page of its own), its image, the packages its committed manifest was read with,
+// and every class it provides with its config and ports. `#Name` opens on a class (the viewer's hovers link here).
 const route = useRoute()
 const name = computed(() => String(route.params.name))
 const summary = ref<EnvironmentSummary | null>(null)
@@ -14,6 +14,7 @@ const error = ref<string | null>(null)
 const filter = ref('')
 const highlighted = ref<string | null>(null)
 const image = ref<ImageStatus | null>(null)
+const versionList = ref<EnvironmentVersions | null>(null)
 const imageError = ref<string | null>(null)
 const requesting = ref(false)
 let imagePoll: ReturnType<typeof setInterval> | null = null
@@ -90,6 +91,7 @@ onMounted(async () => {
     else if (!m) error.value = `No interface manifest has been generated for ${name.value}.`
     manifest.value = m
     if (summary.value) void refreshImage()
+    if (summary.value) fetchVersions(name.value).then(v => (versionList.value = v)).catch(() => {})
     // the headers are printed on the server; the page works without them
     if (m) fetchHeaders(name.value).then(h => (headers.value = h)).catch(() => {})
   } catch (e) {
@@ -144,7 +146,7 @@ watch(() => route.hash, hash => (highlighted.value = decodeURIComponent(hash.sli
           <span><code class="text-xs break-all">{{ summary.manifest_image }}</code> <UBadge color="warning" variant="subtle" size="sm">earlier image</UBadge></span>
         </template>
         <template v-if="versions.length">
-          <span class="text-muted">Versions</span>
+          <span class="text-muted">Manifest read with</span>
           <span class="flex flex-wrap gap-1">
             <UBadge v-for="[pkg, v] in versions" :key="pkg" color="neutral" variant="outline" size="sm">{{ pkg }} {{ v }}</UBadge>
           </span>
@@ -156,6 +158,35 @@ watch(() => route.hash, hash => (highlighted.value = decodeURIComponent(hash.sli
           </span>
         </template>
       </div>
+      <section v-if="versionList?.versions?.length" class="flex flex-col gap-2">
+        <h2 class="text-lg font-semibold">Versions</h2>
+        <p class="text-sm text-muted">
+          Each version is one locked set of packages and its image; a run records the version it used. Runs that name no
+          version get the default ({{ versionList.default_source === 'deployment' ? 'set by the deployment' : 'chosen by an administrator' }}).
+        </p>
+        <table class="text-sm">
+          <thead>
+            <tr class="text-left text-muted">
+              <th class="pr-4 py-1">Version</th><th class="pr-4">State</th><th class="pr-4">Made from</th><th class="pr-4">Created</th><th>Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="v in versionList.versions" :key="v.number" class="border-t border-default align-top">
+              <td class="pr-4 py-1 whitespace-nowrap">
+                <NuxtLink :to="`/environments/${encodeURIComponent(name)}/versions/${v.number}`" class="text-primary font-mono">{{ name }}@{{ v.number }}</NuxtLink>
+                <UBadge v-if="v.number === versionList.default" color="primary" variant="subtle" size="sm" class="ml-2">default</UBadge>
+              </td>
+              <td class="pr-4"><UBadge :color="stateColor(v.state)" variant="subtle" size="sm">{{ v.state }}</UBadge></td>
+              <td class="pr-4 text-xs">
+                <span v-if="v.image" class="font-mono break-all">{{ v.image }}</span>
+                <span v-else>{{ v.runtime_contract === 2 ? 'composed (pixi)' : v.origin ?? 'shared' }}<template v-if="v.resolved_at"> · resolved {{ formatTime(v.resolved_at) }}</template></span>
+              </td>
+              <td class="pr-4 text-xs text-muted whitespace-nowrap">{{ formatTime(v.created_at) }}</td>
+              <td class="text-xs text-muted max-w-xl">{{ v.note }}<span v-if="v.failure" class="text-error"> {{ v.failure }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
       <UAlert
         v-if="manifest?.errors?.length"
         color="warning"
@@ -170,6 +201,8 @@ watch(() => route.hash, hash => (highlighted.value = decodeURIComponent(hash.sli
         </template>
       </UAlert>
       <template v-if="manifest">
+        <h2 class="text-lg font-semibold">Classes</h2>
+        <p class="text-sm text-muted">As the committed interface manifest lists them; a version's page lists the classes its own image provides.</p>
         <div class="flex flex-wrap items-center gap-3">
           <UInput v-model="filter" placeholder="Filter by name or address" icon="i-lucide-search" class="w-72" />
           <span class="text-sm text-muted">{{ components.length }} of {{ manifest.components.length }}</span>
