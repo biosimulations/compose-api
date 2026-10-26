@@ -9,7 +9,7 @@
 |---|---|---|
 | 0 | This document | in review |
 | 1 | Manifest entries declare how they install; environments declare their member entries | in review |
-| 2 | The runner (runtime contract 2), in place of pbest's | |
+| 2 | The runner (runtime contract 2), in place of pbest's | in review |
 | 3 | pixi: generated from entries, locked in an unprivileged Job; the `composed` version kind | |
 | 4 | Build, read back, record; export as pixi or uv | |
 | 5 | Compliance: composites per entry, generic interface checks, levels computed per version | |
