@@ -1382,6 +1382,7 @@
           "Registry"
         ],
         "summary": "The environments documents run in, with what their interface manifests hold",
+        "description": "The environments this deployment declares (environments.yaml), then the mash-ups the database holds\n(docs/plan-environment-composition.md, D7.9). Public: the same for every caller.",
         "operationId": "list-environments",
         "responses": {
           "200": {
@@ -5323,7 +5324,8 @@
             "type": "string",
             "enum": [
               "shared",
-              "prebuilt"
+              "prebuilt",
+              "mash-up"
             ],
             "title": "Kind"
           },
@@ -5554,6 +5556,19 @@
             ],
             "title": "Failure",
             "description": "Why it failed: for a composed version, its lock's conflict"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At",
+            "description": "When a run last used it (its newest simulation); none if none has"
           }
         },
         "type": "object",
@@ -5713,6 +5728,19 @@
             ],
             "title": "Failure",
             "description": "Why it failed: for a composed version, its lock's conflict"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At",
+            "description": "When a run last used it (its newest simulation); none if none has"
           },
           "lock": {
             "anyOf": [

@@ -231,6 +231,9 @@ class EnvironmentVersion(BaseModel):
     created_at: datetime.datetime | None = None
     note: str | None = None
     failure: str | None = Field(default=None, description="Why it failed: for a composed version, its lock's conflict")
+    last_used_at: datetime.datetime | None = Field(
+        default=None, description="When a run last used it (its newest simulation); none if none has"
+    )
 
     @property
     def label(self) -> str:

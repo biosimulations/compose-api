@@ -2,7 +2,8 @@
 import type { EnvironmentSummary, EnvironmentVersions } from '~/composables/useRegistry'
 
 // The environments composites run in, each with the interface manifest generated inside its image
-// (docs/plan-authoring.md): what the checker, the viewer and the editor resolve a document's classes against.
+// (docs/plan-authoring.md): what the checker, the viewer and the editor resolve a document's classes against. The
+// declared ones come first, then the mash-ups made on demand (docs/plan-environment-composition.md, D7.9).
 const environments = ref<EnvironmentSummary[]>([])
 const versions = ref<Record<string, EnvironmentVersions>>({})
 const loading = ref(true)
@@ -37,7 +38,7 @@ onMounted(async () => {
             <div class="flex flex-col gap-2 text-sm">
               <div class="flex flex-wrap items-center gap-2">
                 <span class="text-lg font-semibold">{{ e.name }}</span>
-                <UBadge variant="subtle" :color="e.kind === 'shared' ? 'primary' : 'neutral'">{{ e.kind }}</UBadge>
+                <UBadge variant="subtle" :color="e.kind === 'shared' ? 'primary' : e.kind === 'mash-up' ? 'info' : 'neutral'">{{ e.kind }}</UBadge>
                 <UBadge v-if="e.stale" color="warning" variant="subtle">manifest from an earlier image</UBadge>
               </div>
               <div>
@@ -50,8 +51,11 @@ onMounted(async () => {
                 <span class="text-muted">· {{ versions[e.name]!.versions!.filter(v => v.state === 'ready').length }} ready</span>
                 <UBadge v-if="versions[e.name]!.default != null" color="primary" variant="subtle" size="sm">default @{{ versions[e.name]!.default }}</UBadge>
               </div>
-              <div class="text-muted">
-                Run with <code>{{ e.simulator ? `simulator=${e.simulator}` : 'no simulator (the default)' }}</code>
+              <div v-if="e.kind === 'mash-up'" class="text-muted">
+                Made on demand from the {{ e.entries.length }} entries below, for runs that no named environment covers
+              </div>
+              <div v-else class="text-muted">
+                Run with <code>{{ e.kind === 'shared' ? 'no environment named (the default)' : `environment=${e.name}` }}</code>
               </div>
               <code v-if="e.image" class="text-xs text-muted break-all">{{ e.image }}</code>
               <div v-if="e.entries.length" class="flex flex-wrap gap-1">

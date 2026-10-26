@@ -187,7 +187,7 @@ class InterfaceManifest(BaseModel):
 
 class EnvironmentSummary(BaseModel):
     name: str
-    kind: Literal["shared", "prebuilt"]
+    kind: Literal["shared", "prebuilt", "mash-up"]
     simulator: str | None = Field(description="The value of /simulation/run's `simulator` for this environment")
     image: str | None = Field(description="The image this deployment runs it in")
     manifest_image: str | None = Field(description="The image the manifest was read from")
@@ -196,6 +196,28 @@ class EnvironmentSummary(BaseModel):
     components: int
     errors: int
     entries: list[EntryRef]
+
+
+def summarize_mash_up(
+    name: str, entries: list[str], interfaces: dict[str, Any] | None, core: dict[str, str] | None
+) -> EnvironmentSummary:
+    """A mash-up as the web app lists it (D7.9), from its default version: the classes its image provides, read back
+    when it was built, since it has no committed manifest."""
+    registry = load_manifest()
+    levels = {e.id: e.level for e in registry.entries}
+    components = (interfaces or {}).get("components") or []
+    return EnvironmentSummary(
+        name=name,
+        kind="mash-up",
+        simulator=None,
+        image=None,
+        manifest_image=None,
+        stale=False,
+        process_bigraph=(core or {}).get("process-bigraph"),
+        components=len(components),
+        errors=len((interfaces or {}).get("errors") or []),
+        entries=[EntryRef(id=e, level=levels.get(e, CurationLevel.LISTED)) for e in entries],
+    )
 
 
 def manifest_path(name: str) -> Path:
