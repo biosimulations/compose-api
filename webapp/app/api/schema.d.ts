@@ -512,7 +512,7 @@ export interface paths {
         get: operations["list-environment-versions"];
         put?: never;
         /**
-         * Make a new version: a shared environment's spec resolved at a date, or a prebuilt one's image by digest
+         * Make a new version: a composed environment's entries at a date, or a prebuilt one's image by digest
          * @description The new version is `building` until its image is built or pulled, then `ready` (or `failed`). It does not
          *     become the default: runs get it once an administrator makes it so (`PUT …/default`). A composed environment's
          *     version is `resolving` first, while its entries are locked together in a Job of their own; one that does not
@@ -571,23 +571,6 @@ export interface paths {
         put?: never;
         /** Run a version's compliance cases again (its entries' cases, as committed now) */
         post: operations["run-environment-version-compliance"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/registry/environments/{name}/versions/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Resolve a shared environment's spec without creating anything: the lock, and its changes from the default */
-        post: operations["preview-environment-version"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2039,68 +2022,19 @@ export interface components {
             seen_run?: number | null;
         };
         /**
-         * LockPreview
-         * @description What a shared version would be: its lock, and how it differs from the default version's.
-         */
-        LockPreview: {
-            /** Environment */
-            environment: string;
-            /**
-             * Resolved At
-             * Format: date-time
-             */
-            resolved_at: string;
-            /** Origin */
-            origin: string;
-            /** Lock Sha256 */
-            lock_sha256: string;
-            /** Lock */
-            lock: string;
-            /**
-             * Existing
-             * @description The number of a version with this very lock, if any
-             */
-            existing?: number | null;
-            /**
-             * Against
-             * @description The default version compared with, if it has a lock or a list of installed packages
-             */
-            against?: number | null;
-            /**
-             * Against Basis
-             * @description What of the default version was compared: its lock, or (a version made before locks, such as one built by a run) the packages its image installed, which name a package installed from git by its version
-             */
-            against_basis?: ("lock" | "installed") | null;
-            /** Changes */
-            changes?: components["schemas"]["PackageChange"][];
-        };
-        /**
          * NewEnvironmentVersion
          * @description What to make a version from. A composed environment (one that lists its registry entries): a date to resolve
-         *     its entries at (default now); a mash-up is an environment of its own, never a version of another. A shared one
-         *     without entries: a date, and optionally a library list other than the registry's (an unreviewed, `custom`
-         *     version). A prebuilt one: its image by digest.
+         *     its entries at (default now); a mash-up is an environment of its own, never a version of another. A prebuilt one:
+         *     its image by digest. (Library lists, the shared uv path's `custom` versions, are retired:
+         *     docs/plan-environment-composition.md, D8.5; versions made that way stay readable.)
          */
         NewEnvironmentVersion: {
             /** Resolved At */
             resolved_at?: string | null;
-            /** Libraries */
-            libraries?: {
-                [key: string]: string;
-            }[] | null;
             /** Image */
             image?: string | null;
             /** Note */
             note?: string | null;
-        };
-        /** PackageChange */
-        PackageChange: {
-            /** Name */
-            name: string;
-            /** Before */
-            before?: string | null;
-            /** After */
-            after?: string | null;
         };
         /**
          * PackageType
@@ -4082,60 +4016,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
-            };
-        };
-    };
-    "preview-environment-version": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NewEnvironmentVersion"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LockPreview"];
-                };
-            };
-            /** @description Not signed in */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not an environment administrator, or environment administration is not configured */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description No such environment, or no such version */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description The spec does not resolve, or is not a lock's */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };

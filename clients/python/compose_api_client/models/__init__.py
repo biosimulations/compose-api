@@ -81,11 +81,7 @@ from .known_problem_clear import KnownProblemClear
 from .known_problem_edit import KnownProblemEdit
 from .known_problem_mark import KnownProblemMark
 from .list_simulations_status_type_0 import ListSimulationsStatusType0
-from .lock_preview import LockPreview
-from .lock_preview_against_basis_type_0 import LockPreviewAgainstBasisType0
 from .new_environment_version import NewEnvironmentVersion
-from .new_environment_version_libraries_type_0_item import NewEnvironmentVersionLibrariesType0Item
-from .package_change import PackageChange
 from .package_type import PackageType
 from .project_info import ProjectInfo
 from .registered_package import RegisteredPackage
@@ -214,11 +210,7 @@ __all__ = (
     "KnownProblemEdit",
     "KnownProblemMark",
     "ListSimulationsStatusType0",
-    "LockPreview",
-    "LockPreviewAgainstBasisType0",
     "NewEnvironmentVersion",
-    "NewEnvironmentVersionLibrariesType0Item",
-    "PackageChange",
     "PackageType",
     "ProjectInfo",
     "RegisteredPackage",

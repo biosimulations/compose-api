@@ -1,10 +1,9 @@
-"""The libraries installed into the shared simulator image.
+"""The library list pbest's shared image was made from, kept for the tests (docs/plan-environment-composition.md, 8d).
 
-The list used to be fetched on every simulation request from the `dev` branch of `biosimulations/registry`, so any
-commit there silently changed the generated container definition, and with it the md5 that identifies a
-`SimulatorVersion`, and triggered a rebuild. It is now a copy of that file pinned at `REGISTRY_SOURCE`, so the
-identity changes only when this file does, in a reviewed commit. To take an upstream change, copy the new file here
-and update `REGISTRY_SOURCE`; expect a container rebuild on the next run.
+The service made registry_env's image from it until its versions were composed (registry_env@1 is that image; @5,
+composed with pixi, is the default since 2026-10-26). The test database's registry_env default still runs pbest's
+definition of it, which the SLURM tests build and run (tests/fixtures/postgres_fixtures.seed_shared_default). A copy
+of biosimulations/registry's registry.json at `REGISTRY_SOURCE` (that repository is archived).
 """
 
 import json
@@ -16,7 +15,7 @@ from pydantic import HttpUrl
 REGISTRY_SOURCE = (
     "https://github.com/biosimulations/registry/blob/f8b013277230da8561e739f409d6f15619fa85dc/registry.json"
 )
-_REGISTRY_PATH = Path(__file__).parent / "simulator_registry.json"
+_REGISTRY_PATH = Path(__file__).parent / "resources" / "simulator_registry.json"
 
 
 def registry_libraries() -> list[dict[str, str]]:

@@ -4,7 +4,6 @@ a version built in the background, the default an administrator chooses, and ret
 The image work is the run path's own function (handlers.ensure_image), replaced here; a shared version's lock is
 replaced too, so nothing reaches PyPI or a cluster."""
 
-import datetime
 import hashlib
 import uuid
 from collections.abc import AsyncGenerator, Iterator
@@ -22,8 +21,6 @@ from compose_api.api.routers import registry as registry_router
 from compose_api.authorization import get_caller
 from compose_api.config import override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
-from compose_api.environments import service as environment_service
-from compose_api.environments.lock import Lock, SharedSpec
 from compose_api.environments.versions import version_for
 from compose_api.simulation import handlers
 from compose_api.simulation.models import SimulatorVersion
@@ -72,13 +69,6 @@ def builds(monkeypatch: pytest.MonkeyPatch) -> Iterator[Builds]:
         yield fake
 
 
-@pytest.fixture
-def uv_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    """registry_env as it was before it listed its entries: a shared environment whose versions are uv locks (the path
-    docs/plan-environment-composition.md retires in step 8)."""
-    monkeypatch.setattr(environment_service, "is_composed", lambda spec: False)
-
-
 @pytest_asyncio.fixture
 async def app(database_service: DatabaseServiceSQL) -> AsyncGenerator[FastAPI]:
     app = FastAPI()
@@ -107,7 +97,6 @@ async def test_reading_is_public_and_changing_needs_the_administrator_role(app: 
         async with _as(app, USER) as user:
             for response in (
                 await user.post(f"/registry/environments/{PREBUILT}/versions", json=body),
-                await user.post(f"/registry/environments/{PREBUILT}/versions/preview", json={}),
                 await user.put(f"/registry/environments/{PREBUILT}/default", json={"number": 1}),
                 await user.post(f"/registry/environments/{PREBUILT}/versions/1/retire"),
             ):
@@ -201,79 +190,6 @@ async def test_the_chosen_default_is_what_runs_get_and_it_cannot_be_retired(
         assert retired.status_code == 200 and retired.json()["state"] == "retired"
 
 
-@pytest.mark.asyncio
-async def test_a_default_made_before_locks_is_compared_by_what_its_image_installed(
-    app: FastAPI, builds: Builds, database_service: DatabaseServiceSQL, monkeypatch: pytest.MonkeyPatch, uv_path: None
-) -> None:
-    lock = "numpy==2.5.4\npbest @ git+https://github.com/biosimulations/pbest@a4713e9\n"
-
-    async def compile_lock(spec: SharedSpec, resolved_at: datetime.datetime) -> Lock:
-        return Lock(text=lock, resolved_at=resolved_at.replace(tzinfo=None))
-
-    monkeypatch.setattr(environment_service, "compile_lock", compile_lock)
-    default, _ = await version_for(database_service, None)  # adopted from the deployment: no lock
-    async with _as(app, ADMIN) as admin:
-        unread_response = await admin.post("/registry/environments/registry_env/versions/preview", json={})
-        assert unread_response.status_code == 200, unread_response.text
-        unread = unread_response.json()
-        assert (unread["against"], unread["against_basis"], unread["changes"]) == (None, None, [])
-
-        installed = "numpy==2.4.0\npbest==0.6.5\n"  # read back from its image: a git install shows its version
-        await database_service.get_environments_db().set_contents(default.database_id, installed, None)
-        preview = (await admin.post("/registry/environments/registry_env/versions/preview", json={})).json()
-    assert (preview["against"], preview["against_basis"]) == (default.number, "installed")
-    assert preview["changes"] == [
-        {"name": "numpy", "before": "2.4.0", "after": "2.5.4"},
-        {"name": "pbest", "before": "0.6.5", "after": "git+https://github.com/biosimulations/pbest@a4713e9"},
-    ]
-
-
-@pytest.mark.asyncio
-async def test_a_shared_version_is_its_lock_and_a_preview_shows_what_would_change(
-    app: FastAPI, builds: Builds, monkeypatch: pytest.MonkeyPatch, uv_path: None
-) -> None:
-    locks = {"old": "numpy==2.4.0\nsix==1.10.0\n", "new": "numpy==2.5.4\nsix==1.10.0\nlibvcell==0.0.24\n"}
-    use = {"lock": locks["old"]}
-
-    async def compile_lock(spec: SharedSpec, resolved_at: datetime.datetime) -> Lock:
-        return Lock(text=use["lock"], resolved_at=resolved_at.replace(tzinfo=None))
-
-    monkeypatch.setattr(environment_service, "compile_lock", compile_lock)
-    async with _as(app, ADMIN) as admin:
-        created = await admin.post("/registry/environments/registry_env/versions", json={"note": "first lock"})
-        assert created.status_code == 201, created.text
-        number = created.json()["number"]
-        detail = (await admin.get(f"/registry/environments/registry_env/versions/{number}")).json()
-        assert detail["lock"] == locks["old"] and detail["origin"] == "registry"
-        assert detail["spec"] == SharedSpec.from_registry().as_json()
-        assert detail["state"] == "ready"
-        assert (
-            await admin.put("/registry/environments/registry_env/default", json={"number": number})
-        ).status_code == 200
-
-        same = (await admin.post("/registry/environments/registry_env/versions/preview", json={})).json()
-        assert (same["existing"], same["against"], same["changes"]) == (number, number, [])
-
-        use["lock"] = locks["new"]
-        preview = (await admin.post("/registry/environments/registry_env/versions/preview", json={})).json()
-        assert preview["existing"] is None and preview["against"] == number and preview["against_basis"] == "lock"
-        assert preview["changes"] == [
-            {"name": "libvcell", "before": None, "after": "0.0.24"},
-            {"name": "numpy", "before": "2.4.0", "after": "2.5.4"},
-        ]
-
-        custom = await admin.post(
-            "/registry/environments/registry_env/versions",
-            json={"libraries": [{"name": "six", "version": "1.10.0", "package_registry": "pypi"}]},
-        )
-        assert custom.status_code == 201 and custom.json()["origin"] == "custom"
-        refused = await admin.post("/registry/environments/registry_env/versions", json={"image": _digest()})
-        assert refused.status_code == 422
-
-
-# --- composed versions (docs/plan-environment-composition.md, step 4) ---------------------------------------------
-
-
 @dataclass
 class Locks:
     """The lock Job, replaced: returns ``text`` (a distinct lock per request unless ``same``), or refuses."""
@@ -364,15 +280,19 @@ async def test_a_version_that_resolves_to_an_existing_lock_says_which(
 
 
 @pytest.mark.asyncio
-async def test_a_composed_environment_takes_a_date_not_libraries_images_or_a_preview(
+async def test_a_composed_environment_takes_a_date_not_libraries_or_an_image(
     app: FastAPI, builds: Builds, locks: Locks
 ) -> None:
+    """A library list (the retired shared uv path, D8.5) is refused as an unknown field; `preview` is gone."""
     async with _as(app, ADMIN) as admin:
-        for body in ({"libraries": [{"name": "six", "package_registry": "pypi"}]}, {"image": _digest()}):
-            refused = await admin.post("/registry/environments/registry_env/versions", json=body)
-            assert refused.status_code == 422 and "composed from its registry entries" in refused.json()["detail"]
-        preview = await admin.post("/registry/environments/registry_env/versions/preview", json={})
-        assert preview.status_code == 422 and "resolved in a Job" in preview.json()["detail"]
+        listed = await admin.post("/registry/environments/registry_env/versions", json={"libraries": [{"name": "six"}]})
+        assert listed.status_code == 422 and "libraries" in listed.text
+        imaged = await admin.post("/registry/environments/registry_env/versions", json={"image": _digest()})
+        assert imaged.status_code == 422 and "composed from its registry entries" in imaged.json()["detail"]
+        assert (await admin.post("/registry/environments/registry_env/versions/preview", json={})).status_code in (
+            404,
+            405,
+        )
     assert locks.asked == []
 
 

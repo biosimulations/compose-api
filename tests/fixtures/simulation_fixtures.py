@@ -23,7 +23,7 @@ from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import JobStatus, JobType, SimulatorVersion
 from compose_api.simulation.simulation_service import SimulationServiceHpc
-from compose_api.simulation.simulator_registry import registry_dependencies
+from tests.fixtures.simulator_registry import registry_dependencies
 
 
 @pytest_asyncio.fixture(scope="function")

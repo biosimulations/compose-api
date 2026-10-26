@@ -960,7 +960,6 @@ $ compose-api environments [OPTIONS] COMMAND [ARGS]...
 * `version`: One version: what it was made from, its...
 * `export`: Write the files that recreate a version...
 * `compliance`: Where each entry of a version stands...
-* `preview`: Resolve a shared environment's spec now...
 * `create`: Make a new version (or answer the existing...
 * `default`: Make a ready version the one runs get when...
 * `inspect`: Read a version's image back again: what it...
@@ -1148,27 +1147,6 @@ $ compose-api environments compliance [OPTIONS] NAME NUMBER
 **Options**:
 
 * `--run`: Run the cases again first (needs the environment administrator role).
-* `--json`: Print JSON (the same as --output json).
-* `--help`: Show this message and exit.
-
-### `compose-api environments preview`
-
-Resolve a shared environment's spec now (or at --resolved-at) and show how its lock differs from the default
-version's. Creates nothing. Needs the environment administrator role.
-
-**Usage**:
-
-```console
-$ compose-api environments preview [OPTIONS] NAME
-```
-
-**Arguments**:
-
-* `NAME`: The environment, e.g. registry_env.  [required]
-
-**Options**:
-
-* `--resolved-at [%Y-%m-%d|%Y-%m-%dT%H:%M:%S|%Y-%m-%d %H:%M:%S]`: Resolve with nothing newer than this (UTC); default now.
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 

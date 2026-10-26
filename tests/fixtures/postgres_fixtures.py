@@ -45,7 +45,7 @@ def shared_definition() -> ContainerizationFileRepr:
     from pbest.containerization.container_constructor import generate_container_def_file
     from pbest.utils.input_types import ContainerizationEngine
 
-    from compose_api.simulation.simulator_registry import registry_dependencies
+    from tests.fixtures.simulator_registry import registry_dependencies
 
     return generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)
 

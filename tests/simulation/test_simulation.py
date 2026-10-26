@@ -31,10 +31,10 @@ from compose_api.simulation.models import (
     SimulatorVersion,
 )
 from compose_api.simulation.simulation_service import SimulationServiceHpc
-from compose_api.simulation.simulator_registry import registry_dependencies
 from compose_api.simulation.submission_worker import SubmissionWorker
 from tests.fixtures.mocks import TestBackgroundTask
 from tests.fixtures.simulation_fixtures import PRODUCTION_SIMULATOR_DEF_HASH
+from tests.fixtures.simulator_registry import registry_dependencies
 from tests.fixtures.slurm_fixtures_backend import SlurmBackend
 from tests.simulators.utils import assert_test_sim_results, test_dir
 

@@ -54,7 +54,6 @@ from compose_api.simulation.models import (
     EnvironmentVersion,
     EnvironmentVersionDetail,
     EnvironmentVersions,
-    LockPreview,
     NewEnvironmentVersion,
     SimulatorVersion,
     VersionState,
@@ -403,30 +402,12 @@ async def run_environment_version_compliance(
 
 
 @config.router.post(
-    path="/environments/{name}/versions/preview",
-    response_model=LockPreview,
-    operation_id="preview-environment-version",
-    tags=["Registry"],
-    summary="Resolve a shared environment's spec without creating anything: the lock, and its changes from the default",
-    responses={**_NO_ENVIRONMENT, **_ADMIN, 422: {"description": "The spec does not resolve, or is not a lock's"}},
-)
-async def preview_environment_version(
-    name: str, request: NewEnvironmentVersion, caller: EnvironmentAdmin
-) -> LockPreview:
-    spec = _known_environment(name)
-    try:
-        return await environment_service.preview(get_required_database_service(), spec, request)
-    except VersionRequestError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
-
-
-@config.router.post(
     path="/environments/{name}/versions",
     response_model=EnvironmentVersion,
     status_code=201,
     operation_id="create-environment-version",
     tags=["Registry"],
-    summary="Make a new version: a shared environment's spec resolved at a date, or a prebuilt one's image by digest",
+    summary="Make a new version: a composed environment's entries at a date, or a prebuilt one's image by digest",
     responses={
         200: {"model": EnvironmentVersion, "description": "A version with this very definition exists: that one"},
         **_NO_ENVIRONMENT,

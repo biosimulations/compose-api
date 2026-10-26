@@ -1,7 +1,7 @@
 # Regression and reproducibility suites (docs/plan-sedml.md, phase 6): every suite in examples/ run on the deployed
 # service, monthly and on demand. Each run's results are read at /ui/suites/<name> (or `compose-api suites show`): the
 # solvers' agreement, the references, and drift from the suite's accepted baseline run. Run it after a release that
-# changes environments.yaml, registry/solvers.yaml, simulator_registry.json or sedml/pblang-requirements.txt.
+# changes environments.yaml, registry/solvers.yaml or sedml/pblang-requirements.txt.
 name: sedml-suites
 
 on:

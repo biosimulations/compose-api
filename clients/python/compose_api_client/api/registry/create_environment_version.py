@@ -85,8 +85,7 @@ def sync_detailed(
     client: AuthenticatedClient | Client,
     body: NewEnvironmentVersion,
 ) -> Response[Any | EnvironmentVersion]:
-    """Make a new version: a shared environment's spec resolved at a date, or a prebuilt one's image by
-    digest
+    """Make a new version: a composed environment's entries at a date, or a prebuilt one's image by digest
 
      The new version is `building` until its image is built or pulled, then `ready` (or `failed`). It
     does not
@@ -102,10 +101,9 @@ def sync_detailed(
         body (NewEnvironmentVersion): What to make a version from. A composed environment (one
             that lists its registry entries): a date to resolve
             its entries at (default now); a mash-up is an environment of its own, never a version of
-            another. A shared one
-            without entries: a date, and optionally a library list other than the registry's (an
-            unreviewed, `custom`
-            version). A prebuilt one: its image by digest.
+            another. A prebuilt one:
+            its image by digest. (Library lists, the shared uv path's `custom` versions, are retired:
+            docs/plan-environment-composition.md, D8.5; versions made that way stay readable.)
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -133,8 +131,7 @@ def sync(
     client: AuthenticatedClient | Client,
     body: NewEnvironmentVersion,
 ) -> Any | EnvironmentVersion | None:
-    """Make a new version: a shared environment's spec resolved at a date, or a prebuilt one's image by
-    digest
+    """Make a new version: a composed environment's entries at a date, or a prebuilt one's image by digest
 
      The new version is `building` until its image is built or pulled, then `ready` (or `failed`). It
     does not
@@ -150,10 +147,9 @@ def sync(
         body (NewEnvironmentVersion): What to make a version from. A composed environment (one
             that lists its registry entries): a date to resolve
             its entries at (default now); a mash-up is an environment of its own, never a version of
-            another. A shared one
-            without entries: a date, and optionally a library list other than the registry's (an
-            unreviewed, `custom`
-            version). A prebuilt one: its image by digest.
+            another. A prebuilt one:
+            its image by digest. (Library lists, the shared uv path's `custom` versions, are retired:
+            docs/plan-environment-composition.md, D8.5; versions made that way stay readable.)
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -176,8 +172,7 @@ async def asyncio_detailed(
     client: AuthenticatedClient | Client,
     body: NewEnvironmentVersion,
 ) -> Response[Any | EnvironmentVersion]:
-    """Make a new version: a shared environment's spec resolved at a date, or a prebuilt one's image by
-    digest
+    """Make a new version: a composed environment's entries at a date, or a prebuilt one's image by digest
 
      The new version is `building` until its image is built or pulled, then `ready` (or `failed`). It
     does not
@@ -193,10 +188,9 @@ async def asyncio_detailed(
         body (NewEnvironmentVersion): What to make a version from. A composed environment (one
             that lists its registry entries): a date to resolve
             its entries at (default now); a mash-up is an environment of its own, never a version of
-            another. A shared one
-            without entries: a date, and optionally a library list other than the registry's (an
-            unreviewed, `custom`
-            version). A prebuilt one: its image by digest.
+            another. A prebuilt one:
+            its image by digest. (Library lists, the shared uv path's `custom` versions, are retired:
+            docs/plan-environment-composition.md, D8.5; versions made that way stay readable.)
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -222,8 +216,7 @@ async def asyncio(
     client: AuthenticatedClient | Client,
     body: NewEnvironmentVersion,
 ) -> Any | EnvironmentVersion | None:
-    """Make a new version: a shared environment's spec resolved at a date, or a prebuilt one's image by
-    digest
+    """Make a new version: a composed environment's entries at a date, or a prebuilt one's image by digest
 
      The new version is `building` until its image is built or pulled, then `ready` (or `failed`). It
     does not
@@ -239,10 +232,9 @@ async def asyncio(
         body (NewEnvironmentVersion): What to make a version from. A composed environment (one
             that lists its registry entries): a date to resolve
             its entries at (default now); a mash-up is an environment of its own, never a version of
-            another. A shared one
-            without entries: a date, and optionally a library list other than the registry's (an
-            unreviewed, `custom`
-            version). A prebuilt one: its image by digest.
+            another. A prebuilt one:
+            its image by digest. (Library lists, the shared uv path's `custom` versions, are retired:
+            docs/plan-environment-composition.md, D8.5; versions made that way stay readable.)
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.

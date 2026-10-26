@@ -23,8 +23,8 @@
 | 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | |
 | 8a | Versions come from the database only: the deployed (pbest) definition, `simulator_registry.json`, `shared_image()` retired | merged (#424), 0.7.53 |
 | 8b | Prebuilt images by their versions, not `PREBUILT_SIMULATORS` | merged (#426), 0.7.54; the `api.env` line goes with 8c |
-| 8c | Interface manifests from each environment's default version, not committed files | in review |
-| 8d | The shared uv path, `preview` and custom library lists retired | |
+| 8c | Interface manifests from each environment's default version, not committed files | merged (#428), 0.7.55 |
+| 8d | The shared uv path, `preview` and custom library lists retired | in review |
 | 8e | pbest's types vendored; compose-api no longer depends on pbest | |
 
 ## Why (2026-10-25)
@@ -492,6 +492,18 @@
      (`tests/fixtures/resources/registry_env.interfaces.json`); @1's committed manifest is kept as a fixture for the
      compliance test that needs the image before pbsim_common#21; the webapp's tests keep copies of the two
      manifests under `webapp/test/fixtures/`.
+
+   *As built, 8d (2026-10-26):*
+   - Gone: `environments/lock.py` (`SharedSpec`, the uv lock of a library list), `environments/definition.py` (the
+     shared definition made from it), `service.preview` and the shared branch of `service.create`,
+     `POST …/versions/preview` (`preview-environment-version`) with the client's `preview_environment_version` and
+     the CLI's `environments preview`, and the `LockPreview`/`PackageChange` models.
+   - `NewEnvironmentVersion` loses `libraries` and refuses unknown fields, so a library list is a 422 rather than
+     ignored. `service.create` now makes only a prebuilt version; a composed one is `create_composed`'s.
+   - `simulator_registry.json` and its loader move to the tests (`tests/fixtures/`), for the test database's seed,
+     which runs pbest's definition of it for the SLURM tests; 8e replaces that seed.
+   - Kept: the uv export of a composed version (`uv_export.py`, the uv lock Job), and every version made the old way,
+     readable, with its lock (registry_env@1 has none; `origin=custom` versions, if any, keep theirs).
 
    **Order:** 8a, 8b, 8c, 8d, 8e. Each is one PR, released and checked live before the next: a run with no version
    takes @5; viva-pde-particle runs by its version; the checker and SED-ML runs use read-back manifests; creating a
