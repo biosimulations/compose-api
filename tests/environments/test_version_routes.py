@@ -280,6 +280,7 @@ class Locks:
 
     refuse: str | None = None
     same: bool = False
+    text: str = "version: 7\n"  # the lock every request gets while `same`
     asked: list[str] = field(default_factory=list)
 
     async def __call__(self, toml: str, pixi_image: str, suffix: str) -> str:
@@ -288,7 +289,7 @@ class Locks:
         self.asked.append(toml)
         if self.refuse is not None:
             raise LockFailedError(self.refuse)
-        return "version: 7\n" + ("" if self.same else f"# {uuid.uuid4().hex}\n")
+        return self.text if self.same else f"version: 7\n# {uuid.uuid4().hex}\n"
 
 
 @pytest.fixture
@@ -588,3 +589,23 @@ async def test_admission_follows_what_the_version_certifies(
     with pytest.raises(SubmissionRejectedError) as failed:
         submit("local:pbsim_common.simulators.copasi_process.CopasiUTCStep")
     assert "failed its compliance cases" in failed.value.violations[0].reason
+
+
+@pytest.mark.asyncio
+async def test_a_lock_whose_version_failed_to_build_can_be_made_again(
+    app: FastAPI, builds: Builds, locks: Locks
+) -> None:
+    """registry_env@2 failed to build on 0.7.43 (its definition overran one environment string); a version is its
+    lock, but a failed one must not stand in the way of making that lock again."""
+    locks.same, locks.text = True, f"version: 7\n# its own {uuid.uuid4().hex}\n"
+    builds.failing = True
+    async with _as(app, ADMIN) as admin:
+        url = "/registry/environments/registry_env/versions"
+        failed = (await admin.post(url, json={"resolved_at": "2026-10-20T00:00:00"})).json()["number"]
+        builds.failing = False
+        again = (await admin.post(url, json={"resolved_at": "2026-10-21T00:00:00"})).json()["number"]
+        first = (await admin.get(f"{url}/{failed}")).json()
+        retried = (await admin.get(f"{url}/{again}")).json()
+    assert first["state"] == "failed"
+    assert retried["state"] == "ready" and retried["failure"] is None, retried["failure"]
+    assert retried["lock_sha256"] == first["lock_sha256"]
