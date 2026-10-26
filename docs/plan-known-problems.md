@@ -1,6 +1,6 @@
 # Known problems: each solver's expected failures in a suite, curated by an admin, cleared when fixed
 
-**Status (2026-10-26): step 1 under way.** It follows run 4 of biomodels-curated-300 on `registry_env@4`
+**Status (2026-10-26): step 1 released (0.7.47, 0.7.48); VCell's import failures seeded; step 2a under way.** It follows run 4 of biomodels-curated-300 on `registry_env@4`
 ([plan-environment-composition](plan-environment-composition.md), step 6) and borrows the known-faults pattern of
 VCell's regression tests. One PR per step, each merged with a merge commit.
 
@@ -92,12 +92,17 @@ VCell's regression tests. One PR per step, each merged with a merge commit.
    - Tests: each outcome in K5, a cleared problem in an earlier and a later run, 401/403 without the role, the
      CLI commands.
    - Regenerate the spec, the client and `schema.d.ts`. Needs a release.
-2. **Webapp.**
-   - On a suite run row: the excused solvers with their reasons, and a "resolved" badge.
-   - With `suites:curate`: "Mark known problem" (solver, category, reason) on a solver that failed or differs, and
-     "Clear" on a resolved one. Each opens a confirmation dialog, after the CSP is enforced (plan-webapp-admin A3).
-   - A "Known problems" tab on the suite page, open and cleared.
-   - Vitest tests for the gating and the dialogs.
+2. **Webapp**, in two parts.
+   - **2a, read-only (no CSP dependency):**
+     - a row's verdict reads `excused` when only solvers with a known problem fail or differ;
+     - each solver's problem on the row: the solver (marked `resolved` when it now completes and agrees), its
+       category and its reason;
+     - `excused` and `resolved` summary badges, and a switch hiding excused rows;
+     - a "Known problems" tab (`?tab=problems`), open and cleared, with when each was seen, marked and cleared;
+     - Vitest tests for the row logic (`app/utils/suites.ts`).
+   - **2b, curating:** with `suites:curate`, "Mark known problem" (solver, category, reason) on a solver that failed
+     or differs, and "Clear" on a resolved one. Each opens a confirmation dialog, after the CSP is enforced
+     (plan-webapp-admin A3). Vitest tests for the gating and the dialogs.
 3. **Seed and remove `expected:`.**
    - Mark the 11 `expected:` entries, solver-scoped, through the CLI.
    - Mark run 4's VCell import failures, with categories from the logs and VCell's `knownFaults()`.
