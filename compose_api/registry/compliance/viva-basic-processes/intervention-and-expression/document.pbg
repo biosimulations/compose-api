@@ -1,0 +1,34 @@
+{
+  "state": {
+    "x": 1.0,
+    "y": 0.0,
+    "tick": 0,
+    "dose": {
+      "_type": "process",
+      "address": "local:viva_basic_processes.intervention.Intervention",
+      "config": {"mode": "add", "value": 2.0},
+      "interval": 1.0,
+      "inputs": {"target": ["x"]},
+      "outputs": {"target": ["x"]}
+    },
+    "readout": {
+      "_type": "step",
+      "address": "local:viva_basic_processes.math_expression.MathExpressionStep",
+      "config": {"expressions": [{"out": "y", "expr": "3*x + 1"}]},
+      "inputs": {"x": ["x"]},
+      "outputs": {"y": ["y"]}
+    },
+    "clock": {
+      "_type": "process",
+      "address": "local:viva_basic_processes.clock.Clock",
+      "interval": 1.0,
+      "outputs": {"tick": ["tick"]}
+    },
+    "emitter": {
+      "_type": "step",
+      "address": "local:RAMEmitter",
+      "config": {"emit": {"x": "float", "y": "float", "tick": "integer", "global_time": "float"}},
+      "inputs": {"x": ["x"], "y": ["y"], "tick": ["tick"], "global_time": ["global_time"]}
+    }
+  }
+}

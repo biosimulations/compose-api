@@ -1,0 +1,12 @@
+description: >-
+  Intervention (add 2 per step) perturbs a float store x starting at 1, MathExpressionStep reads it out as
+  y = 3x + 1, and Clock counts the steps. After five steps of 1: x = 11, y = 34, tick = 5; after two, x = 5. Values
+  computed by hand; checked with compose-api's runner on process-bigraph 1.9.1 (2026-10-26).
+document: document.pbg
+interval: 5
+expect:
+  - {kind: rows, emitter: emitter, min: 6}
+  - {kind: scalar, emitter: emitter, field: x, expected: 11.0}
+  - {kind: scalar, emitter: emitter, field: y, expected: 34.0}
+  - {kind: scalar, emitter: emitter, field: tick, expected: 5}
+  - {kind: scalar, emitter: emitter, field: x, row: 2, expected: 5.0}
