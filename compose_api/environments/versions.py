@@ -7,18 +7,15 @@ environment its solvers use (``default`` names them all at their defaults).
 A version is a database record (docs/plan-environment-composition.md, D8.1): a run that names none takes its
 environment's default, which an administrator chose; a shared environment with none yet (a fresh deployment) refuses
 the run until one is made (`compose-api environments create registry_env`). Versions made before, pbest's
-registry_env@1 among them, stay runnable by number (D8.2). A prebuilt environment's default is still the definition of
-its pinned image (``settings.prebuilt_simulators``), created the first time it is seen, until step 8b.
+registry_env@1 among them, stay runnable by number (D8.2). A prebuilt environment is the same (D8.3): its versions
+are images by digest an administrator registers (`compose-api environments create <name> --image …`), and what this
+deployment offers of it is its default.
 """
 
 from typing import TYPE_CHECKING
 
-from pbest.utils.input_types import ContainerizationFileRepr
-
 from compose_api.registry.environments import load_environments
-from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.models import EnvironmentVersion, SimulatorVersion, VersionState
-from compose_api.simulation.prebuilt import prebuilt_definition, prebuilt_image
 
 if TYPE_CHECKING:
     from compose_api.db.database_service import DatabaseService
@@ -27,13 +24,6 @@ if TYPE_CHECKING:
 def shared_environment() -> str:
     """The shared environment's name (``registry_env``)."""
     return next(e.name for e in load_environments().environments if e.kind == "shared")
-
-
-def deployed_definition(simulator: str) -> tuple[ContainerizationFileRepr, str]:
-    """The definition this deployment runs a prebuilt simulator from, and its pinned image. `UnknownSimulatorError`
-    for a name the deployment does not list."""
-    image = prebuilt_image(simulator)
-    return prebuilt_definition(image), image
 
 
 class VersionUnavailableError(LookupError):
@@ -97,38 +87,52 @@ async def version_for(
     environment: str | None = None,
 ) -> tuple[EnvironmentVersion, SimulatorVersion]:
     """The version a run of ``simulator`` uses (None: the shared environment), and its simulator row: ``number`` when
-    the run names one; otherwise the environment's default (D8.1; a prebuilt one's is still adopted from its pinned
-    image until step 8b). ``environment`` names an undeclared composed environment (a mash-up) instead.
-    `NoDefaultVersionError` when the shared environment has no version yet."""
+    the run names one; otherwise the environment's default (D8.1, D8.3). ``environment`` names an undeclared composed
+    environment (a mash-up) instead. `NoDefaultVersionError` when the environment has no version yet."""
     if environment is not None and not declared(environment):
         return await composed_version(database_service, environment, number)
     if environment is not None and simulator is None and environment != shared_environment():
         simulator = environment  # a declared prebuilt environment, named as an environment
     if number is not None:
         return await chosen_version(database_service, environment_of(simulator), number)
-    if simulator is None:
-        shared = shared_environment()
-        default = await database_service.get_environments_db().get_default(shared)
-        if default is None:
-            raise NoDefaultVersionError(
-                f"{shared} has no version yet: an administrator makes its first one"
-                f" (`compose-api environments create {shared}`)"
-            )
-        return await chosen_version(database_service, shared, default.number)
-    definition, image = deployed_definition(simulator)
-    simulator_db = database_service.get_simulator_db()
-    found = await simulator_db.get_simulator_by_def_hash(get_singularity_hash(definition))
-    simulator_version = found if found is not None else await simulator_db.insert_simulator(definition)
+    name = simulator if simulator is not None else shared_environment()
+    default = await database_service.get_environments_db().get_default(name)
+    if default is None:
+        how = f"{name}" if simulator is None else f"{name} --image <image by digest>"
+        raise NoDefaultVersionError(
+            f"{name} has no version yet: an administrator makes its first one (`compose-api environments create {how}`)"
+        )
+    return await chosen_version(database_service, name, default.number)
+
+
+async def prebuilt_images(database_service: "DatabaseService | None") -> dict[str, str]:
+    """The image each prebuilt environment runs here: its default version's, when that is ready or building (D8.3).
+    An environment with none is not offered."""
+    if database_service is None:
+        return {}
     environments_db = database_service.get_environments_db()
-    version = await environments_db.adopt_deployed(simulator, "prebuilt", simulator_version.database_id, image=image)
-    if version.simulator_id != simulator_version.database_id:  # an administrator chose another version
-        if version.simulator_id is None:  # a default is ready, so it has one
-            raise LookupError(f"the default {version.label} has no simulator")
-        chosen = await simulator_db.get_simulator(version.simulator_id)
-        if chosen is None:
-            raise LookupError(f"{version.label}'s simulator {version.simulator_id} is gone")
-        simulator_version = chosen
-    return version, simulator_version
+    images = {}
+    for spec in load_environments().environments:
+        if spec.kind != "prebuilt":
+            continue
+        default = await environments_db.get_default(spec.name)
+        if default is not None and default.image is not None and default.state in RUNNABLE:
+            images[spec.name] = default.image
+    return images
+
+
+async def prebuilt_names(database_service: "DatabaseService | None") -> dict[str, str]:
+    """Every image a prebuilt environment's versions have run, to that environment's name (for labelling runs)."""
+    if database_service is None:
+        return {}
+    environments_db = database_service.get_environments_db()
+    names = {}
+    for spec in load_environments().environments:
+        if spec.kind == "prebuilt":
+            for version in await environments_db.list_versions(spec.name):
+                if version.image is not None:
+                    names[version.image] = spec.name
+    return names
 
 
 DEFAULT = "default"

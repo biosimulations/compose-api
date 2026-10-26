@@ -10,6 +10,7 @@ an environment's definition and simulator, its image status, and the wait on a b
 import asyncio
 import datetime
 import logging
+from collections.abc import Mapping
 from enum import StrEnum
 
 from pbest.utils.input_types import ContainerizationFileRepr
@@ -57,10 +58,10 @@ class ImageStatus(BaseModel):
     images: list[EnvironmentImage] = Field(default_factory=list, description="Every image recorded, newest first")
 
 
-def find_environment(name: str) -> EnvironmentSpec | None:
-    """An environment this deployment offers, by name."""
+def find_environment(name: str, prebuilt: Mapping[str, str]) -> EnvironmentSpec | None:
+    """An environment this deployment offers, by name (``prebuilt``: ``environments.versions.prebuilt_images``)."""
     spec = next((e for e in load_environments().environments if e.name == name), None)
-    return spec if spec is not None and offered(spec) else None
+    return spec if spec is not None and offered(spec, prebuilt) else None
 
 
 async def simulator_for(

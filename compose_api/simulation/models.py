@@ -391,7 +391,7 @@ class SimulationRequest(BaseModel):
     simulation_file_type: SimulationFileType
     end_time_point: float = 1.0
     is_batch: bool
-    # A prebuilt simulator by name (settings.prebuilt_simulators); None runs the shared container.
+    # A prebuilt environment by name (its default version's image, D8.3); None runs the shared one.
     simulator: str | None = None
     # The version of that environment to run in (docs/plan-environment-versions.md, step 5); None: its default.
     environment_version: int | None = None

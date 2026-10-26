@@ -21,8 +21,8 @@
 | 7a | Runs name an environment or have one inferred; environments listed from the database | merged (#415, #416) |
 | 7b | Implicit mash-ups, proven with viva-basic-processes | done: #417–#419 (0.7.51), #421 (0.7.52); live 2026-10-26 |
 | 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | |
-| 8a | Versions come from the database only: the deployed (pbest) definition, `simulator_registry.json`, `shared_image()` retired | in review |
-| 8b | Prebuilt images by their versions, not `PREBUILT_SIMULATORS` | |
+| 8a | Versions come from the database only: the deployed (pbest) definition, `simulator_registry.json`, `shared_image()` retired | merged (#424), 0.7.53 |
+| 8b | Prebuilt images by their versions, not `PREBUILT_SIMULATORS` | in review; `api.env` cleanup after it is live |
 | 8c | Interface manifests from each environment's default version, not committed files | |
 | 8d | The shared uv path, `preview` and custom library lists retired | |
 | 8e | pbest's types vendored; compose-api no longer depends on pbest | |
@@ -459,6 +459,21 @@
      generator and `environments/lock.py`, 8d), so it goes with the last of them.
    - The test database seeds registry_env with a ready default running pbest's definition, which the SLURM tests
      build and run (`tests/fixtures/postgres_fixtures.seed_shared_default`), and the `simulator` fixture reuses it.
+
+   *As built, 8b (2026-10-26):*
+   - A prebuilt environment is offered when it has a default version that is ready or building, and runs take that
+     version's image (`versions.prebuilt_images`); with no default, `version_for` raises `NoDefaultVersionError` with
+     `environments create <name> --image …`. Nothing adopts a pinned image any more; `prebuilt_image` and the
+     `prebuilt_simulators` setting are gone.
+   - Every place that read the setting takes the images from the database: `simulator=`/`environment=` checks (an
+     unknown or unregistered name is still "unknown simulator", 400), inference, the environment summaries and
+     catalog, the image-status routes, `/webapp/config`'s list, and the simulation listing (a run's simulator named
+     by any version that had its image, `versions.prebuilt_names`; `?simulator=` by the default's image).
+   - Only environments.yaml's prebuilt environments can have one: tests that used made-up names use
+     viva-pde-particle, registered through `tests/fixtures/postgres_fixtures.register_prebuilt`.
+   - Production already had what this needs: viva-pde-particle@1, ready and its default, records the digest
+     `PREBUILT_SIMULATORS` pins. `PREBUILT_SIMULATORS` leaves `api.env` once this is live (the running release still
+     reads it).
 
    **Order:** 8a, 8b, 8c, 8d, 8e. Each is one PR, released and checked live before the next: a run with no version
    takes @5; viva-pde-particle runs by its version; the checker and SED-ML runs use read-back manifests; creating a

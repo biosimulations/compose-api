@@ -22,7 +22,7 @@ from compose_api.dependencies import (
 )
 from compose_api.environments import lifecycle
 from compose_api.environments.admission import standing_for
-from compose_api.environments.versions import VersionUnavailableError, chosen_version, environment_of
+from compose_api.environments.versions import VersionUnavailableError, chosen_version, environment_of, prebuilt_images
 from compose_api.registry.environments import load_environments, offered
 from compose_api.registry.manifest import SERVICE_BUNDLE, load_manifest
 from compose_api.registry.resolver import covering_environment, needed_entries
@@ -48,7 +48,6 @@ from compose_api.simulation.models import (
     SimulationExperiment,
     SimulationFileType,
 )
-from compose_api.simulation.prebuilt import UnknownSimulatorError, prebuilt_image
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +67,14 @@ async def _named_environment(environment: str | None, simulator: str | None) -> 
     """The prebuilt simulator a request's `environment` and `simulator` name (None: the shared environment, or none
     named), and the undeclared composed environment it names (a mash-up), if it does. `environment` names any
     environment this deployment offers or the database holds; `simulator` is the older name for a prebuilt one, kept
-    for a release (docs/plan-environment-composition.md, D7.1). A 400 when they disagree or the name is unknown."""
+    for a release (docs/plan-environment-composition.md, D7.1). A prebuilt one is offered when it has a default
+    version (D8.3). A 400 when they disagree or the name is unknown."""
+    images = await prebuilt_images(get_database_service())
+    if simulator is not None and simulator not in images:
+        offered_here = ", ".join(sorted(images)) or "none"
+        raise HTTPException(
+            status_code=400, detail=f"unknown simulator {simulator!r}; this deployment offers: {offered_here}"
+        )
     if environment is None:
         return simulator, None
     spec = next((e for e in load_environments().environments if e.name == environment), None)
@@ -76,7 +82,7 @@ async def _named_environment(environment: str | None, simulator: str | None) -> 
         if simulator is not None:
             raise HTTPException(status_code=400, detail=f"`environment={environment}` is a mash-up, not `{simulator}`.")
         return None, environment
-    if spec is None or not offered(spec):
+    if spec is None or not offered(spec, images):
         raise HTTPException(status_code=400, detail=f"No environment {environment!r} is offered here.")
     named = spec.name if spec.kind == "prebuilt" else None
     if simulator is not None and simulator != named:
@@ -125,7 +131,10 @@ async def _inferred(
     needed = needed_entries(targets, manifest)
     database_service = get_database_service()
     mash_ups = await lifecycle.mash_up_specs(database_service) if database_service is not None else []
-    covering = covering_environment(needed, manifest, load_environments(), offered=offered, mash_ups=mash_ups)
+    images = await prebuilt_images(database_service)
+    covering = covering_environment(
+        needed, manifest, load_environments(), offered=lambda spec: offered(spec, images), mash_ups=mash_ups
+    )
     if covering is not None:
         if covering.kind == "prebuilt":
             return _Inferred(simulator=covering.name)
@@ -156,11 +165,6 @@ def _checked_options(
         run_tags, run_description = clean_tags(tags), clean_description(description)
     except LabelError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    if simulator is not None:
-        try:
-            prebuilt_image(simulator)
-        except UnknownSimulatorError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
     if interval_time < 0 or interval_time > 1000:
         raise HTTPException(status_code=400, detail="Invalid interval time, it has to be between 0 and 1000")
     return run_tags, run_description
@@ -206,7 +210,7 @@ async def submit_simulation(
     ] = None,
 ) -> SimulationExperiment:
     """`environment` names the environment to run in; `simulator` is the older way to name a prebuilt one (an
-    owner-published image this deployment lists, settings.prebuilt_simulators). With neither, and no
+    owner-published image registered as a version of its environment). With neither, and no
     `environment_version`, the environment is inferred from the classes the documents name
     (docs/plan-environment-composition.md, step 7a): the shared environment for everything it provides, as before;
     otherwise the smallest offered environment that provides them all.
@@ -245,7 +249,7 @@ async def submit_simulation(
     # Checked before anything is recorded or submitted: the container resolves addresses itself, and will import
     # whatever module it is told to, so this is the only point a submission is checked. A prebuilt simulator's
     # image brings its own processes, which this registry does not describe, so its classes are not looked up (the
-    # deployment vouches for the image by listing it in settings.prebuilt_simulators); the unsafe forms, `local:!`
+    # administrator vouched for the image by registering it as a version); the unsafe forms, `local:!`
     # and any other protocol, are refused for it all the same.
     # what the version it will run in certifies (docs/plan-environment-composition.md, step 5c): a component refused
     # there, or an entry whose compliance cases failed there, is refused before the manifest's level is consulted

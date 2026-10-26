@@ -129,12 +129,16 @@ async def receive_csp_report(request: Request) -> Response:
 
 
 async def get_webapp_config() -> WebappConfig:
+    from compose_api.dependencies import get_database_service  # late: dependencies imports the API modules
+    from compose_api.environments.versions import prebuilt_images
+
     settings = get_settings()
     return WebappConfig(
         auth0_domain=settings.auth0_domain,
         auth0_audience=settings.auth0_audience,
         auth0_client_id=settings.auth0_spa_client_id,
-        prebuilt_simulators=sorted(settings.prebuilt_simulators),
+        # the prebuilt environments a run may name: those with a default version (D8.3)
+        prebuilt_simulators=sorted(await prebuilt_images(get_database_service())),
         dataset_kinds=DATASET_KINDS,
     )
 

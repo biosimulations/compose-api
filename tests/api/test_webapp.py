@@ -18,7 +18,9 @@ from compose_api.api.webapp import (
     mount_webapp,
 )
 from compose_api.config import get_settings, override_settings
+from compose_api.db.database_service import DatabaseService
 from compose_api.observability.datasets import DATASET_KINDS
+from tests.fixtures.postgres_fixtures import register_prebuilt
 
 SHELL = "<html>spa shell</html>"
 
@@ -66,16 +68,18 @@ def test_without_a_build_only_the_config_and_report_endpoints_are_added(tmp_path
 
 @pytest.mark.asyncio
 async def test_webapp_config_publishes_login_settings_and_simulator_names(
-    http_api_client: httpx.AsyncClient,
+    http_api_client: httpx.AsyncClient, database_service: DatabaseService
 ) -> None:
-    with override_settings(auth0_spa_client_id="spa-client", prebuilt_simulators={"b-sim": "img:b", "a-sim": "img:a"}):
+    """The prebuilt environments a run may name: those with a registered default version (D8.3)."""
+    await register_prebuilt(database_service, "viva-pde-particle", "ghcr.io/example/pde@sha256:" + "2" * 64)
+    with override_settings(auth0_spa_client_id="spa-client"):
         response = await http_api_client.get("/webapp/config")
     assert response.status_code == 200
     assert response.json() == {
         "auth0_domain": get_settings().auth0_domain,
         "auth0_audience": get_settings().auth0_audience,
         "auth0_client_id": "spa-client",
-        "prebuilt_simulators": ["a-sim", "b-sim"],
+        "prebuilt_simulators": ["viva-pde-particle"],
         "dataset_kinds": DATASET_KINDS,
     }
     assert "results-bundle" in DATASET_KINDS

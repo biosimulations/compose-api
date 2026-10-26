@@ -9,6 +9,11 @@ import httpx
 import pytest
 
 from compose_api.config import override_settings
+from compose_api.db.database_service import DatabaseService
+from tests.fixtures.postgres_fixtures import register_prebuilt, unregister_prebuilt
+
+PREBUILT = "viva-pde-particle"  # the prebuilt environment environments.yaml declares
+SIM_IMAGE = "ghcr.io/example/simulator@sha256:" + "0" * 64
 
 
 def pbg(*addresses: str) -> bytes:
@@ -57,33 +62,35 @@ async def test_unknown_file_type_is_a_400_not_a_500(http_api_client: httpx.Async
 
 @pytest.mark.asyncio
 async def test_a_listed_prebuilt_simulator_is_not_checked_against_the_registry(
-    http_api_client: httpx.AsyncClient,
+    http_api_client: httpx.AsyncClient, database_service: DatabaseService
 ) -> None:
-    """Its image brings its own processes; the deployment vouches for the image by listing it."""
-    with override_settings(prebuilt_simulators={"sim-a": "ghcr.io/example/simulator@sha256:" + "0" * 64}):
-        response = await http_api_client.post(
-            "/simulation/run",
-            params={"simulator": "sim-a"},
-            files={"uploaded_file": ("doc.pbg", pbg("local:sim_a.processes.Solver"), "application/json")},
-        )
+    """Its image brings its own processes; an administrator vouched for the image by registering it (D8.3)."""
+    await register_prebuilt(database_service, PREBUILT, SIM_IMAGE)
+    response = await http_api_client.post(
+        "/simulation/run",
+        params={"simulator": PREBUILT},
+        files={"uploaded_file": ("doc.pbg", pbg("local:sim_a.processes.Solver"), "application/json")},
+    )
     assert not (response.status_code == 400 and "violations" in response.text), response.text
 
 
 @pytest.mark.asyncio
-async def test_a_listed_prebuilt_simulator_still_refuses_unsafe_forms(http_api_client: httpx.AsyncClient) -> None:
-    """Listing the image vouches for its classes, not for an arbitrary import or another protocol."""
-    with override_settings(prebuilt_simulators={"sim-a": "ghcr.io/example/simulator@sha256:" + "0" * 64}):
-        response = await http_api_client.post(
-            "/simulation/run",
-            params={"simulator": "sim-a"},
-            files={
-                "uploaded_file": (
-                    "doc.pbg",
-                    pbg("local:sim_a.processes.Solver", "local:!os.system", "rest:http://example.org/p"),
-                    "application/json",
-                )
-            },
-        )
+async def test_a_listed_prebuilt_simulator_still_refuses_unsafe_forms(
+    http_api_client: httpx.AsyncClient, database_service: DatabaseService
+) -> None:
+    """Registering the image vouches for its classes, not for an arbitrary import or another protocol."""
+    await register_prebuilt(database_service, PREBUILT, SIM_IMAGE)
+    response = await http_api_client.post(
+        "/simulation/run",
+        params={"simulator": PREBUILT},
+        files={
+            "uploaded_file": (
+                "doc.pbg",
+                pbg("local:sim_a.processes.Solver", "local:!os.system", "rest:http://example.org/p"),
+                "application/json",
+            )
+        },
+    )
     assert response.status_code == 400
     violations = response.json()["detail"]["violations"]
     assert {v["address"] for v in violations} == {"local:!os.system", "rest:http://example.org/p"}
@@ -91,15 +98,19 @@ async def test_a_listed_prebuilt_simulator_still_refuses_unsafe_forms(http_api_c
 
 
 @pytest.mark.asyncio
-async def test_an_unlisted_simulator_is_refused_before_the_registry(http_api_client: httpx.AsyncClient) -> None:
-    with override_settings(prebuilt_simulators={}):
+async def test_an_unlisted_simulator_is_refused_before_the_registry(
+    http_api_client: httpx.AsyncClient, database_service: DatabaseService
+) -> None:
+    """A name no environment declares, and a declared one with no version registered, are both unknown here."""
+    await unregister_prebuilt(database_service, PREBUILT)
+    for name in ("sim-a", PREBUILT):
         response = await http_api_client.post(
             "/simulation/run",
-            params={"simulator": "sim-a"},
+            params={"simulator": name},
             files={"uploaded_file": ("doc.pbg", pbg("local:sim_a.processes.Solver"), "application/json")},
         )
-    assert response.status_code == 400
-    assert "unknown simulator" in response.json()["detail"]
+        assert response.status_code == 400
+        assert "unknown simulator" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
@@ -116,42 +127,46 @@ PDE = "local:viva_pde_particle.processes.fenicsx_reaction_diffusion.FenicsxReact
 
 
 @pytest.mark.asyncio
-async def test_a_run_naming_no_environment_goes_where_its_classes_are(http_api_client: httpx.AsyncClient) -> None:
+async def test_a_run_naming_no_environment_goes_where_its_classes_are(
+    http_api_client: httpx.AsyncClient, database_service: DatabaseService
+) -> None:
     """Step 7a (D7.1): a document using only viva-pde-particle's classes is inferred to run in its image when the
     deployment offers it, as if it had named it; offered nowhere, the shared environment refuses it as before."""
-    with override_settings(prebuilt_simulators={"viva-pde-particle": PDE_IMAGE}):
-        inferred = await http_api_client.post(
-            "/simulation/run", files={"uploaded_file": ("doc.pbg", pbg(PDE), "application/json")}
-        )
+    await register_prebuilt(database_service, PREBUILT, PDE_IMAGE)
+    inferred = await http_api_client.post(
+        "/simulation/run", files={"uploaded_file": ("doc.pbg", pbg(PDE), "application/json")}
+    )
     assert not (inferred.status_code == 400 and "violations" in inferred.text), inferred.text
-    with override_settings(prebuilt_simulators={}):
-        refused = await http_api_client.post(
-            "/simulation/run", files={"uploaded_file": ("doc.pbg", pbg(PDE), "application/json")}
-        )
+    await unregister_prebuilt(database_service, PREBUILT)
+    refused = await http_api_client.post(
+        "/simulation/run", files={"uploaded_file": ("doc.pbg", pbg(PDE), "application/json")}
+    )
     assert refused.status_code == 400
     (violation,) = refused.json()["detail"]["violations"]
     assert "not installed in the environment `registry_env`" in violation["reason"]
 
 
 @pytest.mark.asyncio
-async def test_a_named_environment_is_used_as_given(http_api_client: httpx.AsyncClient) -> None:
+async def test_a_named_environment_is_used_as_given(
+    http_api_client: httpx.AsyncClient, database_service: DatabaseService
+) -> None:
     """`environment=` names any offered environment; the shared one checks the registry, whatever was inferable."""
-    with override_settings(prebuilt_simulators={"viva-pde-particle": PDE_IMAGE}):
-        shared = await http_api_client.post(
-            "/simulation/run",
-            params={"environment": "registry_env"},
-            files={"uploaded_file": ("doc.pbg", pbg(PDE), "application/json")},
-        )
-        disagreeing = await http_api_client.post(
-            "/simulation/run",
-            params={"environment": "registry_env", "simulator": "viva-pde-particle"},
-            files={"uploaded_file": ("doc.pbg", pbg(PDE), "application/json")},
-        )
-        unknown = await http_api_client.post(
-            "/simulation/run",
-            params={"environment": "nowhere"},
-            files={"uploaded_file": ("doc.pbg", pbg(PDE), "application/json")},
-        )
+    await register_prebuilt(database_service, PREBUILT, PDE_IMAGE)
+    shared = await http_api_client.post(
+        "/simulation/run",
+        params={"environment": "registry_env"},
+        files={"uploaded_file": ("doc.pbg", pbg(PDE), "application/json")},
+    )
+    disagreeing = await http_api_client.post(
+        "/simulation/run",
+        params={"environment": "registry_env", "simulator": "viva-pde-particle"},
+        files={"uploaded_file": ("doc.pbg", pbg(PDE), "application/json")},
+    )
+    unknown = await http_api_client.post(
+        "/simulation/run",
+        params={"environment": "nowhere"},
+        files={"uploaded_file": ("doc.pbg", pbg(PDE), "application/json")},
+    )
     assert shared.status_code == 400 and "registry_env" in shared.json()["detail"]["violations"][0]["reason"]
     assert disagreeing.status_code == 400 and "disagree" in disagreeing.json()["detail"]
     assert unknown.status_code == 400 and "No environment 'nowhere'" in unknown.json()["detail"]

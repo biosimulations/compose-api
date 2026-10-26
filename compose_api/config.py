@@ -161,14 +161,6 @@ class Settings(BaseSettings):
     # (compose_api/simulation/images.py); the first pass runs at startup.
     image_verify_interval_seconds: int = 3600
 
-    # Simulators published by their owners as OCI images, by name: a request's `simulator`
-    # query parameter selects one and the job runs in that image instead of the shared one
-    # (compose_api/simulation/prebuilt.py). Only these names are accepted, so a request can
-    # never pull an arbitrary image. Pin by digest or an immutable tag: the cached SIF is
-    # keyed on the reference. In the environment, a JSON object:
-    #   PREBUILT_SIMULATORS='{"viva-pde-particle": "ghcr.io/vivarium-collective/viva-pde-particle-compose:sha-abc1234"}'
-    prebuilt_simulators: dict[str, str] = {}
-
     # Auth0 access-token verification (compose_api/authentication.py). Neither is a secret. While either is
     # empty no token can be verified: anonymous requests still work and any supplied bearer token gets a 401.
     auth0_domain: str = ""  # e.g. dev-bu7yo7484tyxu6a1.us.auth0.com -- no scheme, no trailing slash

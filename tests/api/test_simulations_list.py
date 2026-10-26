@@ -11,7 +11,6 @@ from pbest.utils.input_types import ContainerizationEngine
 from compose_api.api.main import app
 from compose_api.authorization import get_caller
 from compose_api.common.hpc.models import SlurmJob
-from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.observability.datasets import ORIGIN_MANIFEST, ArtifactRecord
 from compose_api.observability.events import RunEvent
@@ -19,6 +18,7 @@ from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.models import JobType, SimulationRequest, SubmissionSpec, Visibility
 from compose_api.simulation.prebuilt import prebuilt_definition
 from tests.api.test_authorization import ALICE
+from tests.fixtures.postgres_fixtures import register_prebuilt
 
 IMAGE = "ghcr.io/example/sim@sha256:" + "0" * 64
 
@@ -27,7 +27,7 @@ IMAGE = "ghcr.io/example/sim@sha256:" + "0" * 64
 async def simulations(
     database_service: DatabaseServiceSQL, simulation_request: SimulationRequest, monkeypatch: pytest.MonkeyPatch
 ) -> AsyncGenerator[dict[str, int]]:
-    monkeypatch.setitem(get_settings().prebuilt_simulators, "example-sim", IMAGE)
+    await register_prebuilt(database_service, "viva-pde-particle", IMAGE)  # its versions name its runs (D8.3)
     sim_db, hpc_db = database_service.get_simulator_db(), database_service.get_hpc_db()
     definition = prebuilt_definition(IMAGE)
     simulator = await sim_db.get_simulator_by_def_hash(get_singularity_hash(definition))
@@ -93,12 +93,12 @@ async def test_list_newest_first_with_status_and_filters(simulations: dict[str, 
         assert page["total"] == 2
         done = page["simulations"][0]
         assert done["status"] == "completed" and done["slurm_job_id"] == 9301 and done["trace_id"]
-        assert done["simulator"] == "example-sim"
+        assert done["simulator"] == "viva-pde-particle"
         assert page["simulations"][1]["status"] == "submitting" and page["simulations"][1]["slurm_job_id"] is None
 
         only = (await http.get("/simulations", params={"status": "submitting"})).json()
         assert [s["simulation_id"] for s in only["simulations"]] == [simulations["submitting"]]
-        by_name = (await http.get("/simulations", params={"simulator": "example-sim", "limit": 1})).json()
+        by_name = (await http.get("/simulations", params={"simulator": "viva-pde-particle", "limit": 1})).json()
         assert by_name["total"] == 2 and by_name["next_offset"] == 1
         later = datetime.datetime.now(tz=datetime.UTC) + datetime.timedelta(hours=1)
         assert (await http.get("/simulations", params={"since": later.isoformat()})).json()["total"] == 0

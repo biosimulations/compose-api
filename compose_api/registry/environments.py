@@ -8,13 +8,13 @@ app's editor and checker (`/registry/environments`).
 """
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
-from compose_api.config import get_settings
 from compose_api.registry.manifest import CurationLevel, Manifest, RegistryEntry, load_manifest
 
 ENVIRONMENTS_PATH = Path(__file__).parent / "environments.yaml"
@@ -125,17 +125,14 @@ def module_roots(environment: str, manifest: Manifest | None = None) -> list[str
     return sorted({root for e in manifest.entries if environment in e.bundles for root in e.module_roots})
 
 
-def deployed_image(spec: EnvironmentSpec, prebuilt: dict[str, str] | None = None) -> str | None:
-    """The image a prebuilt environment is pinned to here; None for the shared one (its versions are database
-    records, D8.1) and for a prebuilt one this deployment does not list."""
-    if spec.kind != "prebuilt":
-        return None
-    pins = get_settings().prebuilt_simulators if prebuilt is None else prebuilt
-    return pins.get(spec.name)
+def deployed_image(spec: EnvironmentSpec, prebuilt: Mapping[str, str]) -> str | None:
+    """The image a prebuilt environment runs here: its default version's (``prebuilt``, from
+    ``environments.versions.prebuilt_images``; D8.3). None for the shared one and for a prebuilt one with no default."""
+    return prebuilt.get(spec.name) if spec.kind == "prebuilt" else None
 
 
-def offered(spec: EnvironmentSpec, prebuilt: dict[str, str] | None = None) -> bool:
-    """Whether this deployment runs the environment: the shared one always, a prebuilt one when it is pinned."""
+def offered(spec: EnvironmentSpec, prebuilt: Mapping[str, str]) -> bool:
+    """Whether this deployment runs the environment: the shared one always, a prebuilt one when it has a default."""
     return spec.kind == "shared" or deployed_image(spec, prebuilt) is not None
 
 
@@ -230,7 +227,7 @@ def read_manifest(name: str, registry: Manifest | None = None) -> InterfaceManif
     return manifest
 
 
-def summarize(spec: EnvironmentSpec, prebuilt: dict[str, str] | None = None) -> EnvironmentSummary | None:
+def summarize(spec: EnvironmentSpec, prebuilt: Mapping[str, str]) -> EnvironmentSummary | None:
     """The environment as the web app lists it; None for a prebuilt one this deployment does not offer."""
     if not offered(spec, prebuilt):
         return None
@@ -277,7 +274,7 @@ class CatalogEntry(BaseModel):
     environments: list[EntryEnvironment] = Field(default_factory=list)
 
 
-def catalog_entries(prebuilt: dict[str, str] | None = None) -> list[CatalogEntry]:
+def catalog_entries(prebuilt: Mapping[str, str]) -> list[CatalogEntry]:
     """Every registry entry (manifest.yaml over catalog.yaml), highest level first, then by id, each with the offered
     environments whose manifest lists its classes."""
     registry = load_manifest()
