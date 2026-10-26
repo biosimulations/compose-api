@@ -1,24 +1,26 @@
 # Composed environments: built by compose-api from curated entries, certified by compliance composites
 
-**Status (2026-10-25): decided (Jim); step 0 in review.**
+**Status (2026-10-26): the active plan. Steps 0–5 merged; step 6 finishing (registry_env@5, suite run 5); step 7's decisions proposed below (D7.1–D7.10), for Jim to confirm.**
 - One PR per step, each merged with a merge commit; each PR updates the table below.
 - This plan supersedes the open parts of [plan-environment-versions](plan-environment-versions.md): step 5b's solver check, step 6, and the shared uv build path.
 - The rest of that plan stays: versions as database records, defaults, retirement, read-back, every run recording its version, suites naming theirs, the admin role, and the prebuilt kind.
 
 | Step | What | State |
 |---|---|---|
-| 0 | This document | in review |
-| 1 | Manifest entries declare how they install; environments declare their member entries | in review |
-| 2 | The runner (runtime contract 2), in place of pbest's | in review |
-| 3 | pixi: generated from entries, locked in an unprivileged Job; the definition that installs the lock | in review |
+| 0 | This document | merged (#382) |
+| 1 | Manifest entries declare how they install; environments declare their member entries | merged (#383) |
+| 2 | The runner (runtime contract 2), in place of pbest's | merged (#384) |
+| 3 | pixi: generated from entries, locked in an unprivileged Job; the definition that installs the lock | merged (#385) |
 | 4a | Environments get a stable id; versions and suite runs refer to it, never to a name | merged (#386) |
 | 4 | Composed versions: created `resolving`, locked in the background, built, read back; exported as pixi | merged (#387) |
 | 4b | The uv export (`pyproject.toml` and `uv.lock`) for a composed version that needs no conda | merged (#388) |
 | 5a | Compliance checks: the generic `step-outputs-replace` check, cases kept with an entry, their evaluation; pbsim-common's first cases | merged (#389) |
 | 5b | Compliance runs: after a build, each member entry's cases run in the version; levels recorded per entry and version; API and CLI | merged (#390) |
-| 5c | Admission by what the version certifies: a refused component, a failed entry, members only | in review |
-| 6 | registry_env migrates to a composed version on a current process-bigraph | |
-| 7 | The per-composite resolver: mash-ups built on demand from a run | |
+| 5c | Admission by what the version certifies: a refused component, a failed entry, members only | merged (#391) |
+| 6 | registry_env migrates to a composed version on a current process-bigraph | @4 (0.7.46) and @5 (0.7.50) ready; suite run 5 running; then the default |
+| 7a | Runs name an environment or have one inferred; environments listed from the database | decisions proposed |
+| 7b | Implicit mash-ups, proven with a light pure-PyPI component | |
+| 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | |
 | 8 | Retire the shared uv path, `simulator_registry.json`, `shared_image()`, pbest in images, `PREBUILT_SIMULATORS`, the committed interface manifests | |
 
 ## Why (2026-10-25)
@@ -101,6 +103,53 @@
 5. **If the entries cannot share an environment,** the request is refused with a 409 and pixi's explanation.
 6. **Every run records the version it got.** An inferred choice can change later; to reproduce a run, name that
    version.
+
+### Step 7's decisions (proposed 2026-10-26, for Jim to confirm)
+
+**What exists today, which step 7 starts from:**
+- A run names a prebuilt image (`simulator=`) or goes to `registry_env`, with an optional `environment_version=`. No
+  request can name a composed environment other than `registry_env`.
+- The environment list (`GET /registry/environments`, the webapp) comes from `environments.yaml`, not the database.
+- Only three component entries can be composed and are `tested`: pbsim-common, pb-multiscale-actin and
+  biosim-toolkit, all three already in `registry_env`. viva-pde-particle is a prebuilt image with no `install`; the 48
+  catalog entries are `listed`. So inference alone would always choose `registry_env`, and a mash-up needs a new
+  composable entry before one can be built at all.
+- viva-pde-particle's image carries no pbsim-common: its 14 classes are all `viva_pde_particle.*`. A document putting a
+  UTC step beside its PDE and particle processes is the motivating mash-up (7c).
+
+**Decisions:**
+- **D7.1 A run names its environment, or has one inferred.** `/simulation/run` takes `environment=<name>` beside
+  `environment_version=<n>`. `simulator=` stays as an alias for a prebuilt environment for one release. With neither,
+  the environment is inferred (D7.2–D7.4). SED-ML runs are unchanged: each solver names its environment in
+  `solvers.yaml`, and suites name their versions.
+- **D7.2 Inference maps addresses to entries.** Each address goes to the entry whose module root contains it (the
+  longest root wins). A component entry may list the library entries it needs in a new `requires` field (pbsim-common:
+  tellurium, python-copasi, pyvcell, libvcell), which join the set. An address under no entry is refused (400), as
+  today. An entry with no `install` (a prebuilt image's) can only be served by its own environment: a document mixing
+  it with other entries is refused (409, "<entry> cannot be composed yet").
+- **D7.3 Reuse before build.** Among environments whose default version is ready and whose entries cover the set (a
+  superset will do): named before mash-ups, then the fewest entries, then the name. The run takes that environment's
+  default version, and admission uses that version's standing (step 5c), as now.
+- **D7.4 A mash-up is created when nothing covers the set.** Every entry must be `tested` in the manifest. The lock
+  runs while the request waits (about 15 s), so a conflict is a **409 with pixi's explanation** before anything is
+  recorded. The build and the compliance runs follow in the background, and the run waits in the queue until the
+  image is ready, as a run on a new version of `registry_env` would.
+- **D7.5 Who may cause a mash-up build.** *Recommended:* only a signed-in caller, while anyone may *use* a mash-up that
+  exists. A build runs registry code as root on the privileged builder for a few minutes, so an anonymous request
+  should not be able to start one; C5 said anyone, so this narrows it. At most two implicit builds run at a time, and
+  the same entry set is never built twice (the identity is the set).
+- **D7.6 Naming.** `mash-<first 10 hex of sha256 of the sorted entry ids>`; the environment records its entries, and
+  the pages show them. Giving one a curated name is a rename (an admin action).
+- **D7.7 A mash-up's later versions.** Only its first version is created implicitly. After that it behaves like a
+  named environment: an admin refreshes it with `environments create`, and runs keep taking its default until then.
+  A manifest pin that moves therefore never triggers builds by itself.
+- **D7.8 Garbage collection: none this round.** Each version records when a run last used it (`last_used_at`), and an
+  admin retires what is idle. Automatic retirement waits for data on how many mash-ups appear.
+- **D7.9 Environments are listed from the database.** `GET /registry/environments` returns every environment row, with
+  `environments.yaml` adding what it knows about the declared ones (the Python command, the describe pin). A new kind,
+  `mash-up`, sits beside `shared` and `prebuilt`. The webapp lists mash-ups in their own group, with their entries.
+- **D7.10 Validation follows the chosen environment.** The `registry_env` bundle check (`SERVICE_BUNDLE`) is replaced
+  by "the entry is a member of the environment the run will use"; admission by the version's standing is unchanged.
 
 ### What is a safe component
 - An entry in `manifest.yaml`, pinned to a release or a commit, whose compliance composites pass **in the environment version that will run it**.
@@ -252,9 +301,31 @@
      `/experiment` bound then ran the COPASI compliance case through the runner, and it passed.
    - pbsim-common and biosim-toolkit move to process-bigraph ≥1.9.1. pbsim_common is changed only with Jim's go-ahead.
    - Create the first composed version, run Ciliberto and biomodels-curated-300 on it, and compare with run 3. Make it the default when it holds.
-7. **The per-composite resolver.**
-   - A document's addresses map to entries; then choose a covering ready version, or create and build a mash-up implicitly.
-   - Validation is generalised beyond the registry_env bundle.
+7. **The per-composite resolver**, in three parts (D7.1–D7.10).
+   - **7a. Naming, inferring, listing; no new builds.**
+     - `environment=` on `/simulation/run` (D7.1), with the client and CLI options.
+     - The resolver: addresses to entries, `requires` in the manifest (pbsim-common's libraries), and choosing a
+       covering ready environment (D7.2, D7.3). With today's entries it always chooses `registry_env`, so no run
+       changes; a test pins that.
+     - Environments listed from the database, the `mash-up` kind, and `last_used_at` (D7.8, D7.9).
+     - Validation by membership of the chosen environment (D7.10).
+   - **7b. Implicit mash-ups, proven with a light component.**
+     - Creation when nothing covers the set: the lock in the request (409 on a conflict), the build and compliance in
+       the background, the run queued behind the image (D7.4–D7.6). Signed-in only, two builds at a time (D7.5).
+     - The first real member: a catalog component that installs from PyPI alone (no conda, no build step), raised to
+       a manifest entry with an `install` pin and a compliance case, at `tested`. Chosen with Jim.
+     - Live: a document using it with a pbsim-common step creates `mash-…`, builds it, runs, and a second identical
+       run reuses it. A deliberately conflicting pair answers 409.
+     - The webapp shows mash-ups on the environments page.
+   - **7c. viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up.** Two things block it today:
+     - **Smoldyn is not a package.** viva-pde-particle compiles it from a patched submodule while its image builds
+       (`build-smoldyn`). Either manifest entries gain a reviewed `build` step, run in the build Job after `pixi
+       install`, or Smoldyn is published as a package (conda-forge or a wheel). To decide with Jim.
+     - **Some of its dependencies track `main` branches** (viva-superpowers, viva-workspace, viva-catalog); C2 needs a
+       release or a commit for each.
+     - Both are changes in vivarium-collective, made only with Jim's go-ahead. Then: an `install` and `conda` for the
+       entry (fenics-dolfinx 0.10, MPI, Netgen), compliance cases kept with it, and a document combining its
+       processes with `VCellUTCStep` or `CopasiUTCStep`, built as a mash-up.
 8. **Retire:**
    - the shared uv path;
    - `simulator_registry.json`;
@@ -280,5 +351,5 @@
 ## Open questions
 
 - **Where the pixi image and the builder's pixi version are pinned.** Probably beside the describe pin in `environments.yaml`.
-- **How a mash-up is named,** and when an implicit mash-up is garbage-collected.
+- ~~How a mash-up is named, and when an implicit mash-up is garbage-collected.~~ Proposed as D7.6 and D7.8.
 - **Placement across islands when a composite cannot share one environment** (EV6–EV8, rule 3 of decision 5). It stays out of this round: a conflict is reported, not split.
