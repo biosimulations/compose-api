@@ -793,11 +793,17 @@ def environments_export(
     out: Annotated[Path, typer.Option("--out", "-o", help="Directory to write the files into.")] = Path("."),
     export_format: Annotated[
         str | None,
-        typer.Option("--format", help="pixi (pixi.toml, pixi.lock) or requirements; the version's own by default."),
+        typer.Option(
+            "--format",
+            help="pixi (pixi.toml, pixi.lock), uv (pyproject.toml, uv.lock; without conda) or requirements;"
+            " pixi by default for a composed version.",
+        ),
     ] = None,
 ) -> None:
     """Write the files that recreate a version locally: a composed version's pixi.toml and pixi.lock (then
-    `pixi install --frozen`), or a shared one's uv lock as requirements.txt (then `uv pip install -r`)."""
+    `pixi install --frozen`) or, when it needs nothing from conda, its pyproject.toml and uv.lock (then `uv sync`);
+    a shared one's uv lock as requirements.txt (then `uv pip install -r`). Both describe CPython on Linux x86-64, the
+    platform the image runs."""
     settings = _settings(ctx)
     with make_session(settings) as s:
         exported = s.export_environment_version(name, number, format=export_format)

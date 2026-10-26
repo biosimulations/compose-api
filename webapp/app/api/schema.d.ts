@@ -539,7 +539,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A version as files to recreate it locally: pixi.toml and pixi.lock, or a uv requirements lock */
+        /** A version as files to recreate it locally: pixi files, uv files (without conda), or requirements */
         get: operations["export-environment-version"];
         put?: never;
         post?: never;
@@ -3703,7 +3703,7 @@ export interface operations {
     "export-environment-version": {
         parameters: {
             query?: {
-                /** @description pixi or requirements; the version's own by default */
+                /** @description pixi, uv (a composed version without conda) or requirements; pixi by default */
                 format?: string | null;
             };
             header?: never;

@@ -12,8 +12,8 @@
 | 2 | The runner (runtime contract 2), in place of pbest's | in review |
 | 3 | pixi: generated from entries, locked in an unprivileged Job; the definition that installs the lock | in review |
 | 4a | Environments get a stable id; versions and suite runs refer to it, never to a name | merged (#386) |
-| 4 | Composed versions: created `resolving`, locked in the background, built, read back; exported as pixi | in review |
-| 4b | The uv export (`pyproject.toml` and `uv.lock`) for a composed version that needs no conda | |
+| 4 | Composed versions: created `resolving`, locked in the background, built, read back; exported as pixi | merged (#387) |
+| 4b | The uv export (`pyproject.toml` and `uv.lock`) for a composed version that needs no conda | in review |
 | 5 | Compliance: composites per entry, generic interface checks, levels computed per version | |
 | 6 | registry_env migrates to a composed version on a current process-bigraph | |
 | 7 | The per-composite resolver: mash-ups built on demand from a run | |
@@ -156,6 +156,19 @@
    - **Export:** `GET …/versions/{n}/export?format=pixi|requirements` is public and returns the files. CLI:
      `environments export NAME N [--out DIR]`, which writes file names only, into `--out`.
    - **Deferred to 4b:** the uv form, which needs uv in the lock Job.
+   *As built, 4b (2026-10-25):*
+   - **When:** after a composed version resolves and builds, if its entries need nothing from conda-forge.
+   - **The project** (`environments/uv_export.py`): a `pyproject.toml` naming the entries and core as dependencies
+     and constraining every other PyPI package to the version in `pixi.lock`. It is `package = false`, with the same
+     `exclude-newer`.
+   - **Locking:** uv locks it in the same unprivileged scratch Job (`pixi exec --spec uv uv lock`).
+   - **Kept only if identical:** the form is kept only when uv's packages and versions equal pixi's, and is served
+     as `export?format=uv`.
+   - **Platform:** the project is restricted to `sys_platform == 'linux' and platform_machine == 'x86_64' and
+     implementation_name == 'cpython'`, what pixi locked for and the image runs. Without the CPython clause, uv
+     added `cffi` and `pycparser`, which are PyPy-only dependencies.
+   - **Checked in the real pixi image:** registry_env without readdy and pb-multiscale-actin locks to the same 89
+     packages, at the same versions, under pixi and uv.
 5. **Compliance.**
    - `compose_api/registry/compliance/<entry>/` holds composites and expectations; the generic checks are shared.
    - When a version is ready, compose-api submits its members' compliance runs (label `source=compliance`), evaluates them, and stores each entry's level per version (a new `entry_level` table).

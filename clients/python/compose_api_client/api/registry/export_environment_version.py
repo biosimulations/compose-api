@@ -86,12 +86,13 @@ def sync_detailed(
     client: AuthenticatedClient | Client,
     format_: None | str | Unset = UNSET,
 ) -> Response[Any | EnvironmentExport | HTTPValidationError]:
-    """A version as files to recreate it locally: pixi.toml and pixi.lock, or a uv requirements lock
+    """A version as files to recreate it locally: pixi files, uv files (without conda), or requirements
 
     Args:
         name (str):
         number (int):
-        format_ (None | str | Unset): pixi or requirements; the version's own by default
+        format_ (None | str | Unset): pixi, uv (a composed version without conda) or requirements;
+            pixi by default
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -121,12 +122,13 @@ def sync(
     client: AuthenticatedClient | Client,
     format_: None | str | Unset = UNSET,
 ) -> Any | EnvironmentExport | HTTPValidationError | None:
-    """A version as files to recreate it locally: pixi.toml and pixi.lock, or a uv requirements lock
+    """A version as files to recreate it locally: pixi files, uv files (without conda), or requirements
 
     Args:
         name (str):
         number (int):
-        format_ (None | str | Unset): pixi or requirements; the version's own by default
+        format_ (None | str | Unset): pixi, uv (a composed version without conda) or requirements;
+            pixi by default
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -151,12 +153,13 @@ async def asyncio_detailed(
     client: AuthenticatedClient | Client,
     format_: None | str | Unset = UNSET,
 ) -> Response[Any | EnvironmentExport | HTTPValidationError]:
-    """A version as files to recreate it locally: pixi.toml and pixi.lock, or a uv requirements lock
+    """A version as files to recreate it locally: pixi files, uv files (without conda), or requirements
 
     Args:
         name (str):
         number (int):
-        format_ (None | str | Unset): pixi or requirements; the version's own by default
+        format_ (None | str | Unset): pixi, uv (a composed version without conda) or requirements;
+            pixi by default
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -184,12 +187,13 @@ async def asyncio(
     client: AuthenticatedClient | Client,
     format_: None | str | Unset = UNSET,
 ) -> Any | EnvironmentExport | HTTPValidationError | None:
-    """A version as files to recreate it locally: pixi.toml and pixi.lock, or a uv requirements lock
+    """A version as files to recreate it locally: pixi files, uv files (without conda), or requirements
 
     Args:
         name (str):
         number (int):
-        format_ (None | str | Unset): pixi or requirements; the version's own by default
+        format_ (None | str | Unset): pixi, uv (a composed version without conda) or requirements;
+            pixi by default
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.

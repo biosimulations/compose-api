@@ -12,7 +12,7 @@ from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.db.db_utils import _ALEMBIC_INI, DeclarativeTableBase, create_db
 from compose_api.simulation.models import JobType, SimulationRequest, SimulatorVersion
 
-HEAD = "b6d1e8f2c473"
+HEAD = "d4f7a2c9e815"
 
 NEW_COLUMNS = {
     "hpcrun": {"trace_id", "events_cursor", "last_event_at", "exit_code", "backend", "external_id"},

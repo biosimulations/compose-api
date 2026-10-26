@@ -1793,7 +1793,7 @@
         "tags": [
           "Registry"
         ],
-        "summary": "A version as files to recreate it locally: pixi.toml and pixi.lock, or a uv requirements lock",
+        "summary": "A version as files to recreate it locally: pixi files, uv files (without conda), or requirements",
         "operationId": "export-environment-version",
         "parameters": [
           {
@@ -1827,10 +1827,10 @@
                   "type": "null"
                 }
               ],
-              "description": "pixi or requirements; the version's own by default",
+              "description": "pixi, uv (a composed version without conda) or requirements; pixi by default",
               "title": "Format"
             },
-            "description": "pixi or requirements; the version's own by default"
+            "description": "pixi, uv (a composed version without conda) or requirements; pixi by default"
           }
         ],
         "responses": {

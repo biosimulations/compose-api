@@ -389,3 +389,42 @@ async def test_a_version_exports_the_files_that_recreate_it(app: FastAPI, builds
     async with _as(app, None) as anonymous:
         prebuilt = await anonymous.get(f"/registry/environments/{PREBUILT}/versions/{image['number']}/export")
         assert prebuilt.status_code == 409 and "no lock to export" in prebuilt.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_a_composition_without_conda_also_exports_as_uv(
+    app: FastAPI, builds: Builds, locks: Locks, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from compose_api.environments import uv_export
+    from compose_api.simulation import build_k8s
+
+    projects: list[str] = []
+    answer = {"lock": 'version = 1\n\n[[package]]\nname = "registry-env"\nversion = "0"\nsource = { virtual = "." }\n'}
+
+    async def uv_lock(project: str, pixi_image: str, suffix: str) -> str:
+        projects.append(project)
+        return answer["lock"]
+
+    monkeypatch.setattr(build_k8s, "uv_lock", uv_lock)
+
+    async def create() -> int:
+        async with _as(app, ADMIN) as admin:
+            number: int = (await admin.post("/registry/environments/registry_env/versions", json={})).json()["number"]
+            return number
+
+    async def export_uv(number: int) -> httpx.Response:
+        async with _as(app, None) as anonymous:
+            return await anonymous.get(f"/registry/environments/registry_env/versions/{number}/export?format=uv")
+
+    refused = await export_uv(await create())
+    assert refused.status_code == 409 and "needs packages from conda-forge" in refused.json()["detail"]
+    assert projects == []  # registry_env needs readdy: no uv form is attempted
+
+    monkeypatch.setattr(uv_export, "needs_conda", lambda spec: False)
+    exported = await export_uv(await create())
+    assert exported.status_code == 200, exported.text
+    assert set(exported.json()["files"]) == {"pyproject.toml", "uv.lock"} and len(projects) == 1
+
+    answer["lock"] += '\n[[package]]\nname = "cffi"\nversion = "2.1.1"\n'  # uv arrives elsewhere: not kept
+    missing = await export_uv(await create())
+    assert missing.status_code == 409 and "has not been made" in missing.json()["detail"]
