@@ -19,7 +19,7 @@
 | 5c | Admission by what the version certifies: a refused component, a failed entry, members only | merged (#391) |
 | 6 | registry_env migrates to a composed version on a current process-bigraph | @4 (0.7.46) and @5 (0.7.50) ready; suite run 5 running; then the default |
 | 7a | Runs name an environment or have one inferred; environments listed from the database | merged (#415, #416) |
-| 7b | Implicit mash-ups, proven with viva-basic-processes | 7b-1 to 7b-3 merged (#417–#419) and live in 0.7.51; the live check found the read-back fix (in review) |
+| 7b | Implicit mash-ups, proven with viva-basic-processes | done: #417–#419 (0.7.51), #421 (0.7.52); live 2026-10-26 |
 | 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | |
 | 8a | Versions come from the database only: the deployed (pbest) definition, `simulator_registry.json`, `shared_image()` retired | decisions proposed (D8.1–D8.6) |
 | 8b | Prebuilt images by their versions, not `PREBUILT_SIMULATORS` | |
@@ -384,7 +384,9 @@
        Two findings:
        - **Nothing was read back from the mash-up's image:** `build_k8s.inspection_of` found its Python and module
          roots in environments.yaml only. Fixed: a composed version is entered through pixi and provides its own
-         entries' roots. `@1` is read again through `inspect`, which now accepts a mash-up's name.
+         entries' roots. `@1` is read again through `inspect`, which now accepts a mash-up's name: after 0.7.52
+         (#421) it lists 89 packages (process-bigraph 1.9.1, pbsim-common 0.1.3.dev1, viva-basic-processes 0.3.0,
+         sympy 1.14.0) and 15 classes, and the generic checks find nothing.
        - **A document cannot name process-bigraph's own `RAMEmitter`:** `local:RAMEmitter` is refused as a short
          name, and no entry covers `process_bigraph`, so the live document carries no emitter (its results are its
          saved state). Compliance cases use it because they are not checked as submissions. Parked.
