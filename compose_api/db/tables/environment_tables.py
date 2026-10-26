@@ -47,7 +47,8 @@ class ORMEnvironmentVersion(DeclarativeTableBase):
     env: Mapped[ORMEnvironment] = relationship(lazy="joined", foreign_keys=[environment_id])
     number: Mapped[int] = mapped_column(nullable=False)
     state: Mapped[str] = mapped_column(String(16), nullable=False)
-    simulator_id: Mapped[int] = mapped_column(ForeignKey("simulator.id"), nullable=False, index=True)
+    # None while a composed version is resolving: its definition, so its simulator, waits for its lock
+    simulator_id: Mapped[int | None] = mapped_column(ForeignKey("simulator.id"), nullable=True, index=True)
     # prebuilt: the image, by digest
     image: Mapped[str | None] = mapped_column(Text, nullable=True)
     # shared: what it was made from, and (step 3) its lock, whose hash is its identity
@@ -63,6 +64,8 @@ class ORMEnvironmentVersion(DeclarativeTableBase):
     created_by: Mapped[str | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # why a version failed (a composed version's lock did not resolve: pixi's explanation)
+    failure: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     def to_environment_version(self) -> EnvironmentVersion:
         return EnvironmentVersion(
@@ -81,6 +84,7 @@ class ORMEnvironmentVersion(DeclarativeTableBase):
             created_by=self.created_by,
             created_at=self.created_at,
             note=self.note,
+            failure=self.failure,
         )
 
     def to_environment_version_detail(self) -> EnvironmentVersionDetail:

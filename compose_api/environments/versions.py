@@ -63,6 +63,8 @@ async def chosen_version(
         raise VersionUnavailableError(f"there is no version {environment}@{number}")
     if version.state not in RUNNABLE:
         raise VersionUnavailableError(f"{version.label} is {version.state}: runs cannot use it")
+    if version.simulator_id is None:  # not runnable, so not reached: a resolving version has no simulator yet
+        raise VersionUnavailableError(f"{version.label} is still resolving")
     simulator = await database_service.get_simulator_db().get_simulator(version.simulator_id)
     if simulator is None:
         raise VersionUnavailableError(f"{version.label}'s simulator {version.simulator_id} is gone")
@@ -96,6 +98,8 @@ async def version_for(
             simulator, "prebuilt", simulator_version.database_id, image=image
         )
     if version.simulator_id != simulator_version.database_id:  # an administrator chose another version
+        if version.simulator_id is None:  # a default is ready, so it has one
+            raise LookupError(f"the default {version.label} has no simulator")
         chosen = await simulator_db.get_simulator(version.simulator_id)
         if chosen is None:
             raise LookupError(f"{version.label}'s simulator {version.simulator_id} is gone")

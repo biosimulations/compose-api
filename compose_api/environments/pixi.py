@@ -182,18 +182,23 @@ def _terminated(text: str) -> str:
 
 def composed_definition(spec: ComposedSpec, lock: PixiLock, pixi_image: str) -> ContainerizationFileRepr:
     """The definition of a composed version made from ``spec`` and locked as ``lock``, built from ``pixi_image``."""
+    return definition_of(pixi_toml(spec), spec.types, lock, pixi_image)
+
+
+def definition_of(toml: str, types: list[str], lock: PixiLock, pixi_image: str) -> ContainerizationFileRepr:
+    """The definition from what a composed version records: its workspace, its runner types, its lock, its image."""
     from compose_api.environments import runner
 
     representation = _TEMPLATE.format(
         pixi_image=pixi_image,
         workspace=WORKSPACE,
         runner_dir=str(Path(RUNNER).parent),
-        toml=_terminated(pixi_toml(spec)),
+        toml=_terminated(toml),
         lock=_terminated(lock.text),
         shell_hook=SHELL_HOOK,
         runner=RUNNER,
         runner_source=_terminated(Path(runner.__file__).read_text()),
-        types=json.dumps(",".join(spec.types)),
+        types=json.dumps(",".join(types)),
     )
     return ContainerizationFileRepr(
         representation=representation, containerization_engine=ContainerizationEngine.APPTAINER

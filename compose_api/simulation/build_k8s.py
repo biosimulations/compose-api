@@ -666,9 +666,14 @@ async def inspection_of(version: EnvironmentVersion) -> Inspection | None:
     spec = next((e for e in load_environments().environments if e.name == version.environment), None)
     if spec is None:
         return None
+    from compose_api.environments import pixi
+
     roots = tuple(module_roots(spec.name))
+    # a composed image (runtime contract 2) is entered through pixi's activation, whatever the environment's other
+    # versions use
+    python = pixi.PYTHON if version.runtime_contract == pixi.RUNTIME_CONTRACT else tuple(spec.python)
     return Inspection(
-        python=tuple(spec.python),
+        python=python,
         roots=roots,
         environment=spec.name,
         label=version.image or version.label,

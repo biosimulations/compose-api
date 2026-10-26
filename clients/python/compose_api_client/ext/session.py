@@ -32,6 +32,7 @@ from compose_api_client.api.registry import (
     build_environment,
     build_simulator,
     create_environment_version,
+    export_environment_version,
     get_environment_headers,
     get_environment_images,
     get_environment_manifest,
@@ -131,6 +132,7 @@ from compose_api_client.models import (
     Dataset,
     DatasetPage,
     DefaultVersion,
+    EnvironmentExport,
     EnvironmentHeaders,
     EnvironmentSummary,
     EnvironmentVersion,
@@ -613,6 +615,13 @@ class ComposeSession:
         """One version: what it was made from, its lock, and what it installed and provides."""
         op = Operation("GET", f"/registry/environments/{name}/versions/{number}", replayable=True)
         r, _ = self._send(op, lambda c: get_environment_version.sync_detailed(name, number, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def export_environment_version(self, name: str, number: int, *, format: str | None = None) -> EnvironmentExport:  # noqa: A002
+        """The files that recreate a version locally: pixi.toml and pixi.lock, or a uv requirements lock."""
+        op = Operation("GET", f"/registry/environments/{name}/versions/{number}/export", replayable=True)
+        fmt = format if format is not None else UNSET
+        r, _ = self._send(op, lambda c: export_environment_version.sync_detailed(name, number, client=c, format_=fmt))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def preview_environment_version(self, name: str, *, resolved_at: datetime.datetime | None = None) -> LockPreview:
@@ -1442,6 +1451,21 @@ class AsyncComposeSession:
         """One version: what it was made from, its lock, and what it installed and provides."""
         op = Operation("GET", f"/registry/environments/{name}/versions/{number}", replayable=True)
         r, _ = await self._send(op, lambda c: get_environment_version.asyncio_detailed(name, number, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def export_environment_version(
+        self,
+        name: str,
+        number: int,
+        *,
+        format: str | None = None,  # noqa: A002
+    ) -> EnvironmentExport:
+        """The files that recreate a version locally: pixi.toml and pixi.lock, or a uv requirements lock."""
+        op = Operation("GET", f"/registry/environments/{name}/versions/{number}/export", replayable=True)
+        fmt = format if format is not None else UNSET
+        r, _ = await self._send(
+            op, lambda c: export_environment_version.asyncio_detailed(name, number, client=c, format_=fmt)
+        )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def preview_environment_version(

@@ -1675,7 +1675,7 @@
           "Registry"
         ],
         "summary": "Make a new version: a shared environment's spec resolved at a date, or a prebuilt one's image by digest",
-        "description": "The new version is `building` until its image is built or pulled, then `ready` (or `failed`). It does not\nbecome the default: runs get it once an administrator makes it so (`PUT \u2026/default`).",
+        "description": "The new version is `building` until its image is built or pulled, then `ready` (or `failed`). It does not\nbecome the default: runs get it once an administrator makes it so (`PUT \u2026/default`). A composed environment's\nversion is `resolving` first, while its entries are locked together in a Job of their own; one that does not\nresolve is `failed`, with pixi's explanation in `failure` (docs/plan-environment-composition.md, step 4).",
         "operationId": "create-environment-version",
         "parameters": [
           {
@@ -1774,6 +1774,81 @@
           },
           "404": {
             "description": "No such environment, or no such version"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/registry/environments/{name}/versions/{number}/export": {
+      "get": {
+        "tags": [
+          "Registry"
+        ],
+        "summary": "A version as files to recreate it locally: pixi.toml and pixi.lock, or a uv requirements lock",
+        "operationId": "export-environment-version",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Number"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pixi or requirements; the version's own by default",
+              "title": "Format"
+            },
+            "description": "pixi or requirements; the version's own by default"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentExport"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such environment, or no such version"
+          },
+          "409": {
+            "description": "The version has no lock in that format (prebuilt, older, or still resolving)"
           },
           "422": {
             "description": "Validation Error",
@@ -4572,6 +4647,39 @@
         "title": "EntryRef",
         "description": "The registry entry a component belongs to (by module root), and its curation level."
       },
+      "EnvironmentExport": {
+        "properties": {
+          "environment": {
+            "type": "string",
+            "title": "Environment"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "format": {
+            "type": "string",
+            "title": "Format"
+          },
+          "files": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Files",
+            "description": "File name -> contents"
+          }
+        },
+        "type": "object",
+        "required": [
+          "environment",
+          "number",
+          "format",
+          "files"
+        ],
+        "title": "EnvironmentExport",
+        "description": "A version's environment as files to recreate it with locally (docs/plan-environment-composition.md, C2a):\n`pixi` (pixi.toml and pixi.lock, `pixi install --frozen`) for a composed version, `requirements` (the uv lock,\n`uv pip install -r`) for a shared one."
+      },
       "EnvironmentHeaders": {
         "properties": {
           "environment": {
@@ -4812,8 +4920,16 @@
             "$ref": "#/components/schemas/VersionState"
           },
           "simulator_id": {
-            "type": "integer",
-            "title": "Simulator Id"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simulator Id",
+            "description": "Its simulator: none while a composed version is resolving"
           },
           "image": {
             "anyOf": [
@@ -4913,6 +5029,18 @@
               }
             ],
             "title": "Note"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure",
+            "description": "Why it failed: for a composed version, its lock's conflict"
           }
         },
         "type": "object",
@@ -4951,8 +5079,16 @@
             "$ref": "#/components/schemas/VersionState"
           },
           "simulator_id": {
-            "type": "integer",
-            "title": "Simulator Id"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simulator Id",
+            "description": "Its simulator: none while a composed version is resolving"
           },
           "image": {
             "anyOf": [
@@ -5052,6 +5188,18 @@
               }
             ],
             "title": "Note"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure",
+            "description": "Why it failed: for a composed version, its lock's conflict"
           },
           "lock": {
             "anyOf": [
@@ -5729,7 +5877,7 @@
         },
         "type": "object",
         "title": "NewEnvironmentVersion",
-        "description": "What to make a version from. A shared environment: a date to resolve its spec at (default now), and optionally\na library list other than the registry's (an unreviewed, `custom` version). A prebuilt one: its image by digest."
+        "description": "What to make a version from. A composed environment (one that lists its registry entries): a date to resolve\nits entries at (default now); a mash-up is an environment of its own, never a version of another. A shared one\nwithout entries: a date, and optionally a library list other than the registry's (an unreviewed, `custom`\nversion). A prebuilt one: its image by digest."
       },
       "PackageChange": {
         "properties": {

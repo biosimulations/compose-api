@@ -34,6 +34,8 @@ from .default_version import DefaultVersion
 from .drift import Drift
 from .entry_environment import EntryEnvironment
 from .entry_ref import EntryRef
+from .environment_export import EnvironmentExport
+from .environment_export_files import EnvironmentExportFiles
 from .environment_headers import EnvironmentHeaders
 from .environment_headers_components import EnvironmentHeadersComponents
 from .environment_image import EnvironmentImage
@@ -162,6 +164,8 @@ __all__ = (
     "Drift",
     "EntryEnvironment",
     "EntryRef",
+    "EnvironmentExport",
+    "EnvironmentExportFiles",
     "EnvironmentHeaders",
     "EnvironmentHeadersComponents",
     "EnvironmentImage",

@@ -783,6 +783,34 @@ def environments_version(ctx: typer.Context, name: _ENV_ARG, number: _NUMBER_ARG
         emit(settings.output, s.environment_version(name, number))
 
 
+@environments_app.command("export")
+@claims("environments export", "export-environment-version")
+@handled
+def environments_export(
+    ctx: typer.Context,
+    name: _ENV_ARG,
+    number: _NUMBER_ARG,
+    out: Annotated[Path, typer.Option("--out", "-o", help="Directory to write the files into.")] = Path("."),
+    export_format: Annotated[
+        str | None,
+        typer.Option("--format", help="pixi (pixi.toml, pixi.lock) or requirements; the version's own by default."),
+    ] = None,
+) -> None:
+    """Write the files that recreate a version locally: a composed version's pixi.toml and pixi.lock (then
+    `pixi install --frozen`), or a shared one's uv lock as requirements.txt (then `uv pip install -r`)."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        exported = s.export_environment_version(name, number, format=export_format)
+    out.mkdir(parents=True, exist_ok=True)
+    files = exported.files.to_dict()
+    for file_name, text in files.items():
+        (out / Path(str(file_name)).name).write_text(str(text))  # names only: nothing outside --out
+    if resolve(settings.output) is Output.JSON:
+        emit(settings.output, {"format": exported.format_, "files": sorted(str(f) for f in files), "out": str(out)})
+        return
+    print(f"{exported.environment}@{exported.number} ({exported.format_}): wrote {', '.join(sorted(files))} to {out}")
+
+
 @environments_app.command("preview")
 @claims("environments preview", "preview-environment-version")
 @handled

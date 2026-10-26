@@ -504,7 +504,9 @@ export interface paths {
         /**
          * Make a new version: a shared environment's spec resolved at a date, or a prebuilt one's image by digest
          * @description The new version is `building` until its image is built or pulled, then `ready` (or `failed`). It does not
-         *     become the default: runs get it once an administrator makes it so (`PUT …/default`).
+         *     become the default: runs get it once an administrator makes it so (`PUT …/default`). A composed environment's
+         *     version is `resolving` first, while its entries are locked together in a Job of their own; one that does not
+         *     resolve is `failed`, with pixi's explanation in `failure` (docs/plan-environment-composition.md, step 4).
          */
         post: operations["create-environment-version"];
         delete?: never;
@@ -522,6 +524,23 @@ export interface paths {
         };
         /** One version of an environment: what it was made from, its lock, and what it installed and provides */
         get: operations["get-environment-version"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/environments/{name}/versions/{number}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A version as files to recreate it locally: pixi.toml and pixi.lock, or a uv requirements lock */
+        get: operations["export-environment-version"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1376,6 +1395,27 @@ export interface components {
             id: string;
             level: components["schemas"]["CurationLevel"];
         };
+        /**
+         * EnvironmentExport
+         * @description A version's environment as files to recreate it with locally (docs/plan-environment-composition.md, C2a):
+         *     `pixi` (pixi.toml and pixi.lock, `pixi install --frozen`) for a composed version, `requirements` (the uv lock,
+         *     `uv pip install -r`) for a shared one.
+         */
+        EnvironmentExport: {
+            /** Environment */
+            environment: string;
+            /** Number */
+            number: number;
+            /** Format */
+            format: string;
+            /**
+             * Files
+             * @description File name -> contents
+             */
+            files: {
+                [key: string]: string;
+            };
+        };
         /** EnvironmentHeaders */
         EnvironmentHeaders: {
             /** Environment */
@@ -1479,8 +1519,11 @@ export interface components {
             /** Number */
             number: number;
             state: components["schemas"]["VersionState"];
-            /** Simulator Id */
-            simulator_id: number;
+            /**
+             * Simulator Id
+             * @description Its simulator: none while a composed version is resolving
+             */
+            simulator_id: number | null;
             /**
              * Image
              * @description A prebuilt version's image, by digest
@@ -1513,6 +1556,11 @@ export interface components {
             created_at?: string | null;
             /** Note */
             note?: string | null;
+            /**
+             * Failure
+             * @description Why it failed: for a composed version, its lock's conflict
+             */
+            failure?: string | null;
         };
         /**
          * EnvironmentVersionDetail
@@ -1534,8 +1582,11 @@ export interface components {
             /** Number */
             number: number;
             state: components["schemas"]["VersionState"];
-            /** Simulator Id */
-            simulator_id: number;
+            /**
+             * Simulator Id
+             * @description Its simulator: none while a composed version is resolving
+             */
+            simulator_id: number | null;
             /**
              * Image
              * @description A prebuilt version's image, by digest
@@ -1568,6 +1619,11 @@ export interface components {
             created_at?: string | null;
             /** Note */
             note?: string | null;
+            /**
+             * Failure
+             * @description Why it failed: for a composed version, its lock's conflict
+             */
+            failure?: string | null;
             /**
              * Lock
              * @description A shared version's lock: every PyPI package, pinned
@@ -1804,8 +1860,10 @@ export interface components {
         };
         /**
          * NewEnvironmentVersion
-         * @description What to make a version from. A shared environment: a date to resolve its spec at (default now), and optionally
-         *     a library list other than the registry's (an unreviewed, `custom` version). A prebuilt one: its image by digest.
+         * @description What to make a version from. A composed environment (one that lists its registry entries): a date to resolve
+         *     its entries at (default now); a mash-up is an environment of its own, never a version of another. A shared one
+         *     without entries: a date, and optionally a library list other than the registry's (an unreviewed, `custom`
+         *     version). A prebuilt one: its image by digest.
          */
         NewEnvironmentVersion: {
             /** Resolved At */
@@ -3626,6 +3684,55 @@ export interface operations {
             };
             /** @description No such environment, or no such version */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "export-environment-version": {
+        parameters: {
+            query?: {
+                /** @description pixi or requirements; the version's own by default */
+                format?: string | null;
+            };
+            header?: never;
+            path: {
+                name: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentExport"];
+                };
+            };
+            /** @description No such environment, or no such version */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The version has no lock in that format (prebuilt, older, or still resolving) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

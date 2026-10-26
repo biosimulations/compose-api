@@ -18,8 +18,10 @@ T = TypeVar("T", bound="NewEnvironmentVersion")
 
 @_attrs_define
 class NewEnvironmentVersion:
-    """What to make a version from. A shared environment: a date to resolve its spec at (default now), and optionally
-    a library list other than the registry's (an unreviewed, `custom` version). A prebuilt one: its image by digest.
+    """What to make a version from. A composed environment (one that lists its registry entries): a date to resolve
+    its entries at (default now); a mash-up is an environment of its own, never a version of another. A shared one
+    without entries: a date, and optionally a library list other than the registry's (an unreviewed, `custom`
+    version). A prebuilt one: its image by digest.
 
         Attributes:
             resolved_at (datetime.datetime | None | Unset):

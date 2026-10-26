@@ -11,8 +11,9 @@
 | 1 | Manifest entries declare how they install; environments declare their member entries | in review |
 | 2 | The runner (runtime contract 2), in place of pbest's | in review |
 | 3 | pixi: generated from entries, locked in an unprivileged Job; the definition that installs the lock | in review |
-| 4a | Environments get a stable id; versions and suite runs refer to it, never to a name | in review |
-| 4 | The `composed` version kind: create (lock, build), read back, record; export as pixi or uv | |
+| 4a | Environments get a stable id; versions and suite runs refer to it, never to a name | merged (#386) |
+| 4 | Composed versions: created `resolving`, locked in the background, built, read back; exported as pixi | in review |
+| 4b | The uv export (`pyproject.toml` and `uv.lock`) for a composed version that needs no conda | |
 | 5 | Compliance: composites per entry, generic interface checks, levels computed per version | |
 | 6 | registry_env migrates to a composed version on a current process-bigraph | |
 | 7 | The per-composite resolver: mash-ups built on demand from a run | |
@@ -137,6 +138,24 @@
    - Reuse the Kubernetes build Job and the read-back.
    - `POST …/versions` creates composed versions (admin), with the CLI to match.
    - `GET …/versions/{n}/export?format=pixi|uv`. The lock Job also resolves the uv form when the environment needs no conda.
+   *As built, 4 (2026-10-25):*
+   - **Which environments are composed:** an environment that lists `entries` in `environments.yaml`; registry_env
+     now does.
+   - **Creating a version** (`POST …/versions`, admin) records it at once, `resolving`. It records the spec: entries,
+     core, `pixi_toml`, `pixi_image`, runner types. It has no simulator yet: `simulator_id` is nullable and the
+     version gains `failure`; migration `b6d1e8f2c473`.
+   - **In the background:** the lock Job runs, then the definition is made and the version gets its simulator and
+     becomes `building`, then the existing build and read-back run.
+   - **A version that does not resolve** is `failed`, with pixi's explanation in `failure`.
+   - **A version that resolves to a lock another version already has** is `failed`, naming that version. It is caught
+     by lock hash, since two dates that lock alike still differ in the workspace's `exclude-newer`.
+   - **Refused for a composed environment** with a 422: `libraries`, `image`, and the preview. The preview gives way
+     to comparing versions once they resolve.
+   - **The read-back** enters a composed image through pixi's activation (`pixi.PYTHON`), whatever the environment's
+     older versions used.
+   - **Export:** `GET …/versions/{n}/export?format=pixi|requirements` is public and returns the files. CLI:
+     `environments export NAME N [--out DIR]`, which writes file names only, into `--out`.
+   - **Deferred to 4b:** the uv form, which needs uv in the lock Job.
 5. **Compliance.**
    - `compose_api/registry/compliance/<entry>/` holds composites and expectations; the generic checks are shared.
    - When a version is ready, compose-api submits its members' compliance runs (label `source=compliance`), evaluates them, and stores each entry's level per version (a new `entry_level` table).

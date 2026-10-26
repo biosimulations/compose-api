@@ -10,9 +10,9 @@ import hashlib
 import logging
 import random
 import string
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
 
 from compose_api.authentication import OptionalPrincipal, get_optional_principal
 from compose_api.authorization import EnvironmentAdmin
@@ -45,6 +45,7 @@ from compose_api.simulation import builds, handlers
 from compose_api.simulation.builds import ImageState, ImageStatus
 from compose_api.simulation.models import (
     DefaultVersion,
+    EnvironmentExport,
     EnvironmentVersion,
     EnvironmentVersionDetail,
     EnvironmentVersions,
@@ -269,6 +270,25 @@ async def _build_version(version: EnvironmentVersion, simulator: SimulatorVersio
     await _read_back(version)
 
 
+async def _resolve_and_build(version: EnvironmentVersion) -> None:
+    """Lock a composed version, then build its image as any version's (``_build_version``)."""
+    suffix = "".join(random.choices(string.hexdigits, k=7))  # noqa: S311 a name, not a secret
+    try:
+        resolved = await environment_service.resolve_composed(get_required_database_service(), version, suffix)
+    except Exception:
+        logger.exception(f"Resolving {version.label} failed")
+        await (
+            get_required_database_service()
+            .get_environments_db()
+            .set_failure(version.database_id, "resolving failed unexpectedly; see the service log")
+        )
+        return
+    if resolved is None:
+        logger.info(f"{version.label} did not resolve")
+        return
+    await _build_version(*resolved)
+
+
 async def _read_back(version: EnvironmentVersion, reread: bool = False) -> None:
     """Store what the version's image installed and provides: left beside a built image by its build (or, with
     ``reread``, by a Job that reads the built image again), or read from a pulled (prebuilt) one by a Job of its own.
@@ -323,6 +343,33 @@ async def get_environment_version(name: str, number: int, principal: OptionalPri
     return version
 
 
+@config.router.get(
+    path="/environments/{name}/versions/{number}/export",
+    response_model=EnvironmentExport,
+    operation_id="export-environment-version",
+    tags=["Registry"],
+    summary="A version as files to recreate it locally: pixi.toml and pixi.lock, or a uv requirements lock",
+    responses={
+        **_NO_ENVIRONMENT,
+        409: {"description": "The version has no lock in that format (prebuilt, older, or still resolving)"},
+    },
+)
+async def export_environment_version(
+    name: str,
+    number: int,
+    principal: OptionalPrincipal,
+    format: Annotated[  # noqa: A002 the query parameter's name
+        str | None, Query(description="pixi or requirements; the version's own by default")
+    ] = None,
+) -> EnvironmentExport:
+    # public: the same for every caller
+    _known_environment(name)
+    try:
+        return environment_service.export(await _version(name, number), format)
+    except VersionRequestError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+
+
 @config.router.post(
     path="/environments/{name}/versions/preview",
     response_model=LockPreview,
@@ -363,16 +410,23 @@ async def create_environment_version(
     caller: EnvironmentAdmin,
 ) -> EnvironmentVersion:
     """The new version is `building` until its image is built or pulled, then `ready` (or `failed`). It does not
-    become the default: runs get it once an administrator makes it so (`PUT …/default`)."""
+    become the default: runs get it once an administrator makes it so (`PUT …/default`). A composed environment's
+    version is `resolving` first, while its entries are locked together in a Job of their own; one that does not
+    resolve is `failed`, with pixi's explanation in `failure` (docs/plan-environment-composition.md, step 4)."""
     spec = _known_environment(name)
     database_service = get_required_database_service()
     try:
+        if environment_service.is_composed(spec):
+            composed = await environment_service.create_composed(database_service, spec, request, caller.subject)
+            background_tasks.add_task(_resolve_and_build, composed)
+            logger.info(f"{composed.label} created by {caller.subject}, resolving")
+            return composed
         version, created = await environment_service.create(database_service, spec, request, caller.subject)
     except VersionRequestError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     if not created:
         response.status_code = 200
-    if created or version.state in (VersionState.BUILDING, VersionState.FAILED):  # a retry restarts its image
+    if (created or version.state in (VersionState.BUILDING, VersionState.FAILED)) and version.simulator_id is not None:
         simulator = await database_service.get_simulator_db().get_simulator(version.simulator_id)
         if simulator is not None:
             background_tasks.add_task(_build_version, version, simulator)

@@ -3,18 +3,32 @@ a date, a prebuilt one from an image by digest. The routes in ``api/routers/regi
 role; this module decides what a request means."""
 
 import datetime
+import logging
 import re
 
 from pbest.utils.input_types import ContainerizationFileRepr
 
 from compose_api.db.database_service import DatabaseService
 from compose_api.db.services.environments_db import VersionSource
+from compose_api.environments import pixi
 from compose_api.environments.definition import shared_definition
 from compose_api.environments.lock import Lock, LockError, SharedSpec, changes, compile_lock
-from compose_api.registry.environments import EnvironmentSpec, load_environments
+from compose_api.registry.environments import EnvironmentSpec, load_environments, spec_problems
+from compose_api.registry.manifest import load_manifest
 from compose_api.simulation import builds
-from compose_api.simulation.models import EnvironmentVersion, LockPreview, NewEnvironmentVersion, PackageChange
+from compose_api.simulation.models import (
+    EnvironmentExport,
+    EnvironmentVersion,
+    EnvironmentVersionDetail,
+    LockPreview,
+    NewEnvironmentVersion,
+    PackageChange,
+    SimulatorVersion,
+    VersionState,
+)
 from compose_api.simulation.prebuilt import prebuilt_definition
+
+logger = logging.getLogger(__name__)
 
 _DIGEST = re.compile(r"^[^@\s]+@sha256:[0-9a-f]{64}$")
 
@@ -51,6 +65,11 @@ async def preview(
     database_service: DatabaseService, environment: EnvironmentSpec, request: NewEnvironmentVersion
 ) -> LockPreview:
     """What a shared version made from ``request`` would be, and how its lock differs from the default's."""
+    if is_composed(environment):
+        raise VersionRequestError(
+            f"{environment.name} is composed: its lock is resolved in a Job, in the background. Create a version, and"
+            " compare it with another once it has resolved"
+        )
     if environment.kind != "shared":
         raise VersionRequestError(f"{environment.name} is prebuilt: its versions are images, with no lock")
     spec, origin = _shared(request)
@@ -85,6 +104,8 @@ async def create(
     """The version ``request`` describes: new and `building` (True), or the existing one with the same definition.
     Its image is not started here."""
     definition: ContainerizationFileRepr
+    if is_composed(environment):
+        raise VersionRequestError(f"{environment.name} is composed: its versions are made by create_composed")
     if environment.kind == "shared":
         spec, origin = _shared(request)
         lock = await _lock(spec, request.resolved_at)
@@ -109,3 +130,101 @@ async def create(
     return await database_service.get_environments_db().create_version(
         environment.name, environment.kind, simulator.database_id, source
     )
+
+
+def is_composed(environment: EnvironmentSpec) -> bool:
+    """Whether the environment is composed from registry entries (docs/plan-environment-composition.md): its versions
+    are pixi locks, resolved in the background, run by compose-api's runner."""
+    return bool(environment.entries)
+
+
+async def create_composed(
+    database_service: DatabaseService,
+    environment: EnvironmentSpec,
+    request: NewEnvironmentVersion,
+    created_by: str | None,
+) -> EnvironmentVersion:
+    """A new composed version, `resolving`: the environment's entries composed at a date. Nothing is locked here
+    (``resolve_composed`` does, in the background); the request is checked."""
+    if request.image is not None or request.libraries is not None:
+        raise VersionRequestError(f"{environment.name} is composed from its registry entries: give a date, not those")
+    composition = load_environments().composition
+    if composition is None:
+        raise VersionRequestError("this service has no composition settings (environments.yaml, `composition`)")
+    manifest = load_manifest()
+    problems = spec_problems(environment, manifest)
+    if problems:
+        raise VersionRequestError("; ".join(problems))
+    resolved_at = request.resolved_at or datetime.datetime.now(datetime.UTC)
+    spec = pixi.ComposedSpec.of(environment, manifest, composition, resolved_at)
+    recorded = {**spec.as_json(), "pixi_toml": pixi.pixi_toml(spec), "pixi_image": composition.pixi_image}
+    source = VersionSource(
+        spec=recorded,
+        origin="registry",
+        resolved_at=spec.resolved_at.replace(tzinfo=None),  # stored as naive UTC, as a shared version's is
+        created_by=created_by,
+        note=request.note,
+        runtime_contract=pixi.RUNTIME_CONTRACT,
+    )
+    return await database_service.get_environments_db().create_resolving(environment.name, environment.kind, source)
+
+
+async def resolve_composed(
+    database_service: DatabaseService, version: EnvironmentVersion, suffix: str
+) -> tuple[EnvironmentVersion, SimulatorVersion] | None:
+    """Lock a resolving version in its Job, then give it its definition's simulator: the version, now `building`, and
+    the simulator to build; None when it failed (it is `failed`, with pixi's explanation or the version it repeats)."""
+    from compose_api.simulation.build_k8s import LockFailedError, lock_composed
+
+    environments_db = database_service.get_environments_db()
+    recorded = version.spec or {}
+    try:
+        text = await lock_composed(recorded["pixi_toml"], recorded["pixi_image"], suffix)
+    except LockFailedError as e:
+        await environments_db.set_failure(version.database_id, f"its entries do not resolve together:\n{e}")
+        return None
+    except Exception as e:
+        logger.exception(f"Locking {version.label} failed")
+        await environments_db.set_failure(version.database_id, f"locking failed: {type(e).__name__}: {e}")
+        return None
+    lock = pixi.PixiLock(text)
+    # a version is its lock: a later date that resolves to the same lock is the same version (its workspace differs
+    # only in its date, so its definition would not show it)
+    same = await environments_db.find_by_lock(version.environment, lock.sha256)
+    if same is not None and same.database_id != version.database_id:
+        await environments_db.set_failure(version.database_id, f"it resolves to the same lock as {same.label}")
+        return None
+    types = list(recorded.get("types", []))
+    definition = pixi.definition_of(recorded["pixi_toml"], types, lock, recorded["pixi_image"])
+    simulator = await builds.simulator_for(database_service.get_simulator_db(), definition)
+    repeated = await environments_db.set_resolved(version.database_id, simulator.database_id, lock.text, lock.sha256)
+    if repeated is not None:
+        await environments_db.set_failure(version.database_id, f"it resolves to the same lock as {repeated.label}")
+        return None
+    resolved = version.model_copy(
+        update={"state": VersionState.BUILDING, "simulator_id": simulator.database_id, "lock_sha256": lock.sha256}
+    )
+    return resolved, simulator
+
+
+EXPORT_FORMATS = ("pixi", "requirements")
+
+
+def export(version: EnvironmentVersionDetail, export_format: str | None) -> EnvironmentExport:
+    """The files that recreate ``version`` locally: a composed version's pixi workspace and lock, or a shared one's uv
+    lock as requirements. `VersionRequestError` when it has none in that format (a prebuilt image, an older version
+    built before locks, or one still resolving)."""
+    composed = version.runtime_contract == pixi.RUNTIME_CONTRACT
+    chosen = export_format or ("pixi" if composed else "requirements")
+    if chosen not in EXPORT_FORMATS:
+        raise VersionRequestError(f"no export format {chosen!r}: one of {', '.join(EXPORT_FORMATS)}")
+    if version.lock is None:
+        raise VersionRequestError(f"{version.label} has no lock to export: it is {version.state}, or an image")
+    if chosen == "pixi" and composed:
+        files = {"pixi.toml": str((version.spec or {}).get("pixi_toml", "")), "pixi.lock": version.lock}
+    elif chosen == "requirements" and not composed:
+        files = {"requirements.txt": version.lock}
+    else:
+        available = "pixi" if composed else "requirements"
+        raise VersionRequestError(f"{version.label} exports as {available}, not {chosen}")
+    return EnvironmentExport(environment=version.environment, number=version.number, format=chosen, files=files)

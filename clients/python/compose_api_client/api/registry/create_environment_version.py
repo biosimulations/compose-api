@@ -90,14 +90,22 @@ def sync_detailed(
 
      The new version is `building` until its image is built or pulled, then `ready` (or `failed`). It
     does not
-    become the default: runs get it once an administrator makes it so (`PUT …/default`).
+    become the default: runs get it once an administrator makes it so (`PUT …/default`). A composed
+    environment's
+    version is `resolving` first, while its entries are locked together in a Job of their own; one that
+    does not
+    resolve is `failed`, with pixi's explanation in `failure` (docs/plan-environment-composition.md,
+    step 4).
 
     Args:
         name (str):
-        body (NewEnvironmentVersion): What to make a version from. A shared environment: a date to
-            resolve its spec at (default now), and optionally
-            a library list other than the registry's (an unreviewed, `custom` version). A prebuilt
-            one: its image by digest.
+        body (NewEnvironmentVersion): What to make a version from. A composed environment (one
+            that lists its registry entries): a date to resolve
+            its entries at (default now); a mash-up is an environment of its own, never a version of
+            another. A shared one
+            without entries: a date, and optionally a library list other than the registry's (an
+            unreviewed, `custom`
+            version). A prebuilt one: its image by digest.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -130,14 +138,22 @@ def sync(
 
      The new version is `building` until its image is built or pulled, then `ready` (or `failed`). It
     does not
-    become the default: runs get it once an administrator makes it so (`PUT …/default`).
+    become the default: runs get it once an administrator makes it so (`PUT …/default`). A composed
+    environment's
+    version is `resolving` first, while its entries are locked together in a Job of their own; one that
+    does not
+    resolve is `failed`, with pixi's explanation in `failure` (docs/plan-environment-composition.md,
+    step 4).
 
     Args:
         name (str):
-        body (NewEnvironmentVersion): What to make a version from. A shared environment: a date to
-            resolve its spec at (default now), and optionally
-            a library list other than the registry's (an unreviewed, `custom` version). A prebuilt
-            one: its image by digest.
+        body (NewEnvironmentVersion): What to make a version from. A composed environment (one
+            that lists its registry entries): a date to resolve
+            its entries at (default now); a mash-up is an environment of its own, never a version of
+            another. A shared one
+            without entries: a date, and optionally a library list other than the registry's (an
+            unreviewed, `custom`
+            version). A prebuilt one: its image by digest.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -165,14 +181,22 @@ async def asyncio_detailed(
 
      The new version is `building` until its image is built or pulled, then `ready` (or `failed`). It
     does not
-    become the default: runs get it once an administrator makes it so (`PUT …/default`).
+    become the default: runs get it once an administrator makes it so (`PUT …/default`). A composed
+    environment's
+    version is `resolving` first, while its entries are locked together in a Job of their own; one that
+    does not
+    resolve is `failed`, with pixi's explanation in `failure` (docs/plan-environment-composition.md,
+    step 4).
 
     Args:
         name (str):
-        body (NewEnvironmentVersion): What to make a version from. A shared environment: a date to
-            resolve its spec at (default now), and optionally
-            a library list other than the registry's (an unreviewed, `custom` version). A prebuilt
-            one: its image by digest.
+        body (NewEnvironmentVersion): What to make a version from. A composed environment (one
+            that lists its registry entries): a date to resolve
+            its entries at (default now); a mash-up is an environment of its own, never a version of
+            another. A shared one
+            without entries: a date, and optionally a library list other than the registry's (an
+            unreviewed, `custom`
+            version). A prebuilt one: its image by digest.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -203,14 +227,22 @@ async def asyncio(
 
      The new version is `building` until its image is built or pulled, then `ready` (or `failed`). It
     does not
-    become the default: runs get it once an administrator makes it so (`PUT …/default`).
+    become the default: runs get it once an administrator makes it so (`PUT …/default`). A composed
+    environment's
+    version is `resolving` first, while its entries are locked together in a Job of their own; one that
+    does not
+    resolve is `failed`, with pixi's explanation in `failure` (docs/plan-environment-composition.md,
+    step 4).
 
     Args:
         name (str):
-        body (NewEnvironmentVersion): What to make a version from. A shared environment: a date to
-            resolve its spec at (default now), and optionally
-            a library list other than the registry's (an unreviewed, `custom` version). A prebuilt
-            one: its image by digest.
+        body (NewEnvironmentVersion): What to make a version from. A composed environment (one
+            that lists its registry entries): a date to resolve
+            its entries at (default now); a mash-up is an environment of its own, never a version of
+            another. A shared one
+            without entries: a date, and optionally a library list other than the registry's (an
+            unreviewed, `custom`
+            version). A prebuilt one: its image by digest.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.

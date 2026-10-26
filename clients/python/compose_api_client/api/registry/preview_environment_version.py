@@ -81,10 +81,13 @@ def sync_detailed(
 
     Args:
         name (str):
-        body (NewEnvironmentVersion): What to make a version from. A shared environment: a date to
-            resolve its spec at (default now), and optionally
-            a library list other than the registry's (an unreviewed, `custom` version). A prebuilt
-            one: its image by digest.
+        body (NewEnvironmentVersion): What to make a version from. A composed environment (one
+            that lists its registry entries): a date to resolve
+            its entries at (default now); a mash-up is an environment of its own, never a version of
+            another. A shared one
+            without entries: a date, and optionally a library list other than the registry's (an
+            unreviewed, `custom`
+            version). A prebuilt one: its image by digest.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -117,10 +120,13 @@ def sync(
 
     Args:
         name (str):
-        body (NewEnvironmentVersion): What to make a version from. A shared environment: a date to
-            resolve its spec at (default now), and optionally
-            a library list other than the registry's (an unreviewed, `custom` version). A prebuilt
-            one: its image by digest.
+        body (NewEnvironmentVersion): What to make a version from. A composed environment (one
+            that lists its registry entries): a date to resolve
+            its entries at (default now); a mash-up is an environment of its own, never a version of
+            another. A shared one
+            without entries: a date, and optionally a library list other than the registry's (an
+            unreviewed, `custom`
+            version). A prebuilt one: its image by digest.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -148,10 +154,13 @@ async def asyncio_detailed(
 
     Args:
         name (str):
-        body (NewEnvironmentVersion): What to make a version from. A shared environment: a date to
-            resolve its spec at (default now), and optionally
-            a library list other than the registry's (an unreviewed, `custom` version). A prebuilt
-            one: its image by digest.
+        body (NewEnvironmentVersion): What to make a version from. A composed environment (one
+            that lists its registry entries): a date to resolve
+            its entries at (default now); a mash-up is an environment of its own, never a version of
+            another. A shared one
+            without entries: a date, and optionally a library list other than the registry's (an
+            unreviewed, `custom`
+            version). A prebuilt one: its image by digest.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -182,10 +191,13 @@ async def asyncio(
 
     Args:
         name (str):
-        body (NewEnvironmentVersion): What to make a version from. A shared environment: a date to
-            resolve its spec at (default now), and optionally
-            a library list other than the registry's (an unreviewed, `custom` version). A prebuilt
-            one: its image by digest.
+        body (NewEnvironmentVersion): What to make a version from. A composed environment (one
+            that lists its registry entries): a date to resolve
+            its entries at (default now); a mash-up is an environment of its own, never a version of
+            another. A shared one
+            without entries: a date, and optionally a library list other than the registry's (an
+            unreviewed, `custom`
+            version). A prebuilt one: its image by digest.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.

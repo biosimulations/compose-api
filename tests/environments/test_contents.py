@@ -311,3 +311,22 @@ async def test_a_prebuilt_version_is_read_back_after_it_is_ready_and_on_request(
     with override_settings(environment_admin_role="env-admin", build_backend="slurm"):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as client:
             assert (await client.post(f"{base}/{number}/inspect")).status_code == 409  # no Kubernetes to run it on
+
+
+@pytest.mark.asyncio
+async def test_a_composed_version_is_read_back_through_pixis_activation(monkeypatch: pytest.MonkeyPatch) -> None:
+    from compose_api.environments import pixi
+    from compose_api.simulation.models import EnvironmentVersion
+
+    async def no_script() -> None:
+        return None
+
+    monkeypatch.setattr(build_k8s, "describe_script", no_script)
+    version = EnvironmentVersion(
+        database_id=1, environment_id=1, environment="registry_env", number=3, state=VersionState.READY,
+        simulator_id=9, runtime_contract=pixi.RUNTIME_CONTRACT,
+    )  # fmt: skip
+    composed = await build_k8s.inspection_of(version)
+    shared = await build_k8s.inspection_of(version.model_copy(update={"runtime_contract": 1}))
+    assert composed is not None and composed.python == pixi.PYTHON
+    assert shared is not None and shared.python[0] == "micromamba"  # @1, built the old way, keeps its own
