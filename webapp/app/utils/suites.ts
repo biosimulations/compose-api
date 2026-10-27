@@ -81,3 +81,71 @@ export function versionParameters(chosen: Record<string, string>): string[] {
 export function runVersions(versions: Record<string, number> | null | undefined): Schemas['VersionRef'][] {
   return Object.entries(versions ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([environment, number]) => ({ environment, number }))
 }
+
+// Curating a suite's known problems in the webapp (docs/plan-known-problems.md, 2b): offered with `suites:curate`,
+// which the API checks again; every change is confirmed first (plan-webapp-admin A3).
+
+export const SUITES_CURATE = 'suites:curate'
+
+/** Whether the caller may mark, edit and clear known problems, as the API says (GET /auth/me). */
+export function canCurate(capabilities: readonly string[] | null | undefined): boolean {
+  return (capabilities ?? []).includes(SUITES_CURATE)
+}
+
+/** Whether a row can take a new problem: it has finished and does not agree, and is not excused as a whole. */
+export function markable(row: Row): boolean {
+  return row.status !== 'running' && row.close !== true && !row.expected
+}
+
+/** The open problem a resolved solver on a row is excused by, to clear it. */
+export function problemToClear(row: Row, solver: string, problems: Problem[]): Problem | undefined {
+  return problems.find(p => p.source === row.source && p.solver === solver && p.cleared_run == null)
+}
+
+/** The categories already used in the suite, sorted: offered when marking another. */
+export function knownCategories(problems: Problem[]): string[] {
+  return [...new Set(problems.map(p => p.category))].sort()
+}
+
+/** A mark the API accepts: a category of 1–64 characters and a reason of 1–2000, once trimmed. */
+export function validMark(category: string, reason: string): boolean {
+  const c = category.trim()
+  const r = reason.trim()
+  return c.length > 0 && c.length <= 64 && r.length > 0 && r.length <= 2000
+}
+
+export interface ProblemConfirmation { title: string, description: string, confirm: string, danger: boolean }
+
+/** What the dialog that marks a problem says. `solver` null: the whole source. */
+export function markConfirmation(source: string, solver: string | null, run: number): ProblemConfirmation {
+  return {
+    title: `Mark a known problem on ${source}?`,
+    description: `${solver ? `${solver} on this model` : 'Every solver on this model'} is excused from run ${run} on, `
+      + 'and in earlier runs too, until the problem is cleared: a row whose only failures or differences are known '
+      + 'problems reads excused, not differ.',
+    confirm: 'Mark it',
+    danger: false
+  }
+}
+
+/** What the dialog that clears a problem says: runs before `run` still excuse it. */
+export function clearConfirmation(problem: Problem, run: number): ProblemConfirmation {
+  return {
+    title: `Clear problem ${problem.problem_id} at run ${run}?`,
+    description: `${problem.solver ?? 'Every solver'} on ${problem.source} is no longer excused from run ${run} on; `
+      + `runs before ${run} still excuse it. Clear it at the run that shows it fixed.`,
+    confirm: 'Clear it',
+    danger: true
+  }
+}
+
+/** What the dialog that edits a problem's category or reason says. */
+export function editConfirmation(problem: Problem): ProblemConfirmation {
+  return {
+    title: `Edit problem ${problem.problem_id}?`,
+    description: `Its category and reason for ${problem.solver ?? 'every solver'} on ${problem.source}. Which runs it `
+      + 'excuses does not change.',
+    confirm: 'Save',
+    danger: false
+  }
+}

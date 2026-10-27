@@ -1,6 +1,7 @@
 # Known problems: each solver's expected failures in a suite, curated by an admin, cleared when fixed
 
-**Status (2026-10-26): steps 1, 2a and 3 done (0.7.47–0.7.49); step 2b (curating in the webapp) waits for the CSP.** It follows run 4 of biomodels-curated-300 on `registry_env@4`
+**Status (2026-10-27): steps 1, 2a and 3 done (0.7.47–0.7.49); step 2b (curating in the webapp) in review, now that the
+CSP is enforced.** It follows run 4 of biomodels-curated-300 on `registry_env@4`
 ([plan-environment-composition](plan-environment-composition.md), step 6) and borrows the known-faults pattern of
 VCell's regression tests. One PR per step, each merged with a merge commit.
 
@@ -103,6 +104,14 @@ VCell's regression tests. One PR per step, each merged with a merge commit.
    - **2b, curating:** with `suites:curate`, "Mark known problem" (solver, category, reason) on a solver that failed
      or differs, and "Clear" on a resolved one. Each opens a confirmation dialog, after the CSP is enforced
      (plan-webapp-admin A3). Vitest tests for the gating and the dialogs.
+   - *As built, 2b (2026-10-27):* on the suite page, with `suites:curate`: "Mark a known problem" on each row that
+     finished without agreeing and is not excused as a whole (`markable`), "Clear" beside a solver listed as
+     resolved, and Edit and "Clear at run N" on the Known problems tab. One `ConfirmDialog` for the three: marking
+     asks for the solver (the suite's, or every solver), the category (free text, the suite's categories offered as
+     one-click choices) and the reason, and records the viewed run as `seen_run`; clearing is at the viewed run, and
+     says runs before it still excuse the problem. The gating, the checks a mark must pass and each dialog's text are
+     in `utils/suites.ts`, tested in `test/suites.test.ts`. The rows do not say which solver failed, so the
+     dialog offers them all.
 3. **Seed and remove `expected:`.** Done 2026-10-26.
    - Run 4's VCell import failures: 24 problems (ids 1–24), seen in run 4, each with VCell's own message as its
      reason and the category VCell's `knownFaults()` would give it: non-integer stoichiometry 9, delay 6, lumped

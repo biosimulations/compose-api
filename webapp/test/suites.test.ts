@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Schemas } from '../app/composables/useApi'
-import { appliesTo, jobCount, rowProblems, rowVerdict, runVersions, suiteEnvironments, versionChoices, versionParameters } from '../app/utils/suites'
+import { appliesTo, canCurate, clearConfirmation, editConfirmation, jobCount, knownCategories, markable, markConfirmation, problemToClear, validMark, rowProblems, rowVerdict, runVersions, suiteEnvironments, versionChoices, versionParameters } from '../app/utils/suites'
 
 // Rows as run 4 of biomodels-curated-300 shows them once its VCell import failures are known problems (2026-10-26).
 const row = (fields: Partial<Schemas['SuiteRunRow']>): Schemas['SuiteRunRow'] =>
@@ -64,5 +64,43 @@ describe('running a suite in chosen versions', () => {
     expect(versionParameters({ 'viva-pde-particle': 'default', 'registry_env': '4' })).toEqual(['registry_env@4', 'viva-pde-particle@default'])
     expect(runVersions({ registry_env: 5 })).toEqual([{ environment: 'registry_env', number: 5 }])
     expect(runVersions(undefined)).toEqual([])
+  })
+})
+
+describe('curating known problems', () => {
+  it('is offered only with the capability', () => {
+    expect(canCurate(['suites:curate'])).toBe(true)
+    expect(canCurate(['environments:admin'])).toBe(false)
+    expect(canCurate(undefined)).toBe(false)
+  })
+
+  it('marks rows that finished without agreeing, and clears the problem a resolved solver had', () => {
+    expect(markable(row({ close: false }))).toBe(true)
+    expect(markable(row({ status: 'incomplete', close: null }))).toBe(true)
+    expect(markable(row({ close: true, status: 'complete' }))).toBe(false)
+    expect(markable(row({ status: 'running' }))).toBe(false)
+    expect(markable(row({ close: false, expected: 'whole source excused' }))).toBe(false)
+    const open = problem({ problem_id: 7 })
+    const cleared = problem({ problem_id: 8, cleared_run: 3 })
+    expect(problemToClear(row({}), 'vcell', [cleared, open])?.problem_id).toBe(7)
+    expect(problemToClear(row({}), 'copasi', [open])).toBeUndefined()
+  })
+
+  it('suggests the categories in use and checks a mark as the API does', () => {
+    expect(knownCategories([problem({ category: 'DELAY' }), problem({ category: 'DELAY' }), problem({})])).toEqual(['DELAY', 'NONINTEGER_STOICH'])
+    expect(validMark(' DELAY ', 'delays are not supported')).toBe(true)
+    expect(validMark('', 'x')).toBe(false)
+    expect(validMark('x', '   ')).toBe(false)
+    expect(validMark('x'.repeat(65), 'r')).toBe(false)
+  })
+
+  it('says what each change does to which runs', () => {
+    expect(markConfirmation('biomodels:BIOMD0000000039', 'vcell', 4).description).toContain('vcell on this model is excused from run 4 on')
+    expect(markConfirmation('s', null, 4).description).toMatch(/^Every solver on this model/)
+    const c = clearConfirmation(problem({ problem_id: 7 }), 5)
+    expect(c.title).toBe('Clear problem 7 at run 5?')
+    expect(c.description).toContain('runs before 5 still excuse it')
+    expect(c.danger).toBe(true)
+    expect(editConfirmation(problem({ problem_id: 7 })).description).toContain('does not change')
   })
 })
