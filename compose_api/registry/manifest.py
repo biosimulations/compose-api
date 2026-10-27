@@ -44,22 +44,35 @@ HPC_MINIMUM_LEVEL = CurationLevel.TESTED
 
 
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+# a wheel by https URL, with nothing a definition's shell line or a TOML string would have to escape
+_WHEEL_URL = re.compile(r"^https://[^\s'\"#?]+/(?P<file>[^/\s'\"#?]+\.whl)$")
 
 
 class Install(BaseModel):
     """How an entry is installed into a composed environment (docs/plan-environment-composition.md, C2): a release
-    from PyPI, or a git repository at a full commit, with any extras."""
+    from PyPI, a git repository at a full commit, or a wheel by URL and its sha256 (7c-2: one no index publishes, such
+    as Smoldyn built for VCell), with any extras."""
 
     pypi: str | None = None
     version: str | None = None
     git: str | None = None
     commit: str | None = None
+    url: str | None = None
+    sha256: str | None = None
     extras: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _one_source_pinned(self) -> "Install":
-        if (self.pypi is None) == (self.git is None):
-            raise ValueError("an install names exactly one of `pypi` and `git`")
+        if [self.pypi, self.git, self.url].count(None) != 2:
+            raise ValueError("an install names exactly one of `pypi`, `git` and `url`")
+        if self.url is not None:
+            if not _WHEEL_URL.match(self.url):
+                raise ValueError(f"`url: {self.url}` must be an https URL of a `.whl`, with no query or fragment")
+            if not (self.sha256 and _SHA256.match(self.sha256)):
+                raise ValueError(f"`url: {self.url}` needs the wheel's `sha256`: pixi checks no hash of its own")
+        elif self.sha256 is not None:
+            raise ValueError("`sha256` is for a `url` install")
         if self.pypi is not None and not self.version:
             raise ValueError(f"`pypi: {self.pypi}` needs its exact `version`")
         if self.git is not None and not (self.commit and _COMMIT.match(self.commit)):
@@ -68,8 +81,12 @@ class Install(BaseModel):
 
     @property
     def name(self) -> str:
-        """The distribution's name, normalized, from PyPI's name or the repository's."""
-        raw = self.pypi or (self.git or "").rstrip("/").removesuffix(".git").rsplit("/", 1)[-1]
+        """The distribution's name, normalized, from PyPI's name, the repository's, or the wheel's file name."""
+        if self.url is not None:
+            match = _WHEEL_URL.match(self.url)
+            raw = match.group("file").split("-", 1)[0] if match else self.url
+        else:
+            raw = self.pypi or (self.git or "").rstrip("/").removesuffix(".git").rsplit("/", 1)[-1]
         return re.sub(r"[-_.]+", "-", raw).lower()
 
 

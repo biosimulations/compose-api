@@ -38,8 +38,11 @@ def _requirement(entry: dict[str, Any]) -> str | None:
     install = entry.get("install")
     if not install:
         return None
-    name = install.get("pypi") or install["git"].rstrip("/").removesuffix(".git").rsplit("/", 1)[-1]
     extras = f"[{','.join(install['extras'])}]" if install.get("extras") else ""
+    if install.get("url"):  # a wheel by URL (composition 7c-2): uv checks a direct URL's hash fragment
+        name = install["url"].rsplit("/", 1)[-1].split("-", 1)[0]
+        return f"{name}{extras} @ {install['url']}#sha256={install['sha256']}"
+    name = install.get("pypi") or install["git"].rstrip("/").removesuffix(".git").rsplit("/", 1)[-1]
     if install.get("git"):
         return f"{name}{extras} @ git+{install['git']}@{install['commit']}"
     return f"{name}{extras}=={install['version']}"

@@ -458,6 +458,18 @@
            again: re-read registry_env@5, the mash-up and viva-pde-particle@1 after the release.
      - **7c-2. `install.url`.** A manifest entry may install a wheel by `url` and `sha256`. The pixi generator writes
        `{ url = … }`, and the lock records the hash; a mismatch fails the lock.
+       - *As built (2026-10-27):* the plan's last clause was wrong, and was corrected by testing pixi in its image.
+         **pixi checks no hash for a direct URL**, neither when it locks nor when it installs: a wrong `#sha256=`
+         fragment locked and installed `six` without complaint. So:
+         - **`Install`** gains `url` (an https `.whl`, with no query or fragment, so nothing needs escaping) and a
+           required `sha256`. The distribution's name comes from the wheel's file name.
+         - **The generator** writes `{ url = "<url>#sha256=<sha256>" }`. The lock therefore carries the expected
+           hash, and a different hash is a different lock and identity.
+         - **The definition** checks each URL wheel in the lock before `pixi install`: it installs curl, fetches the
+           wheel, runs `sha256sum -c`, and exits with "sha256 mismatch: <url>". Run in the pixi image, a good hash
+           passes and a bad one fails. The lines appear only when the lock has a URL wheel, so every existing
+           definition, and so every existing version's identity, is unchanged.
+         - **The uv export** requires the wheel as `name @ <url>#sha256=<sha256>`, whose hash uv does check.
      - **7c-3. The Smoldyn wheel workflow** in `virtualcell/Smoldyn`, pushed with Jim's go-ahead. A workflow builds the
        wheel at a commit, as in the local test, and attaches it to a release (`vcell-pyhybrid-<commit>`).
      - **7c-4. The entries:**
