@@ -11,6 +11,7 @@ the lock does, as for a shared version (``definition.py``).
 import datetime
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -106,11 +107,14 @@ def pixi_toml(spec: ComposedSpec) -> str:
             continue
         if install.git is not None:
             source: dict[str, Any] = {"git": install.git, "rev": install.commit}
+        elif install.url is not None:
+            # the hash rides in the URL, so the lock (and the version's identity) carries it; the build checks it
+            source = {"url": f"{install.url}#sha256={install.sha256}"}
         else:
             source = {"version": f"=={install.version}"}
         if install.extras:
             source["extras"] = install.extras
-        pypi[install.name] = source if len(source) > 1 or install.git else source["version"]
+        pypi[install.name] = source if len(source) > 1 or install.git or install.url else source["version"]
     lines = [
         "[workspace]",
         f"name = {_toml(spec.environment)}",
@@ -165,7 +169,7 @@ From: {pixi_image}
 apt-get update
 apt-get install -y --no-install-recommends git ca-certificates
 rm -rf /var/lib/apt/lists/*
-cd {workspace}
+{url_checks}cd {workspace}
 # exactly the lock: --frozen never re-solves
 pixi install --frozen
 pixi shell-hook --frozen > {shell_hook}
@@ -182,6 +186,35 @@ export TMPDIR=/tmp MPLCONFIGDIR=/tmp XDG_CACHE_HOME=/tmp
 # run by /bin/sh, which has no `source`: pixi's activation is a bash script
 exec /bin/bash -c 'source {shell_hook} && exec python {runner} "$@"' runner "$@"
 """
+
+
+# A wheel installed by URL (composition 7c-2): pixi checks no hash for a direct URL, neither when it locks nor when it
+# installs, so the build fetches each one first and checks it against the sha256 its entry gave (carried in the lock as
+# the URL's fragment). Only a lock with such a wheel gets these lines, so every other definition is unchanged.
+_URL_WHEEL = re.compile(r"^- pypi: direct\+(https://[^\s#]+\.whl)#sha256=([0-9a-f]{64})$", re.MULTILINE)
+_URL_CHECKS = """\
+# wheels by URL: pixi checks no hash of its own, so each is checked against its entry's sha256 before installing
+apt-get update
+apt-get install -y --no-install-recommends curl
+rm -rf /var/lib/apt/lists/*
+{checks}"""
+_URL_CHECK = """\
+curl -fsSL '{url}' -o /tmp/url.whl || exit 1
+echo '{sha256}  /tmp/url.whl' | sha256sum -c - || {{ echo 'sha256 mismatch: {url}' >&2; exit 1; }}
+rm -f /tmp/url.whl
+"""
+
+
+def url_wheels(lock: PixiLock) -> list[tuple[str, str]]:
+    """Every wheel the lock installs by URL, with the sha256 its entry gave: (url, sha256), in lock order."""
+    return [(m.group(1), m.group(2)) for m in _URL_WHEEL.finditer(lock.text)]
+
+
+def _url_checks(lock: PixiLock) -> str:
+    wheels = url_wheels(lock)
+    if not wheels:
+        return ""
+    return _URL_CHECKS.format(checks="".join(_URL_CHECK.format(url=url, sha256=sha) for url, sha in wheels))
 
 
 def _terminated(text: str) -> str:
@@ -228,6 +261,7 @@ def definition_of(
         shell_hook=SHELL_HOOK,
         runner=RUNNER,
         types=json.dumps(",".join(types)),
+        url_checks=_url_checks(lock),
     )
     return ContainerizationFileRepr(
         representation=representation, containerization_engine=ContainerizationEngine.APPTAINER
