@@ -14,6 +14,10 @@ const items = computed<DropdownMenuItem[][]>(() => [
       description: principal.value ? `Roles: ${principal.value.roles.join(', ') || 'none'}` : undefined
     }
   ],
+  // what the API says this caller may do (A2): administration sits next to what it acts on, so link there
+  ...(canAdminister(principal.value?.capabilities)
+    ? [[{ label: 'You can administer environments', icon: 'i-lucide-shield-check', to: '/environments' }]]
+    : []),
   [{ label: 'Sign out', icon: 'i-lucide-log-out', onSelect: () => logout() }]
 ])
 </script>
