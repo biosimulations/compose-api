@@ -127,14 +127,19 @@ def test_the_lock_job_runs_pixi_unprivileged_with_nothing_mounted() -> None:
 
 @pytest.fixture
 def stand_in(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, dict[str, str]]:
-    """Scratch for the script, and a PATH whose `pixi lock` writes a lock unless the workspace asks for a conflict."""
+    """Scratch for the script, and a PATH whose `pixi lock` writes a lock unless the workspace asks for a conflict, and
+    whose `pixi exec` records the specs it was given (in `specs`) and runs the command."""
     scratch = tmp_path / "scratch"
     scratch.mkdir()
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     fake = bin_dir / "pixi"
     fake.write_text(
-        '#!/bin/bash\n[ "$1" = lock ] || exit 2\n'
+        "#!/bin/bash\n"
+        'if [ "$1" = exec ]; then shift\n'
+        '  while [ "$1" = --spec ]; do echo "$2" >> specs; shift 2; done\n'
+        '  [ "$1" = -- ] && shift; exec "$@"\nfi\n'
+        '[ "$1" = lock ] || exit 2\n'
         'if grep -q conflict pixi.toml; then echo "  x No solution: a==1 conflicts with a==2" >&2; exit 1; fi\n'
         'printf "version: 7\\nplatforms: []\\n" > pixi.lock\n'
     )
@@ -157,6 +162,14 @@ def test_the_lock_script_prints_the_lock_or_why_it_did_not_resolve(stand_in: tup
     assert _lock(stand_in, "[workspace]\n") == {build_k8s.LOCKED: "version: 7\nplatforms: []\n"}
     refused = _lock(stand_in, "# conflict\n")
     assert list(refused) == [build_k8s.LOCK_ERROR] and "a==1 conflicts with a==2" in refused[build_k8s.LOCK_ERROR]
+
+
+def test_the_lock_has_git_for_git_sources(stand_in: tuple[Path, dict[str, str]]) -> None:
+    """mash-05956395cf@1 failed in production (2026-10-27): "Git executable not found", resolving viva-pde-particle at
+    its commit. The Job runs unprivileged in the pixi image, which has no git, so `pixi exec` brings it."""
+    scratch, _ = stand_in
+    _lock(stand_in, "[workspace]\n")
+    assert (scratch / "specs").read_text().split() == [build_k8s.GIT_SPEC]
 
 
 class FakeBuilds:
