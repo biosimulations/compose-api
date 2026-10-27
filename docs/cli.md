@@ -557,6 +557,8 @@ $ compose-api simulators [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 * `list`: Simulator versions: id, definition hash,...
+* `history`: Every simulator that is an environment...
+* `show`: One simulator: its container definition,...
 * `images`: Whether a simulator's image is built: its...
 * `build`: Make a simulator's image available: pulled...
 
@@ -569,6 +571,42 @@ Simulator versions: id, definition hash, base image, creation time.
 ```console
 $ compose-api simulators list [OPTIONS]
 ```
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api simulators history`
+
+Every simulator that is an environment version or that runs you can read used, newest first: the versions it
+is (none for one from before versions), and how many runs used it and when.
+
+**Usage**:
+
+```console
+$ compose-api simulators history [OPTIONS]
+```
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api simulators show`
+
+One simulator: its container definition, the versions it is, and the runs that used it (`simulations list
+--simulator-id` lists them).
+
+**Usage**:
+
+```console
+$ compose-api simulators show [OPTIONS] SIMULATOR_ID
+```
+
+**Arguments**:
+
+* `SIMULATOR_ID`: The simulator's id.  [required]
 
 **Options**:
 
@@ -888,6 +926,9 @@ $ compose-api simulations list [OPTIONS]
 
 * `--status TEXT`: Only this state: submitting, running, completed, failed, timeout, ...
 * `--simulator TEXT`: Only this prebuilt simulator (name), or a container-definition hash prefix.
+* `--simulator-id INTEGER`: Only those that used this simulator (`simulators history` lists them).
+* `--environment TEXT`: Only those that ran in a version of this environment.
+* `--environment-version TEXT`: Only those that ran in this version, name@number, e.g. registry_env@5.
 * `--since TEXT`: Only those created since: 30m, 6h, 2d, 1w, or an ISO time.
 * `--label TEXT`: Only those with this label, key:value, e.g. source:biomodels (repeatable, all must match).
 * `--tag TEXT`: Only those with this tag (repeatable, all must match).

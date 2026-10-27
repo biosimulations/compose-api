@@ -242,6 +242,34 @@ class EnvironmentVersion(BaseModel):
         return f"{self.environment}@{self.number}"
 
 
+class VersionRef(BaseModel):
+    """An environment version as a link: its environment's current name and its number (``registry_env@5``)."""
+
+    environment: str
+    number: int
+
+
+class SimulatorSummary(BaseModel):
+    """A simulator (a container definition, identified by its hash) as runs used it (docs/plan-webapp-admin.md, 5c).
+    One recorded before environment versions is no version's, and is reached only this way."""
+
+    simulator_id: int
+    created_at: datetime.datetime | None = None
+    container_def_hash: str
+    versions: list[VersionRef] = Field(
+        default_factory=list, description="The environment versions it is; none for one from before versions"
+    )
+    run_count: int = Field(0, description="How many runs you can read used it")
+    first_run_at: datetime.datetime | None = None
+    last_run_at: datetime.datetime | None = None
+
+
+class SimulatorDetail(SimulatorSummary):
+    """A simulator with its container definition."""
+
+    definition: str
+
+
 class PackageChange(BaseModel):
     """A package added (``before`` None), removed (``after`` None) or at another version between two versions."""
 
@@ -511,6 +539,9 @@ class SimulationSummary(BaseModel):
     tags: list[str] = Field(default_factory=list)  # the submitter's
     description: str | None = None
     submission: SubmissionInfo | None = None  # None for simulations recorded before the submission queue
+    environment_version: VersionRef | None = Field(
+        default=None, description="The environment version it ran in; none for a run from before versions"
+    )
 
 
 class SimulationDetail(SimulationSummary):

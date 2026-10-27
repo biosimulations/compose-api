@@ -632,6 +632,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/registry/simulators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every simulator that is an environment version or that runs you can read used, newest first */
+        get: operations["list-simulators"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/simulators/{simulator_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One simulator: its container definition, the versions it is, and the runs you can read that used it */
+        get: operations["get-simulator"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/registry/simulators/{simulator_id}/images": {
         parameters: {
             query?: never;
@@ -2322,6 +2356,8 @@ export interface components {
             /** Description */
             description?: string | null;
             submission?: components["schemas"]["SubmissionInfo"] | null;
+            /** @description The environment version it ran in; none for a run from before versions */
+            environment_version?: components["schemas"]["VersionRef"] | null;
             /**
              * Event Count
              * @default 0
@@ -2397,6 +2433,65 @@ export interface components {
             /** Description */
             description?: string | null;
             submission?: components["schemas"]["SubmissionInfo"] | null;
+            /** @description The environment version it ran in; none for a run from before versions */
+            environment_version?: components["schemas"]["VersionRef"] | null;
+        };
+        /**
+         * SimulatorDetail
+         * @description A simulator with its container definition.
+         */
+        SimulatorDetail: {
+            /** Simulator Id */
+            simulator_id: number;
+            /** Created At */
+            created_at?: string | null;
+            /** Container Def Hash */
+            container_def_hash: string;
+            /**
+             * Versions
+             * @description The environment versions it is; none for one from before versions
+             */
+            versions?: components["schemas"]["VersionRef"][];
+            /**
+             * Run Count
+             * @description How many runs you can read used it
+             * @default 0
+             */
+            run_count: number;
+            /** First Run At */
+            first_run_at?: string | null;
+            /** Last Run At */
+            last_run_at?: string | null;
+            /** Definition */
+            definition: string;
+        };
+        /**
+         * SimulatorSummary
+         * @description A simulator (a container definition, identified by its hash) as runs used it (docs/plan-webapp-admin.md, 5c).
+         *     One recorded before environment versions is no version's, and is reached only this way.
+         */
+        SimulatorSummary: {
+            /** Simulator Id */
+            simulator_id: number;
+            /** Created At */
+            created_at?: string | null;
+            /** Container Def Hash */
+            container_def_hash: string;
+            /**
+             * Versions
+             * @description The environment versions it is; none for one from before versions
+             */
+            versions?: components["schemas"]["VersionRef"][];
+            /**
+             * Run Count
+             * @description How many runs you can read used it
+             * @default 0
+             */
+            run_count: number;
+            /** First Run At */
+            first_run_at?: string | null;
+            /** Last Run At */
+            last_run_at?: string | null;
         };
         /** SimulatorVersion */
         SimulatorVersion: {
@@ -2706,6 +2801,16 @@ export interface components {
             simulators?: string[] | null;
         };
         /**
+         * VersionRef
+         * @description An environment version as a link: its environment's current name and its number (``registry_env@5``).
+         */
+        VersionRef: {
+            /** Environment */
+            environment: string;
+            /** Number */
+            number: number;
+        };
+        /**
          * VersionState
          * @description An environment version's state (docs/plan-environment-versions.md).
          * @enum {string}
@@ -2859,6 +2964,12 @@ export interface operations {
                 status?: ("submitting" | "waiting" | "queued" | "pending" | "running" | "completed" | "failed" | "cancelled" | "out_of_memory" | "suspended" | "timeout" | "unknown") | null;
                 /** @description Only this prebuilt simulator (by name), or container definitions with this hash prefix */
                 simulator?: string | null;
+                /** @description Only simulations that used this simulator */
+                simulator_id?: number | null;
+                /** @description Only simulations that ran in a version of this environment */
+                environment?: string | null;
+                /** @description Only simulations that ran in this environment version, as name@number */
+                environment_version?: string | null;
                 /** @description Only simulations created at or after this time */
                 since?: string | null;
                 /** @description Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, environment_version, solver, model, project, sedml_task, comparison, collection, suite_run, compliance */
@@ -4223,6 +4334,64 @@ export interface operations {
             };
             /** @description It is the default; make another the default first */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "list-simulators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimulatorSummary"][];
+                };
+            };
+        };
+    };
+    "get-simulator": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                simulator_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimulatorDetail"];
+                };
+            };
+            /** @description No such simulator, or one neither a version nor used by a run you can read */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

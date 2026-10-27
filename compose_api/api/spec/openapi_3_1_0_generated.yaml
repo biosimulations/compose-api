@@ -263,6 +263,36 @@ paths:
           title: Simulator
         description: Only this prebuilt simulator (by name), or container definitions
           with this hash prefix
+      - name: simulator_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Only simulations that used this simulator
+          title: Simulator Id
+        description: Only simulations that used this simulator
+      - name: environment
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only simulations that ran in a version of this environment
+          title: Environment
+        description: Only simulations that ran in a version of this environment
+      - name: environment_version
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only simulations that ran in this environment version, as name@number
+          title: Environment Version
+        description: Only simulations that ran in this environment version, as name@number
       - name: since
         in: query
         required: false
@@ -1474,6 +1504,53 @@ paths:
             is not configured
         '409':
           description: It is the default; make another the default first
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /registry/simulators:
+    get:
+      tags:
+      - Registry
+      summary: Every simulator that is an environment version or that runs you can
+        read used, newest first
+      operationId: list-simulators
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/SimulatorSummary'
+                type: array
+                title: Response List-Simulators
+  /registry/simulators/{simulator_id}:
+    get:
+      tags:
+      - Registry
+      summary: 'One simulator: its container definition, the versions it is, and the
+        runs you can read that used it'
+      operationId: get-simulator
+      parameters:
+      - name: simulator_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Simulator Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulatorDetail'
+        '404':
+          description: No such simulator, or one neither a version nor used by a run
+            you can read
         '422':
           description: Validation Error
           content:
@@ -4782,6 +4859,12 @@ components:
           anyOf:
           - $ref: '#/components/schemas/SubmissionInfo'
           - type: 'null'
+        environment_version:
+          anyOf:
+          - $ref: '#/components/schemas/VersionRef'
+          - type: 'null'
+          description: The environment version it ran in; none for a run from before
+            versions
         event_count:
           type: integer
           title: Event Count
@@ -4919,6 +5002,12 @@ components:
           anyOf:
           - $ref: '#/components/schemas/SubmissionInfo'
           - type: 'null'
+        environment_version:
+          anyOf:
+          - $ref: '#/components/schemas/VersionRef'
+          - type: 'null'
+          description: The environment version it ran in; none for a run from before
+            versions
       type: object
       required:
       - simulation_id
@@ -4929,6 +5018,100 @@ components:
       title: SimulationSummary
       description: 'One simulation as a listing shows it: what ran, where, and how
         it went (its latest SLURM job).'
+    SimulatorDetail:
+      properties:
+        simulator_id:
+          type: integer
+          title: Simulator Id
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+        container_def_hash:
+          type: string
+          title: Container Def Hash
+        versions:
+          items:
+            $ref: '#/components/schemas/VersionRef'
+          type: array
+          title: Versions
+          description: The environment versions it is; none for one from before versions
+        run_count:
+          type: integer
+          title: Run Count
+          description: How many runs you can read used it
+          default: 0
+        first_run_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: First Run At
+        last_run_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Run At
+        definition:
+          type: string
+          title: Definition
+      type: object
+      required:
+      - simulator_id
+      - container_def_hash
+      - definition
+      title: SimulatorDetail
+      description: A simulator with its container definition.
+    SimulatorSummary:
+      properties:
+        simulator_id:
+          type: integer
+          title: Simulator Id
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+        container_def_hash:
+          type: string
+          title: Container Def Hash
+        versions:
+          items:
+            $ref: '#/components/schemas/VersionRef'
+          type: array
+          title: Versions
+          description: The environment versions it is; none for one from before versions
+        run_count:
+          type: integer
+          title: Run Count
+          description: How many runs you can read used it
+          default: 0
+        first_run_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: First Run At
+        last_run_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Run At
+      type: object
+      required:
+      - simulator_id
+      - container_def_hash
+      title: SimulatorSummary
+      description: 'A simulator (a container definition, identified by its hash) as
+        runs used it (docs/plan-webapp-admin.md, 5c).
+
+        One recorded before environment versions is no version''s, and is reached
+        only this way.'
     SimulatorVersion:
       properties:
         container_def:
@@ -5449,6 +5632,21 @@ components:
       title: VerifyRequest
       description: Which BioSimulators simulators to verify a comparison with (docs/plan-verify-oracle.md,
         V4).
+    VersionRef:
+      properties:
+        environment:
+          type: string
+          title: Environment
+        number:
+          type: integer
+          title: Number
+      type: object
+      required:
+      - environment
+      - number
+      title: VersionRef
+      description: 'An environment version as a link: its environment''s current name
+        and its number (``registry_env@5``).'
     VersionState:
       type: string
       enum:

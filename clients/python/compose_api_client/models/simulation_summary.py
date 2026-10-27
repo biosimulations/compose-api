@@ -12,6 +12,7 @@ from ..types import UNSET, Unset
 if TYPE_CHECKING:
     from ..models.simulation_summary_labels import SimulationSummaryLabels
     from ..models.submission_info import SubmissionInfo
+    from ..models.version_ref import VersionRef
 
 
 T = TypeVar("T", bound="SimulationSummary")
@@ -40,6 +41,8 @@ class SimulationSummary:
         tags (list[str] | Unset):
         description (None | str | Unset):
         submission (None | SubmissionInfo | Unset):
+        environment_version (None | Unset | VersionRef): The environment version it ran in; none for a run from before
+            versions
     """
 
     simulation_id: int
@@ -60,10 +63,12 @@ class SimulationSummary:
     tags: list[str] | Unset = UNSET
     description: None | str | Unset = UNSET
     submission: None | SubmissionInfo | Unset = UNSET
+    environment_version: None | Unset | VersionRef = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         from ..models.submission_info import SubmissionInfo  # noqa: PLC0415
+        from ..models.version_ref import VersionRef  # noqa: PLC0415
 
         simulation_id = self.simulation_id
 
@@ -149,6 +154,14 @@ class SimulationSummary:
         else:
             submission = self.submission
 
+        environment_version: dict[str, Any] | None | Unset
+        if isinstance(self.environment_version, Unset):
+            environment_version = UNSET
+        elif isinstance(self.environment_version, VersionRef):
+            environment_version = self.environment_version.to_dict()
+        else:
+            environment_version = self.environment_version
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
@@ -184,6 +197,8 @@ class SimulationSummary:
             field_dict["description"] = description
         if submission is not UNSET:
             field_dict["submission"] = submission
+        if environment_version is not UNSET:
+            field_dict["environment_version"] = environment_version
 
         return field_dict
 
@@ -191,6 +206,7 @@ class SimulationSummary:
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.simulation_summary_labels import SimulationSummaryLabels  # noqa: PLC0415
         from ..models.submission_info import SubmissionInfo  # noqa: PLC0415
+        from ..models.version_ref import VersionRef  # noqa: PLC0415
 
         d = dict(src_dict)
         simulation_id = d.pop("simulation_id")
@@ -317,6 +333,23 @@ class SimulationSummary:
 
         submission = _parse_submission(d.pop("submission", UNSET))
 
+        def _parse_environment_version(data: object) -> None | Unset | VersionRef:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, dict):
+                    raise TypeError()
+                environment_version_type_0 = VersionRef.from_dict(data)
+
+                return environment_version_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(None | Unset | VersionRef, data)
+
+        environment_version = _parse_environment_version(d.pop("environment_version", UNSET))
+
         simulation_summary = cls(
             simulation_id=simulation_id,
             experiment_id=experiment_id,
@@ -336,6 +369,7 @@ class SimulationSummary:
             tags=tags,
             description=description,
             submission=submission,
+            environment_version=environment_version,
         )
 
         simulation_summary.additional_properties = d

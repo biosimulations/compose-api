@@ -38,11 +38,13 @@ from compose_api_client.api.registry import (
     get_environment_manifest,
     get_environment_version,
     get_environment_version_compliance,
+    get_simulator,
     get_simulator_images,
     inspect_environment_version,
     list_environment_versions,
     list_environments,
     list_registry_entries,
+    list_simulators,
     list_solvers,
     retire_environment_version,
     run_environment_version_compliance,
@@ -170,6 +172,8 @@ from compose_api_client.models import (
     SimulationDetail,
     SimulationExperiment,
     SimulationPage,
+    SimulatorDetail,
+    SimulatorSummary,
     Solver,
     Suite,
     SuiteRunInfo,
@@ -698,6 +702,19 @@ class ComposeSession:
         r, _ = self._send(op, lambda c: inspect_environment_version.sync_detailed(name, number, client=c))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
+    def simulators_used(self) -> list[SimulatorSummary]:
+        """Every simulator that is an environment version or that runs you can read used, newest first: the versions
+        it is (none for one from before versions) and how many runs used it."""
+        op = Operation("GET", "/registry/simulators", replayable=True)
+        r, _ = self._send(op, lambda c: list_simulators.sync_detailed(client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    def simulator(self, simulator_id: int) -> SimulatorDetail:
+        """One simulator: its container definition, the versions it is, and the runs that used it."""
+        op = Operation("GET", f"/registry/simulators/{simulator_id}", replayable=True)
+        r, _ = self._send(op, lambda c: get_simulator.sync_detailed(simulator_id, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
     def simulator_images(self, simulator_id: int) -> ImageStatus:
         """Whether a simulator's image is built, with its image records and newest build run."""
         op = Operation("GET", f"/registry/simulators/{simulator_id}/images", replayable=True)
@@ -831,14 +848,20 @@ class ComposeSession:
         tags: Sequence[str] = (),
         limit: int = 50,
         offset: int = 0,
+        simulator_id: int | None = None,
+        environment: str | None = None,
+        environment_version: str | None = None,
     ) -> SimulationPage:
         """Simulations the caller may read, newest first, each with its latest SLURM job. ``status`` is a job state
-        or ``"submitting"``; ``simulator`` a prebuilt simulator's name or a container-definition hash prefix."""
+        or ``"submitting"``; ``simulator`` a prebuilt simulator's name or a container-definition hash prefix;
+        ``environment`` any version of it, ``environment_version`` one (``registry_env@5``)."""
         op = Operation("GET", "/simulations", replayable=True)
         r, _ = self._send(
             op,
             lambda c: list_simulations.sync_detailed(
-                client=c, **_simulation_filters(status, simulator, since, labels, tags, limit, offset)
+                client=c,
+                **_simulation_filters(status, simulator, since, labels, tags, limit, offset),
+                **_where_ran(simulator_id, environment, environment_version),
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -1610,6 +1633,16 @@ class AsyncComposeSession:
         r, _ = await self._send(op, lambda c: inspect_environment_version.asyncio_detailed(name, number, client=c))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
+    async def simulators_used(self) -> list[SimulatorSummary]:
+        op = Operation("GET", "/registry/simulators", replayable=True)
+        r, _ = await self._send(op, lambda c: list_simulators.asyncio_detailed(client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
+    async def simulator(self, simulator_id: int) -> SimulatorDetail:
+        op = Operation("GET", f"/registry/simulators/{simulator_id}", replayable=True)
+        r, _ = await self._send(op, lambda c: get_simulator.asyncio_detailed(simulator_id, client=c))
+        return _parsed(r, op=op)  # type: ignore[no-any-return]
+
     async def simulator_images(self, simulator_id: int) -> ImageStatus:
         """Whether a simulator's image is built, with its image records and newest build run."""
         op = Operation("GET", f"/registry/simulators/{simulator_id}/images", replayable=True)
@@ -1743,12 +1776,17 @@ class AsyncComposeSession:
         tags: Sequence[str] = (),
         limit: int = 50,
         offset: int = 0,
+        simulator_id: int | None = None,
+        environment: str | None = None,
+        environment_version: str | None = None,
     ) -> SimulationPage:
         op = Operation("GET", "/simulations", replayable=True)
         r, _ = await self._send(
             op,
             lambda c: list_simulations.asyncio_detailed(
-                client=c, **_simulation_filters(status, simulator, since, labels, tags, limit, offset)
+                client=c,
+                **_simulation_filters(status, simulator, since, labels, tags, limit, offset),
+                **_where_ran(simulator_id, environment, environment_version),
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -2138,6 +2176,14 @@ def _simulation_filters(
         "tag": list(tags) if tags else UNSET,
         "limit": limit,
         "offset": offset,
+    }
+
+
+def _where_ran(simulator_id: int | None, environment: str | None, environment_version: str | None) -> dict[str, Any]:
+    return {
+        "simulator_id": simulator_id if simulator_id is not None else UNSET,
+        "environment": environment if environment is not None else UNSET,
+        "environment_version": environment_version if environment_version is not None else UNSET,
     }
 
 
