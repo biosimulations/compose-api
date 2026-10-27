@@ -1,0 +1,18 @@
+description: >-
+  viva-pde-particle's own example (compose_runner.write_example): EnsembleRunner runs four trials, seeds 1 to 4, of the
+  Fokker-Planck benchmark's trial_rho (test4, tau 0.2, dtau 1e-3), each a PDE solve co-simulated with Smoldyn (built
+  with OPTION_VCELL), and emits each seed's two values. The emitter is named fully qualified (composition D7c.2). The
+  values are seeded, so exact: these are what its prebuilt image's runner and compose-api's runner gave in the
+  registry_env@5 + viva-pde-particle environment, identically (2026-10-27, docs/plan-environment-composition.md 7c).
+document: document.pbg
+interval: 1
+expect:
+  - {kind: rows, emitter: emitter, min: 2}
+  - {kind: scalar, emitter: emitter, field: seeds.0, expected: 1}
+  - {kind: scalar, emitter: emitter, field: seeds.3, expected: 4}
+  - {kind: scalar, emitter: emitter, field: values.0.0, expected: 0.07137369415367853, rel: 1.0e-6}
+  - {kind: scalar, emitter: emitter, field: values.0.1, expected: 0.0004004746655585104, rel: 1.0e-6}
+  - {kind: scalar, emitter: emitter, field: values.1.0, expected: 0.0, abs: 1.0e-12}
+  - {kind: scalar, emitter: emitter, field: values.2.0, expected: 0.09234150979599469, rel: 1.0e-6}
+  - {kind: scalar, emitter: emitter, field: values.2.1, expected: 0.0020975747341526988, rel: 1.0e-6}
+  - {kind: scalar, emitter: emitter, field: values.3.0, expected: 0.0, abs: 1.0e-12}

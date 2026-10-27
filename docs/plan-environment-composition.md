@@ -480,6 +480,35 @@
        - a compliance case kept with it: a short PDE + Smoldyn ensemble with fixed seeds, the emitter fully
          qualified, and its expected values;
        - tested locally (lock, install, the case) before merge.
+       - *As built (2026-10-27):*
+         - **The wheel:** release `vcell-pyhybrid-e86d552` of `virtualcell/Smoldyn`, built by its workflow (#1, 7c-3).
+           sha256 `bb033bcc…`, checked on download. Builds are not bit-reproducible, so the entry takes the release
+           asset's hash.
+         - **The entries:**
+           - `smoldyn-vcell` (by URL), `vcell-fenics` (git `4dab281`), `pyvcell-fvsolver` 0.11.1 and `zarr` 3.4.1;
+           - viva-pde-particle gains `install` (git `8c16827`, the deployed image's commit; the package's code is
+             the same at main's `65f9a62`), the `reference` extra, its conda engines, and `requires`.
+         - **`members_of` for a prebuilt image** now includes its bundled entries' requirements, which the image
+           installs its own way. Without that, a document of viva-pde-particle's classes alone would no longer be
+           covered by its image and would make a mash-up, breaking D7c.3.
+         - **Compliance case `viva-pde-particle/fokker-planck-ensemble`:** its own example (four seeded PDE + Smoldyn
+           trials) with the emitter fully qualified. A `scalar` expectation's `field` may now be a path
+           (`values.2.0`).
+         - **Checked with compose-api's own code, in Docker:**
+           - a document of EnsembleRunner, `CopasiUTCStep` and RAMEmitter needs ten entries; no declared environment
+             covers them; they are composable, so `mash-05956395cf`;
+           - its generated workspace locked in 45 s (462 packages);
+           - the definition's URL check passed against the release;
+           - `pixi install --frozen` succeeded;
+           - compose-api's runner ran both cases, and its evaluator passed both: viva-pde-particle's nine
+             expectations, and pbsim-common's COPASI case against its reference;
+           - validation admits the case document in the mash-up.
+         - **Open question for Jim:** `EnsembleRunner`'s config `trial: "module:function"` imports whatever it names,
+           so a document could run any importable function through config, which the address check never sees.
+           Its prebuilt image already accepts such documents. Composed, the class joins mash-ups. Options:
+           - accept it, the sandbox being the container;
+           - a validation rule limiting `trial` to `viva_pde_particle.*`;
+           - a change in viva-pde-particle (vivarium-collective, with Jim's go-ahead).
      - **7c-5. Live:** a release, then a document combining viva-pde-particle's processes with `CopasiUTCStep`,
        submitted signed in. It creates its mash-up, locks and builds it (expect a large image), and runs.
      - **Optional, vivarium-collective with Jim's go-ahead:** viva-pde-particle's `ensemble_document` writes the fully

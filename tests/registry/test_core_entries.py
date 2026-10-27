@@ -92,3 +92,22 @@ def test_a_core_entry_needs_module_roots() -> None:
         RegistryEntry(
             id="x", package="x", source="s", kind="core", version="1", level=CurationLevel.TESTED, module_roots=[]
         )
+
+
+def test_viva_pde_particle_and_copasi_make_a_mash_up_that_admits_them() -> None:
+    """The motivating mash-up (composition 7c): viva-pde-particle's ensemble beside pbsim-common's COPASI step, with
+    process-bigraph's emitter. No declared environment covers both, so a mash-up of exactly what they need is made,
+    and its version admits every address. Locked, built and run in Docker on 2026-10-27 (7c-4)."""
+    from compose_api.environments import lifecycle
+    from compose_api.registry.resolver import covering_environment
+
+    manifest = load_manifest()
+    targets = ["viva_pde_particle.ensemble.EnsembleRunner", COPASI[6:], RAM[6:]]
+    needed = needed_entries(targets, manifest)
+    assert {"viva-pde-particle", "smoldyn-vcell", "pbsim-common", "python-copasi"} <= needed
+    assert "process-bigraph-emitters" not in needed
+    assert covering_environment(needed, manifest, load_environments()) is None
+    assert lifecycle.composable(needed, manifest) == []
+    standing = Standing(label=f"{lifecycle.mash_up_name(needed)}@1", members=frozenset(needed))
+    for address in ("local:viva_pde_particle.ensemble.EnsembleRunner", COPASI, RAM):
+        assert _reason(address, standing) is None, address

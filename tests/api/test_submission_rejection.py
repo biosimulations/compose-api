@@ -131,7 +131,8 @@ async def test_a_run_naming_no_environment_goes_where_its_classes_are(
     http_api_client: httpx.AsyncClient, database_service: DatabaseService
 ) -> None:
     """Step 7a (D7.1): a document using only viva-pde-particle's classes is inferred to run in its image when the
-    deployment offers it, as if it had named it; offered nowhere, the shared environment refuses it as before."""
+    deployment offers it, as if it had named it. Offered nowhere, its classes are composable since composition 7c-4,
+    so the run needs a mash-up, which only a signed-in caller may cause (D7.4): an anonymous one is told to sign in."""
     await register_prebuilt(database_service, PREBUILT, PDE_IMAGE)
     inferred = await http_api_client.post(
         "/simulation/run", files={"uploaded_file": ("doc.pbg", pbg(PDE), "application/json")}
@@ -141,9 +142,9 @@ async def test_a_run_naming_no_environment_goes_where_its_classes_are(
     refused = await http_api_client.post(
         "/simulation/run", files={"uploaded_file": ("doc.pbg", pbg(PDE), "application/json")}
     )
-    assert refused.status_code == 400
-    (violation,) = refused.json()["detail"]["violations"]
-    assert "not installed in the environment `registry_env`" in violation["reason"]
+    assert refused.status_code == 401, refused.text
+    detail = refused.json()["detail"]
+    assert "viva-pde-particle" in detail and "sign in to have one made" in detail
 
 
 @pytest.mark.asyncio

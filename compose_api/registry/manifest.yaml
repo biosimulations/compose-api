@@ -77,12 +77,39 @@ entries:
   - id: viva-pde-particle
     package: viva-pde-particle
     source: https://github.com/vivarium-collective/viva-pde-particle
-    # the commit behind the deployed image (PREBUILT_SIMULATORS pins its digest, tagged sha-8c16827)
+    # the commit behind the deployed image (PREBUILT_SIMULATORS pins its digest, tagged sha-8c16827), and what a
+    # composed environment installs: the package's code is the same at main's 65f9a62 (2026-10-27)
     commit: 8c168271e3b48ac667cde9092ca025be0f444d65
+    # composed too (docs/plan-environment-composition.md 7c, D7c.1-D7c.3): its engines from conda-forge, as its own
+    # pixi.toml's `compose` environment has them, less the Smoldyn toolchain; Smoldyn is the smoldyn-vcell wheel
+    install:
+      git: https://github.com/vivarium-collective/viva-pde-particle
+      commit: 8c168271e3b48ac667cde9092ca025be0f444d65
+      extras: [reference]
+    conda:
+      fenics-dolfinx: "0.10.*"
+      mpich: "*"
+      gmsh: "*"
+      python-gmsh: "*"
+      h5py: "*"
+      netgen: ">=6.2.2602,<7"
+      scikit-image: "*"
+      pydantic: ">=2.10,<3"
+      vtk: "*"
+      pyvista: ">=0.49.0,<0.50"
+      imageio: ">=2.38.0,<3"
+    # what its pixi.toml adds beyond its package metadata: Smoldyn, the VCell solver and geometry, results bundles
+    requires:
+      - smoldyn-vcell
+      - vcell-fenics
+      - pyvcell-fvsolver
+      - zarr
+      - pyvcell
+      - libvcell
     module_roots:
       - viva_pde_particle
     level: tested
-    # its own prebuilt image, not registry_env: it runs only with `simulator=viva-pde-particle`
+    # its own prebuilt image runs a document of its classes alone (D7c.3); composed, they join a mash-up
     bundles:
       - viva-pde-particle
     evidence:
@@ -91,6 +118,11 @@ entries:
         package's own CI on every push to main (.github/workflows/compose-image.yml): a smoke ensemble in Docker,
         then this service's exact job contract under `apptainer run --compat` with /experiment bound, before the
         image is pushed. The pinned digest passed both.
+      - >-
+        Composed on 2026-10-27 (7c-4): with registry_env@5's entries in one pixi lock (472 packages, no conflict), its
+        example ensemble (four PDE + Smoldyn trials) gave values identical to its prebuilt image's through
+        compose-api's runner. In a composed version its compliance case (registry/compliance/viva-pde-particle)
+        decides its level.
 
   - id: biosim-toolkit
     package: biosim-toolkit
@@ -159,6 +191,58 @@ entries:
   # --- libraries: installed for the components above, with no process classes of their own ------------------------
   # Pinned to what registry_env@1 actually ran (read back from its image, 2026-10-25), not to the old library list,
   # which said tellurium 2.2.11.1 and python-copasi 4.46.300 while the image held these.
+
+  - id: smoldyn-vcell
+    kind: library
+    package: smoldyn
+    # Smoldyn's Python module built with OPTION_VCELL (the hybrid ValueProvider hooks) from the virtualcell fork's
+    # pyhybrid branch, by its .github/workflows/vcell-hybrid-wheel.yml (composition 7c-3, D7c.1): on no index
+    source: https://github.com/virtualcell/Smoldyn/releases/tag/vcell-pyhybrid-e86d552
+    version: "2.76.dev0+vcell.e86d552"
+    install:
+      url: https://github.com/virtualcell/Smoldyn/releases/download/vcell-pyhybrid-e86d552/smoldyn-2.76.dev0%2Bvcell.e86d552-cp312-cp312-linux_x86_64.whl
+      sha256: bb033bccff9481a075603d4a79fefe249b152fac5544a716adf16761adc29d14
+    level: installable
+    evidence:
+      - >-
+        Built at e86d552 by the fork's workflow and released 2026-10-27; the hash is the release asset's, checked on
+        download. CPython 3.12 on Linux x86-64; it links libpython, which composed images put on LD_LIBRARY_PATH.
+
+  - id: vcell-fenics
+    kind: library
+    package: vcell-fenics
+    source: https://github.com/virtualcell/vcell-fenics/tree/4dab281e1ed3f7c2b2bb60c6c2d1a8ccb251ca17
+    commit: 4dab281e1ed3f7c2b2bb60c6c2d1a8ccb251ca17
+    install:
+      git: https://github.com/virtualcell/vcell-fenics
+      commit: 4dab281e1ed3f7c2b2bb60c6c2d1a8ccb251ca17
+    level: installable
+    evidence:
+      - The commit viva-pde-particle's pixi.toml pins (main, the merge of #211); its geometry formalism and Netgen realization.
+
+  - id: pyvcell-fvsolver
+    kind: library
+    package: pyvcell-fvsolver
+    source: https://pypi.org/project/pyvcell-fvsolver/0.11.1/
+    version: "0.11.1"
+    install:
+      pypi: pyvcell-fvsolver
+      version: "0.11.1"
+    level: installable
+    evidence:
+      - viva-pde-particle's pixi.toml floor (>=0.11.1, the hybrid fixes vcell-fvsolver#32-#34); what the 2026-10-27 lock resolved.
+
+  - id: zarr
+    kind: library
+    package: zarr
+    source: https://pypi.org/project/zarr/3.4.1/
+    version: "3.4.1"
+    install:
+      pypi: zarr
+      version: "3.4.1"
+    level: installable
+    evidence:
+      - viva-pde-particle's results bundles are zarr groups (its pixi.toml, >=3.1,<4); what the 2026-10-27 lock resolved.
 
   - id: tellurium
     kind: library
