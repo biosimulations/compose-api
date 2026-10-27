@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { Schemas } from '~/composables/useApi'
+import type { Confirmation } from '~/utils/admin'
+import type { VersionChoice } from '~/utils/suites'
 
 // One suite: its runs, and for the chosen one (`?run=N`, else the newest) a row per model: whether the solvers agree,
 // whether they match the references, and whether each solver drifted from its own result in the baseline run. Each
@@ -53,17 +55,56 @@ useIntervalFn(() => {
   if (view.value && (view.value.status === 'submitting' || view.value.summary.running)) loadRun()
 }, 15000)
 
+// Running it (plan-webapp-admin step 5, A4): it needs sign-in, a nudge rather than a guard, and names a version of
+// each environment its solvers use (default: each one's default); the run records them as numbers. The API refuses a
+// second run while one is going (409).
+const { enabled: signInOffered, isAuthenticated } = useAuth()
+const needsSignIn = computed(() => signInOffered.value && !isAuthenticated.value)
+const solvers = ref<Schemas['Solver'][]>([])
+const environments = computed(() => (suite.value ? suiteEnvironments(suite.value, solvers.value) : []))
+const choices = ref<Record<string, VersionChoice[]>>({})
+const chosen = ref<Record<string, string>>({})
+const confirming = ref(false)
+const runError = ref<string | null>(null)
+const selectedInfo = computed(() => runs.value.find(r => r.number === selected.value) ?? null)
+
+async function openRun() {
+  runError.value = null
+  confirming.value = true
+  if (!solvers.value.length) solvers.value = await listSolvers().catch(() => [])
+  for (const env of environments.value) {
+    chosen.value[env] ??= 'default'
+    if (!choices.value[env]) {
+      fetchVersions(env)
+        .then(v => (choices.value = { ...choices.value, [env]: versionChoices(env, v.versions ?? [], v.default) }))
+        .catch(() => (choices.value = { ...choices.value, [env]: versionChoices(env, [], null) }))
+    }
+  }
+}
+
+const runConfirmation = computed<Confirmation | null>(() => suite.value
+  ? {
+      title: `Run ${name.value}?`,
+      description: `It submits about ${jobCount(suite.value, solvers.value)} simulations: each of its ${suite.value.sources.length} models on each solver, in the versions below. `
+        + 'Only one run of a suite goes at a time.',
+      confirm: 'Run the suite',
+      danger: false
+    }
+  : null)
+
 async function runNow() {
   starting.value = true
-  // every environment at its current default; the run records the versions as numbers (plan-environment-versions)
+  runError.value = null
+  const picked = Object.fromEntries(environments.value.map(env => [env, chosen.value[env] ?? 'default']))
   const { data, error: err } = await useApi().POST('/suites/{name}/run', {
-    params: { path: { name: name.value }, query: { environment_version: ['default'] } },
+    params: { path: { name: name.value }, query: { environment_version: versionParameters(picked) } }
   })
   starting.value = false
   if (err || !data) {
-    error.value = errorMessage(err, 'Could not start the suite')
+    runError.value = errorMessage(err, 'Could not start the suite')
     return
   }
+  confirming.value = false
   selected.value = data.number
   await load()
 }
@@ -76,7 +117,9 @@ const fmt = (s: number | string | null | undefined) => (typeof s === 'number' ? 
     <PageHeader :title="name" :description="suite?.description">
       <template #actions>
         <UButton to="/suites" icon="i-lucide-arrow-left" label="Suites" color="neutral" variant="ghost" />
-        <UButton icon="i-lucide-play" label="Run the suite" :loading="starting" @click="runNow" />
+        <UTooltip :text="needsSignIn ? 'Sign in to run the suite' : ''" :disabled="!needsSignIn">
+          <UButton icon="i-lucide-play" label="Run the suite" :loading="starting" :disabled="needsSignIn || !suite" @click="openRun" />
+        </UTooltip>
       </template>
     </PageHeader>
     <UContainer class="py-6 flex flex-col gap-4">
@@ -84,8 +127,18 @@ const fmt = (s: number | string | null | undefined) => (typeof s === 'number' ? 
       <div v-if="suite" class="flex flex-wrap items-center gap-3 text-sm">
         <span class="text-muted">{{ suite.sources.length }} models · solvers {{ suite.solvers?.join(', ') || 'all' }} · baseline run {{ suite.baseline ?? 'none yet (accepted by a pull request to its suite.yaml)' }}</span>
         <span class="grow" />
-        <USelect v-if="runs.length" v-model="selected" :items="runs.map(r => ({ label: `run ${r.number}${r.number === suite?.baseline ? ' (baseline)' : ''} · ${formatTime(r.created_at)}`, value: r.number }))" class="w-72" />
+        <USelect v-if="runs.length" v-model="selected" :items="runs.map(r => ({ label: `run ${r.number}${r.number === suite?.baseline ? ' (baseline)' : ''} · ${formatTime(r.created_at)}${runVersions(r.environment_versions).length ? ' · ' + runVersions(r.environment_versions).map(versionLabel).join(', ') : ''}`, value: r.number }))" class="w-96" />
       </div>
+      <div v-if="selectedInfo" class="flex flex-wrap items-center gap-2 text-sm">
+        <span class="text-muted">Run {{ selectedInfo.number }} ran in</span>
+        <RanIn v-for="v in runVersions(selectedInfo.environment_versions)" :key="v.environment" :version="v" :simulator-id="0" class="text-xs" />
+        <span v-if="!runVersions(selectedInfo.environment_versions).length" class="text-muted">each environment's image at the time (started before versions were recorded)</span>
+      </div>
+      <ConfirmDialog v-model:open="confirming" :confirmation="runConfirmation" :busy="starting" :error="runError" @confirm="runNow">
+        <UFormField v-for="env in environments" :key="env" :label="env">
+          <USelect v-model="chosen[env]" :items="choices[env] ?? [{ label: 'default', value: 'default' }]" class="w-56" />
+        </UFormField>
+      </ConfirmDialog>
       <p v-if="!runs.length" class="text-muted text-sm">This suite has not run yet.</p>
       <template v-if="view">
         <div class="flex flex-wrap gap-2 text-sm">

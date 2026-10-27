@@ -73,10 +73,11 @@ export function confirmation(
       }
     case 'inspect':
       return {
-        title: `Read ${label} back again?`,
-        description: `Its image is run again in the background to list what it installed and the classes it provides. `
-          + 'Nothing else about the version changes.',
-        confirm: 'Read it back',
+        title: `Re-read the contents of ${label}?`,
+        description: `Its image is run again in the background to record what it installed (its packages) and the `
+          + 'classes it provides. A build does this by itself; re-read a prebuilt image, or one whose record is missing '
+          + 'or wrong. Nothing else about the version changes: runs and the default are unaffected.',
+        confirm: 'Re-read its contents',
         danger: false
       }
   }

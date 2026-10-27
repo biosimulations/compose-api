@@ -1,8 +1,7 @@
 # Web UI: sign-in switched on, and the administrative tasks brought into it
 
-**Status (2026-10-27): active; steps 1–4, 5c, 6 and 7 done (CSP enforced #436; 5c in 0.7.59; 6 in 0.7.60). Left:
-step 5's suite page (the version picker, each run's versions, the button disabled while signed out), and Jim's
-signed-in check of step 6 in production.** It continues [plan-webapp-login](plan-webapp-login.md), whose work is done apart
+**Status (2026-10-27): every step built (CSP enforced #436; 5c in 0.7.59; 6 in 0.7.60; step 5's suite page in
+review). Left: releasing the suite page, and Jim's signed-in check of steps 5–6 in production; then the plan is done.** It continues [plan-webapp-login](plan-webapp-login.md), whose work is done apart
 from switching it on (W2, #359), and step 5b of [plan-environment-versions](plan-environment-versions.md), the
 webapp's environment version pages. One PR per step, each merged with a merge commit. Steps that change
 `kustomize/` deploy on merge; the others reach production with a release.
@@ -139,6 +138,12 @@ webapp's environment version pages. One PR per step, each merged with a merge co
        versions;
      - each run's `environment_versions` shown beside it;
      - the button disabled while signed out (A4).
+   - *As built, the suite page (2026-10-27):* "Run the suite" is disabled while signed out (when sign-in is offered)
+     and opens a confirmation (`ConfirmDialog`) with the number of simulations it submits and a version picker per
+     environment its solvers use (`utils/suites.ts`: `suiteEnvironments`, `versionChoices`, default first, then ready
+     versions newest first); the request names each (`versionParameters`), and a 409 shows in the dialog. The run
+     picker and a line under it show each run's versions, linked to their pages. The environment page's "Read back"
+     is renamed "Re-read contents", with a tooltip on each action.
    - **The simulation and comparison pages:** show the `environment_version` each run used. Simulations already carry
      it as a label.
    - Webapp only (`useRegistry.ts` gains the version calls), and it ships with a release.

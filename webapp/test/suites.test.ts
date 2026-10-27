@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Schemas } from '../app/composables/useApi'
-import { appliesTo, rowProblems, rowVerdict } from '../app/utils/suites'
+import { appliesTo, jobCount, rowProblems, rowVerdict, runVersions, suiteEnvironments, versionChoices, versionParameters } from '../app/utils/suites'
 
 // Rows as run 4 of biomodels-curated-300 shows them once its VCell import failures are known problems (2026-10-26).
 const row = (fields: Partial<Schemas['SuiteRunRow']>): Schemas['SuiteRunRow'] =>
@@ -34,5 +34,35 @@ describe('a suite run row against its known problems', () => {
     expect(appliesTo(problem({}), 9)).toBe(true)
     expect(appliesTo(problem({ cleared_run: 4 }), 3)).toBe(true)
     expect(appliesTo(problem({ cleared_run: 4 }), 4)).toBe(false)
+  })
+})
+
+describe('running a suite in chosen versions', () => {
+  const solver = (id: string, environment: string) =>
+    ({ id, name: id, role: 'TimeCourseSolver', environment, address: `local:x.${id}`, algorithms: ['KISAO_0000019'] }) as Schemas['Solver']
+  const solvers = [solver('copasi', 'registry_env'), solver('tellurium', 'registry_env'), solver('vcell', 'registry_env'), solver('pde', 'viva-pde-particle')]
+  const suite = (fields: Partial<Schemas['Suite']>) => ({ name: 's', description: '', sources: ['a', 'b', 'c'], ...fields }) as Schemas['Suite']
+  const version = (number: number, state: Schemas['EnvironmentVersion']['state']) =>
+    ({ database_id: number, environment_id: 1, environment: 'registry_env', number, state, simulator_id: number }) as Schemas['EnvironmentVersion']
+
+  it('needs a version of each environment its solvers run in', () => {
+    expect(suiteEnvironments(suite({ solvers: ['copasi', 'tellurium'] }), solvers)).toEqual(['registry_env'])
+    expect(suiteEnvironments(suite({}), solvers)).toEqual(['registry_env', 'viva-pde-particle'])
+    expect(jobCount(suite({ solvers: ['copasi', 'tellurium'] }), solvers)).toBe(6)
+    expect(jobCount(suite({}), solvers)).toBe(12)
+  })
+
+  it('offers the default first, then ready versions newest first', () => {
+    const choices = versionChoices('registry_env', [version(1, 'ready'), version(3, 'failed'), version(5, 'ready'), version(4, 'ready')], 5)
+    expect(choices.map(c => c.value)).toEqual(['default', '5', '4', '1'])
+    expect(choices[0]!.label).toBe('default (@5)')
+    expect(choices[1]!.label).toBe('@5 (the default)')
+    expect(versionChoices('x', [], null)).toEqual([{ label: 'default', value: 'default' }])
+  })
+
+  it('names every environment in the request, and reads the versions of a run back', () => {
+    expect(versionParameters({ 'viva-pde-particle': 'default', 'registry_env': '4' })).toEqual(['registry_env@4', 'viva-pde-particle@default'])
+    expect(runVersions({ registry_env: 5 })).toEqual([{ environment: 'registry_env', number: 5 }])
+    expect(runVersions(undefined)).toEqual([])
   })
 })

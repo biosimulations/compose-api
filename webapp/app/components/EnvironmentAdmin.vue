@@ -113,7 +113,7 @@ async function confirmAct() {
     notice.value = {
       default: `${props.name}@${version.number} is now the default.`,
       retire: `${props.name}@${version.number} is retired.`,
-      inspect: `${props.name}@${version.number} is being read back; its page shows the result in a minute or two.`
+      inspect: `The contents of ${props.name}@${version.number} are being re-read; its page shows them in a minute or two.`
     }[action]
     acting.value = false
     emit('changed')

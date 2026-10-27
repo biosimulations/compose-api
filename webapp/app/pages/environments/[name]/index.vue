@@ -212,7 +212,12 @@ watch(() => route.hash, hash => (highlighted.value = decodeURIComponent(hash.sli
                     variant="ghost"
                     :color="action === 'retire' ? 'error' : 'neutral'"
                     :icon="{ default: 'i-lucide-star', retire: 'i-lucide-archive', inspect: 'i-lucide-scan-search' }[action]"
-                    :label="{ default: 'Make default', retire: 'Retire', inspect: 'Read back' }[action]"
+                    :label="{ default: 'Make default', retire: 'Retire', inspect: 'Re-read contents' }[action]"
+                    :title="{
+                      default: 'Runs that name no version will run in this one',
+                      retire: 'Refuse new runs in this version; recorded runs keep it',
+                      inspect: 'Run its image again to record what it installed and the classes it provides'
+                    }[action]"
                     @click="admin?.act(action, v)"
                   />
                 </template>

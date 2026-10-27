@@ -56,7 +56,7 @@ describe('environment administration', () => {
     expect(retired.title).toBe('Retire registry_env@4?')
     expect(retired.danger).toBe(true)
     expect(retired.description).toContain('Runs already recorded keep it')
-    expect(confirmation('inspect', 'registry_env', 5, 5).title).toBe('Read registry_env@5 back again?')
+    expect(confirmation('inspect', 'registry_env', 5, 5).title).toBe('Re-read the contents of registry_env@5?')
     expect(creationConfirmation('registry_env', 'composed', '2026-10-27', '').description).toContain('as of 2026-10-27')
     const image = 'ghcr.io/x/y@sha256:' + 'b'.repeat(64)
     expect(creationConfirmation('viva-pde-particle', 'prebuilt', '', ` ${image}`).description).toContain(`The image ${image} is pulled`)
