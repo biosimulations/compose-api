@@ -1085,7 +1085,8 @@ $ compose-api environments versions [OPTIONS] NAME
 
 ### `compose-api environments version`
 
-One version: what it was made from, its lock, and what it installed and provides.
+One version: what it was made from, its lock, and what it installed and provides. With --against, the
+packages added, removed or at another version since that one, as their images installed them.
 
 **Usage**:
 
@@ -1100,6 +1101,7 @@ $ compose-api environments version [OPTIONS] NAME NUMBER
 
 **Options**:
 
+* `--against INTEGER`: Another version's number: list how this one's packages differ from it.
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 

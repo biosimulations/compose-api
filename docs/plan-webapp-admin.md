@@ -1,6 +1,6 @@
 # Web UI: sign-in switched on, and the administrative tasks brought into it
 
-**Status (2026-10-25): decisions confirmed; steps 1 and 2 under way.** It continues [plan-webapp-login](plan-webapp-login.md), whose work is done apart
+**Status (2026-10-26): active; steps 1 and 2 done, step 3 in review, step 5 partly built.** It continues [plan-webapp-login](plan-webapp-login.md), whose work is done apart
 from switching it on (W2, #359), and step 5b of [plan-environment-versions](plan-environment-versions.md), the
 webapp's environment version pages. One PR per step, each merged with a merge commit. Steps that change
 `kustomize/` deploy on merge; the others reach production with a release.
@@ -100,6 +100,17 @@ webapp's environment version pages. One PR per step, each merged with a merge co
      `lock.changes` the preview uses, so the CLI can diff too (`environments version … --against`).
    - The suite run guard (A4), with a test.
    - Regenerate the spec and the client, and add the CLI options. This needs a release.
+   - *As built (2026-10-26):*
+     - `capabilities` names `environments:admin`, `suites:curate` (known problems, added since the decisions) and
+       `simulations:read-all`, each computed by its enforcing check (`authorization.CAPABILITIES`). The field has a
+       default, so a client talking to an older release reads none. `compose-api auth status --verify` prints them.
+     - The diff compares what the two images installed (`installed`, PEP 503 names, as the webapp's version view
+       does), not their locks: `lock.changes` and `PackageChange` left with composition step 8d, and the read-back
+       exists for every version, registry_env@1 and prebuilt images included. A version with nothing read back yet
+       is a 409. CLI: `environments version NAME N --against M`.
+     - The guard holds a suite while a run is still `submitting`, or while a run under two days old
+       (`suite_runs.IN_FLIGHT_FOR`) has members not finished. Past that it is stalled, not running, so one stuck
+       simulation cannot block the suite for good. Two requests at the same instant can still both start.
 4. **Enforce the CSP** (`WEBAPP_CSP_ENFORCE=true` in `api.env`, deploys on merge).
    - Two weeks of ordinary use have already produced no reports (findings, 1). Only the sign-in flow is unmeasured,
      so enforcing can follow step 1 by a few days, not weeks: long enough for several people to sign in, renew a

@@ -1,6 +1,7 @@
 """Suites (docs/plan-sedml.md, phase 6): the seed suites parse, and a suite run submits every source, is read per
 source (agreement, references), and once a run is the baseline, the next is compared with it solver by solver."""
 
+import datetime
 import json
 from pathlib import Path
 from typing import Any, cast
@@ -76,6 +77,8 @@ async def test_a_suite_run_and_its_drift_from_the_baseline(
 
     started = (await client.post("/suites/test-suite/run", params={"environment_version": "default"})).json()
     assert started["number"] == 1
+    submitting = await client.post("/suites/test-suite/run", params={"environment_version": "default"})
+    assert submitting.status_code == 409  # its sources are not all submitted yet
     await _settled(database_service)
     assert [r["number"] for r in (await client.get("/suites/test-suite/runs")).json()] == [1]
     first = submitted["runs"]
@@ -86,6 +89,9 @@ async def test_a_suite_run_and_its_drift_from_the_baseline(
 
     running = (await client.get("/suites/test-suite/runs/1")).json()
     assert running["summary"]["running"] == 2 and running["summary"]["failed"] == 1
+    # one run at a time: not while run 1's runs are going (docs/plan-webapp-admin.md, A4)
+    held = await client.post("/suites/test-suite/run", params={"environment_version": "default"})
+    assert held.status_code == 409 and "/suites/test-suite/runs/1" in held.json()["detail"]
     failed = next(r for r in running["rows"] if r["failure"])
     assert failed["source"] == "biomodels:BIOMD9999999999"
 
@@ -111,3 +117,31 @@ async def test_a_suite_run_and_its_drift_from_the_baseline(
     assert view["summary"]["drifted"] == 2 and view["summary"]["differ"] == 2  # copasi now differs from tellurium
     assert (await client.get("/suites/test-suite/runs/9")).status_code == 404
     assert (await client.get("/suites/nope/runs")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_a_stalled_run_does_not_hold_the_suite(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A submitted run with a member that never finished holds its suite for `IN_FLIGHT_FOR`, then no longer."""
+    from types import SimpleNamespace
+
+    from compose_api.sedml import service, suite_runs
+
+    now = datetime.datetime.now(datetime.UTC)
+    run = SimpleNamespace(number=3, status="submitted", created_at=now)
+    rows = [SimpleNamespace(members=[SimpleNamespace(simulation_id=7)])]
+    db = SimpleNamespace(
+        suite_runs=lambda name: _returning([run]), suite_comparisons=lambda name, number: _returning(rows)
+    )
+    services = SimpleNamespace(get_comparisons_db=lambda: db)
+    monkeypatch.setattr(suite_runs, "get_required_database_service", lambda: services)
+    monkeypatch.setattr(service, "member_statuses", lambda found: _returning({7: "running"}))
+    suite = Suite(name="held", description="", sources=["biomodels:BIOMD0000000012"], solvers=["copasi"])
+    assert await suite_runs.in_flight(suite) == 3
+    run.created_at = (now - suite_runs.IN_FLIGHT_FOR - datetime.timedelta(minutes=1)).replace(tzinfo=None)
+    assert await suite_runs.in_flight(suite) is None
+    run.status = "submitting"  # still being submitted: resumed after a restart, so it holds the suite however old
+    assert await suite_runs.in_flight(suite) == 3
+
+
+async def _returning(value: Any) -> Any:
+    return value

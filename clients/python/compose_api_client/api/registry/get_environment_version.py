@@ -8,13 +8,26 @@ from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.environment_version_detail import EnvironmentVersionDetail
 from ...models.http_validation_error import HTTPValidationError
-from ...types import Response
+from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
     name: str,
     number: int,
+    *,
+    against: int | None | Unset = UNSET,
 ) -> dict[str, Any]:
+
+    params: dict[str, Any] = {}
+
+    json_against: int | None | Unset
+    if isinstance(against, Unset):
+        json_against = UNSET
+    else:
+        json_against = against
+    params["against"] = json_against
+
+    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
     _kwargs: dict[str, Any] = {
         "method": "get",
@@ -22,6 +35,7 @@ def _get_kwargs(
             name=quote(str(name), safe=""),
             number=quote(str(number), safe=""),
         ),
+        "params": params,
     }
 
     return _kwargs
@@ -38,6 +52,10 @@ def _parse_response(
     if response.status_code == 404:
         response_404 = cast(Any, None)
         return response_404
+
+    if response.status_code == 409:
+        response_409 = cast(Any, None)
+        return response_409
 
     if response.status_code == 422:
         response_422 = HTTPValidationError.from_dict(response.json())
@@ -66,12 +84,15 @@ def sync_detailed(
     number: int,
     *,
     client: AuthenticatedClient | Client,
+    against: int | None | Unset = UNSET,
 ) -> Response[Any | EnvironmentVersionDetail | HTTPValidationError]:
     """One version of an environment: what it was made from, its lock, and what it installed and provides
 
     Args:
         name (str):
         number (int):
+        against (int | None | Unset): Another version of the environment: `changes` lists how this
+            one's packages differ from it
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -84,6 +105,7 @@ def sync_detailed(
     kwargs = _get_kwargs(
         name=name,
         number=number,
+        against=against,
     )
 
     response = client.get_httpx_client().request(
@@ -98,12 +120,15 @@ def sync(
     number: int,
     *,
     client: AuthenticatedClient | Client,
+    against: int | None | Unset = UNSET,
 ) -> Any | EnvironmentVersionDetail | HTTPValidationError | None:
     """One version of an environment: what it was made from, its lock, and what it installed and provides
 
     Args:
         name (str):
         number (int):
+        against (int | None | Unset): Another version of the environment: `changes` lists how this
+            one's packages differ from it
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -117,6 +142,7 @@ def sync(
         name=name,
         number=number,
         client=client,
+        against=against,
     ).parsed
 
 
@@ -125,12 +151,15 @@ async def asyncio_detailed(
     number: int,
     *,
     client: AuthenticatedClient | Client,
+    against: int | None | Unset = UNSET,
 ) -> Response[Any | EnvironmentVersionDetail | HTTPValidationError]:
     """One version of an environment: what it was made from, its lock, and what it installed and provides
 
     Args:
         name (str):
         number (int):
+        against (int | None | Unset): Another version of the environment: `changes` lists how this
+            one's packages differ from it
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -143,6 +172,7 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         name=name,
         number=number,
+        against=against,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -155,12 +185,15 @@ async def asyncio(
     number: int,
     *,
     client: AuthenticatedClient | Client,
+    against: int | None | Unset = UNSET,
 ) -> Any | EnvironmentVersionDetail | HTTPValidationError | None:
     """One version of an environment: what it was made from, its lock, and what it installed and provides
 
     Args:
         name (str):
         number (int):
+        against (int | None | Unset): Another version of the environment: `changes` lists how this
+            one's packages differ from it
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -175,5 +208,6 @@ async def asyncio(
             name=name,
             number=number,
             client=client,
+            against=against,
         )
     ).parsed

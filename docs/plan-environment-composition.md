@@ -20,12 +20,12 @@
 | 6 | registry_env migrates to a composed version on a current process-bigraph | done: @5 (0.7.50) the default since 2026-10-26, suite run 5 without regressions |
 | 7a | Runs name an environment or have one inferred; environments listed from the database | merged (#415, #416) |
 | 7b | Implicit mash-ups, proven with viva-basic-processes | done: #417–#419 (0.7.51), #421 (0.7.52); live 2026-10-26 |
-| 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | |
+| 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | parked 2026-10-26: Smoldyn built from source and `main`-branch dependencies need vivarium-collective changes |
 | 8a | Versions come from the database only: the deployed (pbest) definition, `simulator_registry.json`, `shared_image()` retired | merged (#424), 0.7.53 |
 | 8b | Prebuilt images by their versions, not `PREBUILT_SIMULATORS` | merged (#426), 0.7.54; the `api.env` line goes with 8c |
 | 8c | Interface manifests from each environment's default version, not committed files | merged (#428), 0.7.55 |
 | 8d | The shared uv path, `preview` and custom library lists retired | merged (#430), 0.7.56 |
-| 8e | pbest's types vendored; compose-api no longer depends on pbest | in review |
+| 8e | pbest's types vendored; compose-api no longer depends on pbest | merged (#432), 0.7.57 |
 
 ## Why (2026-10-25)
 

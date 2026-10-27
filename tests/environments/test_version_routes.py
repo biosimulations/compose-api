@@ -559,3 +559,36 @@ async def test_a_mash_up_the_database_holds_is_listed_with_its_entries(
     assert next(iter(environments)) == "registry_env"  # the declared ones come first, as before
     assert versions.status_code == 200 and versions.json()["kind"] == "mash-up" and versions.json()["versions"] == []
     assert unknown.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_a_version_lists_how_its_packages_differ_from_another(
+    app: FastAPI, builds: Builds, database_service: DatabaseServiceSQL
+) -> None:
+    """`?against=` compares what the two images installed, by name as PyPI compares names (webapp-admin step 3)."""
+    environments_db = database_service.get_environments_db()
+    versions = f"/registry/environments/{PREBUILT}/versions"
+    async with _as(app, ADMIN) as admin:
+        numbers = []
+        for installed in ("numpy==2.3.1\nPyYAML==6.0.2\nsix==1.16.0\n", "numpy==2.3.4\npyyaml==6.0.2\nscipy==1.16.0\n"):
+            created = (await admin.post(versions, json={"image": _digest()})).json()
+            await environments_db.set_contents(created["database_id"], installed, {"components": []})
+            numbers.append(created["number"])
+        older, newer = numbers
+        diffed = await admin.get(f"{versions}/{newer}", params={"against": older})
+        assert diffed.status_code == 200, diffed.text
+        assert diffed.json()["against"] == older
+        assert diffed.json()["changes"] == [
+            {"name": "numpy", "before": "2.3.1", "after": "2.3.4"},
+            {"name": "scipy", "before": None, "after": "1.16.0"},
+            {"name": "six", "before": "1.16.0", "after": None},
+        ]  # PyYAML and pyyaml are one package, unchanged
+        plain = (await admin.get(f"{versions}/{newer}")).json()
+        assert plain["changes"] is None and plain["against"] is None
+
+        unread = (await admin.post(versions, json={"image": _digest()})).json()
+        await environments_db.set_contents(unread["database_id"], None, {"components": []})
+        refused = await admin.get(f"{versions}/{newer}", params={"against": unread["number"]})
+        assert refused.status_code == 409 and f"@{unread['number']}" in refused.json()["detail"]
+        missing = await admin.get(f"{versions}/{newer}", params={"against": 99999})
+        assert missing.status_code == 404

@@ -626,10 +626,16 @@ class ComposeSession:
         r, _ = self._send(op, lambda c: list_environment_versions.sync_detailed(name, client=c))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
-    def environment_version(self, name: str, number: int) -> EnvironmentVersionDetail:
-        """One version: what it was made from, its lock, and what it installed and provides."""
+    def environment_version(self, name: str, number: int, *, against: int | None = None) -> EnvironmentVersionDetail:
+        """One version: what it was made from, its lock, and what it installed and provides; with ``against``, how its
+        packages differ from that version's (``changes``)."""
         op = Operation("GET", f"/registry/environments/{name}/versions/{number}", replayable=True)
-        r, _ = self._send(op, lambda c: get_environment_version.sync_detailed(name, number, client=c))
+        r, _ = self._send(
+            op,
+            lambda c: get_environment_version.sync_detailed(
+                name, number, client=c, against=against if against is not None else UNSET
+            ),
+        )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     def export_environment_version(self, name: str, number: int, *, format: str | None = None) -> EnvironmentExport:  # noqa: A002
@@ -1518,10 +1524,18 @@ class AsyncComposeSession:
         r, _ = await self._send(op, lambda c: list_environment_versions.asyncio_detailed(name, client=c))
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
-    async def environment_version(self, name: str, number: int) -> EnvironmentVersionDetail:
-        """One version: what it was made from, its lock, and what it installed and provides."""
+    async def environment_version(
+        self, name: str, number: int, *, against: int | None = None
+    ) -> EnvironmentVersionDetail:
+        """One version: what it was made from, its lock, and what it installed and provides; with ``against``, how its
+        packages differ from that version's (``changes``)."""
         op = Operation("GET", f"/registry/environments/{name}/versions/{number}", replayable=True)
-        r, _ = await self._send(op, lambda c: get_environment_version.asyncio_detailed(name, number, client=c))
+        r, _ = await self._send(
+            op,
+            lambda c: get_environment_version.asyncio_detailed(
+                name, number, client=c, against=against if against is not None else UNSET
+            ),
+        )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
 
     async def export_environment_version(

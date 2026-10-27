@@ -10,7 +10,9 @@ from compose_api_client.auth.sources import AsyncStoredSession
 from compose_api_client.auth.storage import CredentialStore
 from compose_api_client.ext.errors import CliError, NetworkError
 from compose_api_client.ext.session import AsyncComposeSession
+from compose_api_client.models import CurrentPrincipalResponse
 from compose_api_client.profiles import CliSettings
+from compose_api_client.types import Unset
 
 
 async def confirm_identity(
@@ -33,7 +35,7 @@ async def confirm_identity(
                 transport=api_transport,
             ) as api,
         ):
-            await api.whoami()
+            principal = await api.whoami()
     except CliError as exc:
         if after_sign_in:
             raise type(exc)(
@@ -45,4 +47,10 @@ async def confirm_identity(
                 f"{exc.message}. This is not a sign-out: `compose-api auth status` shows the stored session"
             ) from None
         raise
-    return await session.status()
+    status = await session.status()
+    return status.model_copy(update={"capabilities": capabilities_of(principal)})
+
+
+def capabilities_of(principal: CurrentPrincipalResponse) -> list[str]:
+    """What the API says the caller may do; none from a release before it said (docs/plan-webapp-admin.md, A1)."""
+    return [] if isinstance(principal.capabilities, Unset) else list(principal.capabilities)

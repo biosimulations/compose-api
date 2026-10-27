@@ -94,6 +94,21 @@ async def require_suite_curator(caller: OptionalCaller) -> Caller:
 SuiteCurator = Annotated[Caller, Depends(require_suite_curator)]
 
 
+#: what a caller may do, by name, as ``GET /auth/me`` reports it (docs/plan-webapp-admin.md, A1); each is the check
+#: that enforces it, so the two cannot disagree
+CAPABILITIES = {
+    "environments:admin": is_environment_admin,
+    "suites:curate": is_suite_curator,
+    "simulations:read-all": _is_admin,
+}
+
+
+def capabilities(caller: Caller | None) -> list[str]:
+    """The names of what the caller may do beyond what anyone may (A1). The webapp only displays them; every request
+    is still checked."""
+    return sorted(name for name, check in CAPABILITIES.items() if check(caller))
+
+
 def can_read(caller: Caller | None, simulation: SimulationAccess) -> bool:
     """The read policy: public simulations to anyone, private ones to their owner and to configured admins."""
     if simulation.visibility == Visibility.PUBLIC:
