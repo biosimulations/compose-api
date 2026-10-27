@@ -28,11 +28,11 @@ Several documents answer different questions. Start with the one that matches yo
 | SED-ML models (BioModels, biosimulations.org, uploads) run on several solvers and compared; catalog, environments and solvers defined | [plan-sedml.md](plan-sedml.md) | plan, implemented (curated routes and interpolation deferred) | 2026-10-13 |
 | environment builds as jobs of their own, image artifacts recorded, builds on Kubernetes, publishing | [plan-environment-builds.md](plan-environment-builds.md) | plan, phases 1–4 implemented; publishing deferred | 2026-10-13 |
 | environment versions as database records: locked with uv, created and chosen through the API, recorded on every run; the registry as the build trust gate | [plan-environment-versions.md](plan-environment-versions.md) | plan; steps 1–5a merged (0.7.41); rest superseded by composition | 2026-10-25 |
-| environments composed from curated manifest entries: pixi (uv export), compliance composites per entry, registry_env migrated off pbest, mash-ups on demand | [plan-environment-composition.md](plan-environment-composition.md) | plan; steps 0–7b and 8a–8e done (0.7.57); 7c parked | 2026-10-26 |
-| each solver's known problems in a suite: excused per solver, flagged when fixed, curated by an admin in the webapp or CLI | [plan-known-problems.md](plan-known-problems.md) | plan; steps 1, 2a, 3 done (0.7.49); 2b in review | 2026-10-26 |
+| environments composed from curated manifest entries: pixi (uv export), compliance composites per entry, registry_env migrated off pbest, mash-ups on demand | [plan-environment-composition.md](plan-environment-composition.md) | active: 0–7b, 8a–8e done (0.7.57); 7c amended 2026-10-27, parts 7c-1 to 7c-5 | 2026-10-26 |
+| each solver's known problems in a suite: excused per solver, flagged when fixed, curated by an admin in the webapp or CLI | [plan-known-problems.md](plan-known-problems.md) | done: 1, 2a, 3 (0.7.49), 2b (0.7.62) |  2026-10-26 |
 | viewers for datasets, registered per type and loaded lazily; the results bundle in 3D | [plan-viewers.md](plan-viewers.md) | plan, implemented (A1–A3 later) | 2026-10-13 |
 | signing in to the web UI: a PKCE single-page app (no backend-for-frontend), the Auth0 SPA application, hardening | [plan-webapp-login.md](plan-webapp-login.md) | done: live, CSP enforced, documented | 2026-10-27 |
-| the web UI's sign-in switched on, capabilities from `/auth/me`, environment version pages and admin actions, one suite run at a time | [plan-webapp-admin.md](plan-webapp-admin.md) | active; all built, suite page in review | 2026-10-27 |
+| the web UI's sign-in switched on, capabilities from `/auth/me`, environment version pages and admin actions, one suite run at a time | [plan-webapp-admin.md](plan-webapp-admin.md) | done (0.7.61); a signed-in check in production left | 2026-10-27 |
 | runs recorded as `requested` and dispatched by a worker that survives restarts; caps, priorities, resumable suite runs | [plan-durable-submission.md](plan-durable-submission.md) | plan, implemented (0.7.31) | 2026-10-22 |
 | checking SED-ML comparisons against BioSimulators: legacy runs as references, and biosim's `/verify` API as an oracle | [plan-verify-oracle.md](plan-verify-oracle.md) | plan, parked; V0–V4 done, V5 left | 2026-10-26 |
 | the web UI at `/ui`: pages, viewers, composite authoring, how it is built | [webapp.md](webapp.md) | user documentation | 2026-10-13 |
@@ -43,22 +43,20 @@ Several documents answer different questions. Start with the one that matches yo
 We work one plan at a time: the active plan runs to its end, and anything found outside it is recorded here and
 raised, not fixed on the spot.
 
-**Active: [plan-webapp-admin](plan-webapp-admin.md)**: every step is built; step 5's suite page is in review, then a
-release and a signed-in check in production. Then
-[plan-known-problems](plan-known-problems.md) 2b, unblocked by the CSP, or [plan-verify-oracle](plan-verify-oracle.md) V5.
+**Active: [plan-environment-composition](plan-environment-composition.md) 7c** (amended 2026-10-27: viva-pde-particle
+composed, for the PDE + particle + ODE mash-up), parts 7c-1 to 7c-5. Done before it: plan-webapp-admin (0.7.61; Jim's
+signed-in check in production left) and plan-known-problems 2b (0.7.62). Then [plan-verify-oracle](plan-verify-oracle.md) V5.
 
 **Parked**, with where each stopped:
 
 | Thread | Done | Left |
 |---|---|---|
-| [plan-environment-composition](plan-environment-composition.md) | 0–7b, 8a–8e (0.7.57) | 7c: viva-pde-particle as a composed entry, blocked on its Smoldyn build (from source) and on dependencies that track `main` branches; both need vivarium-collective changes. Parked 2026-10-26 |
-| [plan-known-problems](plan-known-problems.md) | 1, 2a, 3 (0.7.49) | 2b: mark and clear in the webapp, in review |
 | [plan-verify-oracle](plan-verify-oracle.md) | V0–V4 | V5: verdicts on the comparison and suite pages |
 | [plan-vcell-ode](plan-vcell-ode.md) | 1–4 | report VCell bugs: BIOMD 112 (`null`), 175 (unknown identifier), 56 and 168 (disagree), 137 (solve error); 235 (out of memory) and 255 (timeout) |
 | [plan-observability](plan-observability.md) | 0–4 | 5: an owner stamped at submit |
 | [plan-environment-builds](plan-environment-builds.md) | phases 1–4 | publishing |
 | Named composed environments | | Only registry_env can be a named composed environment: `versions.py`, `resolver.py` and `lifecycle.py` each take "the" `shared` environment (the default for runs that name none, the resolver's first choice, a mash-up's Python), and the kinds are `shared`, `prebuilt` and `mash-up`. A curated repo (a viva-* entry) runs in registry_env, in a mash-up, or as a prebuilt image. A short plan: a `composed` kind requiring `entries`, `shared` kept as the default, and the resolver ranking named composed environments ahead of mash-ups; composition 7c would use it. Found 2026-10-27 |
-| Emitters in submitted documents | | `local:RAMEmitter` is refused as a short name and no registry entry covers `process_bigraph`, so a submitted document cannot use process-bigraph's own emitters (SED-ML runs report through biosim-toolkit's steps). Found by composition 7b-4, 2026-10-26 |
+| Emitters in submitted documents | | Folded into composition 7c-1 (2026-10-27): process-bigraph's `process_bigraph.emitter` becomes an admitted entry, and documents name `local:process_bigraph.emitter.RAMEmitter` |
 | Test isolation | | `tests/environments/test_contents.py::test_the_reread_job_scripts_leave_what_they_read_beside_the_image` fails when run after `tests/registry tests/api tests/environments` (a settings layer left active: `simulation_store_base_path`); passes alone and in CI's order |
 | Test isolation, staging | | two `tests/simulation/test_staging.py` permission tests fail in the full local order and pass alone (found 2026-10-26) |
 | Open PRs | | #345 (vivarium-workbench plan), dependency bumps |

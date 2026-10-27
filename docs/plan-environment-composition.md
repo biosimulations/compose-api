@@ -20,7 +20,7 @@
 | 6 | registry_env migrates to a composed version on a current process-bigraph | done: @5 (0.7.50) the default since 2026-10-26, suite run 5 without regressions |
 | 7a | Runs name an environment or have one inferred; environments listed from the database | merged (#415, #416) |
 | 7b | Implicit mash-ups, proven with viva-basic-processes | done: #417–#419 (0.7.51), #421 (0.7.52); live 2026-10-26 |
-| 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | parked 2026-10-26: Smoldyn built from source and `main`-branch dependencies need vivarium-collective changes |
+| 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | amended 2026-10-27: the local test passes (D7c.1–D7c.3); parts 7c-1 to 7c-5 to build |
 | 8a | Versions come from the database only: the deployed (pbest) definition, `simulator_registry.json`, `shared_image()` retired | merged (#424), 0.7.53 |
 | 8b | Prebuilt images by their versions, not `PREBUILT_SIMULATORS` | merged (#426), 0.7.54; the `api.env` line goes with 8c |
 | 8c | Interface manifests from each environment's default version, not committed files | merged (#428), 0.7.55 |
@@ -395,15 +395,71 @@
      - Live: a document using it with a pbsim-common step creates `mash-…`, builds it, runs, and a second identical
        run reuses it. A deliberately conflicting pair answers 409.
      - The webapp shows mash-ups on the environments page.
-   - **7c. viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up.** Two things block it today:
-     - **Smoldyn is not a package.** viva-pde-particle compiles it from a patched submodule while its image builds
-       (`build-smoldyn`). Either manifest entries gain a reviewed `build` step, run in the build Job after `pixi
-       install`, or Smoldyn is published as a package (conda-forge or a wheel). To decide with Jim.
-     - **Some of its dependencies track `main` branches** (viva-superpowers, viva-workspace, viva-catalog); C2 needs a
-       release or a commit for each.
-     - Both are changes in vivarium-collective, made only with Jim's go-ahead. Then: an `install` and `conda` for the
-       entry (fenics-dolfinx 0.10, MPI, Netgen), compliance cases kept with it, and a document combining its
-       processes with `VCellUTCStep` or `CopasiUTCStep`, built as a mash-up.
+   - **7c. viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up.**
+     - *Parked 2026-10-26* as blocked on vivarium-collective changes: Smoldyn is compiled from a patched submodule
+       while the image builds (`build-smoldyn`), and some dependencies track `main` branches.
+     - *Amended 2026-10-27, after a local test:* neither block needs vivarium-collective.
+       - Smoldyn's fork is **`virtualcell/Smoldyn`** (branch `pyhybrid`, commit `e86d552`).
+       - viva-pde-particle installs unchanged from git at a commit (`65f9a62`, with the `reference` extra).
+       - Of the `main`-tracking dependencies, viva-superpowers, viva-workspace and viva-catalog are for its workbench
+         and research environment only: the package imports none of them. vcell-fenics (virtualcell) and
+         investigation-contracts are pinned at commits already.
+
+     **The local test (2026-10-27, Docker, linux/amd64).**
+     - **The Smoldyn wheel** `smoldyn-2.76.dev0+vcell.e86d552-cp312-cp312-linux_x86_64` (1.2 MB) builds with
+       `build_smoldyn.sh`'s flags (`OPTION_VCELL`, NSV, no OpenGL). It is built on conda-forge Python 3.12 in the pixi
+       image: manylinux's Pythons have no `libpython`, which Smoldyn's CMake requires. The recipe also needs conda's
+       prefixed `ar`/`ranlib`, an explicit `SMOLDYN_VERSION`, a writable source tree, and retagging (it writes
+       `py3-none-any`).
+     - **The solve:** registry_env@5's pins plus viva-pde-particle's engines locked in 72 s with no conflict. That is
+       472 packages, about 4.4 GB installed: Python 3.12.13, numpy 2.5.4, fenics-dolfinx 0.10.0, PETSc 3.25.6,
+       MPICH 5.0.1, vtk 9.7.1, netgen 6.2.2602, tellurium 2.2.13.1 (libroadrunner 2.11.0), python-copasi 4.48.311,
+       pyvcell 0.5.2, libvcell 0.0.24, pyvcell-fvsolver 0.11.1.
+     - **Imports:** all 22 key imports load together (Smoldyn, dolfinx, mpi4py, petsc4py, vtk, netgen, readdy,
+       tellurium, COPASI, pyvcell, vcell-fenics, pbsim-common's COPASI and Tellurium steps, viva-pde-particle's
+       `smoldyn_hybrid`). They need the `LD_LIBRARY_PATH` composed images already set, for libroadrunner.
+     - **Runs, through compose-api's runner:** the pbsim-common COPASI compliance case completes. viva-pde-particle's
+       example (four PDE + Smoldyn trials) gives values identical to its own runner's smoke.
+     - The one gap: its documents name the emitter `local:ram-emitter`, a link only viva-pde-particle's own core
+       registers.
+
+     **Decisions (Jim, 2026-10-27):**
+     - **D7c.1 Smoldyn is a wheel** built from `virtualcell/Smoldyn` at a commit and attached to a release there.
+       The entry installs it by URL and sha256, not by a `build` step in our build Job.
+     - **D7c.2 Documents name process-bigraph's emitters fully qualified:** `local:process_bigraph.emitter.RAMEmitter`,
+       not `local:ram-emitter`. No short names are registered.
+     - **D7c.3 The prebuilt image stays.** viva-pde-particle@1 still runs documents that use only its classes (the
+       resolver prefers a declared environment that covers them). The composed entry is what lets its classes join a
+       mash-up with other entries.
+
+     **Parts (one PR each, merge commits):**
+     - **7c-1. process-bigraph's emitters are admitted.** A manifest entry for the core's `process_bigraph.emitter`
+       module (RAMEmitter, JSONEmitter, ConsoleEmitter):
+       - level `tested`;
+       - no install of its own: every composed environment installs the core (`composition.core`);
+       - provided by every composed environment and mash-up, and by viva-pde-particle's image (its read-back lists
+         process-bigraph 1.9.1).
+
+       `members_of` and validation count it there. A document may then carry `local:process_bigraph.emitter.RAMEmitter`,
+       which closes the parked "emitters in submitted documents" item. Tests cover a submission with it accepted, and
+       `local:RAMEmitter` still refused.
+     - **7c-2. `install.url`.** A manifest entry may install a wheel by `url` and `sha256`. The pixi generator writes
+       `{ url = … }`, and the lock records the hash; a mismatch fails the lock.
+     - **7c-3. The Smoldyn wheel workflow** in `virtualcell/Smoldyn`, pushed with Jim's go-ahead. A workflow builds the
+       wheel at a commit, as in the local test, and attaches it to a release (`vcell-pyhybrid-<commit>`).
+     - **7c-4. The entries:**
+       - `smoldyn-vcell` (library, the wheel), `vcell-fenics` (library, git at its commit) and `pyvcell-fvsolver`
+         (library, PyPI);
+       - viva-pde-particle given an `install` (git at its commit, the `reference` extra), its `conda:` engines and
+         `requires:`;
+       - a compliance case kept with it: a short PDE + Smoldyn ensemble with fixed seeds, the emitter fully
+         qualified, and its expected values;
+       - tested locally (lock, install, the case) before merge.
+     - **7c-5. Live:** a release, then a document combining viva-pde-particle's processes with `CopasiUTCStep`,
+       submitted signed in. It creates its mash-up, locks and builds it (expect a large image), and runs.
+     - **Optional, vivarium-collective with Jim's go-ahead:** viva-pde-particle's `ensemble_document` writes the fully
+       qualified emitter (`ensemble.py`, one line), so documents it generates pass validation as they are.
+
 8. **Retire** what composition replaced (surveyed 2026-10-26, when registry_env@5, composed, became the default).
 
    **What still uses the old paths:**
