@@ -251,18 +251,21 @@ def _scratch_job(
 PIXI_TOML_ENV = "PIXI_TOML_B64"
 LOCKED = "pixi.lock"
 LOCK_ERROR = "lock.err"
+GIT_SPEC = "git"  # from conda-forge, for the git sources a lock resolves (viva-pde-particle's, first: 7c-5)
 
 
 def lock_script() -> str:
     """Inside the pixi image, unprivileged, in scratch: lock the workspace the Job carries (base64, in the env) and
     print the lock, or why it did not resolve. Locking reads packages' metadata, which can run their build code: it
-    happens here, never in the API pod."""
+    happens here, never in the API pod. pixi resolves a git source with the git executable, which the pixi image
+    lacks and an unprivileged Job cannot apt-get, so `pixi exec` fetches it from conda-forge (`GIT_SPEC`)."""
     return dedent(f"""        set -u
         cd {SCRATCH_DIR}
         export HOME={SCRATCH_DIR} PIXI_CACHE_DIR={SCRATCH_DIR}/cache RATTLER_CACHE_DIR={SCRATCH_DIR}/cache \
           UV_CACHE_DIR={SCRATCH_DIR}/uv
         echo "${PIXI_TOML_ENV}" | base64 -d > pixi.toml
-        if pixi lock > lock.out 2> {LOCK_ERROR}; then kind={LOCKED}; else kind={LOCK_ERROR}; fi
+        if pixi exec --spec {GIT_SPEC} -- pixi lock > lock.out 2> {LOCK_ERROR}; then kind={LOCKED}
+        else kind={LOCK_ERROR}; fi
         echo "{INSPECT_MARKER} $kind"
         cat "$kind"
         echo
@@ -283,14 +286,15 @@ UV_ERROR = "uv.err"
 
 def uv_lock_script() -> str:
     """Inside the pixi image, unprivileged, in scratch: lock the uv project the Job carries with uv (fetched from
-    conda-forge by `pixi exec`), and print the lock or why it did not resolve."""
+    conda-forge by `pixi exec`, with git for git sources), and print the lock or why it did not resolve."""
     return dedent(f"""\
         set -u
         cd {SCRATCH_DIR}
         export HOME={SCRATCH_DIR} PIXI_CACHE_DIR={SCRATCH_DIR}/cache RATTLER_CACHE_DIR={SCRATCH_DIR}/cache \\
           UV_CACHE_DIR={SCRATCH_DIR}/uv
         echo "${PYPROJECT_ENV}" | base64 -d > pyproject.toml
-        if pixi exec --spec uv uv lock > uv.out 2> {UV_ERROR}; then kind={UV_LOCKED}; else kind={UV_ERROR}; fi
+        if pixi exec --spec uv --spec {GIT_SPEC} -- uv lock > uv.out 2> {UV_ERROR}; then kind={UV_LOCKED}
+        else kind={UV_ERROR}; fi
         echo "{INSPECT_MARKER} $kind"
         cat "$kind"
         echo

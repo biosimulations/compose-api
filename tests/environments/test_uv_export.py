@@ -102,7 +102,7 @@ def test_the_uv_lock_script_prints_the_lock_or_why_not(tmp_path: Path, monkeypat
     bin_dir.mkdir()
     fake = bin_dir / "pixi"
     fake.write_text(
-        '#!/bin/bash\n[ "$1 $2 $3 $4 $5" = "exec --spec uv uv lock" ] || exit 2\n'
+        '#!/bin/bash\n[ "$*" = "exec --spec uv --spec git -- uv lock" ] || exit 2\n'
         'if grep -q conflict pyproject.toml; then echo "No solution for numpy" >&2; exit 1; fi\n'
         'printf "version = 1\\n" > uv.lock\n'
     )
