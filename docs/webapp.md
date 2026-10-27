@@ -99,7 +99,7 @@ response carries these security headers:
 
 - A `Content-Security-Policy` that allows scripts only from this origin, plus the hashes of the build's inline
   scripts, which the API computes from the files it serves. Connections are allowed only to this origin and the Auth0
-  tenant. The page cannot be framed. It is **report-only** until `WEBAPP_CSP_ENFORCE=true`. Browsers post violations
+  tenant. The page cannot be framed. Production enforces it (`WEBAPP_CSP_ENFORCE=true`); without that setting it only reports. Browsers post violations
   to `POST /webapp/csp-report`, which the API logs as `CSP violation report`.
 - `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`.
 
