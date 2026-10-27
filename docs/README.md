@@ -32,7 +32,7 @@ Several documents answer different questions. Start with the one that matches yo
 | each solver's known problems in a suite: excused per solver, flagged when fixed, curated by an admin in the webapp or CLI | [plan-known-problems.md](plan-known-problems.md) | plan; steps 1, 2a, 3 done (0.7.49); 2b waits for the CSP | 2026-10-26 |
 | viewers for datasets, registered per type and loaded lazily; the results bundle in 3D | [plan-viewers.md](plan-viewers.md) | plan, implemented (A1–A3 later) | 2026-10-13 |
 | signing in to the web UI: a PKCE single-page app (no backend-for-frontend), the Auth0 SPA application, hardening | [plan-webapp-login.md](plan-webapp-login.md) | done: live, CSP enforced, documented | 2026-10-27 |
-| the web UI's sign-in switched on, capabilities from `/auth/me`, environment version pages and admin actions, one suite run at a time | [plan-webapp-admin.md](plan-webapp-admin.md) | active; 1–4, 5c, 6, 7 done; 5's suite page left | 2026-10-27 |
+| the web UI's sign-in switched on, capabilities from `/auth/me`, environment version pages and admin actions, one suite run at a time | [plan-webapp-admin.md](plan-webapp-admin.md) | active; all built, suite page in review | 2026-10-27 |
 | runs recorded as `requested` and dispatched by a worker that survives restarts; caps, priorities, resumable suite runs | [plan-durable-submission.md](plan-durable-submission.md) | plan, implemented (0.7.31) | 2026-10-22 |
 | checking SED-ML comparisons against BioSimulators: legacy runs as references, and biosim's `/verify` API as an oracle | [plan-verify-oracle.md](plan-verify-oracle.md) | plan, parked; V0–V4 done, V5 left | 2026-10-26 |
 | the web UI at `/ui`: pages, viewers, composite authoring, how it is built | [webapp.md](webapp.md) | user documentation | 2026-10-13 |
@@ -43,8 +43,8 @@ Several documents answer different questions. Start with the one that matches yo
 We work one plan at a time: the active plan runs to its end, and anything found outside it is recorded here and
 raised, not fixed on the spot.
 
-**Active: [plan-webapp-admin](plan-webapp-admin.md)**: steps 1–4, 5c, 6 and 7 are done (0.7.60). Left: step 5's
-suite page (version picker, each run's versions, the button disabled while signed out). Then
+**Active: [plan-webapp-admin](plan-webapp-admin.md)**: every step is built; step 5's suite page is in review, then a
+release and a signed-in check in production. Then
 [plan-known-problems](plan-known-problems.md) 2b, unblocked by the CSP, or [plan-verify-oracle](plan-verify-oracle.md) V5.
 
 **Parked**, with where each stopped:

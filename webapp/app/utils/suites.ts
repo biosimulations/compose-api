@@ -39,3 +39,45 @@ export function rowProblems(row: Row, problems: Problem[], number: number): RowP
     resolved: resolved.has(solver)
   })).sort((a, b) => a.solver.localeCompare(b.solver))
 }
+
+// Running a suite in chosen environment versions (docs/plan-webapp-admin.md, step 5; A4).
+
+type Suite = Schemas['Suite']
+type Solver = Schemas['Solver']
+type Version = Schemas['EnvironmentVersion']
+
+/** The solvers a suite runs: the ones it names, or every solver when it names none (as the API chooses them). */
+export function suiteSolvers(suite: Suite, solvers: Solver[]): Solver[] {
+  return suite.solvers?.length ? solvers.filter(s => suite.solvers!.includes(s.id)) : solvers
+}
+
+/** The environments those solvers run in, sorted: each needs a version named when the suite runs. */
+export function suiteEnvironments(suite: Suite, solvers: Solver[]): string[] {
+  return [...new Set(suiteSolvers(suite, solvers).map(s => s.environment))].sort()
+}
+
+/** How many simulations a run submits, about: one per source and solver. */
+export function jobCount(suite: Suite, solvers: Solver[]): number {
+  return suite.sources.length * suiteSolvers(suite, solvers).length
+}
+
+export interface VersionChoice { label: string, value: string }
+
+/** What a suite run may name for one environment: its default (first), then each ready version, newest first. */
+export function versionChoices(environment: string, versions: Version[], defaultNumber: number | null | undefined): VersionChoice[] {
+  const ready = versions.filter(v => v.state === 'ready').sort((a, b) => b.number - a.number)
+  return [
+    { label: `default${defaultNumber != null ? ` (@${defaultNumber})` : ''}`, value: 'default' },
+    ...ready.map(v => ({ label: `@${v.number}${v.number === defaultNumber ? ' (the default)' : ''}`, value: String(v.number) }))
+  ]
+}
+
+/** The `environment_version` parameters for the chosen versions: `name@number`, or `name@default`. */
+export function versionParameters(chosen: Record<string, string>): string[] {
+  return Object.entries(chosen).sort(([a], [b]) => a.localeCompare(b)).map(([env, v]) => `${env}@${v}`)
+}
+
+/** A run's versions as links' labels, sorted: `registry_env@5`; none for a run started before versions. */
+export function runVersions(versions: Record<string, number> | null | undefined): Schemas['VersionRef'][] {
+  return Object.entries(versions ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([environment, number]) => ({ environment, number }))
+}
