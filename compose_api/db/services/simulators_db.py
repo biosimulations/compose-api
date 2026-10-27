@@ -152,6 +152,13 @@ class SimulatorDatabaseService(ABC):
         """One simulation with its simulator and latest run, for a listing's detail view."""
 
     @abstractmethod
+    async def simulator_uses(
+        self, readable: ColumnElement[bool] | None, also: list[int], only: int | None = None
+    ) -> list["SimulatorUse"]:
+        """Each simulator that a run matching ``readable`` used, or that is in ``also`` (versions), with how many such
+        runs used it and when; ``only``: just that simulator. Newest simulator first."""
+
+    @abstractmethod
     async def get_simulations_access(self, simulation_ids: list[int]) -> list[SimulationAccess]:
         """The owner and visibility of each simulation that exists, in no particular order."""
         pass
@@ -561,6 +568,31 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
         return await _get_simulation_row(self.async_session_maker, simulation_id)
 
     @override
+    async def simulator_uses(
+        self, readable: ColumnElement[bool] | None, also: list[int], only: int | None = None
+    ) -> list["SimulatorUse"]:
+        joined = ORMSimulation.simulator_id == ORMSimulator.id
+        stmt = (
+            select(
+                ORMSimulator.id,
+                ORMSimulator.created_at,
+                ORMSimulator.container_def_hash,
+                func.count(ORMSimulation.id),
+                func.min(ORMSimulation.created_at),
+                func.max(ORMSimulation.created_at),
+            )
+            .outerjoin(ORMSimulation, joined if readable is None else and_(joined, readable))
+            .group_by(ORMSimulator.id)
+            .having(or_(func.count(ORMSimulation.id) > 0, ORMSimulator.id.in_(also)))
+            .order_by(ORMSimulator.id.desc())
+        )
+        if only is not None:
+            stmt = stmt.where(ORMSimulator.id == only)
+        async with self.async_session_maker() as session:
+            rows = (await session.execute(stmt)).tuples().all()
+        return [SimulatorUse(*row) for row in rows]
+
+    @override
     async def get_simulations_access(self, simulation_ids: list[int]) -> list[SimulationAccess]:
         if not simulation_ids:
             return []
@@ -653,11 +685,26 @@ SUBMITTING = "submitting"
 class SimulationQuery:
     status: str | None = None  # a JobStatus value, or "submitting" (no SLURM job yet)
     container_def_hash: str | None = None
+    simulator_id: int | None = None
+    # it ran in one of these environment versions (by id); None: any or none
+    environment_version_ids: list[int] | None = None
     since: datetime.datetime | None = None  # created at or after (UTC)
     labels: dict[str, str] = field(default_factory=dict)  # every one must match
     tags: list[str] = field(default_factory=list)  # every one must be present
     limit: int = 50
     offset: int = 0
+
+
+@dataclass(frozen=True)
+class SimulatorUse:
+    """A simulator, and how many runs used it and when (none, for a version no run has used yet)."""
+
+    simulator_id: int
+    created_at: datetime.datetime
+    container_def_hash: str
+    run_count: int
+    first_run_at: datetime.datetime | None
+    last_run_at: datetime.datetime | None
 
 
 @dataclass(frozen=True)
@@ -722,6 +769,10 @@ async def _page_simulations(
         stmt = stmt.where(ORMHpcRun.status == JobStatusDB(query.status))
     if query.container_def_hash is not None:
         stmt = stmt.where(ORMSimulator.container_def_hash.startswith(query.container_def_hash))
+    if query.simulator_id is not None:
+        stmt = stmt.where(ORMSimulation.simulator_id == query.simulator_id)
+    if query.environment_version_ids is not None:
+        stmt = stmt.where(ORMSimulation.environment_version_id.in_(query.environment_version_ids))
     if query.since is not None:
         stmt = stmt.where(ORMSimulation.created_at >= query.since.astimezone(datetime.UTC).replace(tzinfo=None))
     if query.labels:

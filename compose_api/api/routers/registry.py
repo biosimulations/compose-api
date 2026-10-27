@@ -6,6 +6,7 @@ runs in (docs/plan-authoring.md). Each manifest is read back from the environmen
 (docs/plan-environment-composition.md, D8.4; compose_api/environments/manifests.py).
 """
 
+import datetime
 import hashlib
 import json
 import logging
@@ -16,9 +17,10 @@ from typing import Annotated, Any
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
 
 from compose_api.authentication import OptionalPrincipal, get_optional_principal
-from compose_api.authorization import EnvironmentAdmin
+from compose_api.authorization import EnvironmentAdmin, OptionalCaller, readable_clause
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.config import get_settings
+from compose_api.db.services.simulators_db import SimulatorUse
 from compose_api.dependencies import (
     get_database_service,
     get_required_database_service,
@@ -56,7 +58,10 @@ from compose_api.simulation.models import (
     EnvironmentVersionDetail,
     EnvironmentVersions,
     NewEnvironmentVersion,
+    SimulatorDetail,
+    SimulatorSummary,
     SimulatorVersion,
+    VersionRef,
     VersionState,
 )
 
@@ -546,6 +551,61 @@ async def retire_environment_version(name: str, number: int, caller: Environment
     logger.info(f"{version.label} retired by {caller.subject}")
     retired = version.model_dump(exclude={"lock", "installed", "interfaces"}) | {"state": VersionState.RETIRED}
     return EnvironmentVersion.model_validate(retired)
+
+
+def _utc(value: datetime.datetime | None) -> datetime.datetime | None:
+    """A stored time (naive UTC) as an aware one."""
+    return value.replace(tzinfo=datetime.UTC) if value is not None and value.tzinfo is None else value
+
+
+def _simulator_summary(use: SimulatorUse, versions: dict[int, list[VersionRef]]) -> SimulatorSummary:
+    return SimulatorSummary(
+        simulator_id=use.simulator_id,
+        created_at=_utc(use.created_at),
+        container_def_hash=use.container_def_hash,
+        versions=versions.get(use.simulator_id, []),
+        run_count=use.run_count,
+        first_run_at=_utc(use.first_run_at),
+        last_run_at=_utc(use.last_run_at),
+    )
+
+
+async def _simulator_uses(caller: OptionalCaller, only: int | None = None) -> list[SimulatorSummary]:
+    db = get_required_database_service()
+    versions: dict[int, list[VersionRef]] = {}
+    for link in await db.get_environments_db().version_links():
+        if link.simulator_id is not None:
+            versions.setdefault(link.simulator_id, []).append(link.ref)
+    uses = await db.get_simulator_db().simulator_uses(readable_clause(caller), list(versions), only)
+    return [_simulator_summary(use, versions) for use in uses]
+
+
+@config.router.get(
+    path="/simulators",
+    response_model=list[SimulatorSummary],
+    operation_id="list-simulators",
+    tags=["Registry"],
+    summary="Every simulator that is an environment version or that runs you can read used, newest first",
+)
+async def list_simulators(caller: OptionalCaller) -> list[SimulatorSummary]:
+    # A simulator with no versions ran before environment versions existed: this is the only place that lists it.
+    return await _simulator_uses(caller)
+
+
+@config.router.get(
+    path="/simulators/{simulator_id}",
+    response_model=SimulatorDetail,
+    operation_id="get-simulator",
+    tags=["Registry"],
+    summary="One simulator: its container definition, the versions it is, and the runs you can read that used it",
+    responses={404: {"description": "No such simulator, or one neither a version nor used by a run you can read"}},
+)
+async def get_simulator(simulator_id: int, caller: OptionalCaller) -> SimulatorDetail:
+    found = await _simulator_uses(caller, only=simulator_id)
+    if not found:
+        raise HTTPException(status_code=404, detail=f"no simulator {simulator_id}")
+    simulator = await _simulator(simulator_id)
+    return SimulatorDetail(**found[0].model_dump(), definition=simulator.container_def.representation)
 
 
 @config.router.get(

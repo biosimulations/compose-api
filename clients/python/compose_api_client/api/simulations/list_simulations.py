@@ -16,6 +16,9 @@ def _get_kwargs(
     *,
     status: ListSimulationsStatusType0 | None | Unset = UNSET,
     simulator: None | str | Unset = UNSET,
+    simulator_id: int | None | Unset = UNSET,
+    environment: None | str | Unset = UNSET,
+    environment_version: None | str | Unset = UNSET,
     since: datetime.datetime | None | Unset = UNSET,
     label: list[str] | None | Unset = UNSET,
     tag: list[str] | None | Unset = UNSET,
@@ -40,6 +43,27 @@ def _get_kwargs(
     else:
         json_simulator = simulator
     params["simulator"] = json_simulator
+
+    json_simulator_id: int | None | Unset
+    if isinstance(simulator_id, Unset):
+        json_simulator_id = UNSET
+    else:
+        json_simulator_id = simulator_id
+    params["simulator_id"] = json_simulator_id
+
+    json_environment: None | str | Unset
+    if isinstance(environment, Unset):
+        json_environment = UNSET
+    else:
+        json_environment = environment
+    params["environment"] = json_environment
+
+    json_environment_version: None | str | Unset
+    if isinstance(environment_version, Unset):
+        json_environment_version = UNSET
+    else:
+        json_environment_version = environment_version
+    params["environment_version"] = json_environment_version
 
     json_since: None | str | Unset
     if isinstance(since, Unset):
@@ -120,6 +144,9 @@ def sync_detailed(
     client: AuthenticatedClient | Client,
     status: ListSimulationsStatusType0 | None | Unset = UNSET,
     simulator: None | str | Unset = UNSET,
+    simulator_id: int | None | Unset = UNSET,
+    environment: None | str | Unset = UNSET,
+    environment_version: None | str | Unset = UNSET,
     since: datetime.datetime | None | Unset = UNSET,
     label: list[str] | None | Unset = UNSET,
     tag: list[str] | None | Unset = UNSET,
@@ -132,6 +159,11 @@ def sync_detailed(
         status (ListSimulationsStatusType0 | None | Unset): Only simulations in this state
         simulator (None | str | Unset): Only this prebuilt simulator (by name), or container
             definitions with this hash prefix
+        simulator_id (int | None | Unset): Only simulations that used this simulator
+        environment (None | str | Unset): Only simulations that ran in a version of this
+            environment
+        environment_version (None | str | Unset): Only simulations that ran in this environment
+            version, as name@number
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
         label (list[str] | None | Unset): Only simulations with this label, as key:value;
             repeatable, all must match. Keys: source, environment, environment_version, solver, model,
@@ -151,6 +183,9 @@ def sync_detailed(
     kwargs = _get_kwargs(
         status=status,
         simulator=simulator,
+        simulator_id=simulator_id,
+        environment=environment,
+        environment_version=environment_version,
         since=since,
         label=label,
         tag=tag,
@@ -170,6 +205,9 @@ def sync(
     client: AuthenticatedClient | Client,
     status: ListSimulationsStatusType0 | None | Unset = UNSET,
     simulator: None | str | Unset = UNSET,
+    simulator_id: int | None | Unset = UNSET,
+    environment: None | str | Unset = UNSET,
+    environment_version: None | str | Unset = UNSET,
     since: datetime.datetime | None | Unset = UNSET,
     label: list[str] | None | Unset = UNSET,
     tag: list[str] | None | Unset = UNSET,
@@ -182,6 +220,11 @@ def sync(
         status (ListSimulationsStatusType0 | None | Unset): Only simulations in this state
         simulator (None | str | Unset): Only this prebuilt simulator (by name), or container
             definitions with this hash prefix
+        simulator_id (int | None | Unset): Only simulations that used this simulator
+        environment (None | str | Unset): Only simulations that ran in a version of this
+            environment
+        environment_version (None | str | Unset): Only simulations that ran in this environment
+            version, as name@number
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
         label (list[str] | None | Unset): Only simulations with this label, as key:value;
             repeatable, all must match. Keys: source, environment, environment_version, solver, model,
@@ -202,6 +245,9 @@ def sync(
         client=client,
         status=status,
         simulator=simulator,
+        simulator_id=simulator_id,
+        environment=environment,
+        environment_version=environment_version,
         since=since,
         label=label,
         tag=tag,
@@ -215,6 +261,9 @@ async def asyncio_detailed(
     client: AuthenticatedClient | Client,
     status: ListSimulationsStatusType0 | None | Unset = UNSET,
     simulator: None | str | Unset = UNSET,
+    simulator_id: int | None | Unset = UNSET,
+    environment: None | str | Unset = UNSET,
+    environment_version: None | str | Unset = UNSET,
     since: datetime.datetime | None | Unset = UNSET,
     label: list[str] | None | Unset = UNSET,
     tag: list[str] | None | Unset = UNSET,
@@ -227,6 +276,11 @@ async def asyncio_detailed(
         status (ListSimulationsStatusType0 | None | Unset): Only simulations in this state
         simulator (None | str | Unset): Only this prebuilt simulator (by name), or container
             definitions with this hash prefix
+        simulator_id (int | None | Unset): Only simulations that used this simulator
+        environment (None | str | Unset): Only simulations that ran in a version of this
+            environment
+        environment_version (None | str | Unset): Only simulations that ran in this environment
+            version, as name@number
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
         label (list[str] | None | Unset): Only simulations with this label, as key:value;
             repeatable, all must match. Keys: source, environment, environment_version, solver, model,
@@ -246,6 +300,9 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         status=status,
         simulator=simulator,
+        simulator_id=simulator_id,
+        environment=environment,
+        environment_version=environment_version,
         since=since,
         label=label,
         tag=tag,
@@ -263,6 +320,9 @@ async def asyncio(
     client: AuthenticatedClient | Client,
     status: ListSimulationsStatusType0 | None | Unset = UNSET,
     simulator: None | str | Unset = UNSET,
+    simulator_id: int | None | Unset = UNSET,
+    environment: None | str | Unset = UNSET,
+    environment_version: None | str | Unset = UNSET,
     since: datetime.datetime | None | Unset = UNSET,
     label: list[str] | None | Unset = UNSET,
     tag: list[str] | None | Unset = UNSET,
@@ -275,6 +335,11 @@ async def asyncio(
         status (ListSimulationsStatusType0 | None | Unset): Only simulations in this state
         simulator (None | str | Unset): Only this prebuilt simulator (by name), or container
             definitions with this hash prefix
+        simulator_id (int | None | Unset): Only simulations that used this simulator
+        environment (None | str | Unset): Only simulations that ran in a version of this
+            environment
+        environment_version (None | str | Unset): Only simulations that ran in this environment
+            version, as name@number
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
         label (list[str] | None | Unset): Only simulations with this label, as key:value;
             repeatable, all must match. Keys: source, environment, environment_version, solver, model,
@@ -296,6 +361,9 @@ async def asyncio(
             client=client,
             status=status,
             simulator=simulator,
+            simulator_id=simulator_id,
+            environment=environment,
+            environment_version=environment_version,
             since=since,
             label=label,
             tag=tag,

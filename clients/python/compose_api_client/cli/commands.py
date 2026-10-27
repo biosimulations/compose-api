@@ -920,6 +920,48 @@ def environments_retire(ctx: typer.Context, name: _ENV_ARG, number: _NUMBER_ARG)
         emit(settings.output, s.retire_environment_version(name, number))
 
 
+def _version_label(ref: Any) -> str | None:
+    """``registry_env@5`` from a version reference as ``to_dict`` gives it; None when there is none."""
+    return f"{ref['environment']}@{ref['number']}" if isinstance(ref, dict) else None
+
+
+@simulators_app.command("history")
+@claims("simulators history", "list-simulators")
+@handled
+def simulators_history(ctx: typer.Context) -> None:
+    """Every simulator that is an environment version or that runs you can read used, newest first: the versions it
+    is (none for one from before versions), and how many runs used it and when."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        used = s.simulators_used()
+    rows = [
+        {
+            **(row := simulator.to_dict()),
+            "versions": ", ".join(filter(None, (_version_label(v) for v in row["versions"]))) or "(before versions)",
+        }
+        for simulator in used
+    ]
+    emit(
+        settings.output,
+        rows if settings.output is not Output.JSON else [simulator.to_dict() for simulator in used],
+        ["simulator_id", "container_def_hash", "versions", "run_count", "first_run_at", "last_run_at"],
+        title=f"{len(rows)} simulators",
+    )
+
+
+@simulators_app.command("show")
+@claims("simulators show", "get-simulator")
+@handled
+def simulators_show(
+    ctx: typer.Context, simulator_id: Annotated[int, typer.Argument(help="The simulator's id.")]
+) -> None:
+    """One simulator: its container definition, the versions it is, and the runs that used it (`simulations list
+    --simulator-id` lists them)."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.simulator(simulator_id).to_dict())
+
+
 @simulators_app.command("images")
 @claims("simulators images", "get-simulator-images")
 @handled
@@ -1162,7 +1204,8 @@ def results(
 # -- finding simulations ------------------------------------------------------------------------------------------
 
 SIMULATION_COLUMNS = [
-    "simulation_id", "created_at", "simulator_id", "simulator", "status", "queued", "slurm_job_id", "end_time", "tags",
+    "simulation_id", "created_at", "simulator_id", "simulator", "version", "status", "queued",
+    "slurm_job_id", "end_time", "tags",
 ]  # fmt: skip
 
 
@@ -1215,6 +1258,15 @@ def simulations_list(
     simulator: Annotated[
         str | None, typer.Option(help="Only this prebuilt simulator (name), or a container-definition hash prefix.")
     ] = None,
+    simulator_id: Annotated[
+        int | None, typer.Option(help="Only those that used this simulator (`simulators history` lists them).")
+    ] = None,
+    environment: Annotated[
+        str | None, typer.Option(help="Only those that ran in a version of this environment.")
+    ] = None,
+    environment_version: Annotated[
+        str | None, typer.Option(help="Only those that ran in this version, name@number, e.g. registry_env@5.")
+    ] = None,
     since: Annotated[
         str | None, typer.Option(help="Only those created since: 30m, 6h, 2d, 1w, or an ISO time.")
     ] = None,
@@ -1240,8 +1292,18 @@ def simulations_list(
             tags=tag or (),
             limit=limit,
             offset=offset,
+            simulator_id=simulator_id,
+            environment=environment,
+            environment_version=environment_version,
         )
-    rows = [{**(row := sim.to_dict()), "queued": queued(row)} for sim in page.simulations]
+    rows = [
+        {
+            **(row := sim.to_dict()),
+            "queued": queued(row),
+            "version": _version_label(row.get("environment_version")),
+        }
+        for sim in page.simulations
+    ]
     shown = f"{offset + 1}-{offset + len(rows)}" if rows else "0"
     emit(settings.output, rows, SIMULATION_COLUMNS, title=f"simulations {shown} of {page.total}")
 

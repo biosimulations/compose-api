@@ -14,6 +14,7 @@ from compose_api.authentication import get_optional_principal
 from compose_api.authorization import OptionalCaller, can_read, readable_clause
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.db.services.datasets_db import DatasetQuery
+from compose_api.db.services.environments_db import VersionLink
 from compose_api.db.services.simulators_db import SUBMITTING, SimulationQuery, SimulationRow
 from compose_api.dependencies import get_database_service, get_required_database_service, get_simulation_service
 from compose_api.environments.versions import prebuilt_images, prebuilt_names
@@ -27,6 +28,7 @@ from compose_api.simulation.models import (
     SimulationSummary,
     SubmissionInfo,
     SubmissionState,
+    VersionRef,
     Visibility,
 )
 from compose_api.simulation.prebuilt import prebuilt_definition, prebuilt_image_of
@@ -69,8 +71,9 @@ def _simulator_label(container_def: str, names: Mapping[str, str]) -> str | None
     return names.get(image, image)
 
 
-def _summary(row: SimulationRow, names: Mapping[str, str]) -> SimulationSummary:
+def _summary(row: SimulationRow, names: Mapping[str, str], versions: Mapping[int, VersionRef]) -> SimulationSummary:
     run = row.run
+    version_id = row.simulation.environment_version_id
     return SimulationSummary(
         simulation_id=row.simulation.id,
         created_at=_iso(row.simulation.created_at),
@@ -90,6 +93,7 @@ def _summary(row: SimulationRow, names: Mapping[str, str]) -> SimulationSummary:
         tags=list(row.simulation.tags or []),
         description=row.simulation.description,
         submission=_submission(row),
+        environment_version=versions.get(version_id) if version_id is not None else None,
     )
 
 
@@ -104,6 +108,37 @@ def _submission(row: SimulationRow) -> SubmissionInfo | None:
         attempts=queued.attempts,
         last_error=queued.last_error,
     )
+
+
+async def _version_refs() -> dict[int, VersionRef]:
+    """Every version by its id, named by its environment's current name."""
+    return {link.version_id: link.ref for link in await _version_links()}
+
+
+async def _version_links() -> list[VersionLink]:
+    return await get_required_database_service().get_environments_db().version_links()
+
+
+def _versions_matching(
+    links: list[VersionLink], environment: str | None, environment_version: str | None
+) -> list[int] | None:
+    """The ids of the versions the filters name (None: no filter); a name or version that does not exist is a 400."""
+    if environment is None and environment_version is None:
+        return None
+    matching = links
+    if environment is not None:
+        matching = [link for link in matching if link.ref.environment == environment]
+        if not matching:
+            raise HTTPException(status_code=400, detail=f"No environment named {environment!r} has versions")
+    if environment_version is not None:
+        name, _, number = environment_version.rpartition("@")
+        if not name or not number.isdigit():
+            detail = f"{environment_version!r}: use name@number, e.g. registry_env@5"
+            raise HTTPException(status_code=400, detail=detail)
+        matching = [link for link in matching if link.ref == VersionRef(environment=name, number=int(number))]
+        if not matching:
+            raise HTTPException(status_code=400, detail=f"No environment version {environment_version}")
+    return [link.version_id for link in matching]
 
 
 def _container_hash(simulator: str, images: Mapping[str, str]) -> str:
@@ -127,6 +162,13 @@ async def list_simulations(
         str | None,
         Query(description="Only this prebuilt simulator (by name), or container definitions with this hash prefix"),
     ] = None,
+    simulator_id: Annotated[int | None, Query(description="Only simulations that used this simulator")] = None,
+    environment: Annotated[
+        str | None, Query(description="Only simulations that ran in a version of this environment")
+    ] = None,
+    environment_version: Annotated[
+        str | None, Query(description="Only simulations that ran in this environment version, as name@number")
+    ] = None,
     since: Annotated[
         datetime.datetime | None, Query(description="Only simulations created at or after this time")
     ] = None,
@@ -147,11 +189,14 @@ async def list_simulations(
         labels = parse_label_filters(label)
     except LabelError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    links = await _version_links()
     query = SimulationQuery(
         status=status,
         container_def_hash=_container_hash(simulator, await prebuilt_images(get_database_service()))
         if simulator
         else None,
+        simulator_id=simulator_id,
+        environment_version_ids=_versions_matching(links, environment, environment_version),
         since=since if since is None or since.tzinfo else since.replace(tzinfo=datetime.UTC),
         labels=labels,
         tags=[t.strip() for t in tag or [] if t.strip()],
@@ -163,8 +208,9 @@ async def list_simulations(
     )
     following = offset + len(rows)
     names = await prebuilt_names(get_database_service())
+    versions = {link.version_id: link.ref for link in links}
     return SimulationPage(
-        simulations=[_summary(r, names) for r in rows],
+        simulations=[_summary(r, names, versions) for r in rows],
         total=total,
         next_offset=following if following < total else None,
     )
@@ -183,7 +229,7 @@ async def get_simulation(simulation_id: int, caller: OptionalCaller) -> Simulati
     row = await db.get_simulator_db().get_simulation_row(simulation_id)
     if row is None or not can_read(caller, row.simulation.to_simulation_access()):
         raise HTTPException(status_code=404, detail=f"Simulation with id {simulation_id} not found.")
-    summary = _summary(row, await prebuilt_names(db))
+    summary = _summary(row, await prebuilt_names(db), await _version_refs())
     event_count = await db.get_events_db().count_events(summary.trace_id) if summary.trace_id else 0
     _, dataset_count = await db.get_datasets_db().page(
         DatasetQuery(simulation_id=simulation_id, available=None, limit=1)

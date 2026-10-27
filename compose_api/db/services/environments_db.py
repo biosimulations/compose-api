@@ -15,6 +15,7 @@ from compose_api.simulation.models import (
     EnvironmentVersion,
     EnvironmentVersionDetail,
     EnvironmentVersions,
+    VersionRef,
     VersionState,
 )
 
@@ -45,6 +46,15 @@ class EnvironmentRecord:
     name: str
     kind: str
     entries: list[str] | None = None
+
+
+@dataclass(frozen=True)
+class VersionLink:
+    """A version's id and simulator, and how it is named: what runs and simulators link to (plan-webapp-admin 5c)."""
+
+    version_id: int
+    simulator_id: int | None
+    ref: VersionRef
 
 
 @dataclass(frozen=True)
@@ -172,6 +182,10 @@ class EnvironmentsDatabaseService(ABC):
     @abstractmethod
     async def describe(self, environment: str, kind: str) -> EnvironmentVersions:
         """Its versions and its default (an environment never seen yet has none)."""
+
+    @abstractmethod
+    async def version_links(self) -> list[VersionLink]:
+        """Every version of every environment, by environment name and number."""
 
 
 class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
@@ -490,6 +504,22 @@ class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
             )
             last_used: dict[int | None, datetime.datetime] = dict(rows.tuples().all())
         return [v.model_copy(update={"last_used_at": last_used.get(v.database_id)}) for v in versions]
+
+    @override
+    async def version_links(self) -> list[VersionLink]:
+        query = (
+            select(
+                ORMEnvironmentVersion.id,
+                ORMEnvironmentVersion.simulator_id,
+                ORMEnvironment.name,
+                ORMEnvironmentVersion.number,
+            )
+            .join(ORMEnvironment, ORMEnvironment.id == ORMEnvironmentVersion.environment_id)
+            .order_by(ORMEnvironment.name, ORMEnvironmentVersion.number)
+        )
+        async with self.async_session_maker() as session:
+            rows = (await session.execute(query)).tuples().all()
+        return [VersionLink(v, sim, VersionRef(environment=name, number=n)) for v, sim, name, n in rows]
 
     @override
     async def describe(self, environment: str, kind: str) -> EnvironmentVersions:

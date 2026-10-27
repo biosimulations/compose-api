@@ -12,7 +12,7 @@ from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.db.db_utils import _ALEMBIC_INI, DeclarativeTableBase, create_db
 from compose_api.simulation.models import JobType, SimulationRequest, SimulatorVersion
 
-HEAD = "f6b2c9d4e017"
+HEAD = "a7d4c2e9b513"
 
 NEW_COLUMNS = {
     "hpcrun": {"trace_id", "events_cursor", "last_event_at", "exit_code", "backend", "external_id"},
@@ -143,6 +143,40 @@ async def test_existing_simulations_get_a_submission_row_for_their_state(
         states = {row[0]: row[1] for row in (await conn.execute(query)).all()}
     assert states == {ran: "submitted", never: "failed"}
     assert await _revision(async_postgres_engine) == HEAD
+
+
+@pytest.mark.asyncio
+async def test_runs_on_a_versions_simulator_are_linked_to_it(
+    async_postgres_engine: AsyncEngine, database_service: DatabaseServiceSQL, simulation_request: SimulationRequest
+) -> None:
+    """A run recorded before its simulator became a version ran in that version's image: the upgrade links it. A run
+    on a simulator that is no version's stays unlinked (docs/plan-webapp-admin.md, 5c)."""
+    from compose_api.simulation.prebuilt import prebuilt_definition
+    from tests.fixtures.postgres_fixtures import register_prebuilt
+
+    simulator_db = database_service.get_simulator_db()
+    version = await register_prebuilt(
+        database_service, "viva-pde-particle", "ghcr.io/example/backfill@sha256:" + "4" * 64
+    )
+    versioned = await simulator_db.get_simulator(version.simulator_id or 0)
+    earlier = await simulator_db.insert_simulator(
+        prebuilt_definition("ghcr.io/example/backfill-earlier@sha256:" + "5" * 64), packages_used=None
+    )
+    assert versioned is not None
+    before = (await simulator_db.insert_simulation(simulation_request, "backfill-before", versioned)).database_id
+    legacy = (await simulator_db.insert_simulation(simulation_request, "backfill-legacy", earlier)).database_id
+    async with async_postgres_engine.begin() as conn:
+        await conn.execute(text("UPDATE alembic_version SET version_num = 'f6b2c9d4e017'"))
+    await create_db(async_postgres_engine)
+    query = text(f"SELECT id, environment_version_id FROM simulation WHERE id IN ({before}, {legacy})")  # noqa: S608
+    async with async_postgres_engine.connect() as conn:
+        links = {row[0]: row[1] for row in (await conn.execute(query)).all()}
+    assert links == {before: version.database_id, legacy: None}
+    assert await _revision(async_postgres_engine) == HEAD
+    for simulation_id in (before, legacy):
+        await simulator_db.delete_simulation(simulation_id)
+    for simulator_id in (versioned.database_id, earlier.database_id):
+        await simulator_db.delete_simulator(simulator_id)
 
 
 def _alembic(sync_conn: Connection, direction: str, revision: str) -> None:

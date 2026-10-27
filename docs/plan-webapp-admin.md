@@ -140,6 +140,37 @@ webapp's environment version pages. One PR per step, each merged with a merge co
    - **The simulation and comparison pages:** show the `environment_version` each run used. Simulations already carry
      it as a label.
    - Webapp only (`useRegistry.ts` gains the version calls), and it ships with a release.
+   - **5c. Every run links to where it ran, and every environment to its runs** (Jim, 2026-10-26).
+     - *The hole.* Every run records its simulator (`simulation.simulator_id`: a container definition and its hash),
+       but only runs since environment versions also record a version. In production, 5,935 of 8,636 runs (69%) ran
+       on 18 simulators that are no environment's version: they ran before versions existed (image 132 alone has 3,461
+       runs, from 2026-05). Nothing lists those simulators or shows their definitions, apart from the deprecated
+       `GET /core/simulator/list`.
+     - *Not backfilled as versions.* registry_env@1 is already simulator 286, so older simulators would need numbers
+       below 1, and versions made the old way stay as they are (composition D8.2). A simulator is addressable on its
+       own instead, and a version links to its simulator.
+     - **API (one PR):**
+       - `GET /registry/simulators` (`list-simulators`): every simulator that is a version or that a readable run
+         used, with the versions it is (`environment`, `number`), how many readable runs used it, and their first and
+         last dates. `GET /registry/simulators/{id}` (`get-simulator`) adds its definition.
+       - `GET /simulations` gains `simulator_id`, `environment` (any version of it) and `environment_version`
+         (`name@n`). The last two match the stored version id, not the label, which is a name snapshot and which
+         a third of the versioned runs lack.
+       - Each simulation summary gains `environment_version` (`environment`, `number`), from the stored id with the
+         environment's current name.
+       - A migration backfills `simulation.environment_version_id` for runs whose simulator is exactly one version's:
+         a run on simulator 286 before registry_env@1 was recorded ran in that image.
+       - CLI: `simulators history`, `simulators show`, and `simulations list --simulator-id/--environment/
+         --environment-version`.
+       - *As built (2026-10-26):* the routes, filters and summary field as above (`VersionRef`, `SimulatorSummary`,
+         `SimulatorDetail`; `EnvironmentsDatabaseService.version_links`, `SimulatorDatabaseService.simulator_uses`).
+         Run counts and dates count only runs the caller may read (`readable_clause`). An unknown environment or
+         version in a filter is a 400, like an unknown label key. The backfill is alembic `a7d4c2e9b513`; the
+         CLI's simulation table gains a `version` column.
+     - **Webapp (one PR):** the simulation and comparison pages link each run to its version, or to its simulator's
+       page when it has none. The simulator page shows its definition, its versions and "N runs". The environment
+       page's versions and each version view link "N runs" to the filtered simulation list. The environments page
+       gains a collapsed "Earlier simulators (before versions)" section.
 6. **Admin actions in the webapp.** Shown only with `environments:admin`; ship only after step 4. Each one gets a
    confirmation dialog (A3):
    - **Refresh a shared environment:** preview (date, default today; the lock diff and package count), then confirm to

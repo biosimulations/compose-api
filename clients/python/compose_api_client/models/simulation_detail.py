@@ -12,6 +12,7 @@ from ..types import UNSET, Unset
 if TYPE_CHECKING:
     from ..models.simulation_detail_labels import SimulationDetailLabels
     from ..models.submission_info import SubmissionInfo
+    from ..models.version_ref import VersionRef
 
 
 T = TypeVar("T", bound="SimulationDetail")
@@ -40,6 +41,8 @@ class SimulationDetail:
         tags (list[str] | Unset):
         description (None | str | Unset):
         submission (None | SubmissionInfo | Unset):
+        environment_version (None | Unset | VersionRef): The environment version it ran in; none for a run from before
+            versions
         event_count (int | Unset):  Default: 0.
         dataset_count (int | Unset):  Default: 0.
     """
@@ -62,12 +65,14 @@ class SimulationDetail:
     tags: list[str] | Unset = UNSET
     description: None | str | Unset = UNSET
     submission: None | SubmissionInfo | Unset = UNSET
+    environment_version: None | Unset | VersionRef = UNSET
     event_count: int | Unset = 0
     dataset_count: int | Unset = 0
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         from ..models.submission_info import SubmissionInfo  # noqa: PLC0415
+        from ..models.version_ref import VersionRef  # noqa: PLC0415
 
         simulation_id = self.simulation_id
 
@@ -153,6 +158,14 @@ class SimulationDetail:
         else:
             submission = self.submission
 
+        environment_version: dict[str, Any] | None | Unset
+        if isinstance(self.environment_version, Unset):
+            environment_version = UNSET
+        elif isinstance(self.environment_version, VersionRef):
+            environment_version = self.environment_version.to_dict()
+        else:
+            environment_version = self.environment_version
+
         event_count = self.event_count
 
         dataset_count = self.dataset_count
@@ -192,6 +205,8 @@ class SimulationDetail:
             field_dict["description"] = description
         if submission is not UNSET:
             field_dict["submission"] = submission
+        if environment_version is not UNSET:
+            field_dict["environment_version"] = environment_version
         if event_count is not UNSET:
             field_dict["event_count"] = event_count
         if dataset_count is not UNSET:
@@ -203,6 +218,7 @@ class SimulationDetail:
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.simulation_detail_labels import SimulationDetailLabels  # noqa: PLC0415
         from ..models.submission_info import SubmissionInfo  # noqa: PLC0415
+        from ..models.version_ref import VersionRef  # noqa: PLC0415
 
         d = dict(src_dict)
         simulation_id = d.pop("simulation_id")
@@ -329,6 +345,23 @@ class SimulationDetail:
 
         submission = _parse_submission(d.pop("submission", UNSET))
 
+        def _parse_environment_version(data: object) -> None | Unset | VersionRef:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, dict):
+                    raise TypeError()
+                environment_version_type_0 = VersionRef.from_dict(data)
+
+                return environment_version_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(None | Unset | VersionRef, data)
+
+        environment_version = _parse_environment_version(d.pop("environment_version", UNSET))
+
         event_count = d.pop("event_count", UNSET)
 
         dataset_count = d.pop("dataset_count", UNSET)
@@ -352,6 +385,7 @@ class SimulationDetail:
             tags=tags,
             description=description,
             submission=submission,
+            environment_version=environment_version,
             event_count=event_count,
             dataset_count=dataset_count,
         )

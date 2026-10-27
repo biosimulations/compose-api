@@ -634,3 +634,44 @@ def test_environments_version_against_another_lists_the_package_changes(monkeypa
     assert json.loads(invoke("environments", "version", "registry_env", "5", "--against", "4").stdout)["against"] == 4
     invoke("environments", "version", "registry_env", "5")
     assert "against" not in seen[-1].url.params
+
+
+def test_simulators_history_names_versions_and_simulations_filter_by_where_they_ran(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    simulators = [
+        {"simulator_id": 290, "container_def_hash": "6729", "run_count": 911,
+         "versions": [{"environment": "registry_env", "number": 5}]},
+        {"simulator_id": 132, "container_def_hash": "ab12", "run_count": 3461, "versions": []},
+    ]  # fmt: skip
+    page = {
+        "simulations": [
+            {"simulation_id": 8771, "experiment_id": "e", "simulator_id": 290, "container_def_hash": "6729",
+             "status": "completed", "environment_version": {"environment": "registry_env", "number": 5}},
+        ],
+        "total": 1,
+    }  # fmt: skip
+    seen: list[httpx.Request] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=simulators if request.url.path == "/registry/simulators" else page)
+
+    monkeypatch.setattr(
+        cli_module, "make_session", lambda s: ComposeSession(s.url, transport=httpx.MockTransport(answer))
+    )
+    table = runner.invoke(app, ["--output", "table", "simulators", "history"], env={"COLUMNS": "200"})
+    assert table.exit_code == 0, table.output
+    assert "registry_env@5" in table.stdout and "(before versions)" in table.stdout and "3461" in table.stdout
+
+    listed = runner.invoke(
+        app, ["--output", "table", "simulations", "list", "--environment-version", "registry_env@5",
+              "--simulator-id", "290"],
+        env={"COLUMNS": "200"},
+    )  # fmt: skip
+    assert listed.exit_code == 0, listed.output
+    assert "registry_env@5" in listed.stdout
+    params = dict(seen[-1].url.params)
+    assert (params["environment_version"], params["simulator_id"]) == ("registry_env@5", "290")
+    assert "environment" not in params
+    assert json.loads(invoke("simulations", "list").stdout)[0]["environment_version"]["number"] == 5
