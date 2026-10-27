@@ -59,11 +59,14 @@ Do not treat bearer authentication as an access-control boundary for simulation 
 
 ## Human callers
 
-This API does not register or sign in users; Auth0 does. There are two supported ways for a person to get an access
-token for it:
+This API does not register or sign in users; Auth0 does. There are three supported ways for a person to get an
+access token for it:
 
 - The [`compose-api` command-line client](cli.md). It signs you up or in on Auth0's hosted pages (email and password,
   or Google), keeps the session in your operating system's credential store, renews it, and calls this API for you.
+- The [web UI](webapp.md) at `/ui`. "Sign in" runs Auth0's Authorization Code flow with PKCE in the browser, with
+  this API's audience; the UI sends the token only to this API, and asks `GET /auth/me` who you are and what you may
+  do.
 - BioSim's web login. The client that completed that login requests an **access token** whose audience is the Compose
   API identifier for the environment you are calling, and sends it in the `Authorization` header above.
 
@@ -113,9 +116,36 @@ A server started from `assets/dev/config/.dev_env` uses whatever `AUTH0_AUDIENCE
 
 ## Roles
 
-A verified caller is recorded with the role `user`. If the access token includes the `https://api.biosimulations.org/roles` claim (tokens for a person signed in through BioSim do; client-credentials tokens do not), those role names are recorded as well. An anonymous caller has no role.
+A verified caller is recorded with the role `user`. If the access token includes the `https://api.biosimulations.org/roles` claim (tokens for a person signed in through BioSim, the CLI or the web UI do; client-credentials tokens do not), those role names are recorded as well. An anonymous caller has no role.
 
-Roles identify the caller. At most one role is checked: when a deployment sets `ADMIN_ROLE` (`Settings.admin_role`, empty by default), the read policy lets a caller with that role read private simulations. The shared BioSim `admin` role grants nothing here unless a deployment names it. No simulation is private yet, so today no role changes what a caller can read. Do not assume any other role grants or denies access unless this API later documents that check.
+Roles identify the caller. Three settings name the roles this API checks; each is empty by default, which turns its
+check off, and none may be `user`, the role every signed-in caller holds:
+
+| Setting | Grants | Production |
+|---|---|---|
+| `ENVIRONMENT_ADMIN_ROLE` | create, default, retire and read back environment versions | `admin` |
+| `SUITE_CURATOR_ROLE` | mark, edit and clear a suite's known problems | `admin` |
+| `ADMIN_ROLE` | read every private simulation | unset |
+
+The shared BioSim `admin` role grants only what a deployment names it for. No simulation is private yet, so today no
+role changes what a caller can read. Do not assume any other role grants or denies access unless this API documents
+that check.
+
+## Capabilities
+
+`GET /auth/me` returns, beside the roles, **`capabilities`**: what this deployment lets the caller do, by name. Each is
+computed by the same function that enforces it (`compose_api/authorization.py`, `CAPABILITIES`), so the two cannot
+disagree, and a client shows controls by capability rather than by matching role names, which are server
+configuration.
+
+| Capability | Held by a caller with |
+|---|---|
+| `environments:admin` | `ENVIRONMENT_ADMIN_ROLE` |
+| `suites:curate` | `SUITE_CURATOR_ROLE` |
+| `simulations:read-all` | `ADMIN_ROLE` |
+
+`compose-api auth status --verify` prints them. The list is empty for a caller with none of the roles; an anonymous
+caller has no `/auth/me`. A capability only says what the API will accept: every request is checked again.
 
 ## Do not
 

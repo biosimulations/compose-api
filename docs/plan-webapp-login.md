@@ -4,16 +4,19 @@
 **(2026-10-22, later: W1 requested in UCHHPC/auth0-pulumi#5. W3 and W4 are in review in one PR.)**
 **(2026-10-25: W1 deployed 2026-10-23; W3 and W4 shipped from 0.7.30; W2 is #359. Switching it on, and what comes
 after, continues in [plan-webapp-admin](plan-webapp-admin.md).)**
+**(2026-10-27: done. W2 is live, the CSP is enforced (plan-webapp-admin step 4, #436), and W5 is written
+(plan-webapp-admin step 7): [webapp.md](webapp.md) "Sign-in" and "Administration", [authentication.md](authentication.md)
+"Human callers" and "Capabilities".)**
 No code has changed for this plan yet. One PR per work item, each merged with a merge commit. The configuration
 change (W2) deploys on merge, so it waits for W3 and W4 to be in a release.
 
 | Item | What | Owner | State |
 |---|---|---|---|
 | W1 | The Auth0 Single Page Application | Novrus (auth0-pulumi) | deployed 2026-10-23 (UCHHPC/auth0-pulumi#5) |
-| W2 | `AUTH0_SPA_CLIENT_ID` in the deployments | us | ready; deploys on merge |
+| W2 | `AUTH0_SPA_CLIENT_ID` in the deployments | us | live (#359) |
 | W3 | Webapp fixes: return target, token allowlist, sign-up, identity, expired sessions | us | released (#331, 0.7.30) |
-| W4 | Security headers on `/ui`, Content-Security-Policy report-only first | us | released (#331, 0.7.30) |
-| W5 | Documentation | us | open |
+| W4 | Security headers on `/ui`, Content-Security-Policy report-only first | us | released (#331, 0.7.30); enforced 2026-10-27 (#436) |
+| W5 | Documentation | us | done (plan-webapp-admin step 7) |
 
 ## Findings (2026-10-22)
 
