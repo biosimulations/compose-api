@@ -53,14 +53,17 @@ def _types(version: EnvironmentVersion, files: dict[str, str]) -> dict[str, Any]
 
 
 def version_roots(version: EnvironmentVersion) -> list[str]:
-    """The module roots a version provides: its entries' (a composed version records them), else its bundle's."""
+    """The module roots a version provides: its entries' and the core's (a composed version records its entries),
+    else its bundle's."""
     from compose_api.registry.environments import module_roots
     from compose_api.registry.manifest import load_manifest
 
     ids = [str(e["id"]) for e in (version.spec or {}).get("entries", []) if "id" in e]
     if not ids:
         return module_roots(version.environment)
-    return sorted({root for e in load_manifest().entries if e.id in ids for root in e.module_roots})
+    manifest = load_manifest()
+    provided = [e for e in manifest.entries if e.id in ids] + manifest.core_entries()
+    return sorted({root for e in provided for root in e.module_roots})
 
 
 async def _store(

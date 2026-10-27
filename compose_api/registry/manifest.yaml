@@ -133,6 +133,29 @@ entries:
         values computed by hand; it passed locally on 2026-10-26. MathExpressionStep's outputs are overwrite[float],
         so the generic step-outputs-replace check passes. In a composed version, the case run there decides its level.
 
+  # --- core: classes of the engine every composed environment installs (environments.yaml `composition.core`) -------
+  # Provided by every composed version and mash-up without being listed or installed, and by the prebuilt images its
+  # `bundles` name (docs/plan-environment-composition.md, 7c-1, D7c.2). Its version is the core's.
+
+  - id: process-bigraph-emitters
+    kind: core
+    package: process-bigraph
+    source: https://pypi.org/project/process-bigraph/1.9.1/
+    version: "1.9.1"
+    module_roots:
+      - process_bigraph.emitter
+    level: tested
+    # viva-pde-particle's image installs process-bigraph 1.9.1 (its read-back, 2026-10-26)
+    bundles:
+      - viva-pde-particle
+    evidence:
+      - >-
+        Added at tested on 2026-10-27 (composition 7c-1, D7c.2: documents name process-bigraph's emitters fully
+        qualified, `local:process_bigraph.emitter.RAMEmitter`). RAMEmitter, JSONEmitter and ConsoleEmitter are
+        process-bigraph's own; compose-api's runner gathers RAMEmitter's results into the `.pber` file, and every
+        compliance case (pbsim-common's two, viva-basic-processes' one) records its outputs through it, in composed
+        versions on 1.9.1. It replaces the short name `local:RAMEmitter`, which stays refused.
+
   # --- libraries: installed for the components above, with no process classes of their own ------------------------
   # Pinned to what registry_env@1 actually ran (read back from its image, 2026-10-25), not to the old library list,
   # which said tellurium 2.2.11.1 and python-copasi 4.46.300 while the image held these.

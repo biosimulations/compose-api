@@ -443,6 +443,19 @@
        `members_of` and validation count it there. A document may then carry `local:process_bigraph.emitter.RAMEmitter`,
        which closes the parked "emitters in submitted documents" item. Tests cover a submission with it accepted, and
        `local:RAMEmitter` still refused.
+       - *As built (2026-10-27):*
+         - **The entry:** `kind: core` in `registry/manifest.py`. A core entry has module roots, no `install` and no
+           `conda`. `process-bigraph-emitters` (version 1.9.1, the core's) covers `process_bigraph.emitter`, at
+           `tested`, with `bundles: [viva-pde-particle]`.
+         - **Validation** (`_core_reason`): a core class is admitted when the run's version is composed (its standing
+           has members) or its environment is in the entry's bundles. It is refused otherwise, as in registry_env@1,
+           built the old way on process-bigraph 1.0.5. Short names stay refused.
+         - **Resolver and members:** `needed_entries` and `members_of` leave core entries out, so the core never
+           decides where a run goes, names a mash-up, or appears among an environment's entries. Listing one in
+           `entries` is a composition problem.
+         - **Read-back:** a composed version reads back the core's roots too (`version_roots`), as does a prebuilt
+           image that bundles it. The composite checker therefore knows the emitters once a version is read back
+           again: re-read registry_env@5, the mash-up and viva-pde-particle@1 after the release.
      - **7c-2. `install.url`.** A manifest entry may install a wheel by `url` and `sha256`. The pixi generator writes
        `{ url = … }`, and the lock records the hash; a mismatch fails the lock.
      - **7c-3. The Smoldyn wheel workflow** in `virtualcell/Smoldyn`, pushed with Jim's go-ahead. A workflow builds the
