@@ -100,11 +100,13 @@ def spec_problems(spec: EnvironmentSpec, manifest: Manifest, *, bundled: bool = 
 
 def members_of(spec: EnvironmentSpec, manifest: Manifest) -> frozenset[str]:
     """The registry entries an environment provides: those it is composed of, or, for a prebuilt image (which lists
-    none), the entries bundled in it. Core entries are left out: every environment that can run their classes
+    none), the entries bundled in it and what they require, which the image installs its own way (viva-pde-particle's
+    Smoldyn and engines: composition 7c-4). Core entries are left out: every environment that can run their classes
     provides them, so they never tell environments apart (composition 7c-1)."""
-    return frozenset(spec.entries) or frozenset(
-        e.id for e in manifest.entries if spec.name in e.bundles and e.kind != "core"
-    )
+    if spec.entries:
+        return frozenset(spec.entries)
+    bundled = {e.id for e in manifest.entries if spec.name in e.bundles and e.kind != "core"}
+    return frozenset(manifest.with_requirements(bundled))
 
 
 def _unlisted_requirements(spec: EnvironmentSpec, by_id: dict[str, RegistryEntry]) -> list[str]:

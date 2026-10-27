@@ -115,7 +115,8 @@ def test_a_mash_up_is_named_by_its_entries_and_only_composable_ones_qualify() ->
     assert lifecycle.composable(NEEDED, manifest) == []
     (listed,) = lifecycle.composable({"viva-tellurium"}, manifest)  # a catalog wrapper: no install, `listed`
     assert "does not say how it installs" in listed
-    assert any("cannot be composed" in p for p in lifecycle.composable({"viva-pde-particle"}, manifest))
+    # viva-pde-particle is composable since composition 7c-4: its classes may join a mash-up
+    assert lifecycle.composable(manifest.with_requirements({"viva-pde-particle"}), manifest) == []
 
 
 def test_declared_environments_cover_before_mash_ups() -> None:

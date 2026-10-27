@@ -38,7 +38,9 @@ def test_every_class_registry_env_provides_still_runs_there() -> None:
 def test_a_prebuilt_environments_classes_go_to_it_when_it_is_offered() -> None:
     manifest = load_manifest()
     needed = needed_entries([PDE], manifest)
-    assert needed == {"viva-pde-particle"}
+    # its requirements come with it (composition 7c-4: it is composable now), and its image provides them, so a
+    # document of its classes alone still runs in its prebuilt image (D7c.3), not in a mash-up
+    assert "viva-pde-particle" in needed and "smoldyn-vcell" in needed
     assert choose_environment(needed, manifest, EVERYWHERE).name == "viva-pde-particle"
     # not offered here: the shared environment, whose validation then says the entry is not installed in it
     assert choose_environment(needed, manifest, EVERYWHERE, offered=lambda spec: False).name == "registry_env"

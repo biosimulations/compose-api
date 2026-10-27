@@ -154,7 +154,9 @@ def test_summaries_describe_the_default_versions_manifest() -> None:
     current = summarize(spec, {"viva-pde-particle": PDE_IMAGE}, manifest)
     assert current is not None
     assert (current.simulator, current.components, current.errors, current.stale) == ("viva-pde-particle", 2, 1, False)
-    assert current.process_bigraph == "1.8.5" and [e.id for e in current.entries] == ["viva-pde-particle"]
+    # its entry and what it requires, which its image installs (composition 7c-4), as registry_env lists its libraries
+    assert current.process_bigraph == "1.8.5" and "viva-pde-particle" in [e.id for e in current.entries]
+    assert {"smoldyn-vcell", "vcell-fenics"} <= {e.id for e in current.entries}
 
     shared = next(e for e in load_environments().environments if e.kind == "shared")
     listed = summarize(shared, {}, None)

@@ -137,7 +137,8 @@ class Expectation(BaseModel):
     - ``reference``: every column of ``reference`` (a CSV in the case, with a time column first) matches the result
       at the reference's times, within the tolerance.
     - ``scalar``: the emitted number ``field`` in row ``row`` (the last when omitted) is ``expected``, within the
-      tolerance: for a component whose stores are plain numbers rather than a ``numeric_result``.
+      tolerance: for a component whose stores are plain numbers rather than a ``numeric_result``. ``field`` may be a
+      dotted path into lists and maps, ``values.2.0`` (composition 7c-4: an ensemble's per-seed values).
     """
 
     kind: Literal["rows", "value", "reference", "scalar"]
@@ -237,8 +238,10 @@ def _check_scalar(expectation: Expectation, rows: list[Any]) -> list[str]:
     if expectation.expected is None:
         return ["a scalar expectation needs `expected`"]
     try:
-        row = rows[expectation.row]
-        actual = float(row[expectation.field])
+        found: Any = rows[expectation.row]
+        for step in expectation.field.split("."):
+            found = found[int(step)] if isinstance(found, list) else found[step]
+        actual = float(found)
     except (IndexError, KeyError, TypeError, ValueError) as e:
         return [f"{where}: no number ({type(e).__name__}: {e})"]
     if _close(actual, expectation.expected, expectation.rel, expectation.abs):

@@ -140,3 +140,23 @@ def test_viva_basic_processes_case_checks_plain_numbers() -> None:
     assert not outcome.passed and outcome.failures == ["emitter.y in row -1: 33.0, expected 34.0"]
     missing = evaluate(case, {"emitter": [{"x": 1.0}]})
     assert any("no number" in f for f in missing.failures)
+
+
+def test_viva_pde_particles_case_reads_an_ensembles_values_by_path() -> None:
+    """Its emitter records each seed's values as lists, so `scalar` reads `values.2.0`: a path into lists and maps
+    (composition 7c-4). The rows are what compose-api's runner emitted for this document in the registry_env@5 +
+    viva-pde-particle environment on 2026-10-27, identical to its prebuilt image's."""
+    (case,) = load_cases("viva-pde-particle")
+    assert compliance.case_problems(case) == []
+    values = [[0.07137369415367853, 0.0004004746655585104], [0.0, 0.0],
+              [0.09234150979599469, 0.0020975747341526988], [0.0, 0.0]]  # fmt: skip
+    rows = [{"seeds": [], "values": []}, {"seeds": [1, 2, 3, 4], "values": values}]
+    assert evaluate(case, {"emitter": rows}).passed
+    off = [rows[0], {"seeds": [1, 2, 3, 4], "values": [values[0], values[1], [0.09, 0.002], values[3]]}]
+    outcome = evaluate(case, {"emitter": off})
+    assert not outcome.passed and any(f.startswith("emitter.values.2.0 in row -1: 0.09") for f in outcome.failures)
+    short = evaluate(case, {"emitter": [rows[0], {"seeds": [1], "values": [values[0]]}]})
+    assert any("no number (IndexError" in f for f in short.failures)
+    # the document names its emitter fully qualified (D7c.2), never viva-pde-particle's own short `ram-emitter`
+    document = json.loads(case.path(case.document).read_text())
+    assert document["state"]["emitter"]["address"] == "local:process_bigraph.emitter.RAMEmitter"

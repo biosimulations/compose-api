@@ -1,0 +1,46 @@
+{
+  "state": {
+    "seeds": [],
+    "values": [],
+    "ensemble": {
+      "_type": "process",
+      "address": "local:viva_pde_particle.ensemble.FokkerPlanckEnsemble",
+      "config": {
+        "params": "{\"test\": \"test4\", \"tau\": 0.2, \"dtau\": 0.001}",
+        "seeds": [
+          1,
+          4
+        ],
+        "workers": 0
+      },
+      "interval": 1.0,
+      "inputs": {},
+      "outputs": {
+        "seeds": [
+          "seeds"
+        ],
+        "values": [
+          "values"
+        ]
+      }
+    },
+    "emitter": {
+      "_type": "step",
+      "address": "local:process_bigraph.emitter.RAMEmitter",
+      "config": {
+        "emit": {
+          "seeds": "list[integer]",
+          "values": "list[list[float]]"
+        }
+      },
+      "inputs": {
+        "seeds": [
+          "seeds"
+        ],
+        "values": [
+          "values"
+        ]
+      }
+    }
+  }
+}

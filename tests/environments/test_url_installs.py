@@ -83,7 +83,8 @@ def test_the_check_passes_the_wheel_or_fails_the_build(tmp_path: Path, matches: 
 
 
 def test_a_mash_up_may_list_a_url_entry() -> None:
-    manifest = Manifest(entries=[*load_manifest().entries, _smoldyn()])
+    others = [e for e in load_manifest().entries if e.id != "smoldyn-vcell"]
+    manifest = Manifest(entries=[*others, _smoldyn()])
     spec = EnvironmentSpec(name="mash-x", kind="mash-up", python=["python"], entries=["smoldyn-vcell"])
     composed = ComposedSpec.of(spec, manifest, COMPOSITION, WHEN)
     assert composed.as_json()["entries"][0]["install"] == {"url": WHEEL, "sha256": SHA}
