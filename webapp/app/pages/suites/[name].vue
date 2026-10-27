@@ -109,6 +109,76 @@ async function runNow() {
   await load()
 }
 
+// Curating its known problems (docs/plan-known-problems.md, 2b): offered with suites:curate, which the API checks
+// again; each change is confirmed first. A mark or a clear is made at the run being viewed.
+type Problem = Schemas['KnownProblem']
+type Curation = { kind: 'mark', source: string } | { kind: 'clear', problem: Problem } | { kind: 'edit', problem: Problem }
+const { principal } = useAuth()
+const curator = computed(() => canCurate(principal.value?.capabilities))
+const curation = ref<Curation | null>(null)
+const curating = ref(false)
+const curateBusy = ref(false)
+const curateError = ref<string | null>(null)
+const form = reactive({ solver: '', category: '', reason: '' })
+const EVERY = '(every solver)'
+const solverIds = computed(() => (suite.value ? suiteSolvers(suite.value, solvers.value).map(s => s.id) : []))
+const curationRun = computed(() => view.value?.number ?? runs.value[0]?.number ?? 0)
+const curationConfirmation = computed<Confirmation | null>(() => {
+  const c = curation.value
+  if (!c) return null
+  if (c.kind === 'mark') return markConfirmation(c.source, form.solver === EVERY ? null : form.solver || 'The solver you choose', curationRun.value)
+  return c.kind === 'clear' ? clearConfirmation(c.problem, curationRun.value) : editConfirmation(c.problem)
+})
+const curationInvalid = computed(() => {
+  const c = curation.value
+  if (!c || c.kind === 'clear') return false
+  return !validMark(form.category, form.reason) || (c.kind === 'mark' && !form.solver)
+})
+
+async function startCuration(c: Curation) {
+  curation.value = c
+  curateError.value = null
+  if (c.kind === 'mark') {
+    if (!solvers.value.length) solvers.value = await listSolvers().catch(() => [])
+    Object.assign(form, { solver: '', category: '', reason: '' })
+  } else {
+    Object.assign(form, { solver: c.problem.solver ?? EVERY, category: c.problem.category, reason: c.problem.reason })
+  }
+  curating.value = true
+}
+
+async function saveCuration() {
+  const c = curation.value
+  if (!c) return
+  curateBusy.value = true
+  curateError.value = null
+  const api = useApi()
+  const path = { name: name.value }
+  const result = c.kind === 'mark'
+    ? await api.POST('/suites/{name}/problems', {
+        params: { path },
+        body: { source: c.source, solver: form.solver === EVERY ? null : form.solver, category: form.category.trim(),
+          reason: form.reason.trim(), seen_run: curationRun.value || null }
+      })
+    : c.kind === 'clear'
+      ? await api.POST('/suites/{name}/problems/{problem_id}/clear', {
+          params: { path: { ...path, problem_id: c.problem.problem_id } }, body: { run: curationRun.value }
+        })
+      : await api.PATCH('/suites/{name}/problems/{problem_id}', {
+          params: { path: { ...path, problem_id: c.problem.problem_id } },
+          body: { category: form.category.trim(), reason: form.reason.trim() }
+        })
+  curateBusy.value = false
+  if (result.error || !result.data) {
+    curateError.value = errorMessage(result.error, 'The change was not saved')
+    return
+  }
+  curating.value = false
+  const known = await api.GET('/suites/{name}/problems', { params: { path } })
+  problems.value = known.data ?? problems.value
+  await loadRun()
+}
+
 const fmt = (s: number | string | null | undefined) => (typeof s === 'number' ? s.toPrecision(3) : s ?? '')
 </script>
 
@@ -134,6 +204,32 @@ const fmt = (s: number | string | null | undefined) => (typeof s === 'number' ? 
         <RanIn v-for="v in runVersions(selectedInfo.environment_versions)" :key="v.environment" :version="v" :simulator-id="0" class="text-xs" />
         <span v-if="!runVersions(selectedInfo.environment_versions).length" class="text-muted">each environment's image at the time (started before versions were recorded)</span>
       </div>
+      <ConfirmDialog
+        v-model:open="curating"
+        :confirmation="curationConfirmation"
+        :busy="curateBusy"
+        :error="curateError"
+        :disabled="curationInvalid"
+        @confirm="saveCuration"
+      >
+        <template v-if="curation && curation.kind !== 'clear'">
+          <UFormField v-if="curation.kind === 'mark'" label="Solver">
+            <USelect v-model="form.solver" :items="[...solverIds, EVERY]" placeholder="Which solver has the problem" class="w-64" />
+          </UFormField>
+          <UFormField label="Category" help="What kind of problem, e.g. VCell's fault name; reuse one when it fits.">
+            <UInput v-model="form.category" :maxlength="64" class="w-64 font-mono" />
+            <div v-if="knownCategories(problems).length" class="flex flex-wrap gap-1 mt-1">
+              <UButton
+                v-for="c in knownCategories(problems)" :key="c" :label="c" size="xs" variant="soft"
+                :color="form.category === c ? 'primary' : 'neutral'" class="font-mono" @click="form.category = c"
+              />
+            </div>
+          </UFormField>
+          <UFormField label="Reason" help="Why it fails or differs: the solver's own message, when it gives one.">
+            <UTextarea v-model="form.reason" :rows="3" :maxlength="2000" class="w-full" />
+          </UFormField>
+        </template>
+      </ConfirmDialog>
       <ConfirmDialog v-model:open="confirming" :confirmation="runConfirmation" :busy="starting" :error="runError" @confirm="runNow">
         <UFormField v-for="env in environments" :key="env" :label="env">
           <USelect v-model="chosen[env]" :items="choices[env] ?? [{ label: 'default', value: 'default' }]" class="w-56" />
@@ -183,7 +279,17 @@ const fmt = (s: number | string | null | undefined) => (typeof s === 'number' ? 
                         <UBadge :color="p.resolved ? 'warning' : 'neutral'" variant="outline" size="sm" class="shrink-0">{{ p.solver }}{{ p.resolved ? ' resolved' : '' }}</UBadge>
                         <UBadge v-if="p.category" color="neutral" variant="soft" size="sm" class="shrink-0 font-mono">{{ p.category }}</UBadge>
                         <UTooltip :text="p.reason"><span class="text-muted line-clamp-2">{{ p.reason }}</span></UTooltip>
+                        <UButton
+                          v-if="curator && p.resolved && problemToClear(r, p.solver, problems)"
+                          size="xs" variant="ghost" color="warning" icon="i-lucide-check" label="Clear"
+                          @click="startCuration({ kind: 'clear', problem: problemToClear(r, p.solver, problems)! })"
+                        />
                       </div>
+                      <UButton
+                        v-if="curator && markable(r)"
+                        size="xs" variant="ghost" color="neutral" icon="i-lucide-flag" label="Mark a known problem"
+                        @click="startCuration({ kind: 'mark', source: r.source })"
+                      />
                     </td>
                     <td class="text-xs" :class="r.failure && !r.expected ? 'text-error' : 'text-muted'">{{ r.expected ?? r.failure }}</td>
                   </tr>
@@ -200,7 +306,7 @@ const fmt = (s: number | string | null | undefined) => (typeof s === 'number' ? 
               <table v-if="problems.length" class="text-sm">
                 <thead>
                   <tr class="text-left text-muted">
-                    <th class="pr-4 py-1">Model</th><th class="pr-4">Solver</th><th class="pr-4">Category</th><th class="pr-4">Reason</th><th class="pr-4 whitespace-nowrap">Seen in</th><th class="pr-4">Marked</th><th>Cleared</th>
+                    <th class="pr-4 py-1">Model</th><th class="pr-4">Solver</th><th class="pr-4">Category</th><th class="pr-4">Reason</th><th class="pr-4 whitespace-nowrap">Seen in</th><th class="pr-4">Marked</th><th class="pr-4">Cleared</th><th v-if="curator" />
                   </tr>
                 </thead>
                 <tbody>
@@ -211,7 +317,15 @@ const fmt = (s: number | string | null | undefined) => (typeof s === 'number' ? 
                     <td class="pr-4 text-xs max-w-xl">{{ p.reason }}</td>
                     <td class="pr-4 text-xs whitespace-nowrap">{{ p.seen_run != null ? `run ${p.seen_run}` : '—' }}</td>
                     <td class="pr-4 text-xs text-muted whitespace-nowrap">{{ formatTime(p.marked_at) }}</td>
-                    <td class="text-xs text-muted">{{ p.cleared_run != null ? `at run ${p.cleared_run}, ${formatTime(p.cleared_at)}` : 'open' }}</td>
+                    <td class="pr-4 text-xs text-muted">{{ p.cleared_run != null ? `at run ${p.cleared_run}, ${formatTime(p.cleared_at)}` : 'open' }}</td>
+                    <td v-if="curator" class="whitespace-nowrap">
+                      <UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-pencil" label="Edit" @click="startCuration({ kind: 'edit', problem: p })" />
+                      <UButton
+                        v-if="p.cleared_run == null && curationRun"
+                        size="xs" variant="ghost" color="warning" icon="i-lucide-check" :label="`Clear at run ${curationRun}`"
+                        @click="startCuration({ kind: 'clear', problem: p })"
+                      />
+                    </td>
                   </tr>
                 </tbody>
               </table>

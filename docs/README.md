@@ -29,7 +29,7 @@ Several documents answer different questions. Start with the one that matches yo
 | environment builds as jobs of their own, image artifacts recorded, builds on Kubernetes, publishing | [plan-environment-builds.md](plan-environment-builds.md) | plan, phases 1–4 implemented; publishing deferred | 2026-10-13 |
 | environment versions as database records: locked with uv, created and chosen through the API, recorded on every run; the registry as the build trust gate | [plan-environment-versions.md](plan-environment-versions.md) | plan; steps 1–5a merged (0.7.41); rest superseded by composition | 2026-10-25 |
 | environments composed from curated manifest entries: pixi (uv export), compliance composites per entry, registry_env migrated off pbest, mash-ups on demand | [plan-environment-composition.md](plan-environment-composition.md) | plan; steps 0–7b and 8a–8e done (0.7.57); 7c parked | 2026-10-26 |
-| each solver's known problems in a suite: excused per solver, flagged when fixed, curated by an admin in the webapp or CLI | [plan-known-problems.md](plan-known-problems.md) | plan; steps 1, 2a, 3 done (0.7.49); 2b waits for the CSP | 2026-10-26 |
+| each solver's known problems in a suite: excused per solver, flagged when fixed, curated by an admin in the webapp or CLI | [plan-known-problems.md](plan-known-problems.md) | plan; steps 1, 2a, 3 done (0.7.49); 2b in review | 2026-10-26 |
 | viewers for datasets, registered per type and loaded lazily; the results bundle in 3D | [plan-viewers.md](plan-viewers.md) | plan, implemented (A1–A3 later) | 2026-10-13 |
 | signing in to the web UI: a PKCE single-page app (no backend-for-frontend), the Auth0 SPA application, hardening | [plan-webapp-login.md](plan-webapp-login.md) | done: live, CSP enforced, documented | 2026-10-27 |
 | the web UI's sign-in switched on, capabilities from `/auth/me`, environment version pages and admin actions, one suite run at a time | [plan-webapp-admin.md](plan-webapp-admin.md) | active; all built, suite page in review | 2026-10-27 |
@@ -52,7 +52,7 @@ release and a signed-in check in production. Then
 | Thread | Done | Left |
 |---|---|---|
 | [plan-environment-composition](plan-environment-composition.md) | 0–7b, 8a–8e (0.7.57) | 7c: viva-pde-particle as a composed entry, blocked on its Smoldyn build (from source) and on dependencies that track `main` branches; both need vivarium-collective changes. Parked 2026-10-26 |
-| [plan-known-problems](plan-known-problems.md) | 1, 2a, 3 (0.7.49) | 2b: mark and clear in the webapp (unblocked: the CSP is enforced) |
+| [plan-known-problems](plan-known-problems.md) | 1, 2a, 3 (0.7.49) | 2b: mark and clear in the webapp, in review |
 | [plan-verify-oracle](plan-verify-oracle.md) | V0–V4 | V5: verdicts on the comparison and suite pages |
 | [plan-vcell-ode](plan-vcell-ode.md) | 1–4 | report VCell bugs: BIOMD 112 (`null`), 175 (unknown identifier), 56 and 168 (disagree), 137 (solve error); 235 (out of memory) and 255 (timeout) |
 | [plan-observability](plan-observability.md) | 0–4 | 5: an owner stamped at submit |
