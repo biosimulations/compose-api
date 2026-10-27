@@ -1,7 +1,7 @@
 # Web UI: sign-in switched on, and the administrative tasks brought into it
 
-**Status (2026-10-27): every step built (CSP enforced #436; 5c in 0.7.59; 6 in 0.7.60; step 5's suite page in
-review). Left: releasing the suite page, and Jim's signed-in check of steps 5–6 in production; then the plan is done.** It continues [plan-webapp-login](plan-webapp-login.md), whose work is done apart
+**Status (2026-10-27): done (CSP enforced #436; 5c in 0.7.59; 6 in 0.7.60; step 5's suite page in 0.7.61). Left:
+Jim's signed-in check of steps 5–6 in production.** It continues [plan-webapp-login](plan-webapp-login.md), whose work is done apart
 from switching it on (W2, #359), and step 5b of [plan-environment-versions](plan-environment-versions.md), the
 webapp's environment version pages. One PR per step, each merged with a merge commit. Steps that change
 `kustomize/` deploy on merge; the others reach production with a release.

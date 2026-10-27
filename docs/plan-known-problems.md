@@ -1,7 +1,6 @@
 # Known problems: each solver's expected failures in a suite, curated by an admin, cleared when fixed
 
-**Status (2026-10-27): steps 1, 2a and 3 done (0.7.47–0.7.49); step 2b (curating in the webapp) in review, now that the
-CSP is enforced.** It follows run 4 of biomodels-curated-300 on `registry_env@4`
+**Status (2026-10-27): done. Steps 1, 2a and 3 in 0.7.47–0.7.49; step 2b (curating in the webapp) in 0.7.62 (#445).** It follows run 4 of biomodels-curated-300 on `registry_env@4`
 ([plan-environment-composition](plan-environment-composition.md), step 6) and borrows the known-faults pattern of
 VCell's regression tests. One PR per step, each merged with a merge commit.
 
