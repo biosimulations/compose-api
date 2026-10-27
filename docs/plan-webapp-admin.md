@@ -1,6 +1,8 @@
 # Web UI: sign-in switched on, and the administrative tasks brought into it
 
-**Status (2026-10-26): active; steps 1–3 done (step 3 in 0.7.58), step 4 in review, step 5 partly built.** It continues [plan-webapp-login](plan-webapp-login.md), whose work is done apart
+**Status (2026-10-27): active; steps 1–4, 5c, 6 and 7 done (CSP enforced #436; 5c in 0.7.59; 6 in 0.7.60). Left:
+step 5's suite page (the version picker, each run's versions, the button disabled while signed out), and Jim's
+signed-in check of step 6 in production.** It continues [plan-webapp-login](plan-webapp-login.md), whose work is done apart
 from switching it on (W2, #359), and step 5b of [plan-environment-versions](plan-environment-versions.md), the
 webapp's environment version pages. One PR per step, each merged with a merge commit. Steps that change
 `kustomize/` deploy on merge; the others reach production with a release.
@@ -203,6 +205,12 @@ webapp's environment version pages. One PR per step, each merged with a merge co
    - `docs/webapp.md`: signing in, the version pages, and the admin actions with who sees them.
    - `docs/authentication.md`: `/ui` as a human caller, and the capabilities.
    - Close plan-webapp-login (W5) and step 5b of plan-environment-versions.
+   - *As built (2026-10-27):* `docs/webapp.md` gains the version and simulator pages in its table, the capability
+     line in "Sign-in", and an "Administration" section (who sees it, each action, the dialogs, the CLI
+     equivalents). `docs/authentication.md` gains the web UI under "Human callers", the three role settings under
+     "Roles" (it said at most one was checked), and a "Capabilities" section. plan-webapp-login is closed (W2 live, W5
+     done). plan-environment-versions 5b points here: its pages are built except the suite page's, step 5's
+     remainder.
 
 Steps 1 and 2 are configuration and can go today. Steps 3 and 5 can proceed in parallel. Step 6 waits for both 3
 and 4.

@@ -10,16 +10,18 @@ serves it at **`/ui`** on the same host, and `/` redirects there.
 | Page | API operations |
 |---|---|
 | `/ui/` dashboard: counts by status, recent runs | `list-simulations`, `/version` |
-| `/ui/simulations`: paged and filterable by status, simulator, date, labels (`key:value`) and tags; label and tag chips filter the list; download `results.zip` | `list-simulations`, `get-simulation-results-file` |
+| `/ui/simulations`: paged and filterable by status, simulator, date, labels (`key:value`) and tags; label and tag chips filter the list; where each run ran ("Ran in"), and the runs of one environment, version or simulator (linked from their pages); download `results.zip` | `list-simulations`, `get-simulation-results-file` |
 | `/ui/simulations/new`: upload a `.pbg`, `.omex` or `.sbml`, or a curated COPASI/Tellurium time course from SBML. Registry rejections are listed address by address | `run-simulation`, `run-copasi`, `run-tellurium` |
-| `/ui/simulations/{id}`: status (polled until terminal), SLURM and container-build details, live event log, span tree and Chrome trace (for Perfetto), datasets with inline previews (images, CSV/TSV plotted with Plotly, JSON, text) | `get-simulation`, `get-simulation-status`, `get-simulator-build-status`, `get-simulation-events`, `get-simulation-trace`, `get-simulation-trace-chrome`, `list-datasets`, `get-dataset-content`, `get-simulation-results-file` |
+| `/ui/simulations/{id}`: where it ran (its environment version, or its simulator for a run from before versions), status (polled until terminal), SLURM and container-build details, live event log, span tree and Chrome trace (for Perfetto), datasets with inline previews (images, CSV/TSV plotted with Plotly, JSON, text) | `get-simulation`, `get-simulation-status`, `get-simulator-build-status`, `get-simulation-events`, `get-simulation-trace`, `get-simulation-trace-chrome`, `list-datasets`, `get-dataset-content`, `get-simulation-results-file` |
 | `/ui/datasets`: every run's files | `list-datasets`, `get-dataset-content` |
 | `/ui/datasets/{id}`: one dataset full width in its viewers (a results bundle file by file) | `get-dataset`, `get-dataset-content`, `get-dataset-file` |
 | `/ui/composites/new`: write a composite in `.pblang`, checked as you type, and run it (below) | `list-environments`, `get-environment-manifest`, `run-simulation` |
 | `/ui/sedml`: a SED-ML archive (upload, BioModels, biosimulations.org) previewed and run on several solvers ([plan-sedml.md](plan-sedml.md)) | `preview-sedml`, `run-sedml`, `search-biomodels`, `get-biomodel-omex`, `run-biomodel`, `search-biosimulations-projects`, `get-biosimulations-omex`, `run-biosimulations-project`, `list-solvers` |
 | `/ui/comparisons`, `/ui/comparisons/{id}`: a task's runs, scores per report and data set, overlays of data sets and SED-ML plots | `list-comparisons`, `get-comparison`, `get-comparison-series`, `list-datasets`, `get-dataset-content` |
 | `/ui/suites`, `/ui/suites/{name}`: regression and reproducibility suites, their runs, agreement, references and drift from the baseline per model | `list-suites`, `list-suite-runs`, `get-suite-run`, `run-suite` |
-| `/ui/environments`: where composites run; `/ui/environments/{name}`: its image, versions, registry entries, and every class it provides with its config and ports (`#Name` opens on one) | `list-environments`, `get-environment-manifest` |
+| `/ui/environments`: where composites run, and the simulators runs used before environments had versions; `/ui/environments/{name}`: its image, versions (each linked to its runs), registry entries, and every class it provides with its config and ports (`#Name` opens on one); administration, below | `list-environments`, `get-environment-manifest`, `list-environment-versions`, `list-simulators` |
+| `/ui/environments/{name}/versions/{n}`: one version: its installed packages and a diff against another version, its lock and the pixi/uv files that recreate it, its entries with their compliance cases, its classes, and its runs | `get-environment-version`, `export-environment-version`, `get-environment-version-compliance` |
+| `/ui/simulators/{id}`: one simulator (a container definition, identified by its hash): its definition, the versions it is, and its runs. A simulator from before versions belongs to no environment, and this page is the only place it is described | `get-simulator` |
 | `/ui/catalog`: every registry entry with its curation level, pin and evidence, and the environments that run its classes ([plan-sedml.md](plan-sedml.md), "Concepts") | `list-registry-entries` |
 
 **Viewers are registered per dataset type** (`webapp/app/viewers/registry.ts`, [plan](plan-viewers.md)). Each one
@@ -92,6 +94,8 @@ Rules for the token:
 - After sign-in the UI asks `GET /auth/me` who the caller is, once. A token the API rejects shows up at once, and the
   account menu lists the roles the API sees.
 - "Create account" opens Auth0's sign-up page. Signing in returns to the page the person started from.
+- The account menu shows what the API says the caller may do (`capabilities` from `GET /auth/me`); with
+  `environments:admin` it links "You can administer environments".
 
 The token is kept in the browser's local storage, with rotating refresh tokens, as the platform frontend does
 (decision D1 in [plan-webapp-login](plan-webapp-login.md)). Because script injection could read it, every `/ui`
@@ -103,12 +107,36 @@ response carries these security headers:
   to `POST /webapp/csp-report`, which the API logs as `CSP violation report`.
 - `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`.
 
-Today a token changes nothing a caller can read, because every simulation is public.
+A token changes nothing a caller can read, because every simulation is public. It changes what a caller may do
+only through the capabilities below.
 
-(2026-10-23: the SPA applications exist, created by auth0-pulumi (UCHHPC/auth0-pulumi#5):
-`p7uif3ex4LijqPwSOJsPBnhCdClnxSMM` for production, whose callbacks also include the dev server's, and
-`fEbf0F5Orb6FD4TySB8yWSZTj5hhBNJV` for the local cluster. Their ids are set in
-`kustomize/config/compose-api-rke/api.env` and `kustomize/overlays/compose-api-local/auth0.env`.)
+The SPA applications are created by auth0-pulumi (UCHHPC/auth0-pulumi#5): `p7uif3ex4LijqPwSOJsPBnhCdClnxSMM` for
+production, whose callbacks also include the dev server's, and `fEbf0F5Orb6FD4TySB8yWSZTj5hhBNJV` for the local
+cluster. Their ids are set in `kustomize/config/compose-api-rke/api.env` and
+`kustomize/overlays/compose-api-local/auth0.env`.
+
+## Administration
+
+Environment versions are administered on the environment's own page ([plan-webapp-admin](plan-webapp-admin.md),
+A2), not in a separate area. The controls appear only when `GET /auth/me` lists **`environments:admin`**, which a
+caller has when they hold the deployment's `ENVIRONMENT_ADMIN_ROLE` (production: the tenant's `admin` role). The UI
+only displays the capability: the API checks every request again and answers 403 to anyone else, so a hidden button
+is never the protection.
+
+| Action | Offered for | What it does |
+|---|---|---|
+| New version | a composed environment (`registry_env`, a mash-up) | resolves its registry entries as of a date (today: now) and locks them, then builds the image and runs its compliance cases; an identical lock gives the existing version |
+| Register an image | a prebuilt environment | registers an image by digest (`repository@sha256:…`; tags are refused), pulls it and reads it back |
+| Make default | a ready version that is not the default | runs that name no version run in it; recorded runs and suite runs, which name their versions, do not change |
+| Retire | a ready or failed version that is not the default | it refuses new runs; recorded runs keep it, and its images are kept |
+| Read back | a ready version, or any prebuilt image | reads its installed packages and classes from its image again, in the background |
+
+Every action is confirmed in a dialog that names the environment, the version and the effect (A3). Making a version
+the default shows its packages against the current default's (`?against=`), since a new version changes nothing
+until it is the default. After a new version is made, the page follows it every five seconds until it is ready or
+failed, and shows why it failed. Custom library lists are not offered: that path is retired (composition D8.5).
+
+The same actions are `compose-api environments create|default|retire|inspect` on the [command line](cli.md).
 
 ## Development
 
