@@ -1,16 +1,19 @@
 <script setup lang="ts">
-import type { EnvironmentSummary, EnvironmentVersions } from '~/composables/useRegistry'
+import type { EnvironmentSummary, EnvironmentVersions, SimulatorSummary } from '~/composables/useRegistry'
 
 // The environments composites run in, each with the interface manifest generated inside its image
 // (docs/plan-authoring.md): what the checker, the viewer and the editor resolve a document's classes against. The
 // declared ones come first, then the mash-ups made on demand (docs/plan-environment-composition.md, D7.9).
 const environments = ref<EnvironmentSummary[]>([])
 const versions = ref<Record<string, EnvironmentVersions>>({})
+// simulators from before environment versions: no version's, so reached only from here and from their runs (5c)
+const earlier = ref<SimulatorSummary[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
 
 onMounted(async () => {
   try {
+    listSimulators().then(all => (earlier.value = all.filter(s => !s.versions?.length))).catch(() => {})
     environments.value = await listEnvironments()
     for (const e of environments.value) {
       fetchVersions(e.name).then(v => (versions.value = { ...versions.value, [e.name]: v })).catch(() => {})
@@ -65,6 +68,31 @@ onMounted(async () => {
           </UCard>
         </ULink>
       </div>
+      <details v-if="earlier.length" class="text-sm">
+        <summary class="cursor-pointer font-semibold">
+          Earlier simulators (before versions)
+          <span class="font-normal text-muted">· {{ earlier.length }}, used by {{ earlier.reduce((n, s) => n + (s.run_count ?? 0), 0) }} runs</span>
+        </summary>
+        <p class="text-muted my-2">
+          Container definitions runs used before environments had versions. They belong to no environment; each page shows
+          the definition its runs ran in.
+        </p>
+        <table>
+          <thead>
+            <tr class="text-left text-muted">
+              <th class="pr-4 py-1">Simulator</th><th class="pr-4">Definition hash</th><th class="pr-4">Runs</th><th>Used</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="s in earlier" :key="s.simulator_id" class="border-t border-default">
+              <td class="pr-4 py-1"><NuxtLink :to="`/simulators/${s.simulator_id}`" class="text-primary font-mono">{{ s.simulator_id }}</NuxtLink></td>
+              <td class="pr-4 font-mono text-xs">{{ s.container_def_hash.slice(0, 12) }}</td>
+              <td class="pr-4"><NuxtLink :to="runsLink({ simulator_id: s.simulator_id })" class="text-primary">{{ s.run_count }}</NuxtLink></td>
+              <td class="text-xs text-muted whitespace-nowrap">{{ formatTime(s.first_run_at) }} to {{ formatTime(s.last_run_at) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </details>
     </UContainer>
   </div>
 </template>

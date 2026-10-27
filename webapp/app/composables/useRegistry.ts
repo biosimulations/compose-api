@@ -135,3 +135,23 @@ export async function fetchExport(name: string, number: number, format: 'pixi' |
   })
   return (data?.files as Record<string, string> | undefined) ?? null
 }
+
+export type SimulatorSummary = Schemas['SimulatorSummary']
+export type SimulatorDetail = Schemas['SimulatorDetail']
+
+/** Every simulator that is a version or that runs used, newest first; those with no versions ran before versions. */
+export async function listSimulators(): Promise<SimulatorSummary[]> {
+  const { data, error } = await useApi().GET('/registry/simulators')
+  if (error || !data) throw new Error(errorMessage(error, 'Could not list the simulators'))
+  return data
+}
+
+/** One simulator with its container definition, or null when there is none (or no run you can read used it). */
+export async function fetchSimulator(id: number): Promise<SimulatorDetail | null> {
+  const { data, error, response } = await useApi().GET('/registry/simulators/{simulator_id}', {
+    params: { path: { simulator_id: id } }
+  })
+  if (response.status === 404) return null
+  if (error || !data) throw new Error(errorMessage(error, `Could not read simulator ${id}`))
+  return data
+}

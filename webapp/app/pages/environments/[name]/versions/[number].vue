@@ -90,6 +90,7 @@ const caseColor = (state: string) =>
     <PageHeader :title="`${name}@${number}`" :description="version?.note ?? 'One version of the environment: a locked set of packages and its image.'">
       <template #actions>
         <UButton :to="`/environments/${encodeURIComponent(name)}`" icon="i-lucide-arrow-left" :label="name" color="neutral" variant="ghost" />
+        <UButton :to="runsLink({ environment_version: { environment: name, number } })" icon="i-lucide-list" label="Runs" color="neutral" variant="subtle" />
       </template>
     </PageHeader>
     <UContainer class="py-6 flex flex-col gap-4">
@@ -116,7 +117,8 @@ const caseColor = (state: string) =>
             <span class="text-muted">Lock</span><code class="text-xs break-all">sha256 {{ version.lock_sha256 }}</code>
           </template>
           <template v-if="version.simulator_id != null">
-            <span class="text-muted">Simulator</span><span class="text-xs">{{ version.simulator_id }}</span>
+            <span class="text-muted">Simulator</span>
+            <NuxtLink :to="`/simulators/${version.simulator_id}`" class="text-xs text-primary">{{ version.simulator_id }}</NuxtLink>
           </template>
         </div>
 

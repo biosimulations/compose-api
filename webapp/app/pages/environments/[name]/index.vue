@@ -116,6 +116,7 @@ watch(() => route.hash, hash => (highlighted.value = decodeURIComponent(hash.sli
     <PageHeader :title="name" description="The processes and steps this environment provides, as its image declares them.">
       <template #actions>
         <UButton to="/environments" icon="i-lucide-arrow-left" label="All environments" color="neutral" variant="ghost" />
+        <UButton v-if="versionList?.versions?.length" :to="runsLink({ environment: name })" icon="i-lucide-list" label="Runs" color="neutral" variant="subtle" />
         <UButton v-if="headers" icon="i-lucide-file-code" label="Headers (.pblang)" color="neutral" variant="subtle" @click="downloadHeaders" />
         <UButton :to="manifestUrl" external target="_blank" icon="i-lucide-braces" label="Manifest JSON" color="neutral" variant="subtle" />
       </template>
@@ -170,7 +171,7 @@ watch(() => route.hash, hash => (highlighted.value = decodeURIComponent(hash.sli
         <table class="text-sm">
           <thead>
             <tr class="text-left text-muted">
-              <th class="pr-4 py-1">Version</th><th class="pr-4">State</th><th class="pr-4">Made from</th><th class="pr-4">Created</th><th>Note</th>
+              <th class="pr-4 py-1">Version</th><th class="pr-4">State</th><th class="pr-4">Made from</th><th class="pr-4">Created</th><th class="pr-4">Runs</th><th>Note</th>
             </tr>
           </thead>
           <tbody>
@@ -185,6 +186,10 @@ watch(() => route.hash, hash => (highlighted.value = decodeURIComponent(hash.sli
                 <span v-else>{{ v.runtime_contract === 2 ? 'composed (pixi)' : v.origin ?? 'shared' }}<template v-if="v.resolved_at"> · resolved {{ formatTime(v.resolved_at) }}</template></span>
               </td>
               <td class="pr-4 text-xs text-muted whitespace-nowrap">{{ formatTime(v.created_at) }}</td>
+              <td class="pr-4 text-xs whitespace-nowrap">
+                <NuxtLink v-if="v.last_used_at" :to="runsLink({ environment_version: { environment: name, number: v.number } })" class="text-primary" :title="`Last run ${formatTime(v.last_used_at)}`">runs</NuxtLink>
+                <span v-else class="text-muted">none</span>
+              </td>
               <td class="text-xs text-muted max-w-xl">{{ v.note }}<span v-if="v.failure" class="text-error"> {{ v.failure }}</span></td>
             </tr>
           </tbody>

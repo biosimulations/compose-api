@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { SimulationSummary } from '~/composables/useApi'
 import type { Comparison, ComparisonSeries } from '~/composables/useSedml'
 
 // One SED-ML task run on several solvers (docs/plan-sedml.md, D4): its runs, then, once all have finished, a score per
@@ -17,8 +18,18 @@ async function load() {
   }
   error.value = null
   comparison.value = data
+  void loadRuns(data)
 }
 onMounted(load)
+
+// where each member ran (plan-webapp-admin 5c): its version, or its simulator when it ran before versions
+const runs = ref<Record<number, SimulationSummary>>({})
+async function loadRuns(c: Comparison) {
+  const missing = c.members.filter(m => !runs.value[m.simulation_id])
+  const found = await Promise.all(missing.map(m =>
+    useApi().GET('/simulations/{simulation_id}', { params: { path: { simulation_id: m.simulation_id } } }).then(r => r.data)))
+  runs.value = { ...runs.value, ...Object.fromEntries(found.filter(s => s != null).map(s => [s.simulation_id, s])) }
+}
 useIntervalFn(() => {
   if (comparison.value?.status === 'running') load()
 }, 10000)
@@ -109,6 +120,7 @@ watch(() => comparison.value?.status, async (status) => {
               <UBadge color="neutral" variant="outline">{{ m.solver }}</UBadge>
               <NuxtLink :to="`/simulations/${m.simulation_id}`" class="font-mono text-primary">#{{ m.simulation_id }}</NuxtLink>
               <StatusBadge :status="m.status ?? 'unknown'" />
+              <RanIn v-if="runs[m.simulation_id]" :version="runs[m.simulation_id]!.environment_version" :simulator-id="runs[m.simulation_id]!.simulator_id" class="text-xs" />
             </li>
           </ul>
         </UCard>
