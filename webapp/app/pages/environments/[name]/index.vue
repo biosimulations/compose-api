@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { EnvironmentHeaders, EnvironmentSummary, EnvironmentVersions, ImageStatus, InterfaceManifest } from '~/composables/useRegistry'
+import type { EnvironmentHeaders, EnvironmentSummary, EnvironmentVersion, EnvironmentVersions, ImageStatus, InterfaceManifest } from '~/composables/useRegistry'
+import type { VersionAction } from '~/utils/admin'
 import type { Component } from '~/viewers/composite/interfaces'
 
 // One environment: its versions (each a page of its own), its image, the packages its committed manifest was read with,
@@ -16,6 +17,11 @@ const highlighted = ref<string | null>(null)
 const image = ref<ImageStatus | null>(null)
 const versionList = ref<EnvironmentVersions | null>(null)
 const imageError = ref<string | null>(null)
+// administration (step 6): offered only when the API says the caller may (A1); it checks every request again
+const { principal } = useAuth()
+const capabilities = computed(() => principal.value?.capabilities ?? [])
+const admin = ref<{ act: (action: VersionAction, version: EnvironmentVersion) => void } | null>(null)
+const reloadVersions = () => fetchVersions(name.value).then(v => (versionList.value = v)).catch(() => {})
 const requesting = ref(false)
 let imagePoll: ReturnType<typeof setInterval> | null = null
 
@@ -92,7 +98,7 @@ onMounted(async () => {
     else if (!m && summary.value.kind !== 'mash-up') error.value = `No interface manifest has been generated for ${name.value}.`
     manifest.value = m
     if (summary.value && summary.value.kind !== 'mash-up') void refreshImage() // a mash-up's image is its version's
-    if (summary.value) fetchVersions(name.value).then(v => (versionList.value = v)).catch(() => {})
+    if (summary.value) void reloadVersions()
     // the headers are printed on the server; the page works without them
     if (m) fetchHeaders(name.value).then(h => (headers.value = h)).catch(() => {})
   } catch (e) {
@@ -168,10 +174,18 @@ watch(() => route.hash, hash => (highlighted.value = decodeURIComponent(hash.sli
           Each version is one locked set of packages and its image; a run records the version it used. Runs that name no
           version get the default ({{ versionList.default_source === 'deployment' ? 'set by the deployment' : 'chosen by an administrator' }}).
         </p>
+        <EnvironmentAdmin
+          v-if="summary && canAdminister(capabilities)"
+          ref="admin"
+          :name="name"
+          :kind="summary.kind"
+          :versions="versionList"
+          @changed="reloadVersions"
+        />
         <table class="text-sm">
           <thead>
             <tr class="text-left text-muted">
-              <th class="pr-4 py-1">Version</th><th class="pr-4">State</th><th class="pr-4">Made from</th><th class="pr-4">Created</th><th class="pr-4">Runs</th><th>Note</th>
+              <th class="pr-4 py-1">Version</th><th class="pr-4">State</th><th class="pr-4">Made from</th><th class="pr-4">Created</th><th class="pr-4">Runs</th><th class="pr-4">Note</th><th v-if="canAdminister(capabilities)" />
             </tr>
           </thead>
           <tbody>
@@ -190,7 +204,19 @@ watch(() => route.hash, hash => (highlighted.value = decodeURIComponent(hash.sli
                 <NuxtLink v-if="v.last_used_at" :to="runsLink({ environment_version: { environment: name, number: v.number } })" class="text-primary" :title="`Last run ${formatTime(v.last_used_at)}`">runs</NuxtLink>
                 <span v-else class="text-muted">none</span>
               </td>
-              <td class="text-xs text-muted max-w-xl">{{ v.note }}<span v-if="v.failure" class="text-error"> {{ v.failure }}</span></td>
+              <td class="pr-4 text-xs text-muted max-w-xl">{{ v.note }}<span v-if="v.failure" class="text-error"> {{ v.failure }}</span></td>
+              <td v-if="canAdminister(capabilities)" class="whitespace-nowrap">
+                <template v-for="action in versionActions(v, v.number === versionList.default, capabilities)" :key="action">
+                  <UButton
+                    size="xs"
+                    variant="ghost"
+                    :color="action === 'retire' ? 'error' : 'neutral'"
+                    :icon="{ default: 'i-lucide-star', retire: 'i-lucide-archive', inspect: 'i-lucide-scan-search' }[action]"
+                    :label="{ default: 'Make default', retire: 'Retire', inspect: 'Read back' }[action]"
+                    @click="admin?.act(action, v)"
+                  />
+                </template>
+              </td>
             </tr>
           </tbody>
         </table>

@@ -155,3 +155,47 @@ export async function fetchSimulator(id: number): Promise<SimulatorDetail | null
   if (error || !data) throw new Error(errorMessage(error, `Could not read simulator ${id}`))
   return data
 }
+
+// Administration (docs/plan-webapp-admin.md, step 6): each needs `environments:admin`, which the API checks again.
+
+export type NewEnvironmentVersion = Schemas['NewEnvironmentVersion']
+
+/** A new version: a composed environment's entries at a date, or a prebuilt one's image. An identical one is returned
+ * instead of a second (the API answers 200 rather than 201). */
+export async function createVersion(name: string, body: NewEnvironmentVersion): Promise<EnvironmentVersion> {
+  const { data, error } = await useApi().POST('/registry/environments/{name}/versions', { params: { path: { name } }, body })
+  if (error || !data) throw new Error(errorMessage(error, `Could not make a new version of ${name}`))
+  return data
+}
+
+export async function setDefaultVersion(name: string, number: number): Promise<EnvironmentVersion> {
+  const { data, error } = await useApi().PUT('/registry/environments/{name}/default', { params: { path: { name } }, body: { number } })
+  if (error || !data) throw new Error(errorMessage(error, `Could not make ${name}@${number} the default`))
+  return data
+}
+
+export async function retireVersion(name: string, number: number): Promise<EnvironmentVersion> {
+  const { data, error } = await useApi().POST('/registry/environments/{name}/versions/{number}/retire', {
+    params: { path: { name, number } }
+  })
+  if (error || !data) throw new Error(errorMessage(error, `Could not retire ${name}@${number}`))
+  return data
+}
+
+export async function inspectVersion(name: string, number: number): Promise<EnvironmentVersion> {
+  const { data, error } = await useApi().POST('/registry/environments/{name}/versions/{number}/inspect', {
+    params: { path: { name, number } }
+  })
+  if (error || !data) throw new Error(errorMessage(error, `Could not read ${name}@${number} back`))
+  return data
+}
+
+/** How a version's installed packages differ from another's (`?against=`), or null when either has none read back. */
+export async function fetchChanges(name: string, number: number, against: number): Promise<Schemas['PackageChange'][] | null> {
+  const { data, response } = await useApi().GET('/registry/environments/{name}/versions/{number}', {
+    params: { path: { name, number }, query: { against } }
+  })
+  if (response.status === 409) return null
+  if (!data) throw new Error(`Could not compare ${name}@${number} with @${against} (HTTP ${response.status})`)
+  return data.changes ?? []
+}

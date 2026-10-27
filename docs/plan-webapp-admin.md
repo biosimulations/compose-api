@@ -180,6 +180,9 @@ webapp's environment version pages. One PR per step, each merged with a merge co
    confirmation dialog (A3):
    - **Refresh a shared environment:** preview (date, default today; the lock diff and package count), then confirm to
      create. The new version's state is polled until ready or failed, and the build's failure reason is shown.
+     *Since composition 8d there is no preview:* a new version is inert until it is made the default, so the dialog
+     confirms the date (and a note), and the package diff is shown where it takes effect, in the "Set the default"
+     dialog (against the current default, `?against=`).
    - **Register a prebuilt image:** the image reference must be by digest (the API refuses others), with a note. Its
      inspection runs, and its state is followed.
    - **Set the default:** only for a ready version. The dialog says which runs this affects: requests that name no
@@ -188,6 +191,14 @@ webapp's environment version pages. One PR per step, each merged with a merge co
    - **Re-read a prebuilt version's contents (inspect).**
    - Not offered: custom library lists (A3).
    - Vitest tests cover the capability gating and each dialog, against mocked API responses.
+   - *As built (2026-10-27):* `utils/admin.ts` decides what to offer (`canAdminister`, `versionActions` by state and
+     default, `isDigestReference`) and what each dialog says (`confirmation`, `creationConfirmation`), tested in
+     `test/admin.test.ts`; the webapp has no component-test library, so the logic is kept pure. `EnvironmentAdmin`
+     (the environment page's Versions section) holds the dialogs (`ConfirmDialog`) and follows a new version every 5 s
+     until it settles; each version row gets its actions. The account menu links "You can administer environments".
+     Retire is offered only for a ready or failed version: a version still resolving or building is finished by its
+     build, which would overwrite the state. Checked in headless Chromium against production with the admin routes
+     mocked: no controls when anonymous; each dialog's text, the diff, and the requests' bodies.
 7. **Documentation.**
    - `docs/webapp.md`: signing in, the version pages, and the admin actions with who sees them.
    - `docs/authentication.md`: `/ui` as a human caller, and the capabilities.
