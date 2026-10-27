@@ -1,6 +1,6 @@
 # Web UI: sign-in switched on, and the administrative tasks brought into it
 
-**Status (2026-10-26): active; steps 1 and 2 done, step 3 in review, step 5 partly built.** It continues [plan-webapp-login](plan-webapp-login.md), whose work is done apart
+**Status (2026-10-26): active; steps 1–3 done (step 3 in 0.7.58), step 4 in review, step 5 partly built.** It continues [plan-webapp-login](plan-webapp-login.md), whose work is done apart
 from switching it on (W2, #359), and step 5b of [plan-environment-versions](plan-environment-versions.md), the
 webapp's environment version pages. One PR per step, each merged with a merge commit. Steps that change
 `kustomize/` deploy on merge; the others reach production with a release.
@@ -118,6 +118,11 @@ webapp's environment version pages. One PR per step, each merged with a merge co
    - Before enforcing, read the logged reports in Loki (`CSP violation report`) and allow what is legitimately
      needed.
    - Then repeat the smoke test, and open each viewer (Plotly, the composite viewer, zarr).
+   - *As built (2026-10-26):* Loki for the 7 days to 2026-10-27 02:00Z shows no `CSP violation report` line, across
+     22 `/auth/me` calls from sign-ins on 10-25 and 10-26. A test report posted by hand was logged, so the pipeline
+     works and the silence is real. The build has no `eval` or `new Function`; its one `importScripts` is MapLibre's
+     map-trace worker (Plotly), which `worker-src 'self' blob:` allows. The policy is unchanged;
+     `WEBAPP_CSP_ENFORCE=true` is set in `api.env`.
 5. **Read-only version pages (step 5b of plan-environment-versions).**
    - *2026-10-26:* the Versions section and the version view are built: packages with a diff against another
      ready version, entries with their compliance level and cases, classes, and the pixi/uv files. The suite page's
