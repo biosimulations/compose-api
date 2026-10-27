@@ -78,6 +78,8 @@ def spec_problems(spec: EnvironmentSpec, manifest: Manifest, *, bundled: bool = 
         entry = by_id.get(entry_id)
         if entry is None:
             problems.append(f"{spec.name}: no registry entry {entry_id!r}")
+        elif entry.kind == "core":
+            problems.append(f"{spec.name}: entry {entry_id!r} is core: every composed environment provides it unlisted")
         elif entry.install is None and not entry.conda:
             problems.append(f"{spec.name}: entry {entry_id!r} does not say how it installs (`install` or `conda`)")
         else:
@@ -98,8 +100,11 @@ def spec_problems(spec: EnvironmentSpec, manifest: Manifest, *, bundled: bool = 
 
 def members_of(spec: EnvironmentSpec, manifest: Manifest) -> frozenset[str]:
     """The registry entries an environment provides: those it is composed of, or, for a prebuilt image (which lists
-    none), the entries bundled in it."""
-    return frozenset(spec.entries) or frozenset(e.id for e in manifest.entries if spec.name in e.bundles)
+    none), the entries bundled in it. Core entries are left out: every environment that can run their classes
+    provides them, so they never tell environments apart (composition 7c-1)."""
+    return frozenset(spec.entries) or frozenset(
+        e.id for e in manifest.entries if spec.name in e.bundles and e.kind != "core"
+    )
 
 
 def _unlisted_requirements(spec: EnvironmentSpec, by_id: dict[str, RegistryEntry]) -> list[str]:
@@ -218,7 +223,8 @@ def summarize(
     image = deployed_image(spec, prebuilt)
     registry = load_manifest()
     recorded = (manifest.environment or {}).get("image") if manifest else None
-    entries = [EntryRef(id=e.id, level=e.level) for e in registry.entries if spec.name in e.bundles]
+    members = members_of(spec, registry)  # its entries, the core's left out as everywhere (composition 7c-1)
+    entries = [EntryRef(id=e.id, level=e.level) for e in registry.entries if e.id in members]
     return EnvironmentSummary(
         name=spec.name,
         kind=spec.kind,

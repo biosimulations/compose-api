@@ -76,7 +76,8 @@ def test_environments_file_names_each_environment_once_and_each_has_modules() ->
     assert {"registry_env", "viva-pde-particle"} <= set(names)
     for name in names:
         assert module_roots(name), f"no registry entry is in the {name!r} bundle"
-    assert module_roots("viva-pde-particle") == ["viva_pde_particle"]
+    # its image installs process-bigraph 1.9.1, so it provides the core's emitters too (composition 7c-1)
+    assert module_roots("viva-pde-particle") == ["process_bigraph.emitter", "viva_pde_particle"]
     assert config.describe.raw_url.startswith("https://raw.githubusercontent.com/biosimulations/process-bigraph-lang/")
     assert config.describe.raw_url.endswith("/process_bigraph_lang/v2/describe_env.py")
 

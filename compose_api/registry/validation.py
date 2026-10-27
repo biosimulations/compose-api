@@ -17,7 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from compose_api.registry.manifest import HPC_MINIMUM_LEVEL, SERVICE_BUNDLE, Manifest, load_manifest
+from compose_api.registry.manifest import HPC_MINIMUM_LEVEL, SERVICE_BUNDLE, Manifest, RegistryEntry, load_manifest
 from compose_api.simulation.models import SimulationFileType
 
 logger = logging.getLogger(__name__)
@@ -138,6 +138,21 @@ def _registry_reason(
     entry = manifest.entry_for_module(module)
     if entry is None:
         return f"module `{module}` is not provided by any registered simulator"
+    if entry.kind == "core":
+        return _core_reason(entry, standing, environment)
+    return _component_reason(entry, target, standing, environment)
+
+
+def _level_reason(entry: RegistryEntry) -> str | None:
+    if not entry.level.at_least(HPC_MINIMUM_LEVEL):
+        return (
+            f"registry entry `{entry.id}` is at level `{entry.level}`; the service runs `{HPC_MINIMUM_LEVEL}` or higher"
+        )
+    return None
+
+
+def _component_reason(entry: RegistryEntry, target: str, standing: Standing | None, environment: str) -> str | None:
+    """Why a component's (or library's) class is not allowed in the version the run will use, if it is not."""
     if standing is not None:
         if target in standing.refused:
             return f"`{target}` is refused in {standing.label}: {standing.refused[target]}"
@@ -148,15 +163,26 @@ def _registry_reason(
             return f"registry entry `{entry.id}` failed its compliance cases in {standing.label}"
         if level == "tested":
             return None
-    if not entry.level.at_least(HPC_MINIMUM_LEVEL):
-        return (
-            f"registry entry `{entry.id}` is at level `{entry.level}`; the service runs `{HPC_MINIMUM_LEVEL}` or higher"
-        )
+    level_reason = _level_reason(entry)
+    if level_reason is not None:
+        return level_reason
     # the environment the run will use provides it (D7.10): a composed version's members decide above; otherwise its
     # bundle does
     if (standing is None or standing.members is None) and environment not in entry.bundles:
         return f"registry entry `{entry.id}` is not installed in the environment `{environment}`"
     return None
+
+
+def _core_reason(entry: RegistryEntry, standing: Standing | None, environment: str) -> str | None:
+    """Why a core entry's class is not allowed here, if it is not: every composed version installs the core (a
+    standing with members), and a prebuilt image provides it when its environment is among the entry's bundles."""
+    level_reason = _level_reason(entry)
+    if level_reason is not None:
+        return level_reason
+    if (standing is not None and standing.members is not None) or environment in entry.bundles:
+        return None
+    where = standing.label if standing is not None else f"the environment `{environment}`"
+    return f"registry entry `{entry.id}` is provided by composed versions, and {where} is not one"
 
 
 def check_address(

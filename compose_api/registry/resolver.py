@@ -21,12 +21,13 @@ from compose_api.registry.manifest import Manifest
 
 def needed_entries(targets: Iterable[str], manifest: Manifest) -> set[str]:
     """The registry entries the classes ``targets`` (``<module>.<Class>``) come from, with what they require. A class
-    under no entry adds nothing: validation refuses it."""
+    under no entry adds nothing: validation refuses it. A core entry adds nothing either: every composed environment
+    provides it, so it never decides which environment a run uses or makes a mash-up."""
     found = set()
     for target in targets:
         module = target.rpartition(".")[0]
         entry = manifest.entry_for_module(module) if module else None
-        if entry is not None:
+        if entry is not None and entry.kind != "core":
             found.add(entry.id)
     return manifest.with_requirements(found)
 

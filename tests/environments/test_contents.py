@@ -343,7 +343,8 @@ async def test_a_composed_version_is_read_back_through_pixis_activation(monkeypa
     )
     inspection = await build_k8s.inspection_of(mash_up)
     assert inspection is not None and inspection.python == pixi.PYTHON
-    assert set(inspection.roots) == {"pbsim_common", "viva_basic_processes"}  # tellurium is a library: no roots
+    # tellurium is a library: no roots; the core's emitters are in every composed image (composition 7c-1)
+    assert set(inspection.roots) == {"pbsim_common", "viva_basic_processes", "process_bigraph.emitter"}
     undeclared = mash_up.model_copy(update={"runtime_contract": 1})
     assert await build_k8s.inspection_of(undeclared) is None  # an uncomposed version needs its environment listed
 

@@ -78,8 +78,11 @@ class RegistryEntry(BaseModel):
     package: str
     source: str
     # a `component` provides process classes (its module roots) and is what admission and compliance are about; a
-    # `library` is installed for a component's sake (an engine, or a pin on a component's floating dependency)
-    kind: Literal["component", "library"] = "component"
+    # `library` is installed for a component's sake (an engine, or a pin on a component's floating dependency); a
+    # `core` entry is classes of the engine every composed environment installs (`composition.core` in
+    # environments.yaml), so it is provided by every composed version and mash-up without being listed or installed,
+    # and by the prebuilt images its `bundles` name (docs/plan-environment-composition.md, 7c-1)
+    kind: Literal["component", "library", "core"] = "component"
     version: str | None = None
     commit: str | None = None
     module_roots: list[str] = Field(default_factory=list)
@@ -100,8 +103,10 @@ class RegistryEntry(BaseModel):
     def _pinned(self) -> "RegistryEntry":
         if self.version is None and self.commit is None:
             raise ValueError(f"registry entry {self.id!r} must be pinned by version or commit")
-        if self.kind == "component" and not self.module_roots:
-            raise ValueError(f"registry entry {self.id!r} is a component, so it needs `module_roots`")
+        if self.kind in ("component", "core") and not self.module_roots:
+            raise ValueError(f"registry entry {self.id!r} is a {self.kind}, so it needs `module_roots`")
+        if self.kind == "core" and (self.install is not None or self.conda):
+            raise ValueError(f"registry entry {self.id!r} is core: the composition installs it, so it has no install")
         return self
 
 
@@ -131,6 +136,10 @@ class Manifest(BaseModel):
             entry = by_id.get(entry_id)
             pending.extend(entry.requires if entry is not None else [])
         return found
+
+    def core_entries(self) -> list[RegistryEntry]:
+        """The entries every composed environment provides through its core."""
+        return [entry for entry in self.entries if entry.kind == "core"]
 
     def entry_for_module(self, module: str) -> RegistryEntry | None:
         """The entry whose longest module root contains `module`, so a nested root wins over its parent."""
