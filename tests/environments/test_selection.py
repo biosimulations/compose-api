@@ -11,7 +11,6 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport
-from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
 
 from compose_api.api.routers import suites as suites_router
 from compose_api.db.database_service import DatabaseServiceSQL
@@ -23,6 +22,7 @@ from compose_api.environments.versions import (
     version_for,
 )
 from compose_api.simulation import handlers
+from compose_api.simulation.containerization import ContainerizationEngine, ContainerizationFileRepr
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import EnvironmentVersion, SimulationRequest, VersionState
 from compose_api.simulation.simulation_service import SimulationService

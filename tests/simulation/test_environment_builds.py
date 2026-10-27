@@ -13,7 +13,6 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport
-from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
 
 from compose_api.api.routers import registry as registry_router
 from compose_api.common.hpc.models import SlurmJob
@@ -21,6 +20,7 @@ from compose_api.config import get_settings, override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation import builds, handlers
 from compose_api.simulation.builds import ImageState
+from compose_api.simulation.containerization import ContainerizationEngine, ContainerizationFileRepr
 from compose_api.simulation.models import ImageKind, JobType, SimulatorVersion
 from tests.fixtures.postgres_fixtures import shared_definition
 

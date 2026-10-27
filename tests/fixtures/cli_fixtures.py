@@ -36,7 +36,6 @@ from compose_api_client.cli.wiring import Wiring
 from compose_api_client.profiles import ENV_PREFIX, CliSettings, default_config_path, requested_scopes
 from fastapi import HTTPException, UploadFile
 from keyring.backends.fail import Keyring as FailKeyring
-from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
 from pydantic import SecretStr
 
 from compose_api.api.main import app
@@ -45,6 +44,7 @@ from compose_api.api.routers import results as results_router
 from compose_api.api.routers import simulation as simulation_router
 from compose_api.authentication import Auth0Verifier, get_auth0_verifier
 from compose_api.authorization import readable_simulation
+from compose_api.simulation.containerization import ContainerizationEngine, ContainerizationFileRepr
 from compose_api.simulation.models import (
     HpcRun,
     JobStatus,

@@ -28,7 +28,7 @@ Several documents answer different questions. Start with the one that matches yo
 | SED-ML models (BioModels, biosimulations.org, uploads) run on several solvers and compared; catalog, environments and solvers defined | [plan-sedml.md](plan-sedml.md) | plan, implemented (curated routes and interpolation deferred) | 2026-10-13 |
 | environment builds as jobs of their own, image artifacts recorded, builds on Kubernetes, publishing | [plan-environment-builds.md](plan-environment-builds.md) | plan, phases 1–4 implemented; publishing deferred | 2026-10-13 |
 | environment versions as database records: locked with uv, created and chosen through the API, recorded on every run; the registry as the build trust gate | [plan-environment-versions.md](plan-environment-versions.md) | plan; steps 1–5a merged (0.7.41); rest superseded by composition | 2026-10-25 |
-| environments composed from curated manifest entries: pixi (uv export), compliance composites per entry, registry_env migrated off pbest, mash-ups on demand | [plan-environment-composition.md](plan-environment-composition.md) | plan, **active**; steps 0–5 done, step 6 finishing | 2026-10-26 |
+| environments composed from curated manifest entries: pixi (uv export), compliance composites per entry, registry_env migrated off pbest, mash-ups on demand | [plan-environment-composition.md](plan-environment-composition.md) | plan, **active**; steps 0–7b and 8a–8d done, 8e in review, 7c blocked | 2026-10-26 |
 | each solver's known problems in a suite: excused per solver, flagged when fixed, curated by an admin in the webapp or CLI | [plan-known-problems.md](plan-known-problems.md) | plan; steps 1, 2a, 3 done (0.7.49); 2b waits for the CSP | 2026-10-26 |
 | viewers for datasets, registered per type and loaded lazily; the results bundle in 3D | [plan-viewers.md](plan-viewers.md) | plan, implemented (A1–A3 later) | 2026-10-13 |
 | signing in to the web UI: a PKCE single-page app (no backend-for-frontend), the Auth0 SPA application, hardening | [plan-webapp-login.md](plan-webapp-login.md) | plan; built, switched on by W2 (#359) | 2026-10-25 |
@@ -44,10 +44,9 @@ We work one plan at a time: the active plan runs to its end, and anything found 
 raised, not fixed on the spot.
 
 **Active: [plan-environment-composition](plan-environment-composition.md).**
-- Step 6 (registry_env migrates): `registry_env@4` is built and passes compliance. Suite run 4 on it shows no
-  regressions and four models fixed.
-  - Left: `@5` (pbsim-common c6c1804, 0.7.50), a suite run on it compared with run 4, then making it the default.
-- Then step 7 (resolver and on-demand mash-ups), then step 8 (retirements).
+- Steps 0–7b and 8a–8d are done; registry_env@5, composed with pixi, is the default.
+- Left: 8e (compose-api stops depending on pbest), then 7c (viva-pde-particle as a composed entry), which is blocked
+  on its Smoldyn build and on dependencies that track `main` branches; both need vivarium-collective changes.
 
 **Next, in order:** [plan-webapp-admin](plan-webapp-admin.md) steps 3–4 (capabilities, version diff API, one suite
 run at a time; enforcing the CSP), then [plan-verify-oracle](plan-verify-oracle.md) V5.

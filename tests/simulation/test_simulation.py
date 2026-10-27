@@ -7,16 +7,12 @@ import time
 from pathlib import Path
 
 import pytest
-from pbest.containerization.container_constructor import generate_container_def_file
-from pbest.utils.input_types import (
-    ContainerizationEngine,
-    ContainerizationFileRepr,
-)
 
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.simulation import handlers
+from compose_api.simulation.containerization import ContainerizationFileRepr
 from compose_api.simulation.hpc_utils import (
     _namespace_path,
     get_singularity_hash,
@@ -33,8 +29,8 @@ from compose_api.simulation.models import (
 from compose_api.simulation.simulation_service import SimulationServiceHpc
 from compose_api.simulation.submission_worker import SubmissionWorker
 from tests.fixtures.mocks import TestBackgroundTask
+from tests.fixtures.postgres_fixtures import shared_definition
 from tests.fixtures.simulation_fixtures import PRODUCTION_SIMULATOR_DEF_HASH
-from tests.fixtures.simulator_registry import registry_dependencies
 from tests.fixtures.slurm_fixtures_backend import SlurmBackend
 from tests.simulators.utils import assert_test_sim_results, test_dir
 
@@ -53,15 +49,15 @@ async def test_download_simulator(
 ) -> None:
     """`download_container` pulls a real image over SSH and records it in the database.
 
-    The identity is the real pbest-generated definition and its hash, but the image pulled
+    The identity is registry_env@1's real definition (pbest's) and its hash, but the image pulled
     is a small public one, for two reasons. No simulator image is published under an
     account we control: the previous location was a personal Docker Hub account belonging
-    to someone who has left, and it is not to be used. And the tag for the current pbest
-    pin does not exist there in any case, so the download this test is named for cannot be
+    to someone who has left, and it is not to be used. And no image of this definition was
+    ever published there in any case, so the download this test is named for cannot be
     performed at all until an image is published. What it does still prove is the
     mechanism and the database recording, against the real production code path.
     """
-    container_rep = generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)
+    container_rep = shared_definition()
     image = RemoteContainerImage(
         source_url=PULLABLE_PROBE_IMAGE,
         image_name_and_tag=PULLABLE_PROBE_IMAGE.removeprefix("docker://"),

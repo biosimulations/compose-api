@@ -17,15 +17,15 @@
 | 5a | Compliance checks: the generic `step-outputs-replace` check, cases kept with an entry, their evaluation; pbsim-common's first cases | merged (#389) |
 | 5b | Compliance runs: after a build, each member entry's cases run in the version; levels recorded per entry and version; API and CLI | merged (#390) |
 | 5c | Admission by what the version certifies: a refused component, a failed entry, members only | merged (#391) |
-| 6 | registry_env migrates to a composed version on a current process-bigraph | @4 (0.7.46) and @5 (0.7.50) ready; suite run 5 running; then the default |
+| 6 | registry_env migrates to a composed version on a current process-bigraph | done: @5 (0.7.50) the default since 2026-10-26, suite run 5 without regressions |
 | 7a | Runs name an environment or have one inferred; environments listed from the database | merged (#415, #416) |
 | 7b | Implicit mash-ups, proven with viva-basic-processes | done: #417–#419 (0.7.51), #421 (0.7.52); live 2026-10-26 |
 | 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | |
 | 8a | Versions come from the database only: the deployed (pbest) definition, `simulator_registry.json`, `shared_image()` retired | merged (#424), 0.7.53 |
 | 8b | Prebuilt images by their versions, not `PREBUILT_SIMULATORS` | merged (#426), 0.7.54; the `api.env` line goes with 8c |
 | 8c | Interface manifests from each environment's default version, not committed files | merged (#428), 0.7.55 |
-| 8d | The shared uv path, `preview` and custom library lists retired | in review |
-| 8e | pbest's types vendored; compose-api no longer depends on pbest | |
+| 8d | The shared uv path, `preview` and custom library lists retired | merged (#430), 0.7.56 |
+| 8e | pbest's types vendored; compose-api no longer depends on pbest | in review |
 
 ## Why (2026-10-25)
 
@@ -504,6 +504,21 @@
      which runs pbest's definition of it for the SLURM tests; 8e replaces that seed.
    - Kept: the uv export of a composed version (`uv_export.py`, the uv lock Job), and every version made the old way,
      readable, with its lock (registry_env@1 has none; `origin=custom` versions, if any, keep theirs).
+
+   *As built, 8e (2026-10-26):*
+   - `ContainerizationFileRepr` and `ContainerizationEngine` are copied from pbest 0.6.5 into
+     `compose_api/simulation/containerization.py`, members and values unchanged: stored rows map the engine by name and
+     the wire form stays `containerization_engine: 2`.
+   - The test database's seed runs registry_env@1's definition, copied verbatim from production (simulator 286, md5
+     `0f31dda063001f72dab1f6a0c6b284f2`), into `tests/fixtures/resources/registry_env_at1.def`. It is the text pbest
+     generated from the library list in the tests, byte for byte, so the SLURM tests build and run what they did; the
+     library list (`tests/fixtures/simulator_registry.py` and its JSON) goes.
+   - Gone with pbest: its git pin and `[tool.uv.sources]` entry, the `compose-api-client` override its client pin
+     needed, `spython` (and the Windows `pwd` stub for it in `tests/__init__.py`), git in the API image, and the unused
+     `introspect_package` and `list_packages_from_dependencies`, which took pbest's dependency types. pbsim-common,
+     tellurium, COPASI and the Jupyter stack leave the service's environment with it.
+   - process-bigraph 1.9.1 and bigraph-schema 1.8.1 are dev dependencies: the runner's tests run on the engine
+     composed images install. The test that read a wrapped `.pbg` back through pbest's CLI reads it with the runner.
 
    **Order:** 8a, 8b, 8c, 8d, 8e. Each is one PR, released and checked live before the next: a run with no version
    takes @5; viva-pde-particle runs by its version; the checker and SED-ML runs use read-back manifests; creating a

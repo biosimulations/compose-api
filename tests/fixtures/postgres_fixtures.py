@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from pbest.utils.input_types import ContainerizationFileRepr
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from testcontainers.postgres import PostgresContainer  # type: ignore [import-untyped]
 
@@ -16,6 +15,7 @@ from compose_api.dependencies import (
     set_database_service,
     set_postgres_engine,
 )
+from compose_api.simulation.containerization import ContainerizationEngine, ContainerizationFileRepr
 from compose_api.simulation.models import EnvironmentVersion
 
 
@@ -40,14 +40,11 @@ async def async_postgres_engine(postgres_url: str) -> AsyncGenerator[AsyncEngine
 
 
 def shared_definition() -> ContainerizationFileRepr:
-    """The definition registry_env's test default runs: pbest's, as the service generated it before versions were
-    database records (docs/plan-environment-composition.md, D8.1). The SLURM tests build and run it."""
-    from pbest.containerization.container_constructor import generate_container_def_file
-    from pbest.utils.input_types import ContainerizationEngine
-
-    from tests.fixtures.simulator_registry import registry_dependencies
-
-    return generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)
+    """The definition registry_env's test default runs: registry_env@1's, the image pbest 0.6.5 defined, copied
+    verbatim from production (simulator 286, md5 0f31dda063001f72dab1f6a0c6b284f2) when compose-api stopped
+    depending on pbest (docs/plan-environment-composition.md, D8.6). The SLURM tests build and run it."""
+    text = (Path(__file__).parent / "resources" / "registry_env_at1.def").read_text()
+    return ContainerizationFileRepr(representation=text, containerization_engine=ContainerizationEngine.APPTAINER)
 
 
 async def seed_shared_default(database_service: DatabaseService) -> None:

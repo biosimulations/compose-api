@@ -18,11 +18,11 @@ import time
 import uuid
 
 import pytest
-from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
 
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.common.ssh.ssh_service import SSHService
 from compose_api.db.database_service import DatabaseServiceSQL
+from compose_api.simulation.containerization import ContainerizationEngine, ContainerizationFileRepr
 from compose_api.simulation.hpc_utils import (
     get_singularity_hash,
     get_slurm_singularity_container_file,

@@ -21,7 +21,7 @@ Only images an administrator registered run, so a request can never pull an arbi
 by digest: the definition text, and so the cached SIF, is keyed on the reference.
 """
 
-from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
+from compose_api.simulation.containerization import ContainerizationEngine, ContainerizationFileRepr
 
 _HEADER = "Bootstrap: docker\nFrom: "
 

@@ -101,7 +101,8 @@ class Settings(BaseSettings):
     namespace: str = "test"
     containers_output_dir: str = "/experiment/output"
     # The Python of the separate environment process-bigraph-lang is installed in (sedml/pblang-requirements.txt):
-    # it needs bigraph-schema 1.6, this service's environment has pbest's 1.0, so SED-ML translation runs its CLI there
+    # it needs bigraph-schema 1.6, this service's environment has 1.8 (for the runner's tests), so SED-ML translation
+    # runs its CLI there
     # (docs/plan-sedml.md, phase 3). `make pblang` makes .pblang/ in a checkout; the API image builds the same at /app.
     pblang_python: str = f"{REPO_ROOT}/.pblang/bin/python"
     # Archives fetched from BioModels and biosimulations.org (sedml/sources.py), by id and upstream revision.

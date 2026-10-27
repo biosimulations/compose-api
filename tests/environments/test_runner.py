@@ -1,7 +1,7 @@
 """The runner composed images run documents with: runtime contract 2 (docs/plan-environment-composition.md, step 2).
 
-It is run here as the image runs it, as a script in a subprocess, on this environment's process-bigraph (pbest's 1.0.5,
-no events) and, when uv can fetch it, on the release composed environments target (1.9.1, with events)."""
+It is run here as the image runs it, as a script in a subprocess, on this environment's process-bigraph (the dev
+group's, the release composed environments install) and, when uv can fetch it, on that release with events written."""
 
 import json
 import os
@@ -104,8 +104,8 @@ def test_a_document_is_found_by_name_without_partial_replacements(tmp_path: Path
 
 
 def test_type_tables_are_registered_from_the_environment(tmp_path: Path) -> None:
-    """In a subprocess: building a core discovers every installed package, pbsim-common's COPASI included, which sets
-    the process's locale to C (and this test process's reads to ASCII)."""
+    """In a subprocess: building a core discovers every installed package, which in a composed image includes
+    pbsim-common's COPASI, which sets the process's locale to C (and would set this process's reads to ASCII)."""
     (tmp_path / "runner_types.py").write_text('standard_types = {"pair_of_floats": {"a": "float", "b": "float"}}\n')
     check = "import runner; assert 'pair_of_floats' in runner.build_core().registry"
     result = subprocess.run(  # noqa: S603 the runner's own function, in a process of its own

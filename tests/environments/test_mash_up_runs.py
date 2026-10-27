@@ -10,7 +10,6 @@ from typing import Any, cast
 
 import httpx
 import pytest
-from pbest.utils.input_types import ContainerizationEngine, ContainerizationFileRepr
 
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.db.services.environments_db import VersionSource
@@ -18,6 +17,7 @@ from compose_api.db.tables.environment_tables import ORMEnvironment
 from compose_api.environments import pixi
 from compose_api.environments.versions import VersionUnavailableError, version_for
 from compose_api.simulation import handlers
+from compose_api.simulation.containerization import ContainerizationEngine, ContainerizationFileRepr
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import SimulationFileType, SimulationRequest, VersionState
 from compose_api.simulation.simulation_service import SimulationService

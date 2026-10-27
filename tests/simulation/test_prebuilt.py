@@ -6,13 +6,12 @@ from typing import Any, cast
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from pbest.containerization.container_constructor import generate_container_def_file
-from pbest.utils.input_types import ContainerizationEngine
 
 from compose_api.config import override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.environments.versions import prebuilt_images, prebuilt_names
 from compose_api.simulation import handlers
+from compose_api.simulation.containerization import ContainerizationEngine
 from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.job_monitor import JobMonitor
 from compose_api.simulation.models import (
@@ -28,8 +27,7 @@ from compose_api.simulation.prebuilt import (
 )
 from compose_api.simulation.simulation_service import SimulationService
 from tests.fixtures.mocks import TestBackgroundTask
-from tests.fixtures.postgres_fixtures import register_prebuilt, unregister_prebuilt
-from tests.fixtures.simulator_registry import registry_dependencies
+from tests.fixtures.postgres_fixtures import register_prebuilt, shared_definition, unregister_prebuilt
 
 PREBUILT = "viva-pde-particle"  # the prebuilt environment environments.yaml declares
 IMAGE = "ghcr.io/example/simulator@sha256:" + "0" * 64
@@ -43,7 +41,7 @@ def test_definition_is_just_the_image() -> None:
 
 
 def test_the_shared_definition_names_no_prebuilt_image() -> None:
-    shared = generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)
+    shared = shared_definition()
     assert prebuilt_image_of(shared) is None
 
 
@@ -128,7 +126,7 @@ async def test_a_prebuilt_simulator_is_pulled_from_its_own_image() -> None:
 @pytest.mark.asyncio
 async def test_the_shared_simulator_is_still_pulled_by_hash() -> None:
     service = _RecordingService()
-    shared = generate_container_def_file(registry_dependencies(), ContainerizationEngine.APPTAINER)
+    shared = shared_definition()
     version = _version(shared.representation)
     with override_settings(simulator_image_repository="ghcr.io/example/registry_env"):
         await handlers._download_or_build_container(

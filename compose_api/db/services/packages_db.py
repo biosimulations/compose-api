@@ -2,7 +2,6 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, override
 
-from pbest.utils.input_types import ExperimentPrimaryDependencies
 from sqlalchemy import Result, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -57,18 +56,6 @@ class PackageDatabaseService(ABC):
 
     @abstractmethod
     async def delete_bigraph_compute(self, compute: BiGraphCompute) -> None:
-        pass
-
-    # @abstractmethod
-    # async def dependencies_not_in_database(
-    #     self, dependencies: ExperimentPrimaryDependencies
-    # ) -> ExperimentPrimaryDependencies:
-    #     pass
-
-    @abstractmethod
-    async def list_packages_from_dependencies(
-        self, dependencies: ExperimentPrimaryDependencies
-    ) -> list[RegisteredPackage]:
         pass
 
     @abstractmethod
@@ -219,41 +206,6 @@ class PackageORMExecutor(PackageDatabaseService):
             if db_rep is None:
                 raise ValueError(f"Compute id: {compute.database_id} not found in database")
             await session.delete(db_rep)
-
-    # async def dependencies_not_in_database(
-    #     self, dependencies: ExperimentPrimaryDependencies
-    # ) -> ExperimentPrimaryDependencies:
-    #     async with self.async_session_maker() as session:
-    #         stmt = select(ORMPackage).where(ORMPackage.name.in_(dependencies.pypi_dependencies))
-    #         result: Result[tuple[ORMPackage]] = await session.execute(stmt)
-    #         orm_packages = result.scalars().all()
-    #         names: tuple[str, ...] = tuple(package.name for package in orm_packages)
-    #         pypi_not_in_database: list[str] = []
-    #         for pypi in dependencies.pypi_dependencies:
-    #             if pypi not in names:
-    #                 pypi_not_in_database.append(pypi)
-    #         conda_not_in_database: list[str] = []
-    #         for conda in dependencies.conda_dependencies:
-    #             if conda not in names:
-    #                 conda_not_in_database.append(conda)
-    #         return ExperimentPrimaryDependencies(
-    #             pypi_dependencies=pypi_not_in_database, conda_dependencies=conda_not_in_database
-    #         )
-
-    async def list_packages_from_dependencies(
-        self, dependencies: ExperimentPrimaryDependencies
-    ) -> list[RegisteredPackage]:
-        async with self.async_session_maker() as session:
-            packages: list[RegisteredPackage] = []
-            for package in dependencies.get_pypi_dependencies() + dependencies.get_conda_dependencies():
-                stmt = select(ORMPackage).where(ORMPackage.name.in_(package.get_name()))
-                result: Result[tuple[ORMPackage]] = await session.execute(stmt)
-                orm_packages = result.scalars().all()
-                for row in orm_packages:
-                    processes, steps = await self._list_computes_in_package(package_id=row.id)
-                    packages.append(row.to_bigraph_package(processes=processes, steps=steps))
-
-            return packages
 
     @override
     async def close(self) -> None:

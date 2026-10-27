@@ -6,9 +6,9 @@ from pathlib import Path
 
 import asyncssh
 from asyncssh import SSHCompletedProcess
-from pbest.utils.input_types import ContainerizationEngine
 
 from compose_api.config import get_settings
+from compose_api.simulation.containerization import ContainerizationEngine
 from compose_api.simulation.hpc_utils import (
     _namespace_path,
     get_slurm_singularity_container_file,

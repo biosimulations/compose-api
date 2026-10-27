@@ -7,9 +7,10 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from pbest.utils.input_types import ContainerizationFileRepr
 from pydantic import BaseModel as _BaseModel
 from pydantic import ConfigDict, Field
+
+from compose_api.simulation.containerization import ContainerizationFileRepr
 
 
 @dataclass
