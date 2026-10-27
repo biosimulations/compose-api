@@ -1,6 +1,6 @@
 description: >-
-  viva-pde-particle's own example (compose_runner.write_example): EnsembleRunner runs four trials, seeds 1 to 4, of the
-  Fokker-Planck benchmark's trial_rho (test4, tau 0.2, dtau 1e-3), each a PDE solve co-simulated with Smoldyn (built
+  viva-pde-particle's own example (compose_runner.write_example): FokkerPlanckEnsemble runs four trials, seeds 1 to 4, of
+  the Fokker-Planck benchmark's trial_rho (test4, tau 0.2, dtau 1e-3), each a PDE solve co-simulated with Smoldyn (built
   with OPTION_VCELL), and emits each seed's two values. The emitter is named fully qualified (composition D7c.2). The
   values are seeded, so exact: these are what its prebuilt image's runner and compose-api's runner gave in the
   registry_env@5 + viva-pde-particle environment, identically (2026-10-27, docs/plan-environment-composition.md 7c).

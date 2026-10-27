@@ -4,9 +4,8 @@
     "values": [],
     "ensemble": {
       "_type": "process",
-      "address": "local:viva_pde_particle.ensemble.EnsembleRunner",
+      "address": "local:viva_pde_particle.ensemble.FokkerPlanckEnsemble",
       "config": {
-        "trial": "viva_pde_particle.benchmarks.fokker_planck:trial_rho",
         "params": "{\"test\": \"test4\", \"tau\": 0.2, \"dtau\": 0.001}",
         "seeds": [
           1,

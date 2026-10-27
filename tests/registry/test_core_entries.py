@@ -102,12 +102,12 @@ def test_viva_pde_particle_and_copasi_make_a_mash_up_that_admits_them() -> None:
     from compose_api.registry.resolver import covering_environment
 
     manifest = load_manifest()
-    targets = ["viva_pde_particle.ensemble.EnsembleRunner", COPASI[6:], RAM[6:]]
+    targets = ["viva_pde_particle.ensemble.FokkerPlanckEnsemble", COPASI[6:], RAM[6:]]
     needed = needed_entries(targets, manifest)
     assert {"viva-pde-particle", "smoldyn-vcell", "pbsim-common", "python-copasi"} <= needed
     assert "process-bigraph-emitters" not in needed
     assert covering_environment(needed, manifest, load_environments()) is None
     assert lifecycle.composable(needed, manifest) == []
     standing = Standing(label=f"{lifecycle.mash_up_name(needed)}@1", members=frozenset(needed))
-    for address in ("local:viva_pde_particle.ensemble.EnsembleRunner", COPASI, RAM):
+    for address in ("local:viva_pde_particle.ensemble.FokkerPlanckEnsemble", COPASI, RAM):
         assert _reason(address, standing) is None, address

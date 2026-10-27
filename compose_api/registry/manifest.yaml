@@ -77,14 +77,15 @@ entries:
   - id: viva-pde-particle
     package: viva-pde-particle
     source: https://github.com/vivarium-collective/viva-pde-particle
-    # the commit behind the deployed image (PREBUILT_SIMULATORS pins its digest, tagged sha-8c16827), and what a
-    # composed environment installs: the package's code is the same at main's 65f9a62 (2026-10-27)
-    commit: 8c168271e3b48ac667cde9092ca025be0f444d65
+    # viva-pde-particle#67's merge (2026-10-27): each trial function its own Ensemble class, so no document's config
+    # names what is imported. What a composed environment installs, and the commit of the prebuilt image
+    # (viva-pde-particle-compose:sha-21dfe46) registered as viva-pde-particle@2
+    commit: 21dfe468455b3a8746b184469651494f4b06b4a4
     # composed too (docs/plan-environment-composition.md 7c, D7c.1-D7c.3): its engines from conda-forge, as its own
     # pixi.toml's `compose` environment has them, less the Smoldyn toolchain; Smoldyn is the smoldyn-vcell wheel
     install:
       git: https://github.com/vivarium-collective/viva-pde-particle
-      commit: 8c168271e3b48ac667cde9092ca025be0f444d65
+      commit: 21dfe468455b3a8746b184469651494f4b06b4a4
       extras: [reference]
     conda:
       fenics-dolfinx: "0.10.*"
