@@ -167,7 +167,8 @@ async def test_capabilities_are_what_the_configured_roles_grant(
     from compose_api.config import override_settings
 
     def headers(*roles: str) -> dict[str, str]:
-        return {"Authorization": f"Bearer {fake_auth0.token(**{ROLES_CLAIM: list(roles)})}"}
+        claims: dict[str, Any] = {ROLES_CLAIM: list(roles)}
+        return {"Authorization": f"Bearer {fake_auth0.token(**claims)}"}
 
     admin = headers("admin")
     assert (await authenticated_identity_client.get("/auth/me", headers=admin)).json()["capabilities"] == []
