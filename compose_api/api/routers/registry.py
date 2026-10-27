@@ -29,6 +29,7 @@ from compose_api.environments import compliance_runs, lifecycle, pixi
 from compose_api.environments import service as environment_service
 from compose_api.environments.contents import record_contents
 from compose_api.environments.manifests import annotated, interfaces_of, manifests_of
+from compose_api.environments.packages import package_changes
 from compose_api.environments.service import VersionRequestError
 from compose_api.environments.versions import prebuilt_images, version_for
 from compose_api.registry.environments import (
@@ -318,17 +319,40 @@ async def list_environment_versions(name: str, principal: OptionalPrincipal) -> 
     operation_id="get-environment-version",
     tags=["Registry"],
     summary="One version of an environment: what it was made from, its lock, and what it installed and provides",
-    responses=_NO_ENVIRONMENT,
+    responses={
+        **_NO_ENVIRONMENT,
+        409: {"description": "`against` names a version, or this one is, with nothing read back from its image yet"},
+    },
 )
-async def get_environment_version(name: str, number: int, principal: OptionalPrincipal) -> EnvironmentVersionDetail:
+async def get_environment_version(
+    name: str,
+    number: int,
+    principal: OptionalPrincipal,
+    against: Annotated[
+        int | None,
+        Query(description="Another version of the environment: `changes` lists how this one's packages differ from it"),
+    ] = None,
+) -> EnvironmentVersionDetail:
     # public: the same for every caller
     await _readable_kind(name)
-    version = await _version(name, number)
+    version = await _read_back(name, await _version(name, number))
+    if against is None:
+        return version
+    other = await _read_back(name, await _version(name, against))
+    if version.installed is None or other.installed is None:
+        missing = number if version.installed is None else against
+        raise HTTPException(status_code=409, detail=f"nothing has been read back from {name}@{missing}'s image yet")
+    return version.model_copy(
+        update={"against": against, "changes": package_changes(other.installed, version.installed)}
+    )
+
+
+async def _read_back(name: str, version: EnvironmentVersionDetail) -> EnvironmentVersionDetail:
+    """The version, read back first if it is ready and nothing was (built by a run, or before images were read)."""
     pending = version.installed is None and version.interfaces is None
-    if pending and version.state == VersionState.READY:  # built by a run, or before this service read images back
-        database_service = get_required_database_service()
-        if await record_contents(database_service, version):
-            version = await _version(name, number)
+    ready = pending and version.state == VersionState.READY
+    if ready and await record_contents(get_required_database_service(), version):
+        return await _version(name, version.number)
     return version
 
 

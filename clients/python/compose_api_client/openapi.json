@@ -1779,6 +1779,24 @@
               "type": "integer",
               "title": "Number"
             }
+          },
+          {
+            "name": "against",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Another version of the environment: `changes` lists how this one's packages differ from it",
+              "title": "Against"
+            },
+            "description": "Another version of the environment: `changes` lists how this one's packages differ from it"
           }
         ],
         "responses": {
@@ -1794,6 +1812,9 @@
           },
           "404": {
             "description": "No such environment, or no such version"
+          },
+          "409": {
+            "description": "`against` names a version, or this one is, with nothing read back from its image yet"
           },
           "422": {
             "description": "Validation Error",
@@ -3673,6 +3694,9 @@
           "404": {
             "description": "No such suite"
           },
+          "409": {
+            "description": "A run of the suite is still submitting or running"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -4832,6 +4856,14 @@
             },
             "type": "array",
             "title": "Permissions"
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Capabilities",
+            "description": "What the caller may do beyond what anyone may, by name (environments:admin, suites:curate, simulations:read-all), computed by the checks that enforce them; the server still checks every request"
           }
         },
         "type": "object",
@@ -5741,6 +5773,33 @@
             ],
             "title": "Findings",
             "description": "What the generic compliance checks found in its components: a component with a `fail` is refused in this version (docs/plan-environment-composition.md, step 5)"
+          },
+          "against": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Against",
+            "description": "The version `changes` compares it with, when asked"
+          },
+          "changes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PackageChange"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changes",
+            "description": "With `against`: how its installed packages differ from that version's, by name (PEP 503)"
           }
         },
         "type": "object",
@@ -6461,6 +6520,42 @@
         "type": "object",
         "title": "NewEnvironmentVersion",
         "description": "What to make a version from. A composed environment (one that lists its registry entries): a date to resolve\nits entries at (default now); a mash-up is an environment of its own, never a version of another. A prebuilt one:\nits image by digest. (Library lists, the shared uv path's `custom` versions, are retired:\ndocs/plan-environment-composition.md, D8.5; versions made that way stay readable.)"
+      },
+      "PackageChange": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "PackageChange",
+        "description": "A package added (``before`` None), removed (``after`` None) or at another version between two versions."
       },
       "PackageType": {
         "type": "string",

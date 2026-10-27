@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from ..models.environment_version_detail_findings_type_0_item import EnvironmentVersionDetailFindingsType0Item
     from ..models.environment_version_detail_interfaces_type_0 import EnvironmentVersionDetailInterfacesType0
     from ..models.environment_version_detail_spec_type_0 import EnvironmentVersionDetailSpecType0
+    from ..models.package_change import PackageChange
 
 
 T = TypeVar("T", bound="EnvironmentVersionDetail")
@@ -48,6 +49,9 @@ class EnvironmentVersionDetail:
         findings (list[EnvironmentVersionDetailFindingsType0Item] | None | Unset): What the generic compliance checks
             found in its components: a component with a `fail` is refused in this version (docs/plan-environment-
             composition.md, step 5)
+        against (int | None | Unset): The version `changes` compares it with, when asked
+        changes (list[PackageChange] | None | Unset): With `against`: how its installed packages differ from that
+            version's, by name (PEP 503)
     """
 
     database_id: int
@@ -71,6 +75,8 @@ class EnvironmentVersionDetail:
     installed: None | str | Unset = UNSET
     interfaces: EnvironmentVersionDetailInterfacesType0 | None | Unset = UNSET
     findings: list[EnvironmentVersionDetailFindingsType0Item] | None | Unset = UNSET
+    against: int | None | Unset = UNSET
+    changes: list[PackageChange] | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -194,6 +200,24 @@ class EnvironmentVersionDetail:
         else:
             findings = self.findings
 
+        against: int | None | Unset
+        if isinstance(self.against, Unset):
+            against = UNSET
+        else:
+            against = self.against
+
+        changes: list[dict[str, Any]] | None | Unset
+        if isinstance(self.changes, Unset):
+            changes = UNSET
+        elif isinstance(self.changes, list):
+            changes = []
+            for changes_type_0_item_data in self.changes:
+                changes_type_0_item = changes_type_0_item_data.to_dict()
+                changes.append(changes_type_0_item)
+
+        else:
+            changes = self.changes
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
@@ -234,6 +258,10 @@ class EnvironmentVersionDetail:
             field_dict["interfaces"] = interfaces
         if findings is not UNSET:
             field_dict["findings"] = findings
+        if against is not UNSET:
+            field_dict["against"] = against
+        if changes is not UNSET:
+            field_dict["changes"] = changes
 
         return field_dict
 
@@ -246,6 +274,7 @@ class EnvironmentVersionDetail:
             EnvironmentVersionDetailInterfacesType0,  # noqa: PLC0415
         )
         from ..models.environment_version_detail_spec_type_0 import EnvironmentVersionDetailSpecType0  # noqa: PLC0415
+        from ..models.package_change import PackageChange  # noqa: PLC0415
 
         d = dict(src_dict)
         database_id = d.pop("database_id")
@@ -448,6 +477,37 @@ class EnvironmentVersionDetail:
 
         findings = _parse_findings(d.pop("findings", UNSET))
 
+        def _parse_against(data: object) -> int | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(int | None | Unset, data)
+
+        against = _parse_against(d.pop("against", UNSET))
+
+        def _parse_changes(data: object) -> list[PackageChange] | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, list):
+                    raise TypeError()
+                changes_type_0 = []
+                _changes_type_0 = data
+                for changes_type_0_item_data in _changes_type_0:
+                    changes_type_0_item = PackageChange.from_dict(changes_type_0_item_data)
+
+                    changes_type_0.append(changes_type_0_item)
+
+                return changes_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(list[PackageChange] | None | Unset, data)
+
+        changes = _parse_changes(d.pop("changes", UNSET))
+
         environment_version_detail = cls(
             database_id=database_id,
             environment_id=environment_id,
@@ -470,6 +530,8 @@ class EnvironmentVersionDetail:
             installed=installed,
             interfaces=interfaces,
             findings=findings,
+            against=against,
+            changes=changes,
         )
 
         environment_version_detail.additional_properties = d

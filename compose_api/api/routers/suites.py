@@ -66,6 +66,7 @@ async def get_suite_run(name: str, number: int, principal: OptionalPrincipal) ->
     responses={
         400: {"description": "A version not named, malformed, or that runs cannot use"},
         404: {"description": "No such suite"},
+        409: {"description": "A run of the suite is still submitting or running"},
     },
 )  # fmt: skip
 async def run_suite(
@@ -89,6 +90,13 @@ async def run_suite(
         )
     except (VersionUnavailableError, ValueError) as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    running = await suite_runs.in_flight(s)
+    if running is not None:  # one at a time (docs/plan-webapp-admin.md, A4)
+        raise HTTPException(
+            status_code=409,
+            detail=f"Run {running} of {name!r} is still going (/suites/{name}/runs/{running}); start another once it"
+            " has finished.",
+        )
     number = await suite_runs.start(s, versions)
     logger.info(f"suite {name} run {number} started by {describe_caller(principal)} on {versions}")
     return SuiteRunInfo(number=number, created_at=None, status="submitting", environment_versions=versions)

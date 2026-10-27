@@ -7,7 +7,7 @@ import os
 from typing import Any
 
 from compose_api_client import profiles
-from compose_api_client.auth.identity import confirm_identity
+from compose_api_client.auth.identity import capabilities_of, confirm_identity
 from compose_api_client.auth.models import Provider, SignInMethod, SignInRequest
 from compose_api_client.auth.oauth import Auth0OAuthClient
 from compose_api_client.auth.session import AuthSession, AuthStatus, LogoutResult
@@ -95,9 +95,10 @@ def _env_token_status(
     from compose_api_client.ext.session import AsyncComposeSession
 
     identity: Identity | None = None
+    capabilities: list[str] | None = None
     if args.verify:
 
-        async def check_env() -> Identity:
+        async def check_env() -> tuple[Identity, list[str]]:
             async with AsyncComposeSession(
                 settings.api_base_url,
                 tokens=env_token.as_async(),
@@ -105,9 +106,9 @@ def _env_token_status(
                 transport=wiring.api_transport,
             ) as api_session:
                 principal = await api_session.whoami()
-                return Identity(issuer=principal.issuer, subject=principal.subject)
+                return Identity(issuer=principal.issuer, subject=principal.subject), capabilities_of(principal)
 
-        identity = run(check_env())
+        identity, capabilities = run(check_env())
 
     if args.json:
         emit_json({
@@ -120,6 +121,7 @@ def _env_token_status(
             "renewable": False,
             "api_verified_at": None,
             "checked_with_api": bool(args.verify),
+            "capabilities": capabilities,
         })
         return int(ExitCode.OK)
     emit_text(f"Profile {settings.profile} ({settings.api_base_url})")
@@ -128,6 +130,7 @@ def _env_token_status(
     if identity is not None:
         emit_text(f"Identity: {printable(identity.subject)} ({printable(identity.issuer)})")
         emit_text("API: confirmed this identity just now")
+        _show_capabilities(capabilities)
     else:
         emit_text("API: not checked (run `compose-api auth status --verify` to check now)")
     return int(ExitCode.OK)
@@ -158,6 +161,11 @@ def logout(args: argparse.Namespace, wiring: Wiring | None = None) -> int:
     return int(ExitCode.NETWORK) if result.revocation == "unavailable" else int(ExitCode.OK)
 
 
+def _show_capabilities(capabilities: list[str] | None) -> None:
+    if capabilities is not None:
+        emit_text(f"Capabilities: {', '.join(capabilities) if capabilities else 'none beyond a signed-in user'}")
+
+
 def _show_status(settings: CliSettings, status_obj: AuthStatus, as_json: bool, *, checked_with_api: bool) -> None:
     if as_json:
         document: dict[str, Any] = status_obj.model_dump(mode="json")
@@ -174,6 +182,7 @@ def _show_status(settings: CliSettings, status_obj: AuthStatus, as_json: bool, *
     emit_text(f"Session: {state_str}, until {status_obj.expires_at:%Y-%m-%d %H:%M} UTC; {renewal}")
     if checked_with_api:
         emit_text("API: confirmed this identity just now")
+        _show_capabilities(status_obj.capabilities)
     elif status_obj.api_verified_at is not None:
         emit_text(
             f"API: last confirmed {status_obj.api_verified_at:%Y-%m-%d %H:%M} UTC (stored record only; run"

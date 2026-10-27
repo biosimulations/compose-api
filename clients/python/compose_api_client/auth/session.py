@@ -30,6 +30,8 @@ class AuthStatus(BaseModel):
     expires_at: datetime | None = None
     renewable: bool = False
     api_verified_at: datetime | None = None
+    #: what the API says this caller may do (`GET /auth/me`), when it was just asked; never stored
+    capabilities: list[str] | None = None
 
 
 class LogoutResult(BaseModel):

@@ -366,6 +366,7 @@ def test_login_is_confirmed_by_the_api(
     out = capsys.readouterr().out
     assert f"Identity: {fake_tenant.subject} ({AUTH0_TEST_ISSUER})" in out
     assert "API: confirmed this identity just now" in out
+    assert "Capabilities: none beyond a signed-in user" in out  # no role is configured here
     assert fake_compose_api.transport.paths() == ["/auth/me"]
     record = store.load(settings.binding_key(persistent=True))
     assert record is not None and record.api_verified_at is not None and record.refresh_token is not None

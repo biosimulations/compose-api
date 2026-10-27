@@ -1411,6 +1411,11 @@ export interface components {
             scopes: string[];
             /** Permissions */
             permissions: string[];
+            /**
+             * Capabilities
+             * @description What the caller may do beyond what anyone may, by name (environments:admin, suites:curate, simulations:read-all), computed by the checks that enforce them; the server still checks every request
+             */
+            capabilities?: string[];
         };
         /**
          * Dataset
@@ -1772,6 +1777,16 @@ export interface components {
             findings?: {
                 [key: string]: unknown;
             }[] | null;
+            /**
+             * Against
+             * @description The version `changes` compares it with, when asked
+             */
+            against?: number | null;
+            /**
+             * Changes
+             * @description With `against`: how its installed packages differ from that version's, by name (PEP 503)
+             */
+            changes?: components["schemas"]["PackageChange"][] | null;
         };
         /**
          * EnvironmentVersions
@@ -2035,6 +2050,18 @@ export interface components {
             image?: string | null;
             /** Note */
             note?: string | null;
+        };
+        /**
+         * PackageChange
+         * @description A package added (``before`` None), removed (``after`` None) or at another version between two versions.
+         */
+        PackageChange: {
+            /** Name */
+            name: string;
+            /** Before */
+            before?: string | null;
+            /** After */
+            after?: string | null;
         };
         /**
          * PackageType
@@ -3834,7 +3861,10 @@ export interface operations {
     };
     "get-environment-version": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Another version of the environment: `changes` lists how this one's packages differ from it */
+                against?: number | null;
+            };
             header?: never;
             path: {
                 name: string;
@@ -3855,6 +3885,13 @@ export interface operations {
             };
             /** @description No such environment, or no such version */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `against` names a version, or this one is, with nothing read back from its image yet */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5120,6 +5157,13 @@ export interface operations {
             };
             /** @description No such suite */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A run of the suite is still submitting or running */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

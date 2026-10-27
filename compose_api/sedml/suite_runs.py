@@ -1,5 +1,6 @@
 """Running a suite and reading a suite run (compose_api/sedml/suites.py; docs/plan-sedml.md, phase 6)."""
 
+import datetime
 import logging
 from collections.abc import Mapping
 from typing import Any
@@ -105,6 +106,29 @@ async def start(suite: Suite, environment_versions: dict[str, int] | None = None
     if worker is not None:
         worker.kick()
     return number
+
+
+#: a submitted run with members still unfinished this long after it started is stalled, not running: it no longer
+#: holds the suite (`in_flight`), so one stuck simulation cannot block the suite for good
+IN_FLIGHT_FOR = datetime.timedelta(days=2)
+
+
+async def in_flight(suite: Suite) -> int | None:
+    """The number of a run of the suite that is still submitting, or whose runs have not all finished; None when there
+    is none, and another may start (docs/plan-webapp-admin.md, A4)."""
+    db = get_required_database_service().get_comparisons_db()
+    now = datetime.datetime.now(datetime.UTC)
+    for run in await db.suite_runs(suite.name):
+        if run.status == "submitting":  # resumed by the submission worker after a restart, so never stalled
+            return run.number
+        started = run.created_at if run.created_at.tzinfo else run.created_at.replace(tzinfo=datetime.UTC)
+        if now - started > IN_FLIGHT_FOR:
+            continue
+        rows = await db.suite_comparisons(suite.name, run.number)
+        statuses = await service.member_statuses(rows)
+        if any(statuses.get(m.simulation_id) not in service.TERMINAL for row in rows for m in row.members):
+            return run.number
+    return None
 
 
 async def submit_run(run: ClaimedSuiteRun, owner: str) -> None:

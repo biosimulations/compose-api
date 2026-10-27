@@ -28,7 +28,7 @@ Several documents answer different questions. Start with the one that matches yo
 | SED-ML models (BioModels, biosimulations.org, uploads) run on several solvers and compared; catalog, environments and solvers defined | [plan-sedml.md](plan-sedml.md) | plan, implemented (curated routes and interpolation deferred) | 2026-10-13 |
 | environment builds as jobs of their own, image artifacts recorded, builds on Kubernetes, publishing | [plan-environment-builds.md](plan-environment-builds.md) | plan, phases 1–4 implemented; publishing deferred | 2026-10-13 |
 | environment versions as database records: locked with uv, created and chosen through the API, recorded on every run; the registry as the build trust gate | [plan-environment-versions.md](plan-environment-versions.md) | plan; steps 1–5a merged (0.7.41); rest superseded by composition | 2026-10-25 |
-| environments composed from curated manifest entries: pixi (uv export), compliance composites per entry, registry_env migrated off pbest, mash-ups on demand | [plan-environment-composition.md](plan-environment-composition.md) | plan, **active**; steps 0–7b and 8a–8d done, 8e in review, 7c blocked | 2026-10-26 |
+| environments composed from curated manifest entries: pixi (uv export), compliance composites per entry, registry_env migrated off pbest, mash-ups on demand | [plan-environment-composition.md](plan-environment-composition.md) | plan; steps 0–7b and 8a–8e done (0.7.57); 7c parked | 2026-10-26 |
 | each solver's known problems in a suite: excused per solver, flagged when fixed, curated by an admin in the webapp or CLI | [plan-known-problems.md](plan-known-problems.md) | plan; steps 1, 2a, 3 done (0.7.49); 2b waits for the CSP | 2026-10-26 |
 | viewers for datasets, registered per type and loaded lazily; the results bundle in 3D | [plan-viewers.md](plan-viewers.md) | plan, implemented (A1–A3 later) | 2026-10-13 |
 | signing in to the web UI: a PKCE single-page app (no backend-for-frontend), the Auth0 SPA application, hardening | [plan-webapp-login.md](plan-webapp-login.md) | plan; built, switched on by W2 (#359) | 2026-10-25 |
@@ -43,19 +43,15 @@ Several documents answer different questions. Start with the one that matches yo
 We work one plan at a time: the active plan runs to its end, and anything found outside it is recorded here and
 raised, not fixed on the spot.
 
-**Active: [plan-environment-composition](plan-environment-composition.md).**
-- Steps 0–7b and 8a–8d are done; registry_env@5, composed with pixi, is the default.
-- Left: 8e (compose-api stops depending on pbest), then 7c (viva-pde-particle as a composed entry), which is blocked
-  on its Smoldyn build and on dependencies that track `main` branches; both need vivarium-collective changes.
-
-**Next, in order:** [plan-webapp-admin](plan-webapp-admin.md) steps 3–4 (capabilities, version diff API, one suite
-run at a time; enforcing the CSP), then [plan-verify-oracle](plan-verify-oracle.md) V5.
+**Active: [plan-webapp-admin](plan-webapp-admin.md)**, step 3 (capabilities, the version diff, one suite run at a
+time), then step 4 (enforcing the CSP). Then [plan-verify-oracle](plan-verify-oracle.md) V5.
 
 **Parked**, with where each stopped:
 
 | Thread | Done | Left |
 |---|---|---|
-| [plan-webapp-admin](plan-webapp-admin.md) | 1, 2; 5 partly (environment and version pages, #410) | 3, 4; the rest of 5 (suite version picker, versions on simulation and comparison pages); 6 (admin actions); 7 |
+| [plan-environment-composition](plan-environment-composition.md) | 0–7b, 8a–8e (0.7.57) | 7c: viva-pde-particle as a composed entry, blocked on its Smoldyn build (from source) and on dependencies that track `main` branches; both need vivarium-collective changes. Parked 2026-10-26 |
+| [plan-webapp-admin](plan-webapp-admin.md), after 3 and 4 | 1, 2; 5 partly (environment and version pages, #410) | the rest of 5 (suite version picker, versions on simulation and comparison pages); 6 (admin actions); 7 |
 | [plan-known-problems](plan-known-problems.md) | 1, 2a, 3 (0.7.49) | 2b: mark and clear in the webapp, after webapp-admin 4 |
 | [plan-verify-oracle](plan-verify-oracle.md) | V0–V4 | V5: verdicts on the comparison and suite pages |
 | [plan-vcell-ode](plan-vcell-ode.md) | 1–4 | report VCell bugs: BIOMD 112 (`null`), 175 (unknown identifier), 56 and 168 (disagree), 137 (solve error); 235 (out of memory) and 255 (timeout) |
@@ -63,7 +59,8 @@ run at a time; enforcing the CSP), then [plan-verify-oracle](plan-verify-oracle.
 | [plan-environment-builds](plan-environment-builds.md) | phases 1–4 | publishing |
 | Emitters in submitted documents | | `local:RAMEmitter` is refused as a short name and no registry entry covers `process_bigraph`, so a submitted document cannot use process-bigraph's own emitters (SED-ML runs report through biosim-toolkit's steps). Found by composition 7b-4, 2026-10-26 |
 | Test isolation | | `tests/environments/test_contents.py::test_the_reread_job_scripts_leave_what_they_read_beside_the_image` fails when run after `tests/registry tests/api tests/environments` (a settings layer left active: `simulation_store_base_path`); passes alone and in CI's order |
-| Open PRs | | #403 (regenerated manifests; moot after composition step 8), #345 (vivarium-workbench plan), dependency bumps |
+| Test isolation, staging | | two `tests/simulation/test_staging.py` permission tests fail in the full local order and pass alone (found 2026-10-26) |
+| Open PRs | | #345 (vivarium-workbench plan), dependency bumps |
 
 **Direction** documents say what we intend. **Analysis** documents measure something and lay out options; they are
 dated because measurements go stale. **Record** documents track commitments. When two disagree, the direction

@@ -776,11 +776,29 @@ def environments_versions(ctx: typer.Context, name: _ENV_ARG) -> None:
 @environments_app.command("version")
 @claims("environments version", "get-environment-version")
 @handled
-def environments_version(ctx: typer.Context, name: _ENV_ARG, number: _NUMBER_ARG) -> None:
-    """One version: what it was made from, its lock, and what it installed and provides."""
+def environments_version(
+    ctx: typer.Context,
+    name: _ENV_ARG,
+    number: _NUMBER_ARG,
+    against: Annotated[
+        int | None,
+        typer.Option("--against", help="Another version's number: list how this one's packages differ from it."),
+    ] = None,
+) -> None:
+    """One version: what it was made from, its lock, and what it installed and provides. With --against, the
+    packages added, removed or at another version since that one, as their images installed them."""
     settings = _settings(ctx)
     with make_session(settings) as s:
-        emit(settings.output, s.environment_version(name, number))
+        version = s.environment_version(name, number, against=against)
+    if against is None or resolve(settings.output) is Output.JSON:
+        emit(settings.output, version)
+        return
+    found = version.changes if not isinstance(version.changes, Unset) else None
+    changes = [c.to_dict() for c in found or []]
+    if not changes:
+        print(f"{name}@{number} installs the same packages as {name}@{against}")
+        return
+    emit(settings.output, changes, columns=["name", "before", "after"], title=f"{name}@{against} → {name}@{number}")
 
 
 @environments_app.command("export")

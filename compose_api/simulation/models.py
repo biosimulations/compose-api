@@ -242,6 +242,14 @@ class EnvironmentVersion(BaseModel):
         return f"{self.environment}@{self.number}"
 
 
+class PackageChange(BaseModel):
+    """A package added (``before`` None), removed (``after`` None) or at another version between two versions."""
+
+    name: str
+    before: str | None = None
+    after: str | None = None
+
+
 class EnvironmentVersionDetail(EnvironmentVersion):
     """A version with what it was resolved to and, once built, what it installed and provides."""
 
@@ -252,6 +260,11 @@ class EnvironmentVersionDetail(EnvironmentVersion):
         default=None,
         description="What the generic compliance checks found in its components: a component with a `fail` is"
         " refused in this version (docs/plan-environment-composition.md, step 5)",
+    )
+    against: int | None = Field(default=None, description="The version `changes` compares it with, when asked")
+    changes: list[PackageChange] | None = Field(
+        default=None,
+        description="With `against`: how its installed packages differ from that version's, by name (PEP 503)",
     )
 
 

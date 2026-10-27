@@ -606,3 +606,31 @@ def test_environments_export_writes_the_files_and_nothing_outside_out(
     assert not (tmp_path / "pixi.lock").exists()
     assert seen[0].url.path == "/registry/environments/registry_env/versions/3/export"
     assert dict(seen[0].url.params) == {"format": "pixi"}
+
+
+def test_environments_version_against_another_lists_the_package_changes(monkeypatch: pytest.MonkeyPatch) -> None:
+    version = {
+        "database_id": 9, "environment_id": 1, "environment": "registry_env", "number": 5, "state": "ready",
+        "simulator_id": 3, "against": 4,
+        "changes": [{"name": "libvcell", "before": "0.0.23", "after": "0.0.24"}, {"name": "six", "before": "1.16.0"}],
+    }  # fmt: skip
+    seen: list[httpx.Request] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=version)
+
+    monkeypatch.setattr(
+        cli_module, "make_session", lambda s: ComposeSession(s.url, transport=httpx.MockTransport(answer))
+    )
+    table = runner.invoke(
+        app, ["--output", "table", "environments", "version", "registry_env", "5", "--against", "4"],
+        env={"COLUMNS": "200"},
+    )  # fmt: skip
+    assert table.exit_code == 0, table.output
+    text = " ".join(table.stdout.split())  # the title wraps to the table's width
+    assert "registry_env@4 → registry_env@5" in text and "0.0.24" in text and "six" in text
+    assert dict(seen[-1].url.params) == {"against": "4"}
+    assert json.loads(invoke("environments", "version", "registry_env", "5", "--against", "4").stdout)["against"] == 4
+    invoke("environments", "version", "registry_env", "5")
+    assert "against" not in seen[-1].url.params

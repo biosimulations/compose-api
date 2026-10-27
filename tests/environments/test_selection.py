@@ -21,6 +21,7 @@ from compose_api.environments.versions import (
     resolve_versions,
     version_for,
 )
+from compose_api.sedml import suite_runs
 from compose_api.simulation import handlers
 from compose_api.simulation.containerization import ContainerizationEngine, ContainerizationFileRepr
 from compose_api.simulation.job_monitor import JobMonitor
@@ -125,7 +126,16 @@ async def test_a_run_naming_a_version_runs_in_it_and_is_labelled_with_it(
 
 
 @pytest_asyncio.fixture
-async def suites_client(database_service: DatabaseServiceSQL) -> AsyncGenerator[httpx.AsyncClient]:
+async def suites_client(
+    database_service: DatabaseServiceSQL, monkeypatch: pytest.MonkeyPatch
+) -> AsyncGenerator[httpx.AsyncClient]:
+    """The suite routes. The smoke runs started here are never submitted, so they would hold the suite for the next
+    test: one run at a time is tested in tests/sedml/test_suites.py."""
+
+    async def none_in_flight(suite: object) -> None:
+        return None
+
+    monkeypatch.setattr(suite_runs, "in_flight", none_in_flight)
     app = FastAPI()
     app.include_router(suites_router.config.router, prefix=suites_router.config.prefix)
     async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:

@@ -82,6 +82,7 @@ from .known_problem_edit import KnownProblemEdit
 from .known_problem_mark import KnownProblemMark
 from .list_simulations_status_type_0 import ListSimulationsStatusType0
 from .new_environment_version import NewEnvironmentVersion
+from .package_change import PackageChange
 from .package_type import PackageType
 from .project_info import ProjectInfo
 from .registered_package import RegisteredPackage
@@ -211,6 +212,7 @@ __all__ = (
     "KnownProblemMark",
     "ListSimulationsStatusType0",
     "NewEnvironmentVersion",
+    "PackageChange",
     "PackageType",
     "ProjectInfo",
     "RegisteredPackage",

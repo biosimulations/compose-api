@@ -6,6 +6,8 @@ from typing import Any, TypeVar, cast
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..types import UNSET, Unset
+
 T = TypeVar("T", bound="CurrentPrincipalResponse")
 
 
@@ -19,6 +21,9 @@ class CurrentPrincipalResponse:
         roles (list[str]):
         scopes (list[str]):
         permissions (list[str]):
+        capabilities (list[str] | Unset): What the caller may do beyond what anyone may, by name (environments:admin,
+            suites:curate, simulations:read-all), computed by the checks that enforce them; the server still checks every
+            request
     """
 
     issuer: str
@@ -27,6 +32,7 @@ class CurrentPrincipalResponse:
     roles: list[str]
     scopes: list[str]
     permissions: list[str]
+    capabilities: list[str] | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -42,6 +48,10 @@ class CurrentPrincipalResponse:
 
         permissions = self.permissions
 
+        capabilities: list[str] | Unset = UNSET
+        if not isinstance(self.capabilities, Unset):
+            capabilities = self.capabilities
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
@@ -52,6 +62,8 @@ class CurrentPrincipalResponse:
             "scopes": scopes,
             "permissions": permissions,
         })
+        if capabilities is not UNSET:
+            field_dict["capabilities"] = capabilities
 
         return field_dict
 
@@ -70,6 +82,8 @@ class CurrentPrincipalResponse:
 
         permissions = cast(list[str], d.pop("permissions"))
 
+        capabilities = cast(list[str], d.pop("capabilities", UNSET))
+
         current_principal_response = cls(
             issuer=issuer,
             subject=subject,
@@ -77,6 +91,7 @@ class CurrentPrincipalResponse:
             roles=roles,
             scopes=scopes,
             permissions=permissions,
+            capabilities=capabilities,
         )
 
         current_principal_response.additional_properties = d

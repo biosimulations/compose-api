@@ -40,6 +40,7 @@ async def test_verified_identity(
         "roles": ["publisher", "user"],
         "scopes": ["openid", "profile"],
         "permissions": ["read:example", "write:example"],
+        "capabilities": [],
     }
     assert token not in response.text
     assert fake_auth0.jwks_requests == 1
@@ -155,3 +156,25 @@ async def test_untrusted_metadata_never_grants_roles(
     response = await authenticated_identity_client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
     assert response.json()["roles"] == ["user"]
+
+
+@pytest.mark.asyncio
+async def test_capabilities_are_what_the_configured_roles_grant(
+    authenticated_identity_client: httpx.AsyncClient, fake_auth0: FakeAuth0
+) -> None:
+    """`capabilities` come from the checks that enforce them (docs/plan-webapp-admin.md, A1): none while no role is
+    configured, then those the caller's roles grant."""
+    from compose_api.config import override_settings
+
+    def headers(*roles: str) -> dict[str, str]:
+        return {"Authorization": f"Bearer {fake_auth0.token(**{ROLES_CLAIM: list(roles)})}"}
+
+    admin = headers("admin")
+    assert (await authenticated_identity_client.get("/auth/me", headers=admin)).json()["capabilities"] == []
+    with override_settings(environment_admin_role="admin", suite_curator_role="curator"):
+        granted = (await authenticated_identity_client.get("/auth/me", headers=admin)).json()["capabilities"]
+        assert granted == ["environments:admin"]
+        both = (await authenticated_identity_client.get("/auth/me", headers=headers("admin", "curator"))).json()
+        assert both["capabilities"] == ["environments:admin", "suites:curate"]
+        plain = (await authenticated_identity_client.get("/auth/me", headers=headers())).json()
+        assert plain["capabilities"] == []
