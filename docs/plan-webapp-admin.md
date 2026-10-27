@@ -166,6 +166,11 @@ webapp's environment version pages. One PR per step, each merged with a merge co
        page when it has none. The simulator page shows its definition, its versions and "N runs". The environment
        page's versions and each version view link "N runs" to the filtered simulation list. The environments page
        gains a collapsed "Earlier simulators (before versions)" section.
+       - *As built (2026-10-26):* `RanIn` (a run's version, or its simulator) on the simulation page, the list's
+         "Ran in" column and each comparison member; `utils/environments.ts` `ranInLink`/`runsLink`; the new page
+         `/simulators/{id}` (definition, downloadable); "Runs" links on the environment page (all versions, and per
+         version once used) and the version view, whose simulator id links to its page; the list's filters from the
+         query, cleared with one chip.
 6. **Admin actions in the webapp.** Shown only with `environments:admin`; ship only after step 4. Each one gets a
    confirmation dialog (A3):
    - **Refresh a shared environment:** preview (date, default today; the lock diff and package count), then confirm to

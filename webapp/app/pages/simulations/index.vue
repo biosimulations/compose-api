@@ -17,6 +17,17 @@ const asList = (v: unknown) => (Array.isArray(v) ? v : v ? [v] : []).map(String)
 const labels = ref<string[]>(asList(route.query.label))
 const tags = ref<string[]>(asList(route.query.tag))
 const page = ref(Number(route.query.page ?? 1))
+// where the runs ran: set by the links on environment, version and simulator pages (plan-webapp-admin 5c)
+const ranIn = ref({
+  environment: (route.query.environment as string) || undefined,
+  environment_version: (route.query.environment_version as string) || undefined,
+  simulator_id: route.query.simulator_id ? Number(route.query.simulator_id) : undefined
+})
+const ranInLabel = computed(() => ranIn.value.environment_version ?? ranIn.value.environment
+  ?? (ranIn.value.simulator_id != null ? `simulator ${ranIn.value.simulator_id}` : null))
+function clearRanIn() {
+  ranIn.value = { environment: undefined, environment_version: undefined, simulator_id: undefined }
+}
 
 const rows = ref<SimulationSummary[]>([])
 const total = ref(0)
@@ -33,6 +44,7 @@ async function load() {
         since: since.value ? new Date(since.value).toISOString() : undefined,
         label: labels.value.length ? labels.value : undefined,
         tag: tags.value.length ? tags.value : undefined,
+        ...ranIn.value,
         limit: PAGE,
         offset: (page.value - 1) * PAGE
       }
@@ -48,10 +60,10 @@ async function load() {
   total.value = data.total
 }
 
-watch([status, simulator, since, labels, tags], () => {
+watch([status, simulator, since, labels, tags, ranIn], () => {
   page.value = 1
 })
-watch([status, simulator, since, labels, tags, page], () => {
+watch([status, simulator, since, labels, tags, ranIn, page], () => {
   router.replace({
     query: {
       status: status.value || undefined,
@@ -59,6 +71,7 @@ watch([status, simulator, since, labels, tags, page], () => {
       since: since.value || undefined,
       label: labels.value.length ? labels.value : undefined,
       tag: tags.value.length ? tags.value : undefined,
+      ...ranIn.value,
       page: page.value > 1 ? page.value : undefined
     }
   })
@@ -77,6 +90,7 @@ const UButton = resolveComponent('UButton')
 const NuxtLink = resolveComponent('NuxtLink')
 const StatusBadge = resolveComponent('StatusBadge')
 const RunLabels = resolveComponent('RunLabels')
+const RanIn = resolveComponent('RanIn')
 
 // a chip clicked elsewhere (the detail page, this table) navigates here with a new query: follow it
 watch(() => route.query, (q) => {
@@ -107,6 +121,11 @@ const columns: TableColumn<SimulationSummary>[] = [
     cell: ({ row }) => row.original.simulator
       ? h('span', { class: 'block max-w-72 truncate', title: row.original.simulator }, row.original.simulator)
       : h('span', { class: 'font-mono text-xs text-muted', title: row.original.container_def_hash }, `built ${row.original.container_def_hash.slice(0, 10)}`)
+  },
+  {
+    id: 'ran_in',
+    header: 'Ran in',
+    cell: ({ row }) => h(RanIn, { version: row.original.environment_version, simulatorId: row.original.simulator_id, class: 'text-xs whitespace-nowrap' })
   },
   {
     accessorKey: 'experiment_id',
@@ -151,6 +170,7 @@ const columns: TableColumn<SimulationSummary>[] = [
         <UInput v-model="since" type="date" class="w-44" title="Submitted on or after" />
         <UInputTags v-model="labels" placeholder="Label key:value" icon="i-lucide-filter" class="w-64" title="Labels, e.g. source:biomodels; all must match" />
         <UInputTags v-model="tags" placeholder="Tag" icon="i-lucide-tag" class="w-56" title="Tags; all must match" />
+        <UButton v-if="ranInLabel" icon="i-lucide-x" :label="`Ran in ${ranInLabel}`" color="primary" variant="subtle" size="sm" title="Show runs from anywhere" @click="clearRanIn" />
         <UButton icon="i-lucide-refresh-cw" variant="ghost" color="neutral" :loading="loading" @click="load" />
       </div>
       <UAlert v-if="error" color="error" variant="subtle" icon="i-lucide-circle-alert" :description="error" />

@@ -61,3 +61,31 @@ export function corePackages(version: Version, installed: Map<string, string>): 
   const names = ['process-bigraph', 'bigraph-schema']
   return names.map(n => core[n] ?? installed.get(n)).map((v, i) => (v ? `${names[i]} ${v}` : '')).filter(Boolean)
 }
+
+// Where a run ran, and the runs that ran somewhere (docs/plan-webapp-admin.md, step 5c). A run since environment
+// versions names its version; one from before names only its simulator, which has a page of its own.
+type VersionRef = Schemas['VersionRef']
+
+/** `registry_env@5` */
+export function versionLabel(ref: VersionRef): string {
+  return `${ref.environment}@${ref.number}`
+}
+
+/** The page of the version a run ran in, or of its simulator when it ran before versions. */
+export function ranInLink(version: VersionRef | null | undefined, simulatorId: number): { to: string, label: string } {
+  return version
+    ? { to: `/environments/${encodeURIComponent(version.environment)}/versions/${version.number}`, label: versionLabel(version) }
+    : { to: `/simulators/${simulatorId}`, label: `simulator ${simulatorId}` }
+}
+
+export type RunsFilter = { environment: string } | { environment_version: VersionRef } | { simulator_id: number }
+
+/** The simulation list filtered to the runs of an environment, a version or a simulator. */
+export function runsLink(filter: RunsFilter): string {
+  const query = 'environment' in filter
+    ? `environment=${encodeURIComponent(filter.environment)}`
+    : 'environment_version' in filter
+      ? `environment_version=${encodeURIComponent(versionLabel(filter.environment_version))}`
+      : `simulator_id=${filter.simulator_id}`
+  return `/simulations?${query}`
+}

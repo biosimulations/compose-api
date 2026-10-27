@@ -141,6 +141,10 @@ const fields = computed(() => {
                     <dt class="text-muted">Labels and tags</dt>
                     <dd><RunLabels :labels="sim.labels" :tags="sim.tags" /></dd>
                   </template>
+                  <template v-if="sim">
+                    <dt class="text-muted">Ran in</dt>
+                    <dd class="text-xs self-center"><RanIn :version="sim.environment_version" :simulator-id="sim.simulator_id" /></dd>
+                  </template>
                   <template v-for="[k, v] in fields" :key="k">
                     <dt class="text-muted">{{ k }}</dt>
                     <dd class="font-mono text-xs break-all self-center">{{ v }}</dd>
