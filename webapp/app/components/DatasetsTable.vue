@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TableColumn, TableRow } from '@nuxt/ui'
 import type { Dataset } from '~/composables/useApi'
+import { datasetGlyph } from '~/viewers/kinds'
 import { isDirectoryDataset, viewersFor } from '~/viewers/registry'
 
 // A page of datasets. A row a viewer is registered for opens its page (/datasets/<id>) when clicked, and its name is
@@ -27,7 +28,18 @@ async function save(d: Dataset) {
   }
 }
 
+const UIcon = resolveComponent('UIcon')
+
 const columns = computed<TableColumn<Dataset>[]>(() => [
+  {
+    id: 'glyph',
+    header: '',
+    meta: { class: { th: 'w-8', td: 'w-8 pr-0' } },
+    cell: ({ row }) => {
+      const g = datasetGlyph(row.original)
+      return h(UIcon, { name: g.icon, class: 'size-5 text-muted align-middle', title: g.label, 'aria-label': g.label })
+    }
+  },
   ...(props.showSimulation
     ? [{
         accessorKey: 'simulation_id',
