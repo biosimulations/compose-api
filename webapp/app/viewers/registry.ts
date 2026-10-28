@@ -1,5 +1,6 @@
 import type { Component } from 'vue'
 import type { Dataset } from '~/composables/useApi'
+import { isBundle, isComposite, isImage, isPlotlyFigure, isTable, isText, media } from './kinds'
 
 /**
  * Viewers registered against dataset types (docs/plan-viewers.md F2). `match` scores how well a viewer fits a
@@ -15,16 +16,6 @@ export interface ViewerDef {
 }
 
 const lazy = (loader: () => Promise<Component | { default: Component }>) => defineAsyncComponent(loader)
-
-const media = (d: Dataset) => d.media_type ?? ''
-const isTable = (d: Dataset) => /csv|tab-separated|tsv/.test(media(d)) || /\.(csv|tsv)$/i.test(d.path)
-const isText = (d: Dataset) => media(d).startsWith('text/') || /json|yaml|xml/.test(media(d))
-const isBundle = (d: Dataset) => d.kind === 'results-bundle'
-// a Plotly figure a run wrote (biosim-toolkit's SED-ML Plots step: plots/<sedml>/<plot>.plotly.json)
-const isPlotlyFigure = (d: Dataset) => /\.plotly\.json$/i.test(d.path) || /plotly/.test(media(d))
-// the submitted composite: a process-bigraph document (.pbg or .json), or an OMEX archive holding one or more
-const isComposite = (d: Dataset) =>
-  d.kind === 'input' && (/json|zip/.test(media(d)) || /\.(pbg|json|omex)$/i.test(d.path))
 
 export const VIEWERS: ViewerDef[] = [
   {
@@ -46,7 +37,7 @@ export const VIEWERS: ViewerDef[] = [
     id: 'image',
     label: 'Image',
     icon: 'i-lucide-image',
-    match: d => (media(d).startsWith('image/') ? 10 : 0),
+    match: d => (isImage(d) ? 10 : 0),
     component: lazy(() => import('./ImageViewer.vue'))
   },
   {

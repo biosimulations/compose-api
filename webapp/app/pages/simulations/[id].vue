@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui'
 import type { Dataset, HpcRun, SimulationDetail } from '~/composables/useApi'
+import { isFigure } from '~/viewers/kinds'
 
 const route = useRoute()
 const id = Number(route.params.id)
@@ -12,6 +13,8 @@ const build = ref<HpcRun | null>(null)
 const datasets = ref<Dataset[]>([])
 // The file the simulation was submitted with, announced by the job script when the run starts (kind "input").
 const input = computed(() => datasets.value.find(d => d.kind === 'input') ?? null)
+// The outputs a visualization is registered for (viewers/kinds.ts): plots, images, results bundles.
+const figures = computed(() => datasets.value.filter(isFigure))
 const inputError = ref<string | null>(null)
 
 async function saveInput(d: Dataset) {
@@ -75,14 +78,22 @@ async function saveResults() {
   }
 }
 
+// Overview, what was submitted, what it drew, what it recorded (its trace and events, one tab), and every file. The
+// input and the figures load their viewers (Plotly, vtk.js) only once their tab is opened.
 const tabs = computed<TabsItem[]>(() => [
   { label: 'Overview', icon: 'i-lucide-info', slot: 'overview' as const, value: 'overview' },
-  { label: `Events${sim.value ? ` (${sim.value.event_count})` : ''}`, icon: 'i-lucide-scroll-text', slot: 'events' as const, value: 'events' },
-  { label: 'Trace', icon: 'i-lucide-chart-gantt', slot: 'trace' as const, value: 'trace' },
+  { label: 'Input', icon: 'i-lucide-file-input', slot: 'input' as const, value: 'input', disabled: !input.value },
+  { label: `Figures (${figures.value.length})`, icon: 'i-lucide-chart-spline', slot: 'figures' as const, value: 'figures' },
+  { label: `Events and trace${sim.value ? ` (${sim.value.event_count})` : ''}`, icon: 'i-lucide-scroll-text', slot: 'events' as const, value: 'events' },
   { label: `Datasets (${datasets.value.length})`, icon: 'i-lucide-files', slot: 'datasets' as const, value: 'datasets' }
 ])
-const tab = ref((route.query.tab as string) || 'overview')
-watch(tab, t => navigateTo({ query: { ...route.query, tab: t } }, { replace: true }))
+// `?tab=trace`, from before the trace and the events were one tab, opens that tab
+const tab = ref(route.query.tab === 'trace' ? 'events' : (route.query.tab as string) || 'overview')
+const opened = reactive(new Set([tab.value]))
+watch(tab, (t) => {
+  opened.add(t)
+  navigateTo({ query: { ...route.query, tab: t } }, { replace: true })
+})
 
 const fields = computed(() => {
   const s = sim.value
@@ -181,6 +192,7 @@ const fields = computed(() => {
                     <div class="flex items-center justify-between">
                       <h3 class="font-semibold">Input</h3>
                       <div class="flex gap-1">
+                        <UButton icon="i-lucide-eye" variant="ghost" color="neutral" title="View" :disabled="!input.available" @click="tab = 'input'" />
                         <UButton icon="i-lucide-maximize-2" variant="ghost" color="neutral" title="Open" :to="`/datasets/${input.id}`" :disabled="!input.available" />
                         <UButton icon="i-lucide-download" variant="ghost" color="neutral" title="Download" :disabled="!input.available" @click="saveInput(input)" />
                       </div>
@@ -214,11 +226,51 @@ const fields = computed(() => {
               </div>
             </div>
           </template>
-          <template #events>
-            <div class="pt-4"><EventLog :simulation-id="id" :live="live" /></div>
+          <template #input>
+            <div v-if="input && opened.has('input')" class="pt-4 flex flex-col gap-3">
+              <div class="flex flex-wrap items-center gap-2 text-sm">
+                <span class="font-mono text-xs break-all">{{ input.path }}</span>
+                <UBadge variant="outline" color="neutral">{{ formatBytes(input.size_bytes) }}</UBadge>
+                <span class="grow" />
+                <UButton icon="i-lucide-maximize-2" variant="ghost" color="neutral" label="Open" :to="`/datasets/${input.id}`" :disabled="!input.available" />
+                <UButton icon="i-lucide-download" variant="ghost" color="neutral" label="Download" :disabled="!input.available" @click="saveInput(input)" />
+              </div>
+              <UAlert v-if="inputError" color="error" variant="subtle" :description="inputError" />
+              <UAlert v-if="!input.available" color="neutral" variant="subtle" description="The input is no longer available." />
+              <DatasetViewer v-else :dataset="input" />
+            </div>
           </template>
-          <template #trace>
-            <div class="pt-4"><TraceTree :simulation-id="id" :live="live" /></div>
+          <template #figures>
+            <div v-if="opened.has('figures')" class="pt-4">
+              <p v-if="!figures.length" class="text-sm text-muted">
+                {{ live ? 'No figures yet: they appear as the run writes them.' : 'This run wrote no figures: no plots, images or results bundles.' }}
+              </p>
+              <div v-else class="grid xl:grid-cols-2 gap-4">
+                <UCard v-for="f in figures" :key="f.id">
+                  <template #header>
+                    <div class="flex items-center gap-2">
+                      <h3 class="font-semibold truncate" :title="f.path">{{ f.display_name }}</h3>
+                      <span class="grow" />
+                      <UButton icon="i-lucide-maximize-2" variant="ghost" color="neutral" size="sm" title="Open" :to="`/datasets/${f.id}`" />
+                    </div>
+                  </template>
+                  <p v-if="!f.available" class="text-sm text-muted">No longer available.</p>
+                  <DatasetViewer v-else :dataset="f" />
+                </UCard>
+              </div>
+            </div>
+          </template>
+          <template #events>
+            <div class="pt-4 flex flex-col gap-6">
+              <section class="flex flex-col gap-2">
+                <h3 class="font-semibold">Trace</h3>
+                <TraceTree :simulation-id="id" :live="live" />
+              </section>
+              <section class="flex flex-col gap-2">
+                <h3 class="font-semibold">Events</h3>
+                <EventLog :simulation-id="id" :live="live" />
+              </section>
+            </div>
           </template>
           <template #datasets>
             <div class="pt-4"><DatasetsTable :datasets="datasets" /></div>
