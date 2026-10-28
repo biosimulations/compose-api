@@ -41,6 +41,14 @@ export const VIEWERS: ViewerDef[] = [
     ...lazy(() => import('./PlotlyFigureViewer.vue'), () => import('plotly.js-dist-min'))
   },
   {
+    // the figure's x/y series as a table, beside the figure itself
+    id: 'figure-table',
+    label: 'Table',
+    icon: 'i-lucide-table',
+    match: d => (isPlotlyFigure(d) ? 11 : 0),
+    ...lazy(() => import('./FigureTableViewer.vue'))
+  },
+  {
     id: 'image',
     label: 'Image',
     icon: 'i-lucide-image',
@@ -53,6 +61,14 @@ export const VIEWERS: ViewerDef[] = [
     icon: 'i-lucide-table',
     match: d => (isTable(d) ? 10 : 0),
     ...lazy(() => import('./TableViewer.vue'))
+  },
+  {
+    // the table plotted (its first column as x); after Table, so a table opens as a table
+    id: 'table-plot',
+    label: 'Plot',
+    icon: 'i-lucide-chart-line',
+    match: d => (isTable(d) ? 9 : 0),
+    ...lazy(() => import('./TablePlotViewer.vue'), () => import('plotly.js-dist-min'))
   },
   {
     id: 'text',
