@@ -113,16 +113,15 @@ watch(tab, (t) => {
 const fields = computed(() => {
   const s = sim.value
   if (!s) return []
-  // the experiment id is the page's subtitle; the simulator and its container hash are on the page "Ran in" links to
+  // the experiment id is the page's subtitle; the simulator and its container hash are on the page "Ran in" links to;
+  // the trace and correlation ids are on the Events and trace tab
   return [
     ['Visibility', s.visibility],
     ['Submitted', formatTime(s.created_at)],
     ['Started', formatTime(s.start_time)],
     ['Ended', formatTime(s.end_time)],
     ['SLURM job', s.slurm_job_id ?? '—'],
-    ['Exit code', s.exit_code ?? '—'],
-    ['Trace', s.trace_id ?? '—'],
-    ['Correlation id', run.value?.correlation_id ?? '—']
+    ['Exit code', s.exit_code ?? '—']
   ] as const
 })
 </script>
@@ -278,7 +277,11 @@ const fields = computed(() => {
           <template #events>
             <div class="pt-4 flex flex-col gap-6">
               <section class="flex flex-col gap-2">
-                <h3 class="font-semibold">Trace</h3>
+                <div class="flex flex-wrap items-baseline gap-x-3">
+                  <h3 class="font-semibold">Trace</h3>
+                  <!-- what the API, the job and the logs share (the trace id is derived from it) -->
+                  <span v-if="run?.correlation_id" class="text-sm text-muted font-mono">correlation {{ run.correlation_id }}</span>
+                </div>
                 <TraceTree :simulation-id="id" :live="live" />
               </section>
               <section class="flex flex-col gap-2">
