@@ -645,7 +645,7 @@ wheels = [
 
 [[package]]
 name = "compose-api"
-version = "0.7.65"
+version = "0.7.66"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
@@ -764,7 +764,7 @@ docs = [
 
 [[package]]
 name = "compose-api-client"
-version = "0.7.65"
+version = "0.7.66"
 source = { editable = "clients/python" }
 dependencies = [
     { name = "attrs" },
