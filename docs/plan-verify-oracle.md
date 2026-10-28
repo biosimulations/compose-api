@@ -1,6 +1,6 @@
 # The BioSimulators verify oracle: checking our SED-ML comparisons against biosim's `/verify` API
 
-**Status (2026-10-28): V0–V4 merged; V5 in review.** Linking out to biosim.biosimulations.org pages is deferred: the platform's UI does
+**Status (2026-10-28): done.** V0–V5 are live; V5 shipped in 0.7.66 (#460). The open questions below stay open. Linking out to biosim.biosimulations.org pages is deferred: the platform's UI does
 not use verification yet. Its `/utilities/verify-model` card is a dead link (`frontend/app/pages/utilities/index.vue`
 at `62bc540`), and project and run pages have no verification view to link to. This plan uses the API directly. One
 PR per step, each merged with a merge commit; deploying is a release, as usual.
@@ -12,7 +12,7 @@ PR per step, each merged with a merge commit; deploying is a release, as usual.
 | V2 | A client for the verify API, and a durable `verification` record per comparison | merged (#344) |
 | V3 | The verification worker: submit within the rate limit, poll, store, fold into the comparison | merged (#344) |
 | V4 | Triggers: one comparison on demand (API + CLI), and a suite option (`verify:`) | merged (#348, #351) |
-| V5 | Surface: the comparison page and the suite summary show each verification's verdict | in review |
+| V5 | Surface: the comparison page and the suite summary show each verification's verdict | merged (#460), released 0.7.66 |
 
 ## Context
 
