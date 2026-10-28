@@ -113,10 +113,8 @@ watch(tab, (t) => {
 const fields = computed(() => {
   const s = sim.value
   if (!s) return []
+  // the experiment id is the page's subtitle; the simulator and its container hash are on the page "Ran in" links to
   return [
-    ['Experiment', s.experiment_id],
-    ['Simulator', s.simulator ?? 'Built from the registry container'],
-    ['Container hash', s.container_def_hash],
     ['Visibility', s.visibility],
     ['Submitted', formatTime(s.created_at)],
     ['Started', formatTime(s.start_time)],
