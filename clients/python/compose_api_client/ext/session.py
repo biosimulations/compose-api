@@ -851,10 +851,12 @@ class ComposeSession:
         simulator_id: int | None = None,
         environment: str | None = None,
         environment_version: str | None = None,
+        mine: bool = False,
     ) -> SimulationPage:
         """Simulations the caller may read, newest first, each with its latest SLURM job. ``status`` is a job state
         or ``"submitting"``; ``simulator`` a prebuilt simulator's name or a container-definition hash prefix;
-        ``environment`` any version of it, ``environment_version`` one (``registry_env@5``)."""
+        ``environment`` any version of it, ``environment_version`` one (``registry_env@5``); ``mine``, only those the
+        signed-in caller submitted."""
         op = Operation("GET", "/simulations", replayable=True)
         r, _ = self._send(
             op,
@@ -862,6 +864,7 @@ class ComposeSession:
                 client=c,
                 **_simulation_filters(status, simulator, since, labels, tags, limit, offset),
                 **_where_ran(simulator_id, environment, environment_version),
+                mine=mine or UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]
@@ -1779,6 +1782,7 @@ class AsyncComposeSession:
         simulator_id: int | None = None,
         environment: str | None = None,
         environment_version: str | None = None,
+        mine: bool = False,
     ) -> SimulationPage:
         op = Operation("GET", "/simulations", replayable=True)
         r, _ = await self._send(
@@ -1787,6 +1791,7 @@ class AsyncComposeSession:
                 client=c,
                 **_simulation_filters(status, simulator, since, labels, tags, limit, offset),
                 **_where_ran(simulator_id, environment, environment_version),
+                mine=mine or UNSET,
             ),
         )
         return _parsed(r, op=op)  # type: ignore[no-any-return]

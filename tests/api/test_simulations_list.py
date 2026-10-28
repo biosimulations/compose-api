@@ -177,3 +177,36 @@ async def test_a_queued_run_shows_its_submission_and_place_in_line(
     finally:
         for simulation_id in (first, second, suite):
             await sim_db.delete_simulation(simulation_id)  # the fixture removes the simulator
+
+
+@pytest.mark.asyncio
+async def test_mine_lists_the_callers_own_runs_and_needs_sign_in(
+    simulations: dict[str, int], database_service: DatabaseServiceSQL, simulation_request: SimulationRequest
+) -> None:
+    """docs/plan-favorites-and-studies.md, step 1a: `mine` filters by owner, each run says whether it is the caller's,
+    and no owner is named."""
+    sim_db = database_service.get_simulator_db()
+    template = await sim_db.get_simulation_row(simulations["completed"])
+    assert template is not None
+    simulator = await sim_db.get_simulator(template.simulation.simulator_id)
+    assert simulator is not None
+    owned = await sim_db.insert_simulation(simulation_request, "exp-list-owned", simulator, owner_sub=ALICE.subject)
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
+            anonymous = await http.get("/simulations", params={"mine": True})
+            assert anonymous.status_code == 401 and anonymous.headers["www-authenticate"] == "Bearer"
+            everyone = (await http.get("/simulations")).json()["simulations"]
+            assert not any(s["mine"] for s in everyone) and all("owner_sub" not in s for s in everyone)
+
+            async def alice() -> object:
+                return ALICE
+
+            app.dependency_overrides[get_caller] = alice
+            mine = (await http.get("/simulations", params={"mine": True})).json()
+            assert {s["simulation_id"] for s in mine["simulations"]} == {owned.database_id, simulations["private"]}
+            assert all(s["mine"] for s in mine["simulations"]) and mine["total"] == 2
+            listed = {s["simulation_id"]: s["mine"] for s in (await http.get("/simulations")).json()["simulations"]}
+            assert listed[owned.database_id] and not listed[simulations["completed"]]
+            assert (await http.get(f"/simulations/{owned.database_id}")).json()["mine"] is True
+    finally:
+        await sim_db.delete_simulation(owned.database_id)

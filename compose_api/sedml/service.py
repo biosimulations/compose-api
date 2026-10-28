@@ -82,6 +82,7 @@ async def submit(
     priority: int = 0,
     batch: bool = False,
     environment_versions: dict[str, int] | None = None,
+    owner_sub: str | None = None,
 ) -> list[int]:
     """One comparison per accepted task (all, or those named), one run per solver that accepted it; the ids.
     `references[origin]["<sedml>/<report>"]` (the archive's own `reports.h5`, a biosimulations.org run's) are stored
@@ -171,6 +172,7 @@ async def submit(
                 job_monitor=get_required_job_monitor(),
                 queue=queue,
                 priority=priority,
+                owner_sub=owner_sub,  # the signed-in submitter's; none for a suite's runs (F1)
             )
             await db.get_comparisons_db().add_member(comparison_id, experiment.simulation_database_id, solver_id)
         created.append(comparison_id)

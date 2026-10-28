@@ -297,6 +297,7 @@ async def submit_simulation(
             simulation_service_slurm=sim_service,
             background_tasks=background_tasks,
             job_monitor=job_monitor,
+            owner_sub=principal.subject if principal else None,  # docs/plan-favorites-and-studies.md, F1
         )
     except Exception as e:
         logger.exception("Error running simulation")

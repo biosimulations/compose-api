@@ -332,6 +332,17 @@ paths:
           description: Only simulations with this tag; repeatable, all must match
           title: Tag
         description: Only simulations with this tag; repeatable, all must match
+      - name: mine
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: Only those the caller submitted, signed in; needs a signed-in
+            caller
+          default: false
+          title: Mine
+        description: Only those the caller submitted, signed in; needs a signed-in
+          caller
       - name: limit
         in: query
         required: false
@@ -356,6 +367,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SimulationPage'
+        '401':
+          description: '`mine` without a signed-in caller'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -396,11 +413,13 @@ paths:
       - Simulations
       summary: 'Cancel a run: withdraw it from the queue, or ask SLURM to cancel its
         job'
-      description: 'Any signed-in caller who may read the simulation may cancel it,
-        while no simulation has an owner (every one is
+      description: 'A run with an owner may be cancelled by its owner or a configured
+        admin; one without (anonymous, from before
 
-        public until submissions stamp one, docs/plan-observability.md step 5); then
-        its owner and configured admins.'
+        owners were stamped, or started by the service), by any signed-in caller who
+        may read it
+
+        (docs/plan-favorites-and-studies.md, F4).'
       operationId: cancel-simulation
       parameters:
       - name: simulation_id
@@ -418,13 +437,36 @@ paths:
                 $ref: '#/components/schemas/SimulationCancellation'
         '401':
           description: Cancelling needs a signed-in caller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+        '403':
+          description: The simulation has an owner, and the caller is neither it nor
+            an admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '404':
           description: The simulation does not exist, or the caller may not read it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '409':
           description: The run has finished, or is being submitted to SLURM right
             now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '502':
           description: SLURM could not be asked to cancel the job; try again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -3927,6 +3969,22 @@ components:
       title: EnvironmentVersions
       description: An environment's versions, newest first, and which one a run that
         names none gets.
+    ErrorDetail:
+      properties:
+        detail:
+          type: string
+          title: Detail
+      type: object
+      required:
+      - detail
+      title: ErrorDetail
+      description: 'An error''s body, as FastAPI''s ``HTTPException`` writes it. A
+        route declares it for its error responses so the
+
+        generated client parses them into this rather than typing them ``Any``, which
+        would make the whole return type
+
+        ``Any`` to a type checker.'
     HTTPValidationError:
       properties:
         detail:
@@ -4807,6 +4865,12 @@ components:
         visibility:
           $ref: '#/components/schemas/Visibility'
           default: public
+        mine:
+          type: boolean
+          title: Mine
+          description: The caller submitted it, signed in; its owner is never named
+            (docs/plan-favorites-and-studies.md)
+          default: false
         status:
           type: string
           title: Status
@@ -4950,6 +5014,12 @@ components:
         visibility:
           $ref: '#/components/schemas/Visibility'
           default: public
+        mine:
+          type: boolean
+          title: Mine
+          description: The caller submitted it, signed in; its owner is never named
+            (docs/plan-favorites-and-studies.md)
+          default: false
         status:
           type: string
           title: Status

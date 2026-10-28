@@ -52,6 +52,7 @@ from .environment_version_detail_interfaces_type_0 import EnvironmentVersionDeta
 from .environment_version_detail_spec_type_0 import EnvironmentVersionDetailSpecType0
 from .environment_version_spec_type_0 import EnvironmentVersionSpecType0
 from .environment_versions import EnvironmentVersions
+from .error_detail import ErrorDetail
 from .get_biosimulations_reference_response_get_biosimulations_reference import (
     GetBiosimulationsReferenceResponseGetBiosimulationsReference,
 )
@@ -191,6 +192,7 @@ __all__ = (
     "EnvironmentVersionDetailSpecType0",
     "EnvironmentVersions",
     "EnvironmentVersionSpecType0",
+    "ErrorDetail",
     "GetBiosimulationsReferenceResponseGetBiosimulationsReference",
     "GetBiosimulationsReferenceResponseGetBiosimulationsReferenceAdditionalProperty",
     "GetSimulationTraceChromeResponseGetSimulationTraceChrome",

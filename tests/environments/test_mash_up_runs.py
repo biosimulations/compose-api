@@ -84,6 +84,17 @@ async def test_a_run_naming_a_mash_up_runs_in_its_default_version(
     )
     row = await database_service.get_simulator_db().get_simulation_row(experiment.simulation_database_id)
     assert row is not None and row.simulation.environment_version_id == version_id
+    assert row.simulation.owner_sub is None  # nobody signed in (docs/plan-favorites-and-studies.md, F1)
+    owned = await handlers.run_simulation(
+        simulation_request=request,
+        database_service=database_service,
+        simulation_service_slurm=cast(SimulationService, None),
+        job_monitor=cast(JobMonitor, None),
+        background_tasks=TestBackgroundTask(),
+        owner_sub="auth0|submitter",
+    )
+    owned_row = await database_service.get_simulator_db().get_simulation_row(owned.simulation_database_id)
+    assert owned_row is not None and owned_row.simulation.owner_sub == "auth0|submitter"  # on the simulation only
     assert row.simulation.labels["environment_version"] == f"{name}@1"
     with pytest.raises(VersionUnavailableError, match="no default"):
         await version_for(database_service, None, None, "mash-0000000000")  # unknown: nothing to adopt

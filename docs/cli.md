@@ -932,6 +932,7 @@ $ compose-api simulations list [OPTIONS]
 * `--since TEXT`: Only those created since: 30m, 6h, 2d, 1w, or an ISO time.
 * `--label TEXT`: Only those with this label, key:value, e.g. source:biomodels (repeatable, all must match).
 * `--tag TEXT`: Only those with this tag (repeatable, all must match).
+* `--mine`: Only those you submitted (needs `compose-api login`).
 * `--limit INTEGER`: At most this many.  [default: 50]
 * `--offset INTEGER`: Skip this many (for the next page).  [default: 0]
 * `--json`: Print JSON (the same as --output json).

@@ -6,6 +6,7 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...models.error_detail import ErrorDetail
 from ...models.http_validation_error import HTTPValidationError
 from ...models.list_simulations_status_type_0 import ListSimulationsStatusType0
 from ...models.simulation_page import SimulationPage
@@ -22,6 +23,7 @@ def _get_kwargs(
     since: datetime.datetime | None | Unset = UNSET,
     label: list[str] | None | Unset = UNSET,
     tag: list[str] | None | Unset = UNSET,
+    mine: bool | Unset = False,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
 ) -> dict[str, Any]:
@@ -94,6 +96,8 @@ def _get_kwargs(
         json_tag = tag
     params["tag"] = json_tag
 
+    params["mine"] = mine
+
     params["limit"] = limit
 
     params["offset"] = offset
@@ -111,11 +115,16 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> HTTPValidationError | SimulationPage | None:
+) -> ErrorDetail | HTTPValidationError | SimulationPage | None:
     if response.status_code == 200:
         response_200 = SimulationPage.from_dict(response.json())
 
         return response_200
+
+    if response.status_code == 401:
+        response_401 = ErrorDetail.from_dict(response.json())
+
+        return response_401
 
     if response.status_code == 422:
         response_422 = HTTPValidationError.from_dict(response.json())
@@ -130,7 +139,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[HTTPValidationError | SimulationPage]:
+) -> Response[ErrorDetail | HTTPValidationError | SimulationPage]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -150,9 +159,10 @@ def sync_detailed(
     since: datetime.datetime | None | Unset = UNSET,
     label: list[str] | None | Unset = UNSET,
     tag: list[str] | None | Unset = UNSET,
+    mine: bool | Unset = False,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
-) -> Response[HTTPValidationError | SimulationPage]:
+) -> Response[ErrorDetail | HTTPValidationError | SimulationPage]:
     """List simulations, newest first, each with its latest SLURM job
 
     Args:
@@ -169,6 +179,8 @@ def sync_detailed(
             repeatable, all must match. Keys: source, environment, environment_version, solver, model,
             project, sedml_task, comparison, collection, suite_run, compliance
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
+        mine (bool | Unset): Only those the caller submitted, signed in; needs a signed-in caller
+            Default: False.
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
 
@@ -177,7 +189,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[HTTPValidationError | SimulationPage]
+        Response[ErrorDetail | HTTPValidationError | SimulationPage]
     """
 
     kwargs = _get_kwargs(
@@ -189,6 +201,7 @@ def sync_detailed(
         since=since,
         label=label,
         tag=tag,
+        mine=mine,
         limit=limit,
         offset=offset,
     )
@@ -211,9 +224,10 @@ def sync(
     since: datetime.datetime | None | Unset = UNSET,
     label: list[str] | None | Unset = UNSET,
     tag: list[str] | None | Unset = UNSET,
+    mine: bool | Unset = False,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
-) -> HTTPValidationError | SimulationPage | None:
+) -> ErrorDetail | HTTPValidationError | SimulationPage | None:
     """List simulations, newest first, each with its latest SLURM job
 
     Args:
@@ -230,6 +244,8 @@ def sync(
             repeatable, all must match. Keys: source, environment, environment_version, solver, model,
             project, sedml_task, comparison, collection, suite_run, compliance
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
+        mine (bool | Unset): Only those the caller submitted, signed in; needs a signed-in caller
+            Default: False.
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
 
@@ -238,7 +254,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        HTTPValidationError | SimulationPage
+        ErrorDetail | HTTPValidationError | SimulationPage
     """
 
     return sync_detailed(
@@ -251,6 +267,7 @@ def sync(
         since=since,
         label=label,
         tag=tag,
+        mine=mine,
         limit=limit,
         offset=offset,
     ).parsed
@@ -267,9 +284,10 @@ async def asyncio_detailed(
     since: datetime.datetime | None | Unset = UNSET,
     label: list[str] | None | Unset = UNSET,
     tag: list[str] | None | Unset = UNSET,
+    mine: bool | Unset = False,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
-) -> Response[HTTPValidationError | SimulationPage]:
+) -> Response[ErrorDetail | HTTPValidationError | SimulationPage]:
     """List simulations, newest first, each with its latest SLURM job
 
     Args:
@@ -286,6 +304,8 @@ async def asyncio_detailed(
             repeatable, all must match. Keys: source, environment, environment_version, solver, model,
             project, sedml_task, comparison, collection, suite_run, compliance
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
+        mine (bool | Unset): Only those the caller submitted, signed in; needs a signed-in caller
+            Default: False.
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
 
@@ -294,7 +314,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[HTTPValidationError | SimulationPage]
+        Response[ErrorDetail | HTTPValidationError | SimulationPage]
     """
 
     kwargs = _get_kwargs(
@@ -306,6 +326,7 @@ async def asyncio_detailed(
         since=since,
         label=label,
         tag=tag,
+        mine=mine,
         limit=limit,
         offset=offset,
     )
@@ -326,9 +347,10 @@ async def asyncio(
     since: datetime.datetime | None | Unset = UNSET,
     label: list[str] | None | Unset = UNSET,
     tag: list[str] | None | Unset = UNSET,
+    mine: bool | Unset = False,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
-) -> HTTPValidationError | SimulationPage | None:
+) -> ErrorDetail | HTTPValidationError | SimulationPage | None:
     """List simulations, newest first, each with its latest SLURM job
 
     Args:
@@ -345,6 +367,8 @@ async def asyncio(
             repeatable, all must match. Keys: source, environment, environment_version, solver, model,
             project, sedml_task, comparison, collection, suite_run, compliance
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
+        mine (bool | Unset): Only those the caller submitted, signed in; needs a signed-in caller
+            Default: False.
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
 
@@ -353,7 +377,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        HTTPValidationError | SimulationPage
+        ErrorDetail | HTTPValidationError | SimulationPage
     """
 
     return (
@@ -367,6 +391,7 @@ async def asyncio(
             since=since,
             label=label,
             tag=tag,
+            mine=mine,
             limit=limit,
             offset=offset,
         )

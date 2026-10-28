@@ -65,6 +65,7 @@ async def run_copasi(
         loaded_sbml=request.request_file_path,
         background_tasks=background_tasks,
         use_interesting=True,
+        owner_sub=principal.subject if principal else None,
     )
 
 
@@ -101,4 +102,5 @@ async def run_tellurium(
         simulator_name="Tellurium",
         loaded_sbml=request.request_file_path,
         background_tasks=background_tasks,
+        owner_sub=principal.subject if principal else None,
     )

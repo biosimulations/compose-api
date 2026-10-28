@@ -528,6 +528,10 @@ class SimulationSummary(BaseModel):
     simulator: str | None = None  # the prebuilt simulator's name, or its image; None for a built container
     container_def_hash: str
     visibility: Visibility = Visibility.PUBLIC
+    mine: bool = Field(
+        default=False,
+        description="The caller submitted it, signed in; its owner is never named (docs/plan-favorites-and-studies.md)",
+    )
     status: str  # a JobStatus, or "submitting" while no SLURM job exists yet
     slurm_job_id: int | None = None
     start_time: str | None = None
@@ -549,6 +553,14 @@ class SimulationDetail(SimulationSummary):
 
     event_count: int = 0
     dataset_count: int = 0
+
+
+class ErrorDetail(BaseModel):
+    """An error's body, as FastAPI's ``HTTPException`` writes it. A route declares it for its error responses so the
+    generated client parses them into this rather than typing them ``Any``, which would make the whole return type
+    ``Any`` to a type checker."""
+
+    detail: str
 
 
 class SimulationCancellation(BaseModel):

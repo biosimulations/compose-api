@@ -72,9 +72,12 @@ async def run_simulation(
     queue: str = "interactive",
     priority: int = 0,
     requested_by: str | None = None,
+    owner_sub: str | None = None,
 ) -> SimulationExperiment:
     """Record a run and queue it for the submission worker; its ids. ``queue`` and ``priority`` place it in line
-    (docs/plan-durable-submission.md, Q3); ``requested_by`` is the caller's subject, kept for fair scheduling."""
+    (docs/plan-durable-submission.md, Q3); ``requested_by`` is the caller's subject, kept for fair scheduling.
+    ``owner_sub`` is the signed-in submitter's subject, stored on the simulation as its owner, the one record of who
+    owns a run (docs/plan-favorites-and-studies.md, F1). None: no owner (anonymous, or a run the service starts)."""
     # the environment version it runs in (docs/plan-environment-versions.md): the one it names, or the default
     version, simulator_version = await version_for(
         database_service,
@@ -98,6 +101,7 @@ async def run_simulation(
         experiment_id=experiment_id,
         simulator_version=simulator_version,
         environment_version_id=version.database_id,
+        owner_sub=owner_sub,
         submission=SubmissionSpec(staged_on_store=on_store, queue=queue, priority=priority, requested_by=requested_by),
     )
     worker = get_submission_worker()
@@ -116,6 +120,7 @@ async def run_curated_pbif(
     background_tasks: BackgroundTasks,
     loaded_sbml: Path,
     use_interesting: bool = True,
+    owner_sub: str | None = None,
 ) -> SimulationExperiment:
     # Create OMEX with all necessary files
     with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
@@ -149,6 +154,7 @@ async def run_curated_pbif(
                 simulation_service_slurm=sim_service,
                 job_monitor=job_monitor,
                 background_tasks=background_tasks,
+                owner_sub=owner_sub,
             )
         except Exception as e:
             logger.exception(msg=f"Failed to start {simulator_name} run", exc_info=e)

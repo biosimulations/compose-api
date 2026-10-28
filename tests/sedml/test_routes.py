@@ -98,6 +98,28 @@ async def test_run_makes_one_labelled_run_per_solver_and_a_comparison(
 
 
 @pytest.mark.asyncio
+async def test_a_signed_in_callers_runs_are_theirs(
+    client: httpx.AsyncClient, submitted: dict[str, Any], database_service: DatabaseServiceSQL
+) -> None:
+    """docs/plan-favorites-and-studies.md, F1: each run of a SED-ML submission is owned by the signed-in caller."""
+    from compose_api.api.main import app
+    from compose_api.authentication import AuthenticatedPrincipal, get_optional_principal
+
+    caller = AuthenticatedPrincipal(
+        subject="auth0|sedml-owner", issuer="https://t/", audience=("a",), scopes=frozenset(),
+        permissions=frozenset(), roles=frozenset({"user"}),
+    )  # fmt: skip
+    app.dependency_overrides[get_optional_principal] = lambda: caller
+    try:
+        assert (await client.post("/sedml/run", files=_upload())).status_code == 200
+    finally:
+        app.dependency_overrides.pop(get_optional_principal, None)
+    sim_db = database_service.get_simulator_db()
+    owners = [(await sim_db.get_simulation_row(sim_id)) for _, sim_id, _ in submitted["runs"]]
+    assert len(owners) == 3 and all(r is not None and r.simulation.owner_sub == caller.subject for r in owners)
+
+
+@pytest.mark.asyncio
 async def test_a_task_no_solver_accepts_is_a_400(client: httpx.AsyncClient, submitted: dict[str, Any]) -> None:
     text = zipfile.ZipFile(SOURCE).read("simulation_1.sedml").decode().replace('initialTime="0"', 'initialTime="1"')
     buffer = io.BytesIO()

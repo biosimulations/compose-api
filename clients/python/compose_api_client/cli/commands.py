@@ -1277,6 +1277,7 @@ def simulations_list(
     tag: Annotated[
         list[str] | None, typer.Option(help="Only those with this tag (repeatable, all must match).")
     ] = None,
+    mine: Annotated[bool, typer.Option("--mine", help="Only those you submitted (needs `compose-api login`).")] = False,
     limit: Annotated[int, typer.Option(help="At most this many.")] = 50,
     offset: Annotated[int, typer.Option(help="Skip this many (for the next page).")] = 0,
 ) -> None:
@@ -1295,6 +1296,7 @@ def simulations_list(
             simulator_id=simulator_id,
             environment=environment,
             environment_version=environment_version,
+            mine=mine,
         )
     rows = [
         {
