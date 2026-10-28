@@ -17,6 +17,9 @@ const asList = (v: unknown) => (Array.isArray(v) ? v : v ? [v] : []).map(String)
 const labels = ref<string[]>(asList(route.query.label))
 const tags = ref<string[]>(asList(route.query.tag))
 const page = ref(Number(route.query.page ?? 1))
+// only the runs the signed-in caller submitted (docs/plan-favorites-and-studies.md, step 1a); offered when signed in
+const { isAuthenticated } = useAuth()
+const mine = ref(route.query.mine === 'true')
 // where the runs ran: set by the links on environment, version and simulator pages (plan-webapp-admin 5c)
 const ranIn = ref({
   environment: (route.query.environment as string) || undefined,
@@ -44,6 +47,7 @@ async function load() {
         since: since.value ? new Date(since.value).toISOString() : undefined,
         label: labels.value.length ? labels.value : undefined,
         tag: tags.value.length ? tags.value : undefined,
+        mine: mine.value && isAuthenticated.value ? true : undefined,
         ...ranIn.value,
         limit: PAGE,
         offset: (page.value - 1) * PAGE
@@ -60,10 +64,10 @@ async function load() {
   total.value = data.total
 }
 
-watch([status, simulator, since, labels, tags, ranIn], () => {
+watch([status, simulator, since, labels, tags, ranIn, mine], () => {
   page.value = 1
 })
-watch([status, simulator, since, labels, tags, ranIn, page], () => {
+watch([status, simulator, since, labels, tags, ranIn, mine, page], () => {
   router.replace({
     query: {
       status: status.value || undefined,
@@ -71,6 +75,7 @@ watch([status, simulator, since, labels, tags, ranIn, page], () => {
       since: since.value || undefined,
       label: labels.value.length ? labels.value : undefined,
       tag: tags.value.length ? tags.value : undefined,
+      mine: mine.value ? 'true' : undefined,
       ...ranIn.value,
       page: page.value > 1 ? page.value : undefined
     }
@@ -170,6 +175,7 @@ const columns: TableColumn<SimulationSummary>[] = [
         <UInput v-model="since" type="date" class="w-44" title="Submitted on or after" />
         <UInputTags v-model="labels" placeholder="Label key:value" icon="i-lucide-filter" class="w-64" title="Labels, e.g. source:biomodels; all must match" />
         <UInputTags v-model="tags" placeholder="Tag" icon="i-lucide-tag" class="w-56" title="Tags; all must match" />
+        <USwitch v-if="isAuthenticated" v-model="mine" label="Mine" title="Only the runs you submitted, signed in" />
         <UButton v-if="ranInLabel" icon="i-lucide-x" :label="`Ran in ${ranInLabel}`" color="primary" variant="subtle" size="sm" title="Show runs from anywhere" @click="clearRanIn" />
         <UButton icon="i-lucide-refresh-cw" variant="ghost" color="neutral" :loading="loading" @click="load" />
       </div>

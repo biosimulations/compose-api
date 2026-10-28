@@ -84,6 +84,34 @@ async def test_cancelling_needs_a_signed_in_caller_who_may_read_the_simulation(
 
 
 @pytest.mark.asyncio
+async def test_an_owned_run_is_cancelled_only_by_its_owner(
+    http: AsyncClient, database_service: DatabaseServiceSQL, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion,
+) -> None:  # fmt: skip
+    """docs/plan-favorites-and-studies.md, F4: a public run with an owner is readable by anyone, cancellable by its
+    owner only; one with none (anonymous, or started by the service) by anyone signed in, as before."""
+    sim_db, hpc_db = database_service.get_simulator_db(), database_service.get_hpc_db()
+    owned = await sim_db.insert_simulation(
+        sim_request=simulation_request, experiment_id="experiment-cancel-owned", simulator_version=simulator,
+        owner_sub=ALICE.subject,
+    )  # fmt: skip
+    run = await hpc_db.insert_hpcrun(
+        slurmjobid=7102, job_type=JobType.SIMULATION, ref_id=owned.database_id, correlation_id="corr-cancel-owned"
+    )
+    done = SlurmJob(job_id=7102, name="n", account="a", user_name="u", job_state="COMPLETED")
+    await hpc_db.update_hpcrun_status(run.database_id, done)
+    try:
+        _as(BOB)
+        refused = await http.delete(f"/simulations/{owned.database_id}")
+        assert refused.status_code == 403 and "owner" in refused.json()["detail"]
+        _as(ALICE)  # past the ownership check, to the run's own state: finished
+        assert (await http.delete(f"/simulations/{owned.database_id}")).status_code == 409
+    finally:
+        await hpc_db.delete_hpcrun(run.database_id)
+        await sim_db.delete_simulation(owned.database_id)
+
+
+@pytest.mark.asyncio
 async def test_a_finished_run_is_not_cancelled(
     http: AsyncClient, database_service: DatabaseServiceSQL, simulation_request: SimulationRequest,
     simulator: SimulatorVersion,

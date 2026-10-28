@@ -96,6 +96,7 @@ async def run_biomodel(
     return await run_archive(
         path, f"biomodels:{model_id}", solvers, task, tags, description, Tolerances(), background_tasks,
         references=references or None, environment_versions=environment_version,
+        owner_sub=principal.subject if principal else None,
     )  # fmt: skip
 
 
@@ -170,5 +171,5 @@ async def run_project(
     return await run_archive(
         path, f"biosimulations:{project_id}", solvers, task, tags, description, Tolerances(), background_tasks,
         references={f"biosimulations:{info.simulator or info.run}": reference} if reference else None,
-        environment_versions=environment_version,
+        environment_versions=environment_version, owner_sub=principal.subject if principal else None,
     )  # fmt: skip

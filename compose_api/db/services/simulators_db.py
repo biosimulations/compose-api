@@ -691,6 +691,7 @@ class SimulationQuery:
     since: datetime.datetime | None = None  # created at or after (UTC)
     labels: dict[str, str] = field(default_factory=dict)  # every one must match
     tags: list[str] = field(default_factory=list)  # every one must be present
+    owner_sub: str | None = None  # submitted by this subject, signed in
     limit: int = 50
     offset: int = 0
 
@@ -756,11 +757,29 @@ def _simulation_rows() -> Select[tuple[ORMSimulation, ORMSimulator, ORMHpcRun, O
     )
 
 
+def _simulation_conditions(query: SimulationQuery) -> list[ColumnElement[bool]]:
+    """``query``'s conditions on the simulation itself (what it is, who submitted it, when)."""
+    conditions: list[ColumnElement[bool]] = []
+    if query.simulator_id is not None:
+        conditions.append(ORMSimulation.simulator_id == query.simulator_id)
+    if query.environment_version_ids is not None:
+        conditions.append(ORMSimulation.environment_version_id.in_(query.environment_version_ids))
+    if query.since is not None:
+        conditions.append(ORMSimulation.created_at >= query.since.astimezone(datetime.UTC).replace(tzinfo=None))
+    if query.labels:
+        conditions.append(ORMSimulation.labels.contains(query.labels))
+    if query.tags:
+        conditions.append(ORMSimulation.tags.contains(query.tags))
+    if query.owner_sub is not None:
+        conditions.append(ORMSimulation.owner_sub == query.owner_sub)
+    return conditions
+
+
 async def _page_simulations(
     session_maker: async_sessionmaker[AsyncSession], query: SimulationQuery, readable: ColumnElement[bool] | None
 ) -> tuple[list[SimulationRow], int]:
     """Simulations matching ``query`` and ``readable``, newest first, each with its latest run; and the total."""
-    stmt = _simulation_rows()
+    stmt = _simulation_rows().where(*_simulation_conditions(query))
     if readable is not None:
         stmt = stmt.where(readable)
     if query.status == SUBMITTING:
@@ -769,16 +788,6 @@ async def _page_simulations(
         stmt = stmt.where(ORMHpcRun.status == JobStatusDB(query.status))
     if query.container_def_hash is not None:
         stmt = stmt.where(ORMSimulator.container_def_hash.startswith(query.container_def_hash))
-    if query.simulator_id is not None:
-        stmt = stmt.where(ORMSimulation.simulator_id == query.simulator_id)
-    if query.environment_version_ids is not None:
-        stmt = stmt.where(ORMSimulation.environment_version_id.in_(query.environment_version_ids))
-    if query.since is not None:
-        stmt = stmt.where(ORMSimulation.created_at >= query.since.astimezone(datetime.UTC).replace(tzinfo=None))
-    if query.labels:
-        stmt = stmt.where(ORMSimulation.labels.contains(query.labels))
-    if query.tags:
-        stmt = stmt.where(ORMSimulation.tags.contains(query.tags))
     async with session_maker() as session:
         total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
         result = await session.execute(stmt.order_by(ORMSimulation.id.desc()).limit(query.limit).offset(query.offset))

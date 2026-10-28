@@ -97,8 +97,9 @@ export interface paths {
         post?: never;
         /**
          * Cancel a run: withdraw it from the queue, or ask SLURM to cancel its job
-         * @description Any signed-in caller who may read the simulation may cancel it, while no simulation has an owner (every one is
-         *     public until submissions stamp one, docs/plan-observability.md step 5); then its owner and configured admins.
+         * @description A run with an owner may be cancelled by its owner or a configured admin; one without (anonymous, from before
+         *     owners were stamped, or started by the service), by any signed-in caller who may read it
+         *     (docs/plan-favorites-and-studies.md, F4).
          */
         delete: operations["cancel-simulation"];
         options?: never;
@@ -2333,6 +2334,12 @@ export interface components {
             container_def_hash: string;
             /** @default public */
             visibility: components["schemas"]["Visibility"];
+            /**
+             * Mine
+             * @description The caller submitted it, signed in; its owner is never named (docs/plan-favorites-and-studies.md)
+             * @default false
+             */
+            mine: boolean;
             /** Status */
             status: string;
             /** Slurm Job Id */
@@ -2410,6 +2417,12 @@ export interface components {
             container_def_hash: string;
             /** @default public */
             visibility: components["schemas"]["Visibility"];
+            /**
+             * Mine
+             * @description The caller submitted it, signed in; its owner is never named (docs/plan-favorites-and-studies.md)
+             * @default false
+             */
+            mine: boolean;
             /** Status */
             status: string;
             /** Slurm Job Id */
@@ -2986,6 +2999,8 @@ export interface operations {
                 label?: string[] | null;
                 /** @description Only simulations with this tag; repeatable, all must match */
                 tag?: string[] | null;
+                /** @description Only those the caller submitted, signed in; needs a signed-in caller */
+                mine?: boolean;
                 limit?: number;
                 offset?: number;
             };
@@ -3003,6 +3018,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SimulationPage"];
                 };
+            };
+            /** @description `mine` without a signed-in caller */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -3075,6 +3097,13 @@ export interface operations {
             };
             /** @description Cancelling needs a signed-in caller */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The simulation has an owner, and the caller is neither it nor an admin */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

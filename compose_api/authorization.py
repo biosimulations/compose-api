@@ -118,6 +118,12 @@ def can_read(caller: Caller | None, simulation: SimulationAccess) -> bool:
     return _is_admin(caller) or (simulation.owner_sub is not None and caller.subject == simulation.owner_sub)
 
 
+def can_cancel(caller: Caller, simulation: SimulationAccess) -> bool:
+    """Who may cancel a run they can read: its owner or a configured admin; anyone signed in, for a run with no owner
+    (anonymous, from before owners were stamped, or started by the service) (docs/plan-favorites-and-studies.md, F4)."""
+    return simulation.owner_sub is None or _is_admin(caller) or caller.subject == simulation.owner_sub
+
+
 def readable_clause(caller: Caller | None) -> ColumnElement[bool] | None:
     """:func:`can_read` as a SQL condition on ``simulation``, for listings; None when every simulation is readable."""
     if _is_admin(caller):

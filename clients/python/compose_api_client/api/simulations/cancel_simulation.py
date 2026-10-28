@@ -37,6 +37,10 @@ def _parse_response(
         response_401 = cast(Any, None)
         return response_401
 
+    if response.status_code == 403:
+        response_403 = cast(Any, None)
+        return response_403
+
     if response.status_code == 404:
         response_404 = cast(Any, None)
         return response_404
@@ -78,10 +82,10 @@ def sync_detailed(
 ) -> Response[Any | HTTPValidationError | SimulationCancellation]:
     """Cancel a run: withdraw it from the queue, or ask SLURM to cancel its job
 
-     Any signed-in caller who may read the simulation may cancel it, while no simulation has an owner
-    (every one is
-    public until submissions stamp one, docs/plan-observability.md step 5); then its owner and
-    configured admins.
+     A run with an owner may be cancelled by its owner or a configured admin; one without (anonymous,
+    from before
+    owners were stamped, or started by the service), by any signed-in caller who may read it
+    (docs/plan-favorites-and-studies.md, F4).
 
     Args:
         simulation_id (int):
@@ -112,10 +116,10 @@ def sync(
 ) -> Any | HTTPValidationError | SimulationCancellation | None:
     """Cancel a run: withdraw it from the queue, or ask SLURM to cancel its job
 
-     Any signed-in caller who may read the simulation may cancel it, while no simulation has an owner
-    (every one is
-    public until submissions stamp one, docs/plan-observability.md step 5); then its owner and
-    configured admins.
+     A run with an owner may be cancelled by its owner or a configured admin; one without (anonymous,
+    from before
+    owners were stamped, or started by the service), by any signed-in caller who may read it
+    (docs/plan-favorites-and-studies.md, F4).
 
     Args:
         simulation_id (int):
@@ -141,10 +145,10 @@ async def asyncio_detailed(
 ) -> Response[Any | HTTPValidationError | SimulationCancellation]:
     """Cancel a run: withdraw it from the queue, or ask SLURM to cancel its job
 
-     Any signed-in caller who may read the simulation may cancel it, while no simulation has an owner
-    (every one is
-    public until submissions stamp one, docs/plan-observability.md step 5); then its owner and
-    configured admins.
+     A run with an owner may be cancelled by its owner or a configured admin; one without (anonymous,
+    from before
+    owners were stamped, or started by the service), by any signed-in caller who may read it
+    (docs/plan-favorites-and-studies.md, F4).
 
     Args:
         simulation_id (int):
@@ -173,10 +177,10 @@ async def asyncio(
 ) -> Any | HTTPValidationError | SimulationCancellation | None:
     """Cancel a run: withdraw it from the queue, or ask SLURM to cancel its job
 
-     Any signed-in caller who may read the simulation may cancel it, while no simulation has an owner
-    (every one is
-    public until submissions stamp one, docs/plan-observability.md step 5); then its owner and
-    configured admins.
+     A run with an owner may be cancelled by its owner or a configured admin; one without (anonymous,
+    from before
+    owners were stamped, or started by the service), by any signed-in caller who may read it
+    (docs/plan-favorites-and-studies.md, F4).
 
     Args:
         simulation_id (int):

@@ -11,7 +11,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from compose_api.authentication import get_optional_principal
-from compose_api.authorization import OptionalCaller, can_read, readable_clause
+from compose_api.authorization import Caller, OptionalCaller, can_cancel, can_read, readable_clause
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.db.services.datasets_db import DatasetQuery
 from compose_api.db.services.environments_db import VersionLink
@@ -71,8 +71,11 @@ def _simulator_label(container_def: str, names: Mapping[str, str]) -> str | None
     return names.get(image, image)
 
 
-def _summary(row: SimulationRow, names: Mapping[str, str], versions: Mapping[int, VersionRef]) -> SimulationSummary:
+def _summary(
+    row: SimulationRow, names: Mapping[str, str], versions: Mapping[int, VersionRef], caller: Caller | None
+) -> SimulationSummary:
     run = row.run
+    owner = row.simulation.owner_sub
     version_id = row.simulation.environment_version_id
     return SimulationSummary(
         simulation_id=row.simulation.id,
@@ -82,6 +85,7 @@ def _summary(row: SimulationRow, names: Mapping[str, str], versions: Mapping[int
         simulator=_simulator_label(row.simulator.container_def, names),
         container_def_hash=row.simulator.container_def_hash,
         visibility=Visibility(row.simulation.visibility),
+        mine=caller is not None and owner is not None and owner == caller.subject,
         status=run.status.to_job_status().value if run is not None else SUBMITTING,
         slurm_job_id=run.slurmjobid if run is not None else None,
         start_time=str(run.start_time) if run is not None and run.start_time else None,
@@ -152,6 +156,7 @@ def _container_hash(simulator: str, images: Mapping[str, str]) -> str:
     path="",
     response_model=SimulationPage,
     operation_id="list-simulations",
+    responses={401: {"description": "`mine` without a signed-in caller"}},
     tags=["Simulations"],
     summary="List simulations, newest first, each with its latest SLURM job",
 )
@@ -182,6 +187,9 @@ async def list_simulations(
     tag: Annotated[
         list[str] | None, Query(description="Only simulations with this tag; repeatable, all must match")
     ] = None,
+    mine: Annotated[
+        bool, Query(description="Only those the caller submitted, signed in; needs a signed-in caller")
+    ] = False,
     limit: Annotated[int, Query(ge=1, le=1000)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> SimulationPage:
@@ -189,6 +197,12 @@ async def list_simulations(
         labels = parse_label_filters(label)
     except LabelError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    if mine and caller is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Listing your simulations needs a signed-in caller",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     links = await _version_links()
     query = SimulationQuery(
         status=status,
@@ -200,6 +214,7 @@ async def list_simulations(
         since=since if since is None or since.tzinfo else since.replace(tzinfo=datetime.UTC),
         labels=labels,
         tags=[t.strip() for t in tag or [] if t.strip()],
+        owner_sub=caller.subject if mine and caller is not None else None,
         limit=limit,
         offset=offset,
     )
@@ -210,7 +225,7 @@ async def list_simulations(
     names = await prebuilt_names(get_database_service())
     versions = {link.version_id: link.ref for link in links}
     return SimulationPage(
-        simulations=[_summary(r, names, versions) for r in rows],
+        simulations=[_summary(r, names, versions, caller) for r in rows],
         total=total,
         next_offset=following if following < total else None,
     )
@@ -229,7 +244,7 @@ async def get_simulation(simulation_id: int, caller: OptionalCaller) -> Simulati
     row = await db.get_simulator_db().get_simulation_row(simulation_id)
     if row is None or not can_read(caller, row.simulation.to_simulation_access()):
         raise HTTPException(status_code=404, detail=f"Simulation with id {simulation_id} not found.")
-    summary = _summary(row, await prebuilt_names(db), await _version_refs())
+    summary = _summary(row, await prebuilt_names(db), await _version_refs(), caller)
     event_count = await db.get_events_db().count_events(summary.trace_id) if summary.trace_id else 0
     _, dataset_count = await db.get_datasets_db().page(
         DatasetQuery(simulation_id=simulation_id, available=None, limit=1)
@@ -244,6 +259,7 @@ async def get_simulation(simulation_id: int, caller: OptionalCaller) -> Simulati
     operation_id="cancel-simulation",
     responses={
         401: {"description": "Cancelling needs a signed-in caller"},
+        403: {"description": "The simulation has an owner, and the caller is neither it nor an admin"},
         404: {"description": "The simulation does not exist, or the caller may not read it"},
         409: {"description": "The run has finished, or is being submitted to SLURM right now"},
         502: {"description": "SLURM could not be asked to cancel the job; try again"},
@@ -252,8 +268,9 @@ async def get_simulation(simulation_id: int, caller: OptionalCaller) -> Simulati
     summary="Cancel a run: withdraw it from the queue, or ask SLURM to cancel its job",
 )
 async def cancel_simulation(simulation_id: int, caller: OptionalCaller) -> SimulationCancellation:
-    """Any signed-in caller who may read the simulation may cancel it, while no simulation has an owner (every one is
-    public until submissions stamp one, docs/plan-observability.md step 5); then its owner and configured admins."""
+    """A run with an owner may be cancelled by its owner or a configured admin; one without (anonymous, from before
+    owners were stamped, or started by the service), by any signed-in caller who may read it
+    (docs/plan-favorites-and-studies.md, F4)."""
     if caller is None:
         raise HTTPException(
             status_code=401,
@@ -264,6 +281,8 @@ async def cancel_simulation(simulation_id: int, caller: OptionalCaller) -> Simul
     row = await db.get_simulator_db().get_simulation_row(simulation_id)
     if row is None or not can_read(caller, row.simulation.to_simulation_access()):
         raise HTTPException(status_code=404, detail=f"Simulation with id {simulation_id} not found.")
+    if not can_cancel(caller, row.simulation.to_simulation_access()):
+        raise HTTPException(status_code=403, detail="Only its owner may cancel this simulation")
     try:
         return await handlers.cancel_simulation(
             simulation_id,

@@ -120,7 +120,7 @@ async def run_sedml(
     tolerances = Tolerances(rel_tol=rel_tol, abs_tol_min=abs_tol_min, abs_tol_scale=abs_tol_scale)
     return await run_archive(
         source, None, solvers, task, tags, description, tolerances, background_tasks,
-        environment_versions=environment_version,
+        environment_versions=environment_version, owner_sub=principal.subject if principal else None,
     )  # fmt: skip
 
 
@@ -135,6 +135,7 @@ async def run_archive(
     background_tasks: BackgroundTasks,
     references: dict[str, dict[str, dict[str, list[float]]]] | None = None,
     environment_versions: list[str] | None = None,
+    owner_sub: str | None = None,
 ) -> SedmlRunResult:
     """Translate, submit one run per accepted task and solver, and answer with the comparisons (`/sedml/run`, and the
     source shortcuts in sources.py). `source_label` defaults to `upload:<file name>`. `environment_versions` names
@@ -154,6 +155,7 @@ async def run_archive(
         ids = await service.submit(
             translation, source, source_label or f"upload:{translation.source}", chosen, tasks, run_tags,
             run_description, tolerances, background_tasks, references=references, environment_versions=versions,
+            owner_sub=owner_sub,
         )  # fmt: skip
     except SubmissionRejectedError as e:
         raise HTTPException(

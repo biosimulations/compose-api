@@ -478,6 +478,18 @@
             "description": "Only simulations with this tag; repeatable, all must match"
           },
           {
+            "name": "mine",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Only those the caller submitted, signed in; needs a signed-in caller",
+              "default": false,
+              "title": "Mine"
+            },
+            "description": "Only those the caller submitted, signed in; needs a signed-in caller"
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -511,6 +523,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "`mine` without a signed-in caller"
           },
           "422": {
             "description": "Validation Error",
@@ -574,7 +589,7 @@
           "Simulations"
         ],
         "summary": "Cancel a run: withdraw it from the queue, or ask SLURM to cancel its job",
-        "description": "Any signed-in caller who may read the simulation may cancel it, while no simulation has an owner (every one is\npublic until submissions stamp one, docs/plan-observability.md step 5); then its owner and configured admins.",
+        "description": "A run with an owner may be cancelled by its owner or a configured admin; one without (anonymous, from before\nowners were stamped, or started by the service), by any signed-in caller who may read it\n(docs/plan-favorites-and-studies.md, F4).",
         "operationId": "cancel-simulation",
         "parameters": [
           {
@@ -600,6 +615,9 @@
           },
           "401": {
             "description": "Cancelling needs a signed-in caller"
+          },
+          "403": {
+            "description": "The simulation has an owner, and the caller is neither it nor an admin"
           },
           "404": {
             "description": "The simulation does not exist, or the caller may not read it"
@@ -7377,6 +7395,12 @@
             "$ref": "#/components/schemas/Visibility",
             "default": "public"
           },
+          "mine": {
+            "type": "boolean",
+            "title": "Mine",
+            "description": "The caller submitted it, signed in; its owner is never named (docs/plan-favorites-and-studies.md)",
+            "default": false
+          },
           "status": {
             "type": "string",
             "title": "Status"
@@ -7619,6 +7643,12 @@
           "visibility": {
             "$ref": "#/components/schemas/Visibility",
             "default": "public"
+          },
+          "mine": {
+            "type": "boolean",
+            "title": "Mine",
+            "description": "The caller submitted it, signed in; its owner is never named (docs/plan-favorites-and-studies.md)",
+            "default": false
           },
           "status": {
             "type": "string",

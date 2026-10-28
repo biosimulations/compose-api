@@ -41,9 +41,11 @@ async def submitted(
     simulator = simulator or await sim_db.insert_simulator(definition, packages_used=None)
     recorded: dict[str, Any] = {"runs": []}
 
-    async def run_simulation(simulation_request: SimulationRequest, **_: object) -> SimulationExperiment:
+    async def run_simulation(
+        simulation_request: SimulationRequest, owner_sub: str | None = None, **_: object
+    ) -> SimulationExperiment:
         experiment_id = f"exp-sedml-{next(_ids)}-{tmp_path.name}"
-        sim = await sim_db.insert_simulation(simulation_request, experiment_id, simulator)
+        sim = await sim_db.insert_simulation(simulation_request, experiment_id, simulator, owner_sub=owner_sub)
         recorded["runs"].append((simulation_request, sim.database_id, experiment_id))
         return SimulationExperiment(simulation_database_id=sim.database_id, simulator_database_id=simulator.database_id)
 
