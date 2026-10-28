@@ -117,6 +117,10 @@ class Verification(BaseModel):
     workflow_status: str | None = None
     verify_close: bool | None = Field(default=None, description="BioSimulators' simulators agree on every report")
     references: list[str] = Field(default_factory=list, description="the reference origins it added")
+    agrees_with: list[str] = Field(
+        default_factory=list,
+        description="our solvers whose every scored data set is close to each of its simulators' (once completed)",
+    )
     failed_simulators: list[dict[str, Any]] = Field(
         default_factory=list, description="simulators whose runs at biosimulations.org produced no results"
     )

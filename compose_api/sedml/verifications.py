@@ -36,6 +36,7 @@ from compose_api.sedml.verify import (
     VerifyRateLimitedError,
     VerifyRejectedError,
     VerifyStatus,
+    agrees_with,
     references_from_output,
     sanitize_archive,
     stored_output,
@@ -232,7 +233,8 @@ def _kick() -> None:
         worker.kick()
 
 
-def view(row: ORMVerification) -> Verification:
+def view(row: ORMVerification, comparison_result: dict[str, Any] | None = None) -> Verification:
+    """The verification as the API shows it; ``agrees_with`` needs its comparison's scored result."""
     result = row.result or {}
     runs = (result.get("workflow_results") or {}).get("sims_run_info") or []
     origins = []
@@ -249,6 +251,7 @@ def view(row: ORMVerification) -> Verification:
         workflow_status=row.workflow_status,
         verify_close=row.verify_close,
         references=origins if row.state == "completed" else [],
+        agrees_with=agrees_with(comparison_result, origins) if row.state == "completed" else [],
         failed_simulators=list(result.get("failed_simulators") or []),
         attempts=row.attempts,
         last_error=row.last_error,

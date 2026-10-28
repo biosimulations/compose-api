@@ -5403,6 +5403,12 @@ components:
           - type: boolean
           - type: 'null'
           title: Verify Close
+        oracle_agrees_with:
+          items:
+            type: string
+          type: array
+          title: Oracle Agrees With
+          description: our solvers the newest completed verification agrees with (V5)
       type: object
       required:
       - source
@@ -5573,6 +5579,13 @@ components:
           type: array
           title: References
           description: the reference origins it added
+        agrees_with:
+          items:
+            type: string
+          type: array
+          title: Agrees With
+          description: our solvers whose every scored data set is close to each of
+            its simulators' (once completed)
         failed_simulators:
           items:
             additionalProperties: true

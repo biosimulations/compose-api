@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import type { SimulationSummary } from '~/composables/useApi'
+import type { Schemas, SimulationSummary } from '~/composables/useApi'
 import type { Comparison, ComparisonSeries } from '~/composables/useSedml'
 
 // One SED-ML task run on several solvers (docs/plan-sedml.md, D4): its runs, then, once all have finished, a score per
 // report, data set and solver pair (close below 1), the SED-ML plots with every run's traces overlaid, and any one data
-// set from every run and every reference.
+// set from every run and every reference. Its verifications against BioSimulators' simulators say which of our solvers
+// they side with (docs/plan-verify-oracle.md, V5), and their series join the overlay as references.
 const route = useRoute()
 const id = computed(() => Number(route.params.id))
 const comparison = shallowRef<Comparison | null>(null)
@@ -19,6 +20,7 @@ async function load() {
   error.value = null
   comparison.value = data
   void loadRuns(data)
+  void loadVerifications()
 }
 onMounted(load)
 
@@ -31,8 +33,30 @@ async function loadRuns(c: Comparison) {
   runs.value = { ...runs.value, ...Object.fromEntries(found.filter(s => s != null).map(s => [s.simulation_id, s])) }
 }
 useIntervalFn(() => {
-  if (comparison.value?.status === 'running') load()
+  if (comparison.value?.status === 'running' || verifying.value) load()
 }, 10000)
+
+// its verifications, newest first; asking for one needs sign-in (it spends biosim's shared budget), and asking again
+// while one is going answers that one
+type Verification = Schemas['Verification']
+const verifications = ref<Verification[]>([])
+const verifying = computed(() => verifications.value.some(v => v.state === 'requested' || v.state === 'submitted'))
+const { enabled: signInOffered, isAuthenticated } = useAuth()
+const needsSignIn = computed(() => signInOffered.value && !isAuthenticated.value)
+const asking = ref(false)
+const verifyError = ref<string | null>(null)
+async function loadVerifications() {
+  const { data } = await useApi().GET('/comparisons/{comparison_id}/verifications', { params: { path: { comparison_id: id.value } } })
+  verifications.value = [...(data ?? [])].reverse()
+}
+async function verify() {
+  asking.value = true
+  verifyError.value = null
+  const { error: err } = await useApi().POST('/comparisons/{comparison_id}/verify', { params: { path: { comparison_id: id.value } } })
+  asking.value = false
+  if (err) verifyError.value = errorMessage(err, 'Could not ask for a verification')
+  await loadVerifications()
+}
 
 type PairResult = { score: number | string | null, close: boolean | null, missing?: string[], lengths?: number[], reference?: boolean }
 type ReportResult = { labels: Record<string, Record<string, PairResult>>, worst: { label: string | null, score: number | null } }
@@ -64,8 +88,10 @@ const overlay = computed(() => {
   const lines = Object.entries(s.solvers).map(([solver, cols], i) => ({
     type: 'scatter', mode: 'lines', name: solver, x: cols[timeLabel.value!], y: cols[label.value!], line: { dash: ['solid', 'dash', 'dot', 'dashdot'][i % 4] }
   }))
+  // a legacy run's results grey; each BioSimulators simulator's in a colour of its own
   const refs = Object.entries(s.references).map(([origin, cols]) => ({
-    type: 'scatter', mode: 'markers', name: origin, x: cols[timeLabel.value!], y: cols[label.value!], marker: { size: 4, color: '#888' }
+    type: 'scatter', mode: 'markers', name: isOracle(origin) ? `BioSimulators ${oracleName(origin)}` : origin,
+    x: cols[timeLabel.value!], y: cols[label.value!], marker: isOracle(origin) ? { size: 5, symbol: 'circle-open' } : { size: 4, color: '#888' }
   }))
   return [...lines, ...refs]
 })
@@ -108,7 +134,7 @@ watch(() => comparison.value?.status, async (status) => {
           <template v-else>
             <UBadge :color="comparison.close ? 'success' : 'error'" variant="subtle">{{ comparison.close ? 'the solvers agree' : comparison.status === 'incomplete' ? 'a run did not complete' : 'the solvers differ' }}</UBadge>
             <UBadge v-if="result?.references?.length" :color="scoreColor(result.close_to_references)" variant="outline">
-              {{ result.close_to_references ? 'and match the original results' : 'reference: ' + result.references.join(', ') + (result.close_to_references === false ? ' differs' : '') }}
+              {{ result.close_to_references ? 'and match every reference' : 'references: ' + result.references.map(oracleName).join(', ') + (result.close_to_references === false ? ': one differs' : '') }}
             </UBadge>
           </template>
           <span class="text-sm text-muted">close when the score is below 1: max |a−b| / (atol + rtol·|b|), rtol {{ (comparison.settings as any)?.tolerances?.rel_tol }}</span>
@@ -123,6 +149,40 @@ watch(() => comparison.value?.status, async (status) => {
               <RanIn v-if="runs[m.simulation_id]" :version="runs[m.simulation_id]!.environment_version" :simulator-id="runs[m.simulation_id]!.simulator_id" class="text-xs" />
             </li>
           </ul>
+        </UCard>
+        <UCard>
+          <template #header>
+            <div class="flex flex-wrap items-center gap-2">
+              <h3 class="font-semibold">Checked against BioSimulators</h3>
+              <span class="grow" />
+              <UTooltip :text="needsSignIn ? 'Sign in to ask for a verification' : ''" :disabled="!needsSignIn">
+                <UButton
+                  icon="i-lucide-shield-check" label="Verify" size="sm" variant="soft" :loading="asking"
+                  :disabled="needsSignIn || !canVerify(comparison.status, verifications)" @click="verify"
+                />
+              </UTooltip>
+            </div>
+          </template>
+          <p class="text-sm text-muted mb-2">
+            biosim's /verify runs the archive this comparison ran on BioSimulators' own simulators and compares them
+            with each other. Each simulator's results become a reference here, scored against our solvers like any other.
+          </p>
+          <UAlert v-if="verifyError" color="error" variant="subtle" :title="verifyError" class="mb-2" />
+          <ul v-if="verifications.length" class="flex flex-col gap-2 text-sm">
+            <li v-for="v in verifications" :key="v.verification_id" class="flex flex-wrap items-center gap-2">
+              <UTooltip :text="verificationOracle(v)?.hint ?? ''">
+                <UBadge :color="verificationOracle(v)?.color ?? 'neutral'" variant="subtle">{{ verificationOracle(v)?.text }}</UBadge>
+              </UTooltip>
+              <span class="text-muted">{{ formatTime(v.created_at) }}</span>
+              <UBadge v-for="o in v.references" :key="o" color="neutral" variant="outline" size="sm">{{ oracleName(o) }}</UBadge>
+              <span v-if="!v.references?.length" class="text-xs text-muted">{{ v.simulators.join(', ') }}</span>
+              <UTooltip v-for="f in v.failed_simulators" :key="String(f.simulator_version)" :text="String(f.error_message ?? '')" :disabled="!f.error_message">
+                <span class="text-xs text-warning">{{ f.simulator_version }} produced no results</span>
+              </UTooltip>
+              <span v-if="v.last_error" class="text-xs text-error">{{ v.last_error }}</span>
+            </li>
+          </ul>
+          <p v-else class="text-sm text-muted">Not verified yet.</p>
         </UCard>
         <UCard v-for="[reportId, r] in reports" :key="reportId">
           <template #header>
