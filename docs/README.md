@@ -35,6 +35,7 @@ Several documents answer different questions. Start with the one that matches yo
 | the web UI's sign-in switched on, capabilities from `/auth/me`, environment version pages and admin actions, one suite run at a time | [plan-webapp-admin.md](plan-webapp-admin.md) | done (0.7.61); a signed-in check in production left | 2026-10-27 |
 | runs recorded as `requested` and dispatched by a worker that survives restarts; caps, priorities, resumable suite runs | [plan-durable-submission.md](plan-durable-submission.md) | plan, implemented (0.7.31) | 2026-10-22 |
 | checking SED-ML comparisons against BioSimulators: legacy runs as references, and biosim's `/verify` API as an oracle | [plan-verify-oracle.md](plan-verify-oracle.md) | done: V0–V5 (0.7.66) | 2026-10-28 |
+| a signed-in user's own runs (owners stamped at submit), favorites, and studies that group and share runs | [plan-favorites-and-studies.md](plan-favorites-and-studies.md) | active: step 1a in review | 2026-10-28 |
 | the web UI at `/ui`: pages, viewers, composite authoring, how it is built | [webapp.md](webapp.md) | user documentation | 2026-10-13 |
 | the `compose-api` command line, with its generated reference | [cli.md](cli.md) | user documentation | 2026-10-13 |
 
@@ -43,7 +44,8 @@ Several documents answer different questions. Start with the one that matches yo
 We work one plan at a time: the active plan runs to its end, and anything found outside it is recorded here and
 raised, not fixed on the spot.
 
-**No plan is active** (2026-10-28). The next is chosen from the parked threads below.
+**Active: [plan-favorites-and-studies](plan-favorites-and-studies.md)** (2026-10-28): owners stamped at submit and a
+"Mine" filter (step 1a, which takes over plan-observability step 5), then favorites, then a plan for studies.
 
 **Done:**
 - [plan-verify-oracle](plan-verify-oracle.md): V5, the verdicts on the comparison and suite pages, live in 0.7.66
@@ -62,7 +64,7 @@ raised, not fixed on the spot.
 | Thread | Done | Left |
 |---|---|---|
 | [plan-vcell-ode](plan-vcell-ode.md) | 1–4 | report VCell bugs: BIOMD 112 (`null`), 175 (unknown identifier), 56 and 168 (disagree), 137 (solve error); 235 (out of memory) and 255 (timeout) |
-| [plan-observability](plan-observability.md) | 0–4 | 5: an owner stamped at submit |
+| [plan-observability](plan-observability.md) | 0–4 | 5: taken over by plan-favorites-and-studies (2026-10-28) |
 | [plan-environment-builds](plan-environment-builds.md) | phases 1–4 | publishing |
 | Named composed environments | | Only registry_env can be a named composed environment: `versions.py`, `resolver.py` and `lifecycle.py` each take "the" `shared` environment (the default for runs that name none, the resolver's first choice, a mash-up's Python), and the kinds are `shared`, `prebuilt` and `mash-up`. A curated repo (a viva-* entry) runs in registry_env, in a mash-up, or as a prebuilt image. A short plan: a `composed` kind requiring `entries`, `shared` kept as the default, and the resolver ranking named composed environments ahead of mash-ups; composition 7c would use it. Found 2026-10-27 |
 | Emitters in submitted documents | | Folded into composition 7c-1 (2026-10-27): process-bigraph's `process_bigraph.emitter` becomes an admitted entry, and documents name `local:process_bigraph.emitter.RAMEmitter` |
