@@ -217,6 +217,25 @@ entries:
     install:
       git: https://github.com/virtualcell/vcell-fenics
       commit: 4dab281e1ed3f7c2b2bb60c6c2d1a8ccb251ca17
+    # its package declares no dependencies: its pixi.toml's runtime ones (gmsh is dev-only there, for its licence;
+    # dolfinx_mpc nothing under src/ imports; occt's `novtk` build pin a version string cannot say). Before this, a
+    # mash-up had them only through viva-pde-particle's, and scifem and meshio not at all.
+    conda:
+      fenics-dolfinx: "0.10.*"
+      mpich: "*"
+      petsc4py: "*"
+      scifem: "*"
+      meshio: "*"
+      netgen: ">=6.2.2602,<7"
+      matplotlib-base: "*"
+      numpy: "*"
+      scipy: "*"
+      pyyaml: ">=6.0.3,<7"
+      scikit-image: "*"
+      pydantic: ">=2.10,<3"
+    requires:
+      - zarr
+      - pyvcell
     level: installable
     evidence:
       - The commit viva-pde-particle's pixi.toml pins (main, the merge of #211); its geometry formalism and Netgen realization.
