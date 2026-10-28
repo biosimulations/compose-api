@@ -2,6 +2,7 @@
 import type { TabsItem } from '@nuxt/ui'
 import type { Dataset, HpcRun, SimulationDetail } from '~/composables/useApi'
 import { isFigure } from '~/viewers/kinds'
+import { preloadViewer } from '~/viewers/registry'
 
 const route = useRoute()
 const id = Number(route.params.id)
@@ -15,6 +16,20 @@ const datasets = ref<Dataset[]>([])
 const input = computed(() => datasets.value.find(d => d.kind === 'input') ?? null)
 // The outputs a visualization is registered for (viewers/kinds.ts): plots, images, results bundles.
 const figures = computed(() => datasets.value.filter(isFigure))
+// Their viewers' code (the composite editor, Plotly) is fetched once the page is idle, so opening the Input or Figures
+// tab waits only for the files themselves.
+const preloaded = new Set<string>()
+watch([input, figures], ([i, f]) => {
+  const wanted = [...(i ? [i] : []), ...f].filter(d => !preloaded.has(d.id))
+  if (!wanted.length) return
+  wanted.forEach(d => preloaded.add(d.id))
+  const idle = window.requestIdleCallback ?? ((run: () => void) => setTimeout(run, 200))
+  idle(() => {
+    wanted.forEach(preloadViewer)
+    // the composite viewer checks the input against the manifest of the environment the run used: both are cached
+    if (i && wanted.includes(i)) environmentFor(sim.value?.simulator).then(e => e && fetchManifest(e.name)).catch(() => undefined)
+  })
+})
 const inputError = ref<string | null>(null)
 
 async function saveInput(d: Dataset) {
@@ -237,7 +252,8 @@ const fields = computed(() => {
               </div>
               <UAlert v-if="inputError" color="error" variant="subtle" :description="inputError" />
               <UAlert v-if="!input.available" color="neutral" variant="subtle" description="The input is no longer available." />
-              <DatasetViewer v-else :dataset="input" />
+              <!-- the composite viewer's height, held while it loads, so the page does not jump when it appears -->
+              <DatasetViewer v-else :dataset="input" class="min-h-[52rem]" />
             </div>
           </template>
           <template #figures>
@@ -255,7 +271,8 @@ const fields = computed(() => {
                     </div>
                   </template>
                   <p v-if="!f.available" class="text-sm text-muted">No longer available.</p>
-                  <DatasetViewer v-else :dataset="f" />
+                  <!-- a figure's height (PlotlyFigureViewer: its buttons and a 28rem chart), held while it loads -->
+                  <DatasetViewer v-else :dataset="f" class="min-h-[31rem]" />
                 </UCard>
               </div>
             </div>

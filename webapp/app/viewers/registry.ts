@@ -13,9 +13,16 @@ export interface ViewerDef {
   icon: string
   match: (d: Dataset) => number
   component: Component
+  /** Downloads the viewer's code (and what it imports later, such as Plotly), so a page can fetch it ahead of use. */
+  preload: () => Promise<unknown>
 }
 
-const lazy = (loader: () => Promise<Component | { default: Component }>) => defineAsyncComponent(loader)
+type Loader = () => Promise<Component | { default: Component }>
+// `also` is code the viewer imports only once it draws (Plotly, in PlotlyChart): preloading fetches it too
+const lazy = (load: Loader, also?: () => Promise<unknown>) => ({
+  component: defineAsyncComponent(load),
+  preload: () => Promise.all([load(), also?.()])
+})
 
 export const VIEWERS: ViewerDef[] = [
   {
@@ -24,35 +31,35 @@ export const VIEWERS: ViewerDef[] = [
     label: 'Composite',
     icon: 'i-lucide-workflow',
     match: d => (isComposite(d) ? 10 : 0),
-    component: lazy(() => import('./CompositeViewer.vue'))
+    ...lazy(() => import('./CompositeViewer.vue'))
   },
   {
     id: 'plotly',
     label: 'Figure',
     icon: 'i-lucide-chart-spline',
     match: d => (isPlotlyFigure(d) ? 12 : 0),
-    component: lazy(() => import('./PlotlyFigureViewer.vue'))
+    ...lazy(() => import('./PlotlyFigureViewer.vue'), () => import('plotly.js-dist-min'))
   },
   {
     id: 'image',
     label: 'Image',
     icon: 'i-lucide-image',
     match: d => (isImage(d) ? 10 : 0),
-    component: lazy(() => import('./ImageViewer.vue'))
+    ...lazy(() => import('./ImageViewer.vue'))
   },
   {
     id: 'table',
     label: 'Table',
     icon: 'i-lucide-table',
     match: d => (isTable(d) ? 10 : 0),
-    component: lazy(() => import('./TableViewer.vue'))
+    ...lazy(() => import('./TableViewer.vue'))
   },
   {
     id: 'text',
     label: 'Text',
     icon: 'i-lucide-file-text',
     match: d => (isText(d) ? (isTable(d) ? 2 : 5) : 0),
-    component: lazy(() => import('./TextViewer.vue'))
+    ...lazy(() => import('./TextViewer.vue'))
   },
   {
     // Bundles carrying the web extension are drawn in 3D; others still get it offered, and say why it is empty.
@@ -60,14 +67,14 @@ export const VIEWERS: ViewerDef[] = [
     label: '3D',
     icon: 'i-lucide-box',
     match: d => (isBundle(d) ? (d.attributes?.web ? 10 : 3) : 0),
-    component: lazy(() => import('./BundleSurfaceViewer.vue'))
+    ...lazy(() => import('./BundleSurfaceViewer.vue'))
   },
   {
     id: 'bundle-stats',
     label: 'Statistics',
     icon: 'i-lucide-chart-line',
     match: d => (isBundle(d) ? 5 : 0),
-    component: lazy(() => import('./BundleStatsViewer.vue'))
+    ...lazy(() => import('./BundleStatsViewer.vue'))
   }
 ]
 
@@ -77,6 +84,11 @@ export function viewersFor(d: Dataset): ViewerDef[] {
     .filter(x => x.score > 0)
     .sort((a, b) => b.score - a.score)
     .map(x => x.v)
+}
+
+/** Fetch the code of the viewer `d` opens in, ahead of showing it; a failure here only means it loads when shown. */
+export function preloadViewer(d: Dataset): void {
+  viewersFor(d)[0]?.preload().catch(() => undefined)
 }
 
 /** A directory dataset (a zarr store) has no single file to download. */
