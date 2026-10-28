@@ -139,4 +139,5 @@ async def list_comparison_verifications(comparison_id: int, caller: OptionalCall
     if row is None:
         raise HTTPException(status_code=404, detail=f"Comparison {comparison_id} not found.")
     found = await get_required_database_service().get_comparisons_db().verifications(comparison_id)
-    return [verifications.view(v) for v in found]
+    result = (await service.comparison_view(row)).result if found else None
+    return [verifications.view(v, result) for v in found]

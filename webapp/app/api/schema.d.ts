@@ -2655,6 +2655,11 @@ export interface components {
             verification?: string | null;
             /** Verify Close */
             verify_close?: boolean | null;
+            /**
+             * Oracle Agrees With
+             * @description our solvers the newest completed verification agrees with (V5)
+             */
+            oracle_agrees_with?: string[];
         };
         /** SuiteRunView */
         SuiteRunView: {
@@ -2770,6 +2775,11 @@ export interface components {
              * @description the reference origins it added
              */
             references?: string[];
+            /**
+             * Agrees With
+             * @description our solvers whose every scored data set is close to each of its simulators' (once completed)
+             */
+            agrees_with?: string[];
             /**
              * Failed Simulators
              * @description simulators whose runs at biosimulations.org produced no results

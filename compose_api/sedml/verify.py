@@ -271,6 +271,20 @@ def verify_close(output: VerifyOutput, datasets: set[str] | None = None) -> bool
     return True if scored else None
 
 
+def agrees_with(result: dict[str, Any] | None, origins: list[str]) -> list[str]:
+    """Our solvers BioSimulators' simulators agree with (docs/plan-verify-oracle.md, V5): those whose every data set
+    scored against the verification's references (``origins``) is close to each of them. A data set that could not be
+    scored (missing on one side) is no evidence either way; a solver with nothing scored against them is not counted."""
+    verdicts: dict[str, bool] = {}
+    for report in ((result or {}).get("reports") or {}).values():
+        for pairs in (report.get("labels") or {}).values():
+            for pair, scored in pairs.items():
+                solver, _, origin = pair.partition("|")
+                if origin in origins and scored.get("close") is not None:
+                    verdicts[solver] = verdicts.get(solver, True) and scored["close"] is True
+    return sorted(solver for solver, close in verdicts.items() if close)
+
+
 def stored_output(output: VerifyOutput) -> dict[str, Any]:
     """The output as kept on the verification: without the series, which are kept as references."""
     data = output.model_dump(mode="json")

@@ -1,6 +1,6 @@
 # The BioSimulators verify oracle: checking our SED-ML comparisons against biosim's `/verify` API
 
-**Status (2026-10-22): in progress** (V0–V3 merged; V4 in review). Linking out to biosim.biosimulations.org pages is deferred: the platform's UI does
+**Status (2026-10-28): V0–V4 merged; V5 in review.** Linking out to biosim.biosimulations.org pages is deferred: the platform's UI does
 not use verification yet. Its `/utilities/verify-model` card is a dead link (`frontend/app/pages/utilities/index.vue`
 at `62bc540`), and project and run pages have no verification view to link to. This plan uses the API directly. One
 PR per step, each merged with a merge commit; deploying is a release, as usual.
@@ -11,8 +11,8 @@ PR per step, each merged with a merge commit; deploying is a release, as usual.
 | V1 | Legacy runs as references: a `biomodels:` source's original biosimulations.org run (no new simulation) | merged (#342), released 0.7.33 |
 | V2 | A client for the verify API, and a durable `verification` record per comparison | merged (#344) |
 | V3 | The verification worker: submit within the rate limit, poll, store, fold into the comparison | merged (#344) |
-| V4 | Triggers: one comparison on demand (API + CLI), and a suite option (`verify:`) | in review |
-| V5 | Surface: the comparison page and the suite summary show each verification's verdict | — |
+| V4 | Triggers: one comparison on demand (API + CLI), and a suite option (`verify:`) | merged (#348, #351) |
+| V5 | Surface: the comparison page and the suite summary show each verification's verdict | in review |
 
 ## Context
 
@@ -176,8 +176,9 @@ independent oracle.
   workflows were still `IN_PROGRESS` at biosim after an hour. Asking to verify again resumes a verification that
   failed while its workflow was unfinished (past the deadline, or out of attempts reading it), polling the same
   `workflow_id` with a fresh deadline. One biosim itself failed is submitted afresh.
-- **The suite page** shows each row's newest verification and its `verify_close`, and the summary counts `verifying`,
-  `verified` and `oracle_agrees`.
+- **The suite run's view** (`GET /suites/{name}/runs/{number}`, not yet the web page) gives each row's newest
+  verification and its `verify_close`, and the summary counts `verifying`, `verified` and `oracle_agrees`. *(Corrected
+  2026-10-28: the web pages showed none of it until V5.)*
 - **One comparison, on demand.**
   - `POST /comparisons/{id}/verify` queues one (`kind=omex`). `GET /comparisons/{id}/verifications` lists them.
   - Their `operation_id`s get CLI commands (`compose-api comparisons verify`, `… verifications`), since the `@claims`
@@ -196,6 +197,25 @@ independent oracle.
   references.
 - **The suite page and `SuiteRunView.summary`** gain `verified` and `oracle_agrees_with: {copasi, tellurium}` counts.
   These are what the 300-model triage needs.
+- *As built (2026-10-28):*
+  - **Which solvers the oracle sides with** (`verify.agrees_with`): a solver of ours whose every data set scored
+    against a completed verification's references (`solver|biosimulators:<name>:<version>` pairs) is close. A pair
+    missing on one side is no evidence either way, and a solver with nothing scored against them is not counted. It
+    does not also require `verify_close`: a solver close to every one of the simulators is so whether or not they are
+    close to each other.
+  - **The API:** a `Verification` gains `agrees_with` (`GET /comparisons/{id}/verifications` scores it against the
+    comparison); a suite run's row gains `oracle_agrees_with`, from its newest verification; the summary gains
+    `oracle_agrees_with_<solver>` for each solver the run's comparisons use, flat because the summary is
+    `{name: count}`.
+  - **The comparison page** has a "Checked against BioSimulators" card: each verification's verdict (agrees, with
+    which of our solvers; disagrees, so the model is hard; verifying; not verified), its simulators by version, those
+    that produced no results and why, and a Verify button for a signed-in caller once the comparison has finished and
+    none is going. The page polls while one is. The overlay draws each BioSimulators simulator in a colour of its own,
+    legacy runs still grey.
+  - **The suite page** has a BioSimulators column and, once anything is verified, a line of counts: verifying,
+    verified, its simulators agree, and "sides with <solver>" per solver. Verifying a whole run stays in the CLI
+    (`suites verify`), because of open question 2.
+  - The verdicts are pure functions (`webapp/app/utils/verify.ts`) with their tests.
 - **Not in this plan: links to biosim pages.** The legacy run ids are stored (`sims_run_info`), so they can be added
   when the platform's UI shows verifications or runs we can link to.
 

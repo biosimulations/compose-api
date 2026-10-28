@@ -34,7 +34,7 @@ Several documents answer different questions. Start with the one that matches yo
 | signing in to the web UI: a PKCE single-page app (no backend-for-frontend), the Auth0 SPA application, hardening | [plan-webapp-login.md](plan-webapp-login.md) | done: live, CSP enforced, documented | 2026-10-27 |
 | the web UI's sign-in switched on, capabilities from `/auth/me`, environment version pages and admin actions, one suite run at a time | [plan-webapp-admin.md](plan-webapp-admin.md) | done (0.7.61); a signed-in check in production left | 2026-10-27 |
 | runs recorded as `requested` and dispatched by a worker that survives restarts; caps, priorities, resumable suite runs | [plan-durable-submission.md](plan-durable-submission.md) | plan, implemented (0.7.31) | 2026-10-22 |
-| checking SED-ML comparisons against BioSimulators: legacy runs as references, and biosim's `/verify` API as an oracle | [plan-verify-oracle.md](plan-verify-oracle.md) | plan, parked; V0–V4 done, V5 left | 2026-10-26 |
+| checking SED-ML comparisons against BioSimulators: legacy runs as references, and biosim's `/verify` API as an oracle | [plan-verify-oracle.md](plan-verify-oracle.md) | active: V0–V4 done, V5 in review | 2026-10-28 |
 | the web UI at `/ui`: pages, viewers, composite authoring, how it is built | [webapp.md](webapp.md) | user documentation | 2026-10-13 |
 | the `compose-api` command line, with its generated reference | [cli.md](cli.md) | user documentation | 2026-10-13 |
 
@@ -45,13 +45,14 @@ raised, not fixed on the spot.
 
 **Done: [plan-environment-composition](plan-environment-composition.md)**, its last step 7c (viva-pde-particle
 composed, the PDE + particle + ODE mash-up) live 2026-10-27 in 0.7.64. Done before it: plan-webapp-admin (0.7.61; Jim's
-signed-in check in production left) and plan-known-problems 2b (0.7.62). Next: [plan-verify-oracle](plan-verify-oracle.md) V5.
+signed-in check in production left) and plan-known-problems 2b (0.7.62).
+
+**Active: [plan-verify-oracle](plan-verify-oracle.md) V5** (verdicts on the comparison and suite pages), started 2026-10-28.
 
 **Parked**, with where each stopped:
 
 | Thread | Done | Left |
 |---|---|---|
-| [plan-verify-oracle](plan-verify-oracle.md) | V0–V4 | V5: verdicts on the comparison and suite pages |
 | [plan-vcell-ode](plan-vcell-ode.md) | 1–4 | report VCell bugs: BIOMD 112 (`null`), 175 (unknown identifier), 56 and 168 (disagree), 137 (solve error); 235 (out of memory) and 255 (timeout) |
 | [plan-observability](plan-observability.md) | 0–4 | 5: an owner stamped at submit |
 | [plan-environment-builds](plan-environment-builds.md) | phases 1–4 | publishing |

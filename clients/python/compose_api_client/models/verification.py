@@ -31,6 +31,8 @@ class Verification:
             workflow_status (None | str | Unset):
             verify_close (bool | None | Unset): BioSimulators' simulators agree on every report
             references (list[str] | Unset): the reference origins it added
+            agrees_with (list[str] | Unset): our solvers whose every scored data set is close to each of its simulators'
+                (once completed)
             failed_simulators (list[VerificationFailedSimulatorsItem] | Unset): simulators whose runs at biosimulations.org
                 produced no results
             attempts (int | Unset):  Default: 0.
@@ -47,6 +49,7 @@ class Verification:
     workflow_status: None | str | Unset = UNSET
     verify_close: bool | None | Unset = UNSET
     references: list[str] | Unset = UNSET
+    agrees_with: list[str] | Unset = UNSET
     failed_simulators: list[VerificationFailedSimulatorsItem] | Unset = UNSET
     attempts: int | Unset = 0
     last_error: None | str | Unset = UNSET
@@ -84,6 +87,10 @@ class Verification:
         references: list[str] | Unset = UNSET
         if not isinstance(self.references, Unset):
             references = self.references
+
+        agrees_with: list[str] | Unset = UNSET
+        if not isinstance(self.agrees_with, Unset):
+            agrees_with = self.agrees_with
 
         failed_simulators: list[dict[str, Any]] | Unset = UNSET
         if not isinstance(self.failed_simulators, Unset):
@@ -128,6 +135,8 @@ class Verification:
             field_dict["verify_close"] = verify_close
         if references is not UNSET:
             field_dict["references"] = references
+        if agrees_with is not UNSET:
+            field_dict["agrees_with"] = agrees_with
         if failed_simulators is not UNSET:
             field_dict["failed_simulators"] = failed_simulators
         if attempts is not UNSET:
@@ -183,6 +192,8 @@ class Verification:
 
         references = cast(list[str], d.pop("references", UNSET))
 
+        agrees_with = cast(list[str], d.pop("agrees_with", UNSET))
+
         _failed_simulators = d.pop("failed_simulators", UNSET)
         failed_simulators: list[VerificationFailedSimulatorsItem] | Unset = UNSET
         if _failed_simulators is not UNSET:
@@ -230,6 +241,7 @@ class Verification:
             workflow_status=workflow_status,
             verify_close=verify_close,
             references=references,
+            agrees_with=agrees_with,
             failed_simulators=failed_simulators,
             attempts=attempts,
             last_error=last_error,

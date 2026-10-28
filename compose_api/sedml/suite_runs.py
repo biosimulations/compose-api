@@ -51,6 +51,9 @@ class SuiteRunRow(BaseModel):
     failure: str | None = None
     verification: str | None = None  # the newest verification's state (docs/plan-verify-oracle.md)
     verify_close: bool | None = None
+    oracle_agrees_with: list[str] = Field(
+        default_factory=list, description="our solvers the newest completed verification agrees with (V5)"
+    )
 
 
 class SuiteRunView(BaseModel):
@@ -226,8 +229,12 @@ async def view(suite: Suite, number: int) -> SuiteRunView | None:
     problems = _problems_for(await db.known_problems(suite.name), number)
     found = await db.suite_comparisons(suite.name, number)
     statuses = await service.member_statuses(found)
+    results: dict[int, dict[str, Any] | None] = {}
+    solvers: set[str] = set()
     for row in found:
         c = await service.comparison_view(row, statuses)
+        results[c.comparison_id] = c.result
+        solvers.update(m.solver for m in c.members)
         result = c.result or {}
         worst = _worst(result)
         entry = SuiteRunRow(
@@ -246,11 +253,14 @@ async def view(suite: Suite, number: int) -> SuiteRunView | None:
         if before is not None and c.status != "running":
             entry.drift = await _drift(row, before)
         rows.append(entry)
+    from compose_api.sedml import verifications  # late: verifications imports the service
+
     latest = await db.latest_verifications([r.comparison_id for r in rows if r.comparison_id is not None])
     for entry in rows:
         v = latest.get(entry.comparison_id or -1)
         if v is not None:
             entry.verification, entry.verify_close = v.state, v.verify_close
+            entry.oracle_agrees_with = verifications.view(v, results.get(v.comparison_id)).agrees_with
     for source, why in (run.failures or {}).items():
         rows.append(
             SuiteRunRow(source=source, status="failed", failure=str(why), expected=problems.get((source, None)))
@@ -268,6 +278,8 @@ async def view(suite: Suite, number: int) -> SuiteRunView | None:
         "verifying": sum(1 for r in rows if r.verification in ("requested", "submitted")),
         "verified": sum(1 for r in rows if r.verification == "completed"),
         "oracle_agrees": sum(1 for r in rows if r.verify_close is True),
+        # what the 300-model triage sorts by: which of our solvers BioSimulators sides with
+        **{f"oracle_agrees_with_{s}": sum(1 for r in rows if s in r.oracle_agrees_with) for s in sorted(solvers)},
     }
     return SuiteRunView(
         suite=suite.name, number=number, created_at=service._iso(run.created_at), status=run.status,

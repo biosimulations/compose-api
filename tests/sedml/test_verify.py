@@ -27,6 +27,7 @@ from compose_api.sedml.verify import (
     VerifyOutput,
     VerifyRateLimitedError,
     VerifyRejectedError,
+    agrees_with,
     references_from_output,
     sanitize_archive,
     stored_output,
@@ -89,6 +90,33 @@ def test_one_simulator_is_no_verdict() -> None:
     data = _recorded()
     data["workflow_results"]["sims_run_info"] = data["workflow_results"]["sims_run_info"][:1]
     assert verify_close(VerifyOutput.model_validate(data)) is None
+
+
+def test_the_oracle_agrees_with_a_solver_close_to_every_one_of_its_simulators() -> None:
+    """V5: which of our solvers BioSimulators sides with, from the comparison's scored pairs `solver|origin`."""
+    close, far, unscored = (
+        {"score": 0.1, "close": True},
+        {"score": 50.0, "close": False},
+        {"score": None, "close": None},
+    )
+    origins = ["biosimulators:copasi:4.45.296", "biosimulators:amici:0.34.2"]
+    result = {
+        "reports": {
+            "r": {
+                "labels": {
+                    "A": {"copasi|tellurium": far, "copasi|biosimulators:copasi:4.45.296": close,
+                          "copasi|biosimulators:amici:0.34.2": close, "tellurium|biosimulators:copasi:4.45.296": far,
+                          "tellurium|biosimulators:amici:0.34.2": close, "vcell|biosimulators:amici:0.34.2": unscored,
+                          "tellurium|biosimulations:copasi": close},
+                    "B": {"copasi|biosimulators:copasi:4.45.296": close, "tellurium|biosimulators:amici:0.34.2": close},
+                }
+            }
+        }
+    }  # fmt: skip
+    assert agrees_with(result, origins) == ["copasi"]  # tellurium is far from one; vcell has nothing scored
+    assert agrees_with(result, ["biosimulators:amici:0.34.2"]) == ["copasi", "tellurium"]
+    assert agrees_with(result, ["biosimulations:copasi"]) == ["tellurium"]  # only the origins asked about count
+    assert agrees_with(None, origins) == [] and agrees_with(result, []) == []
 
 
 def test_the_stored_output_leaves_the_series_to_the_references() -> None:
@@ -545,3 +573,41 @@ async def test_member_statuses_come_from_one_query_and_match_the_per_member_view
         alone = await service.comparison_view(row)
         assert [m.status for m in batched.members] == [m.status for m in alone.members]
     assert await database_service.get_simulator_db().get_simulation_statuses([]) == {}
+
+
+@pytest.mark.asyncio
+async def test_a_suite_run_counts_the_solvers_its_verifications_agree_with(
+    client: httpx.AsyncClient, database_service: DatabaseServiceSQL, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion, mount: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:  # fmt: skip
+    """V5: a completed verification's references are scored against our solvers, and the suite run says which of
+    them BioSimulators agrees with, per row and in its summary; the comparison's verifications say so too."""
+    monkeypatch.setattr(suites, "load_suites", lambda: {"oracle-sides": Suite(name="oracle-sides", description="x",
+                                                                              sources=["biomodels:A1"])})  # fmt: skip
+    db = database_service.get_comparisons_db()
+    _, number = await db.new_suite_run("oracle-sides", [])
+    args = (database_service, simulation_request, simulator, mount)
+    differ = await _finished_comparison(
+        *args, "V1", {"copasi": [1.0, 2.0], "tellurium": [5.0, 9.0]}, "oracle-sides", number
+    )
+    unverified = await _finished_comparison(*args, "V2", {"copasi": [1.0, 2.0]}, "oracle-sides", number)
+    verification_id = await db.insert_verification(differ, ["copasi", "tellurium", "amici"], {})
+    for origin in ORIGINS:  # as the worker leaves them: each simulator's series a reference
+        await db.add_reference(differ, origin, {REPORT: {"PX": [1.0, 2.0]}})
+    async with database_service.async_sessionmaker() as session, session.begin():
+        await session.execute(
+            text("UPDATE verification SET state = 'completed', verify_close = true, result = :result WHERE id = :id"),
+            {"result": json.dumps(_recorded()), "id": verification_id},
+        )
+
+    view = (await client.get(f"/suites/oracle-sides/runs/{number}")).json()
+    rows = {r["comparison_id"]: r for r in view["rows"]}
+    assert rows[differ]["oracle_agrees_with"] == ["copasi"] and rows[differ]["verify_close"] is True
+    assert rows[unverified]["oracle_agrees_with"] == [] and rows[unverified]["verification"] is None
+    summary = view["summary"]
+    assert (summary["oracle_agrees_with_copasi"], summary["oracle_agrees_with_tellurium"]) == (1, 0)
+    assert summary["verified"] == 1 and summary["oracle_agrees"] == 1
+    [v] = (await client.get(f"/comparisons/{differ}/verifications")).json()
+    assert v["agrees_with"] == ["copasi"] and v["references"] == [
+        "biosimulators:copasi:4.45.296", "biosimulators:tellurium:2.2.10", "biosimulators:amici:0.34.2"
+    ]  # fmt: skip

@@ -37,6 +37,7 @@ class SuiteRunRow:
         failure (None | str | Unset):
         verification (None | str | Unset):
         verify_close (bool | None | Unset):
+        oracle_agrees_with (list[str] | Unset): our solvers the newest completed verification agrees with (V5)
     """
 
     source: str
@@ -55,6 +56,7 @@ class SuiteRunRow:
     failure: None | str | Unset = UNSET
     verification: None | str | Unset = UNSET
     verify_close: bool | None | Unset = UNSET
+    oracle_agrees_with: list[str] | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -142,6 +144,10 @@ class SuiteRunRow:
         else:
             verify_close = self.verify_close
 
+        oracle_agrees_with: list[str] | Unset = UNSET
+        if not isinstance(self.oracle_agrees_with, Unset):
+            oracle_agrees_with = self.oracle_agrees_with
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
@@ -176,6 +182,8 @@ class SuiteRunRow:
             field_dict["verification"] = verification
         if verify_close is not UNSET:
             field_dict["verify_close"] = verify_close
+        if oracle_agrees_with is not UNSET:
+            field_dict["oracle_agrees_with"] = oracle_agrees_with
 
         return field_dict
 
@@ -307,6 +315,8 @@ class SuiteRunRow:
 
         verify_close = _parse_verify_close(d.pop("verify_close", UNSET))
 
+        oracle_agrees_with = cast(list[str], d.pop("oracle_agrees_with", UNSET))
+
         suite_run_row = cls(
             source=source,
             status=status,
@@ -324,6 +334,7 @@ class SuiteRunRow:
             failure=failure,
             verification=verification,
             verify_close=verify_close,
+            oracle_agrees_with=oracle_agrees_with,
         )
 
         suite_run_row.additional_properties = d

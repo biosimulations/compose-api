@@ -6,7 +6,8 @@ import type { VersionChoice } from '~/utils/suites'
 // One suite: its runs, and for the chosen one (`?run=N`, else the newest) a row per model: whether the solvers agree,
 // whether they match the references, and whether each solver drifted from its own result in the baseline run. Each
 // solver's known problem on a row is shown with its reason, and excuses the row when only such solvers fail or differ
-// (docs/plan-known-problems.md); the suite's problems, open and cleared, are on their own tab.
+// (docs/plan-known-problems.md); the suite's problems, open and cleared, are on their own tab. A row's newest verification
+// against BioSimulators says which of our solvers it sides with (docs/plan-verify-oracle.md, V5).
 type View = Schemas['SuiteRunView']
 const route = useRoute()
 const name = computed(() => String(route.params.name))
@@ -247,6 +248,15 @@ const fmt = (s: number | string | null | undefined) => (typeof s === 'number' ? 
           <UBadge v-if="view.summary.running" color="neutral" variant="subtle">{{ view.summary.running }} running</UBadge>
           <UBadge v-if="view.summary.failed" color="error" variant="outline">{{ view.summary.failed }} not submitted</UBadge>
         </div>
+        <div v-if="view.summary.verified || view.summary.verifying" class="flex flex-wrap items-center gap-2 text-sm">
+          <span class="text-muted">BioSimulators:</span>
+          <UBadge v-if="view.summary.verifying" color="neutral" variant="subtle">{{ view.summary.verifying }} verifying</UBadge>
+          <UBadge color="neutral" variant="outline">{{ view.summary.verified }} verified</UBadge>
+          <UBadge color="neutral" variant="outline">its simulators agree on {{ view.summary.oracle_agrees }}</UBadge>
+          <UBadge v-for="[solver, n] in oracleSides(view.summary)" :key="solver" :color="n ? 'success' : 'neutral'" variant="subtle">
+            sides with {{ solver }} on {{ n }}
+          </UBadge>
+        </div>
         <UTabs v-model="tab" :items="tabs" variant="link" class="w-full">
           <template #run>
             <div class="pt-3 flex flex-col gap-2">
@@ -254,7 +264,7 @@ const fmt = (s: number | string | null | undefined) => (typeof s === 'number' ? 
               <table class="text-sm">
                 <thead>
                   <tr class="text-left text-muted">
-                    <th class="pr-4 py-1">Model</th><th class="pr-4">Task</th><th class="pr-4">Solvers</th><th class="pr-4">References</th><th class="pr-4">Worst</th><th class="pr-4">Since baseline</th><th class="pr-4">Known problems</th><th>Note</th>
+                    <th class="pr-4 py-1">Model</th><th class="pr-4">Task</th><th class="pr-4">Solvers</th><th class="pr-4">References</th><th class="pr-4">BioSimulators</th><th class="pr-4">Worst</th><th class="pr-4">Since baseline</th><th class="pr-4">Known problems</th><th>Note</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -270,6 +280,11 @@ const fmt = (s: number | string | null | undefined) => (typeof s === 'number' ? 
                       </UTooltip>
                     </td>
                     <td class="pr-4"><UBadge v-if="r.close_to_references !== null && r.close_to_references !== undefined" :color="r.close_to_references ? 'success' : 'error'" variant="outline" size="sm">{{ r.close_to_references ? 'match' : 'differ' }}</UBadge></td>
+                    <td class="pr-4">
+                      <UTooltip v-if="rowOracle(r)" :text="rowOracle(r)!.hint ?? ''">
+                        <UBadge :color="rowOracle(r)!.color" variant="subtle" size="sm">{{ rowOracle(r)!.text }}</UBadge>
+                      </UTooltip>
+                    </td>
                     <td class="pr-4 text-xs">{{ r.worst_label }} <span class="text-muted">{{ fmt(r.worst_score) }}</span></td>
                     <td class="pr-4">
                       <UBadge v-for="(d, solver) in r.drift ?? {}" :key="solver" :color="d.close ? 'success' : d.close === false ? 'warning' : 'neutral'" variant="outline" size="sm" class="mr-1">{{ solver }} {{ d.close ? 'same' : d.close === false ? 'drifted' : '?' }}</UBadge>
