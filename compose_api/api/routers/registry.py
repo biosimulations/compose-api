@@ -36,7 +36,6 @@ from compose_api.environments.service import VersionRequestError
 from compose_api.environments.versions import prebuilt_images, version_for
 from compose_api.registry.environments import (
     CatalogEntry,
-    EnvironmentSpec,
     EnvironmentSummary,
     InterfaceManifest,
     catalog_entries,
@@ -277,16 +276,9 @@ _ADMIN: dict[int | str, dict[str, Any]] = {
 }
 
 
-def _known_environment(name: str) -> EnvironmentSpec:
-    spec = environment_service.environment_spec(name)
-    if spec is None:
-        raise HTTPException(status_code=404, detail=f"no environment {name!r}")
-    return spec
-
-
-async def _readable_kind(name: str) -> str:
-    """The kind of an environment whose versions may be read: one environments.yaml declares, or a mash-up the
-    database holds (D7.9). 404 otherwise."""
+async def _known_kind(name: str) -> str:
+    """The kind of an environment whose versions may be read or administered: one environments.yaml declares, or a
+    mash-up the database holds (D7.9). 404 otherwise."""
     spec = environment_service.environment_spec(name)
     if spec is not None:
         return spec.kind
@@ -314,7 +306,7 @@ async def _version(name: str, number: int) -> EnvironmentVersionDetail:
 )
 async def list_environment_versions(name: str, principal: OptionalPrincipal) -> EnvironmentVersions:
     # public: the same for every caller
-    kind = await _readable_kind(name)
+    kind = await _known_kind(name)
     return await get_required_database_service().get_environments_db().describe(name, kind)
 
 
@@ -339,7 +331,7 @@ async def get_environment_version(
     ] = None,
 ) -> EnvironmentVersionDetail:
     # public: the same for every caller
-    await _readable_kind(name)
+    await _known_kind(name)
     version = await _read_back(name, await _version(name, number))
     if against is None:
         return version
@@ -381,7 +373,7 @@ async def export_environment_version(
     ] = None,
 ) -> EnvironmentExport:
     # public: the same for every caller
-    await _readable_kind(name)
+    await _known_kind(name)
     version = await _version(name, number)
     exports = await get_required_database_service().get_environments_db().get_exports(version.database_id)
     try:
@@ -400,7 +392,7 @@ async def export_environment_version(
 )
 async def get_environment_version_compliance(name: str, number: int, principal: OptionalPrincipal) -> ComplianceReport:
     # public: the same for every caller; finished runs are evaluated as this is read
-    await _readable_kind(name)
+    await _known_kind(name)
     database_service = get_required_database_service()
     version = await _version(name, number)
     await compliance_runs.refresh(database_service, version)
@@ -419,7 +411,7 @@ async def get_environment_version_compliance(name: str, number: int, principal: 
 async def run_environment_version_compliance(
     name: str, number: int, background_tasks: BackgroundTasks, caller: EnvironmentAdmin
 ) -> ComplianceReport:
-    _known_environment(name)
+    await _known_kind(name)
     version = await _version(name, number)
     if version.state != VersionState.READY or version.runtime_contract != pixi.RUNTIME_CONTRACT:
         raise HTTPException(status_code=409, detail=f"{version.label} is not a ready composed version")
@@ -502,7 +494,7 @@ async def inspect_environment_version(
 ) -> EnvironmentVersion:
     """Started in the background; `GET …/versions/{number}` shows the result. A prebuilt image is pulled and run; a
     shared one, already built, is read again as its build reads a new one (for images built before builds did)."""
-    await _readable_kind(name)  # a mash-up's versions are read back like any composed one's
+    await _known_kind(name)  # a mash-up's versions are read back like any composed one's
     version = await _version(name, number)
     if version.image is None and version.state != VersionState.READY:
         raise HTTPException(status_code=409, detail=f"{version.label} is {version.state}: its build reads it back")
@@ -523,7 +515,7 @@ async def inspect_environment_version(
     responses={**_NO_ENVIRONMENT, **_ADMIN, 409: {"description": "The version is not ready"}},
 )
 async def set_environment_default(name: str, request: DefaultVersion, caller: EnvironmentAdmin) -> EnvironmentVersion:
-    _known_environment(name)
+    await _known_kind(name)
     version = await _version(name, request.number)
     if version.state != VersionState.READY:
         raise HTTPException(status_code=409, detail=f"{version.label} is {version.state}, not ready")
@@ -541,7 +533,7 @@ async def set_environment_default(name: str, request: DefaultVersion, caller: En
     responses={**_NO_ENVIRONMENT, **_ADMIN, 409: {"description": "It is the default; make another the default first"}},
 )
 async def retire_environment_version(name: str, number: int, caller: EnvironmentAdmin) -> EnvironmentVersion:
-    _known_environment(name)
+    await _known_kind(name)
     version = await _version(name, number)
     environments_db = get_required_database_service().get_environments_db()
     default = await environments_db.get_default(name)

@@ -20,7 +20,7 @@
 | 6 | registry_env migrates to a composed version on a current process-bigraph | done: @5 (0.7.50) the default since 2026-10-26, suite run 5 without regressions |
 | 7a | Runs name an environment or have one inferred; environments listed from the database | merged (#415, #416) |
 | 7b | Implicit mash-ups, proven with viva-basic-processes | done: #417–#419 (0.7.51), #421 (0.7.52); live 2026-10-26 |
-| 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | amended 2026-10-27: the local test passes (D7c.1–D7c.3); parts 7c-1 to 7c-5 to build |
+| 7c | viva-pde-particle as a composed entry: the PDE + particle + ODE mash-up | done: #448–#450, #452 (0.7.63, 0.7.64); live 2026-10-27, run 8816 in `mash-05956395cf@2` |
 | 8a | Versions come from the database only: the deployed (pbest) definition, `simulator_registry.json`, `shared_image()` retired | merged (#424), 0.7.53 |
 | 8b | Prebuilt images by their versions, not `PREBUILT_SIMULATORS` | merged (#426), 0.7.54; the `api.env` line goes with 8c |
 | 8c | Interface manifests from each environment's default version, not committed files | merged (#428), 0.7.55 |
@@ -513,9 +513,30 @@
          - **The prebuilt image** (viva-pde-particle@1, `sha-8c16827`) still has `EnsembleRunner`, and a prebuilt
            run's classes are not looked up. After the release, `environments create viva-pde-particle --image
            …viva-pde-particle-compose@sha256:<sha-21dfe46's digest>` makes @2; it becomes the default, `environments
-           inspect` reads it back, and @1 is retired.
+           inspect` reads it back. *(Done 2026-10-27: @2 is `sha256:519e396c…`, the default, and its read-back
+           lists 16 classes and no `EnsembleRunner`. Jim chose to keep @1.)*
      - **7c-5. Live:** a release, then a document combining viva-pde-particle's processes with `CopasiUTCStep`,
        submitted signed in. It creates its mash-up, locks and builds it (expect a large image), and runs.
+       - *As built (2026-10-27):*
+         - **The document:** `FokkerPlanckEnsemble` (four seeded PDE + Smoldyn trials), `CopasiUTCStep` on
+           `phase_cycle.sbml`, and two `local:process_bigraph.emitter.RAMEmitter`s.
+         - **The first lock failed** on 0.7.63 with "Git executable not found": the lock Job runs in the pixi image,
+           which has no git, and viva-pde-particle and vcell-fenics install from git. #452 (0.7.64) runs the locks
+           with `pixi exec --spec git`. A run creates only a mash-up's first version, so `environments create
+           mash-05956395cf` made @2, which locked and built in about five minutes.
+         - **Run 8816** completed in `mash-05956395cf@2`. Compose-api's evaluator passed both halves: the four
+           ensemble values matched viva-pde-particle's case exactly, and the COPASI time course its reference.
+         - **Compliance** ran by itself once @2 was ready (runs 8817–8819): viva-pde-particle and pbsim-common
+           `tested`; the libraries `untested`, having no classes.
+         - **Re-reads:** registry_env@5 and `mash-0a364f43c1@1` now list the `process_bigraph.emitter` classes.
+         - **Two gaps, fixed after:**
+           - *An administrator could not set a mash-up's default or retire its versions.* `PUT …/default`,
+             `…/retire` and the compliance rerun looked the name up in `environments.yaml` only, so a mash-up was a
+             404. They now find it in the database, as the reading routes do. Until then runs still reached @2, as
+             the newest version.
+           - *The generic check refused `viva_pde_particle.steps.spatial_export.SpatialExport`:* its
+             `exported: list[map]` accumulated. vivarium-collective/viva-pde-particle#69 declares
+             `overwrite[list[map]]`. It reaches compose-api with the next bump of viva-pde-particle's commit.
 
 8. **Retire** what composition replaced (surveyed 2026-10-26, when registry_env@5, composed, became the default).
 

@@ -28,7 +28,7 @@ Several documents answer different questions. Start with the one that matches yo
 | SED-ML models (BioModels, biosimulations.org, uploads) run on several solvers and compared; catalog, environments and solvers defined | [plan-sedml.md](plan-sedml.md) | plan, implemented (curated routes and interpolation deferred) | 2026-10-13 |
 | environment builds as jobs of their own, image artifacts recorded, builds on Kubernetes, publishing | [plan-environment-builds.md](plan-environment-builds.md) | plan, phases 1–4 implemented; publishing deferred | 2026-10-13 |
 | environment versions as database records: locked with uv, created and chosen through the API, recorded on every run; the registry as the build trust gate | [plan-environment-versions.md](plan-environment-versions.md) | plan; steps 1–5a merged (0.7.41); rest superseded by composition | 2026-10-25 |
-| environments composed from curated manifest entries: pixi (uv export), compliance composites per entry, registry_env migrated off pbest, mash-ups on demand | [plan-environment-composition.md](plan-environment-composition.md) | active: 0–7b, 8a–8e done (0.7.57); 7c amended 2026-10-27, parts 7c-1 to 7c-5 | 2026-10-26 |
+| environments composed from curated manifest entries: pixi (uv export), compliance composites per entry, registry_env migrated off pbest, mash-ups on demand | [plan-environment-composition.md](plan-environment-composition.md) | done: 0–8e; 7c live 2026-10-27 (0.7.64) | 2026-10-27 |
 | each solver's known problems in a suite: excused per solver, flagged when fixed, curated by an admin in the webapp or CLI | [plan-known-problems.md](plan-known-problems.md) | done: 1, 2a, 3 (0.7.49), 2b (0.7.62) |  2026-10-26 |
 | viewers for datasets, registered per type and loaded lazily; the results bundle in 3D | [plan-viewers.md](plan-viewers.md) | plan, implemented (A1–A3 later) | 2026-10-13 |
 | signing in to the web UI: a PKCE single-page app (no backend-for-frontend), the Auth0 SPA application, hardening | [plan-webapp-login.md](plan-webapp-login.md) | done: live, CSP enforced, documented | 2026-10-27 |
@@ -43,9 +43,9 @@ Several documents answer different questions. Start with the one that matches yo
 We work one plan at a time: the active plan runs to its end, and anything found outside it is recorded here and
 raised, not fixed on the spot.
 
-**Active: [plan-environment-composition](plan-environment-composition.md) 7c** (amended 2026-10-27: viva-pde-particle
-composed, for the PDE + particle + ODE mash-up), parts 7c-1 to 7c-5. Done before it: plan-webapp-admin (0.7.61; Jim's
-signed-in check in production left) and plan-known-problems 2b (0.7.62). Then [plan-verify-oracle](plan-verify-oracle.md) V5.
+**Done: [plan-environment-composition](plan-environment-composition.md)**, its last step 7c (viva-pde-particle
+composed, the PDE + particle + ODE mash-up) live 2026-10-27 in 0.7.64. Done before it: plan-webapp-admin (0.7.61; Jim's
+signed-in check in production left) and plan-known-problems 2b (0.7.62). Next: [plan-verify-oracle](plan-verify-oracle.md) V5.
 
 **Parked**, with where each stopped:
 
@@ -57,6 +57,7 @@ signed-in check in production left) and plan-known-problems 2b (0.7.62). Then [p
 | [plan-environment-builds](plan-environment-builds.md) | phases 1–4 | publishing |
 | Named composed environments | | Only registry_env can be a named composed environment: `versions.py`, `resolver.py` and `lifecycle.py` each take "the" `shared` environment (the default for runs that name none, the resolver's first choice, a mash-up's Python), and the kinds are `shared`, `prebuilt` and `mash-up`. A curated repo (a viva-* entry) runs in registry_env, in a mash-up, or as a prebuilt image. A short plan: a `composed` kind requiring `entries`, `shared` kept as the default, and the resolver ranking named composed environments ahead of mash-ups; composition 7c would use it. Found 2026-10-27 |
 | Emitters in submitted documents | | Folded into composition 7c-1 (2026-10-27): process-bigraph's `process_bigraph.emitter` becomes an admitted entry, and documents name `local:process_bigraph.emitter.RAMEmitter` |
+| viva-pde-particle's next commit | | viva-pde-particle#69 makes `SpatialExport`'s output replace (composition 7c-5). Taking it means a manifest bump of its `commit`, a new prebuilt image registered as viva-pde-particle@3, and `environments create mash-05956395cf` for @3 |
 | Test isolation | | `tests/environments/test_contents.py::test_the_reread_job_scripts_leave_what_they_read_beside_the_image` fails when run after `tests/registry tests/api tests/environments` (a settings layer left active: `simulation_store_base_path`); passes alone and in CI's order |
 | Test isolation, staging | | two `tests/simulation/test_staging.py` permission tests fail in the full local order and pass alone (found 2026-10-26) |
 | Open PRs | | #345 (vivarium-workbench plan), dependency bumps |
