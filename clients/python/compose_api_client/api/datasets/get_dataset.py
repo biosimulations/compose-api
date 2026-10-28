@@ -1,5 +1,5 @@
 from http import HTTPStatus
-from typing import Any, cast
+from typing import Any
 from urllib.parse import quote
 from uuid import UUID
 
@@ -8,6 +8,7 @@ import httpx
 from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.dataset import Dataset
+from ...models.error_detail import ErrorDetail
 from ...models.http_validation_error import HTTPValidationError
 from ...types import Response
 
@@ -28,14 +29,15 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Any | Dataset | HTTPValidationError | None:
+) -> Dataset | ErrorDetail | HTTPValidationError | None:
     if response.status_code == 200:
         response_200 = Dataset.from_dict(response.json())
 
         return response_200
 
     if response.status_code == 404:
-        response_404 = cast(Any, None)
+        response_404 = ErrorDetail.from_dict(response.json())
+
         return response_404
 
     if response.status_code == 422:
@@ -51,7 +53,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[Any | Dataset | HTTPValidationError]:
+) -> Response[Dataset | ErrorDetail | HTTPValidationError]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -64,7 +66,7 @@ def sync_detailed(
     dataset_id: UUID,
     *,
     client: AuthenticatedClient | Client,
-) -> Response[Any | Dataset | HTTPValidationError]:
+) -> Response[Dataset | ErrorDetail | HTTPValidationError]:
     """Describe one dataset
 
     Args:
@@ -75,7 +77,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | Dataset | HTTPValidationError]
+        Response[Dataset | ErrorDetail | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
@@ -93,7 +95,7 @@ def sync(
     dataset_id: UUID,
     *,
     client: AuthenticatedClient | Client,
-) -> Any | Dataset | HTTPValidationError | None:
+) -> Dataset | ErrorDetail | HTTPValidationError | None:
     """Describe one dataset
 
     Args:
@@ -104,7 +106,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | Dataset | HTTPValidationError
+        Dataset | ErrorDetail | HTTPValidationError
     """
 
     return sync_detailed(
@@ -117,7 +119,7 @@ async def asyncio_detailed(
     dataset_id: UUID,
     *,
     client: AuthenticatedClient | Client,
-) -> Response[Any | Dataset | HTTPValidationError]:
+) -> Response[Dataset | ErrorDetail | HTTPValidationError]:
     """Describe one dataset
 
     Args:
@@ -128,7 +130,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | Dataset | HTTPValidationError]
+        Response[Dataset | ErrorDetail | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
@@ -144,7 +146,7 @@ async def asyncio(
     dataset_id: UUID,
     *,
     client: AuthenticatedClient | Client,
-) -> Any | Dataset | HTTPValidationError | None:
+) -> Dataset | ErrorDetail | HTTPValidationError | None:
     """Describe one dataset
 
     Args:
@@ -155,7 +157,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | Dataset | HTTPValidationError
+        Dataset | ErrorDetail | HTTPValidationError
     """
 
     return (

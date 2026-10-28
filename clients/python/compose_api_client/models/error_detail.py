@@ -11,12 +11,10 @@ T = TypeVar("T", bound="ErrorDetail")
 
 @_attrs_define
 class ErrorDetail:
-    """An error's body, as FastAPI's ``HTTPException`` writes it. A route declares it for its error responses so the
-    generated client parses them into this rather than typing them ``Any``, which would make the whole return type
-    ``Any`` to a type checker.
+    """An error, as ``HTTPException(status_code, detail="...")`` writes it.
 
-        Attributes:
-            detail (str):
+    Attributes:
+        detail (str):
     """
 
     detail: str

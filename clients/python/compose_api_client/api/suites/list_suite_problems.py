@@ -1,11 +1,12 @@
 from http import HTTPStatus
-from typing import Any, cast
+from typing import Any
 from urllib.parse import quote
 
 import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...models.error_detail import ErrorDetail
 from ...models.http_validation_error import HTTPValidationError
 from ...models.known_problem import KnownProblem
 from ...types import UNSET, Response, Unset
@@ -41,7 +42,7 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Any | HTTPValidationError | list[KnownProblem] | None:
+) -> ErrorDetail | HTTPValidationError | list[KnownProblem] | None:
     if response.status_code == 200:
         response_200 = []
         _response_200 = response.json()
@@ -53,7 +54,8 @@ def _parse_response(
         return response_200
 
     if response.status_code == 404:
-        response_404 = cast(Any, None)
+        response_404 = ErrorDetail.from_dict(response.json())
+
         return response_404
 
     if response.status_code == 422:
@@ -69,7 +71,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[Any | HTTPValidationError | list[KnownProblem]]:
+) -> Response[ErrorDetail | HTTPValidationError | list[KnownProblem]]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -83,7 +85,7 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     cleared: bool | None | Unset = UNSET,
-) -> Response[Any | HTTPValidationError | list[KnownProblem]]:
+) -> Response[ErrorDetail | HTTPValidationError | list[KnownProblem]]:
     """A suite's known problems: each solver's expected failures, open and cleared
 
     Args:
@@ -95,7 +97,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | HTTPValidationError | list[KnownProblem]]
+        Response[ErrorDetail | HTTPValidationError | list[KnownProblem]]
     """
 
     kwargs = _get_kwargs(
@@ -115,7 +117,7 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     cleared: bool | None | Unset = UNSET,
-) -> Any | HTTPValidationError | list[KnownProblem] | None:
+) -> ErrorDetail | HTTPValidationError | list[KnownProblem] | None:
     """A suite's known problems: each solver's expected failures, open and cleared
 
     Args:
@@ -127,7 +129,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | HTTPValidationError | list[KnownProblem]
+        ErrorDetail | HTTPValidationError | list[KnownProblem]
     """
 
     return sync_detailed(
@@ -142,7 +144,7 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     cleared: bool | None | Unset = UNSET,
-) -> Response[Any | HTTPValidationError | list[KnownProblem]]:
+) -> Response[ErrorDetail | HTTPValidationError | list[KnownProblem]]:
     """A suite's known problems: each solver's expected failures, open and cleared
 
     Args:
@@ -154,7 +156,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | HTTPValidationError | list[KnownProblem]]
+        Response[ErrorDetail | HTTPValidationError | list[KnownProblem]]
     """
 
     kwargs = _get_kwargs(
@@ -172,7 +174,7 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     cleared: bool | None | Unset = UNSET,
-) -> Any | HTTPValidationError | list[KnownProblem] | None:
+) -> ErrorDetail | HTTPValidationError | list[KnownProblem] | None:
     """A suite's known problems: each solver's expected failures, open and cleared
 
     Args:
@@ -184,7 +186,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | HTTPValidationError | list[KnownProblem]
+        ErrorDetail | HTTPValidationError | list[KnownProblem]
     """
 
     return (

@@ -1,14 +1,13 @@
 from http import HTTPStatus
-from typing import Any, cast
+from typing import Any
 
 import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
-from ...models.get_simulation_trace_chrome_response_get_simulation_trace_chrome import (
-    GetSimulationTraceChromeResponseGetSimulationTraceChrome,
-)
+from ...models.error_detail import ErrorDetail
 from ...models.http_validation_error import HTTPValidationError
+from ...models.trace_document import TraceDocument
 from ...types import UNSET, Response
 
 
@@ -34,14 +33,15 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Any | GetSimulationTraceChromeResponseGetSimulationTraceChrome | HTTPValidationError | None:
+) -> ErrorDetail | HTTPValidationError | TraceDocument | None:
     if response.status_code == 200:
-        response_200 = GetSimulationTraceChromeResponseGetSimulationTraceChrome.from_dict(response.json())
+        response_200 = TraceDocument.from_dict(response.json())
 
         return response_200
 
     if response.status_code == 404:
-        response_404 = cast(Any, None)
+        response_404 = ErrorDetail.from_dict(response.json())
+
         return response_404
 
     if response.status_code == 422:
@@ -57,7 +57,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[Any | GetSimulationTraceChromeResponseGetSimulationTraceChrome | HTTPValidationError]:
+) -> Response[ErrorDetail | HTTPValidationError | TraceDocument]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -70,7 +70,7 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     simulation_id: int,
-) -> Response[Any | GetSimulationTraceChromeResponseGetSimulationTraceChrome | HTTPValidationError]:
+) -> Response[ErrorDetail | HTTPValidationError | TraceDocument]:
     """Get a simulation's trace as a Chrome Trace Event document (open it in ui.perfetto.dev)
 
     Args:
@@ -81,7 +81,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | GetSimulationTraceChromeResponseGetSimulationTraceChrome | HTTPValidationError]
+        Response[ErrorDetail | HTTPValidationError | TraceDocument]
     """
 
     kwargs = _get_kwargs(
@@ -99,7 +99,7 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     simulation_id: int,
-) -> Any | GetSimulationTraceChromeResponseGetSimulationTraceChrome | HTTPValidationError | None:
+) -> ErrorDetail | HTTPValidationError | TraceDocument | None:
     """Get a simulation's trace as a Chrome Trace Event document (open it in ui.perfetto.dev)
 
     Args:
@@ -110,7 +110,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | GetSimulationTraceChromeResponseGetSimulationTraceChrome | HTTPValidationError
+        ErrorDetail | HTTPValidationError | TraceDocument
     """
 
     return sync_detailed(
@@ -123,7 +123,7 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     simulation_id: int,
-) -> Response[Any | GetSimulationTraceChromeResponseGetSimulationTraceChrome | HTTPValidationError]:
+) -> Response[ErrorDetail | HTTPValidationError | TraceDocument]:
     """Get a simulation's trace as a Chrome Trace Event document (open it in ui.perfetto.dev)
 
     Args:
@@ -134,7 +134,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | GetSimulationTraceChromeResponseGetSimulationTraceChrome | HTTPValidationError]
+        Response[ErrorDetail | HTTPValidationError | TraceDocument]
     """
 
     kwargs = _get_kwargs(
@@ -150,7 +150,7 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     simulation_id: int,
-) -> Any | GetSimulationTraceChromeResponseGetSimulationTraceChrome | HTTPValidationError | None:
+) -> ErrorDetail | HTTPValidationError | TraceDocument | None:
     """Get a simulation's trace as a Chrome Trace Event document (open it in ui.perfetto.dev)
 
     Args:
@@ -161,7 +161,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | GetSimulationTraceChromeResponseGetSimulationTraceChrome | HTTPValidationError
+        ErrorDetail | HTTPValidationError | TraceDocument
     """
 
     return (

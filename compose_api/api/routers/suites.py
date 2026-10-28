@@ -7,6 +7,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from compose_api.api.errors import error
 from compose_api.authentication import OptionalPrincipal, describe_caller, get_optional_principal
 from compose_api.authorization import SuiteCurator
 from compose_api.common.gateway.models import RouterConfig
@@ -42,7 +43,7 @@ async def list_suites(principal: OptionalPrincipal) -> list[Suite]:
 
 @config.router.get(
     "/{name}/runs", response_model=list[SuiteRunInfo], operation_id="list-suite-runs", tags=["Suites"],
-    summary="A suite's runs, newest first", responses={404: {"description": "No such suite"}},
+    summary="A suite's runs, newest first", responses={404: error("No such suite")},
 )  # fmt: skip
 async def list_suite_runs(name: str, principal: OptionalPrincipal) -> list[SuiteRunInfo]:
     return await suite_runs.runs(_suite(name))
@@ -51,7 +52,7 @@ async def list_suite_runs(name: str, principal: OptionalPrincipal) -> list[Suite
 @config.router.get(
     "/{name}/runs/{number}", response_model=SuiteRunView, operation_id="get-suite-run", tags=["Suites"],
     summary="One suite run: per source, agreement, references, and drift from the baseline run",
-    responses={404: {"description": "No such suite or run"}},
+    responses={404: error("No such suite or run")},
 )  # fmt: skip
 async def get_suite_run(name: str, number: int, principal: OptionalPrincipal) -> SuiteRunView:
     found = await suite_runs.view(_suite(name), number)
@@ -64,9 +65,9 @@ async def get_suite_run(name: str, number: int, principal: OptionalPrincipal) ->
     "/{name}/run", response_model=SuiteRunInfo, operation_id="run-suite", tags=["Suites"],
     summary="Run every source of the suite on its solvers, in the environment versions named (in the background)",
     responses={
-        400: {"description": "A version not named, malformed, or that runs cannot use"},
-        404: {"description": "No such suite"},
-        409: {"description": "A run of the suite is still submitting or running"},
+        400: error("A version not named, malformed, or that runs cannot use"),
+        404: error("No such suite"),
+        409: error("A run of the suite is still submitting or running"),
     },
 )  # fmt: skip
 async def run_suite(
@@ -106,7 +107,7 @@ async def run_suite(
     "/{name}/runs/{number}/verify", response_model=SuiteVerifyResult, operation_id="verify-suite-run",
     tags=["Suites"],
     summary="Queue a verification against biosim's /verify for a suite run's finished comparisons",
-    responses={404: {"description": "No such suite or run"}},
+    responses={404: error("No such suite or run")},
 )  # fmt: skip
 async def verify_suite_run(
     name: str,
@@ -128,9 +129,9 @@ async def verify_suite_run(
 # --- known problems (docs/plan-known-problems.md) ---------------------------------------------------------------------
 
 _CURATOR_RESPONSES: dict[int | str, dict[str, Any]] = {
-    401: {"description": "Anonymous"},
-    403: {"description": "Not a suite curator, or suite curation is not configured"},
-    404: {"description": "No such suite, problem or run"},
+    401: error("Anonymous"),
+    403: error("Not a suite curator, or suite curation is not configured"),
+    404: error("No such suite, problem or run"),
 }
 
 
@@ -141,7 +142,7 @@ async def _run_numbers(name: str) -> set[int]:
 @config.router.get(
     "/{name}/problems", response_model=list[KnownProblem], operation_id="list-suite-problems", tags=["Suites"],
     summary="A suite's known problems: each solver's expected failures, open and cleared",
-    responses={404: {"description": "No such suite"}},
+    responses={404: error("No such suite")},
 )  # fmt: skip
 async def list_suite_problems(
     name: str,
@@ -158,8 +159,8 @@ async def list_suite_problems(
     tags=["Suites"], summary="Record a known problem of a solver on one of the suite's sources",
     responses={
         **_CURATOR_RESPONSES,
-        400: {"description": "A source or solver the suite does not have"},
-        409: {"description": "A problem is already open for that source and solver"},
+        400: error("A source or solver the suite does not have"),
+        409: error("A problem is already open for that source and solver"),
     },
 )  # fmt: skip
 async def mark_suite_problem(name: str, mark: KnownProblemMark, curator: SuiteCurator) -> KnownProblem:
@@ -200,7 +201,7 @@ async def edit_suite_problem(name: str, problem_id: int, edit: KnownProblemEdit,
     "/{name}/problems/{problem_id}/clear", response_model=KnownProblem, operation_id="clear-suite-problem",
     tags=["Suites"],
     summary="Clear a known problem at the suite run that shows it fixed; earlier runs still excuse it",
-    responses={**_CURATOR_RESPONSES, 409: {"description": "Already cleared"}},
+    responses={**_CURATOR_RESPONSES, 409: error("Already cleared")},
 )  # fmt: skip
 async def clear_suite_problem(
     name: str, problem_id: int, clear: KnownProblemClear, curator: SuiteCurator

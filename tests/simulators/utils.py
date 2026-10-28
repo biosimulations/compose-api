@@ -9,8 +9,8 @@ import numpy
 from compose_api_client import Client
 from compose_api_client.api.results import get_simulation_results_file
 from compose_api_client.ext import AsyncComposeSession
-from compose_api_client.models import HTTPValidationError, SimulationExperiment
-from compose_api_client.types import Response
+from compose_api_client.models import ErrorDetail, HTTPValidationError, SimulationExperiment
+from compose_api_client.types import File, Response
 
 from compose_api.common.gateway.models import Namespace
 from compose_api.config import get_settings
@@ -21,7 +21,7 @@ from compose_api.simulation.hpc_utils import get_internal_experiment_dir
 
 async def check_experiment_run(
     sim_experiment: Any, in_memory_api_client: Client, seconds_to_wait: int = 120
-) -> Response[HTTPValidationError]:
+) -> Response[ErrorDetail | File | HTTPValidationError]:
     """Wait for the simulation through the client's application layer (``ext``), assert it completed, and return
     its results response."""
     assert isinstance(sim_experiment, SimulationExperiment)
@@ -29,7 +29,7 @@ async def check_experiment_run(
     state = await session.wait(sim_experiment.simulation_database_id, poll=2, timeout=seconds_to_wait)
     assert state.ok, f"simulation {sim_experiment.simulation_database_id} ended {state.status}"
 
-    results: Response[HTTPValidationError] = await get_simulation_results_file.asyncio_detailed(
+    results: Response[ErrorDetail | File | HTTPValidationError] = await get_simulation_results_file.asyncio_detailed(
         client=in_memory_api_client, simulation_id=sim_experiment.simulation_database_id
     )
     assert results.status_code == 200

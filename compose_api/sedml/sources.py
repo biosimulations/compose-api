@@ -13,11 +13,11 @@ import io
 import re
 import time
 import zipfile
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from compose_api.config import get_settings
 
@@ -26,7 +26,6 @@ BIOSIMULATIONS = "https://api.biosimulations.org"
 _BIOMODEL_ID = re.compile(r"^(BIOMD|MODEL)\d{10}$")
 _PROJECT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$")
 _TTL = 3600.0
-_memo: dict[str, tuple[float, Any]] = {}
 
 Series = list[float]
 
@@ -78,8 +77,10 @@ def check_project_id(project_id: str) -> str:
     return project_id
 
 
-async def _get(url: str, *, json: bool = True, params: dict[str, Any] | None = None) -> Any:
-    headers = {"Accept": "application/json"} if json else {}
+async def _get_bytes(url: str, *, params: dict[str, str | int] | None = None, accept_json: bool = False) -> bytes:
+    """The body of a successful GET; 404 is :class:`SourceNotFoundError`, any other failure
+    :class:`SourceUnavailableError`."""
+    headers = {"Accept": "application/json"} if accept_json else {}
     try:
         async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
             response = await client.get(url, params=params, headers=headers)
@@ -89,17 +90,103 @@ async def _get(url: str, *, json: bool = True, params: dict[str, Any] | None = N
         raise SourceNotFoundError(url)
     if response.status_code != 200:
         raise SourceUnavailableError(f"{url}: HTTP {response.status_code}")
-    return response.json() if json else response.content
+    return response.content
 
 
-async def _memoized(key: str, fetch: Any) -> Any:
-    now = time.monotonic()
-    hit = _memo.get(key)
-    if hit is not None and now - hit[0] < _TTL:
-        return hit[1]
-    value = await fetch()
-    _memo[key] = (now, value)
-    return value
+async def _get_json[M: BaseModel](url: str, model: type[M], *, params: dict[str, str | int] | None = None) -> M:
+    """A JSON answer read as ``model``: an answer of another shape is :class:`SourceUnavailableError`."""
+    content = await _get_bytes(url, params=params, accept_json=True)
+    try:
+        return model.model_validate_json(content)
+    except ValidationError as e:
+        raise SourceUnavailableError(f"{url}: not the answer expected ({e.error_count()} problems)") from e
+
+
+class _Memo[T]:
+    """Answers kept for a while (``_TTL``), by key."""
+
+    def __init__(self) -> None:
+        self._kept: dict[str, tuple[float, T]] = {}
+
+    async def get(self, key: str, fetch: Callable[[], Awaitable[T]]) -> T:
+        now = time.monotonic()
+        hit = self._kept.get(key)
+        if hit is not None and now - hit[0] < _TTL:
+            return hit[1]
+        value = await fetch()
+        self._kept[key] = (now, value)
+        return value
+
+    def clear(self) -> None:
+        self._kept.clear()
+
+
+# --- upstream answers: what this module reads of them (anything else is ignored) ------------------------------------
+
+
+class _Upstream(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+
+class _BiomodelsSearchHit(_Upstream):
+    id: str
+    name: str | None = None
+    format: str | None = None
+    url: str | None = None
+
+
+class _BiomodelsSearch(_Upstream):
+    models: list[_BiomodelsSearchHit] = []
+
+
+class _Named(_Upstream):
+    name: str | None = None
+
+
+class _Revision(_Upstream):
+    version: int | None = None
+
+
+class _History(_Upstream):
+    revisions: list[_Revision] = []
+
+
+class _Publication(_Upstream):
+    title: str | None = None
+
+
+class _BiomodelsEntry(_Upstream):
+    name: str | None = None
+    format: _Named | None = None
+    curationStatus: str | None = None
+    history: _History | None = None
+    publication: _Publication | None = None
+
+
+class _Project(_Upstream):
+    id: str
+    simulationRun: str
+    created: str | None = None
+    updated: str | None = None
+
+
+class _Projects(_Upstream):
+    projects: list[_Project]
+
+
+class _Run(_Upstream):
+    simulator: str | None = None
+    simulatorVersion: str | None = None
+
+
+_biomodels: _Memo[BiomodelInfo] = _Memo()
+_projects_memo: _Memo[list[_Project]] = _Memo()
+
+
+def forget_cached() -> None:
+    """Drop the answers kept in memory (for tests)."""
+    _biomodels.clear()
+    _projects_memo.clear()
 
 
 def _cache(*parts: str) -> Path:
@@ -113,31 +200,29 @@ def _cache(*parts: str) -> Path:
 
 async def search_biomodels(query: str, limit: int = 20, curated: bool = True) -> list[BiomodelHit]:
     text = f'{query} AND curationstatus:"Manually curated"' if curated else query
-    data = await _get(f"{BIOMODELS}/search", params={"query": text, "numResults": limit, "format": "json"})
-    return [
-        BiomodelHit(id=m["id"], name=m.get("name") or m["id"], format=m.get("format"), url=m.get("url"))
-        for m in data.get("models", [])
-    ]
+    data = await _get_json(
+        f"{BIOMODELS}/search", _BiomodelsSearch, params={"query": text, "numResults": limit, "format": "json"}
+    )
+    return [BiomodelHit(id=m.id, name=m.name or m.id, format=m.format, url=m.url) for m in data.models]
 
 
 async def biomodel(model_id: str) -> BiomodelInfo:
     check_biomodel_id(model_id)
 
     async def fetch() -> BiomodelInfo:
-        data = await _get(f"{BIOMODELS}/{model_id}", params={"format": "json"})
-        revisions = (data.get("history") or {}).get("revisions") or []
+        data = await _get_json(f"{BIOMODELS}/{model_id}", _BiomodelsEntry, params={"format": "json"})
+        revisions = data.history.revisions if data.history else []
         return BiomodelInfo(
             id=model_id,
-            name=data.get("name") or model_id,
-            format=(data.get("format") or {}).get("name"),
-            curation=data.get("curationStatus"),
-            revision=revisions[-1].get("version") if revisions else None,
-            publication=(data.get("publication") or {}).get("title"),
+            name=data.name or model_id,
+            format=data.format.name if data.format else None,
+            curation=data.curationStatus,
+            revision=revisions[-1].version if revisions else None,
+            publication=data.publication.title if data.publication else None,
             url=f"https://www.ebi.ac.uk/biomodels/{model_id}",
         )
 
-    info: BiomodelInfo = await _memoized(f"biomodels:{model_id}", fetch)
-    return info
+    return await _biomodels.get(model_id, fetch)
 
 
 async def biomodel_archive(model_id: str) -> Path:
@@ -145,7 +230,7 @@ async def biomodel_archive(model_id: str) -> Path:
     info = await biomodel(model_id)
     path = _cache("biomodels", f"{model_id}.{info.revision or 0}.omex")
     if not path.exists():
-        content = await _get(f"{BIOMODELS}/model/download/{model_id}", json=False)
+        content = await _get_bytes(f"{BIOMODELS}/model/download/{model_id}")
         _check_zip(content, model_id)
         path.write_bytes(content)
     return path
@@ -154,28 +239,30 @@ async def biomodel_archive(model_id: str) -> Path:
 # --- biosimulations.org -------------------------------------------------------------------------------------------
 
 
-async def _projects() -> list[dict[str, Any]]:
-    async def fetch() -> list[dict[str, Any]]:
-        data: list[dict[str, Any]] = await _get(f"{BIOSIMULATIONS}/projects")
-        return data
+async def _projects() -> list[_Project]:
+    async def fetch() -> list[_Project]:
+        # the API answers a JSON list; read as one model's field so a malformed answer is refused like the others
+        content = await _get_bytes(f"{BIOSIMULATIONS}/projects", accept_json=True)
+        try:
+            return _Projects.model_validate_json(b'{"projects": ' + content + b"}").projects
+        except ValidationError as e:
+            raise SourceUnavailableError(f"{BIOSIMULATIONS}/projects: not the answer expected") from e
 
-    projects: list[dict[str, Any]] = await _memoized("biosimulations:projects", fetch)
-    return projects
+    return await _projects_memo.get("all", fetch)
 
 
 async def search_projects(query: str, limit: int = 20) -> list[ProjectInfo]:
     q = query.lower()
-    found = [p for p in await _projects() if q in p["id"].lower()][:limit]
+    found = [p for p in await _projects() if q in p.id.lower()][:limit]
     return [_project(p) for p in found]
 
 
 async def project(project_id: str) -> ProjectInfo:
     check_project_id(project_id)
-    data = await _get(f"{BIOSIMULATIONS}/projects/{project_id}")
-    info = _project(data)
+    info = _project(await _get_json(f"{BIOSIMULATIONS}/projects/{project_id}", _Project))
     try:
-        run = await _get(f"{BIOSIMULATIONS}/runs/{info.run}")
-        info.simulator, info.simulator_version = run.get("simulator"), run.get("simulatorVersion")
+        run = await _get_json(f"{BIOSIMULATIONS}/runs/{info.run}", _Run)
+        info.simulator, info.simulator_version = run.simulator, run.simulatorVersion
     except (SourceNotFoundError, SourceUnavailableError):
         pass
     return info
@@ -186,7 +273,7 @@ async def legacy_projects(model_id: str) -> list[ProjectInfo]:
     (275 of the first 300 curated entries have one; docs/plan-verify-oracle.md, V1)."""
     check_biomodel_id(model_id)
     prefix = f"{model_id}_"
-    return [_project(p) for p in await _projects() if str(p.get("id", "")).startswith(prefix)]
+    return [_project(p) for p in await _projects() if p.id.startswith(prefix)]
 
 
 async def biomodel_references(model_id: str) -> dict[str, dict[str, dict[str, Series]]]:
@@ -216,7 +303,7 @@ async def project_archive(project_id: str) -> Path:
     stamp = re.sub(r"\W", "", info.updated or "0")
     path = _cache("biosimulations", f"{project_id}.{stamp}.omex")
     if not path.exists():
-        content = await _get(f"{BIOSIMULATIONS}/runs/{info.run}/download", json=False)
+        content = await _get_bytes(f"{BIOSIMULATIONS}/runs/{info.run}/download")
         _check_zip(content, project_id)
         path.write_bytes(content)
     return path
@@ -228,7 +315,7 @@ async def project_reference(project_id: str) -> dict[str, dict[str, Series]]:
     stamp = re.sub(r"\W", "", info.updated or "0")
     path = _cache("biosimulations", f"{project_id}.{stamp}.results.zip")
     if not path.exists():
-        path.write_bytes(await _get(f"{BIOSIMULATIONS}/results/{info.run}/download", json=False))
+        path.write_bytes(await _get_bytes(f"{BIOSIMULATIONS}/results/{info.run}/download"))
     with zipfile.ZipFile(path) as z:
         name = next((n for n in z.namelist() if n.endswith("reports.h5")), None)
         if name is None:
@@ -243,7 +330,7 @@ def reports_from_h5(content: bytes) -> dict[str, dict[str, Series]]:
     out: dict[str, dict[str, Series]] = {}
     with h5py.File(io.BytesIO(content), "r") as f:
 
-        def visit(name: str, obj: Any) -> None:
+        def visit(name: str, obj: object) -> None:
             if not isinstance(obj, h5py.Dataset) or obj.attrs.get("_type") not in ("SedReport", "SedRe"):
                 return
             labels = [str(x) for x in obj.attrs.get("sedmlDataSetLabels", [])]
@@ -254,13 +341,13 @@ def reports_from_h5(content: bytes) -> dict[str, dict[str, Series]]:
     return out
 
 
-def _project(data: dict[str, Any]) -> ProjectInfo:
+def _project(data: _Project) -> ProjectInfo:
     return ProjectInfo(
-        id=data["id"],
-        run=data["simulationRun"],
-        created=data.get("created"),
-        updated=data.get("updated"),
-        url=f"https://biosimulations.org/projects/{data['id']}",
+        id=data.id,
+        run=data.simulationRun,
+        created=data.created,
+        updated=data.updated,
+        url=f"https://biosimulations.org/projects/{data.id}",
     )
 
 

@@ -10,6 +10,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from compose_api.api.errors import error
 from compose_api.authentication import get_optional_principal
 from compose_api.authorization import Caller, OptionalCaller, can_cancel, can_read, readable_clause
 from compose_api.common.gateway.models import RouterConfig
@@ -22,7 +23,6 @@ from compose_api.simulation import handlers
 from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.labels import LABEL_KEYS, LabelError, parse_label_filters
 from compose_api.simulation.models import (
-    ErrorDetail,
     SimulationCancellation,
     SimulationDetail,
     SimulationPage,
@@ -157,7 +157,7 @@ def _container_hash(simulator: str, images: Mapping[str, str]) -> str:
     path="",
     response_model=SimulationPage,
     operation_id="list-simulations",
-    responses={401: {"model": ErrorDetail, "description": "`mine` without a signed-in caller"}},
+    responses={401: error("`mine` without a signed-in caller")},
     tags=["Simulations"],
     summary="List simulations, newest first, each with its latest SLURM job",
 )
@@ -236,7 +236,7 @@ async def list_simulations(
     path="/{simulation_id}",
     response_model=SimulationDetail,
     operation_id="get-simulation",
-    responses={404: {"description": "The simulation does not exist, or the caller may not read it"}},
+    responses={404: error("The simulation does not exist, or the caller may not read it")},
     tags=["Simulations"],
     summary="Describe one simulation: its latest SLURM job, and how many events and datasets its run recorded",
 )
@@ -259,14 +259,11 @@ async def get_simulation(simulation_id: int, caller: OptionalCaller) -> Simulati
     status_code=202,
     operation_id="cancel-simulation",
     responses={
-        401: {"model": ErrorDetail, "description": "Cancelling needs a signed-in caller"},
-        403: {
-            "model": ErrorDetail,
-            "description": "The simulation has an owner, and the caller is neither it nor an admin",
-        },
-        404: {"model": ErrorDetail, "description": "The simulation does not exist, or the caller may not read it"},
-        409: {"model": ErrorDetail, "description": "The run has finished, or is being submitted to SLURM right now"},
-        502: {"model": ErrorDetail, "description": "SLURM could not be asked to cancel the job; try again"},
+        401: error("Cancelling needs a signed-in caller"),
+        403: error("The simulation has an owner, and the caller is neither it nor an admin"),
+        404: error("The simulation does not exist, or the caller may not read it"),
+        409: error("The run has finished, or is being submitted to SLURM right now"),
+        502: error("SLURM could not be asked to cancel the job; try again"),
     },
     tags=["Simulations"],
     summary="Cancel a run: withdraw it from the queue, or ask SLURM to cancel its job",

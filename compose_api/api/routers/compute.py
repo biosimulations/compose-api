@@ -59,10 +59,8 @@ async def get_simulator_list(principal: OptionalPrincipal) -> RegisteredSimulato
     summary="Get the list of processes",
 )
 async def get_processes_list(principal: OptionalPrincipal) -> list[BiGraphProcess]:
-    res: list[BiGraphProcess] = (
-        await get_required_database_service().get_package_db().list_all_computes(BiGraphComputeType.PROCESS)
-    )
-    return res
+    computes = await get_required_database_service().get_package_db().list_all_computes(BiGraphComputeType.PROCESS)
+    return [c for c in computes if isinstance(c, BiGraphProcess)]
 
 
 @config.router.get(
@@ -75,10 +73,8 @@ async def get_processes_list(principal: OptionalPrincipal) -> list[BiGraphProces
     summary="Get the list of processes",
 )
 async def get_steps_list(principal: OptionalPrincipal) -> list[BiGraphStep]:
-    res: list[BiGraphStep] = (
-        await get_required_database_service().get_package_db().list_all_computes(BiGraphComputeType.STEP)
-    )
-    return res
+    computes = await get_required_database_service().get_package_db().list_all_computes(BiGraphComputeType.STEP)
+    return [c for c in computes if isinstance(c, BiGraphStep)]
 
 
 # @config.router.post(

@@ -418,7 +418,7 @@ async def _read_bounded(response: httpx.Response) -> bytes:
     return b"".join(chunks)
 
 
-def _require_ok(status: int, document: Any, url: str) -> None:
+def _require_ok(status: int, document: object, url: str) -> None:
     if status >= 500 or status == 429:
         raise NetworkError(f"Auth0 is unavailable (HTTP {status} from {_path(url)}); try again later")
     if status != 200:
@@ -479,13 +479,13 @@ def _required_tenant_url(document: dict[str, Any], field: str, settings: CliSett
     return url
 
 
-def _token_string(value: Any, field: str) -> str:
+def _token_string(value: object, field: str) -> str:
     if not isinstance(value, str) or not value or len(value) > MAX_TOKEN_CHARS or not value.isascii():
         raise ProtocolError(f"the token response has a missing or malformed {field}")
     return value
 
 
-def _granted_scopes(value: Any, requested: tuple[str, ...]) -> tuple[str, ...]:
+def _granted_scopes(value: object, requested: tuple[str, ...]) -> tuple[str, ...]:
     """RFC 6749 §5.1: an omitted scope means the requested scope was granted unchanged."""
     if value is None:
         granted = requested
@@ -498,7 +498,7 @@ def _granted_scopes(value: Any, requested: tuple[str, ...]) -> tuple[str, ...]:
     return granted
 
 
-def _error_code(payload: Any) -> str:
+def _error_code(payload: object) -> str:
     error = payload.get("error") if isinstance(payload, dict) else None
     return error if isinstance(error, str) and _ERROR_CODE.fullmatch(error) else ""
 

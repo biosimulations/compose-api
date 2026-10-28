@@ -13,6 +13,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, UploadFile
 
+from compose_api.api.errors import SEDML_REFUSED, NoTaskAccepted, Rejection
 from compose_api.authentication import OptionalPrincipal, describe_caller, get_optional_principal
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.dependencies import get_required_database_service
@@ -27,6 +28,7 @@ from compose_api.simulation.labels import LabelError, clean_description, clean_t
 logger = logging.getLogger(__name__)
 
 config = RouterConfig(router=APIRouter(), prefix="/sedml", dependencies=[Depends(get_optional_principal)])
+
 
 MAX_ARCHIVE = 100 * 1024 * 1024
 Solvers = Annotated[list[str] | None, Query(description="Solvers to run (registry/solvers.yaml); all when omitted")]
@@ -100,7 +102,7 @@ async def preview_sedml(archive: UploadFile, principal: OptionalPrincipal, solve
     operation_id="run-sedml",
     tags=["SED-ML"],
     summary="Run each task of a SED-ML archive on several solvers, one run per solver, grouped by a comparison",
-    responses={400: {"description": "Not an archive, an unknown solver, a bad tag, or no task any solver accepted"}},
+    responses={400: SEDML_REFUSED},
 )
 async def run_sedml(
     background_tasks: BackgroundTasks,
@@ -159,15 +161,14 @@ async def run_archive(
         )  # fmt: skip
     except SubmissionRejectedError as e:
         raise HTTPException(
-            status_code=400, detail={"message": e.message, "violations": [v.model_dump() for v in e.violations]}
+            status_code=400, detail=Rejection(message=e.message, violations=e.violations).model_dump()
         ) from e
     if not ids:
         raise HTTPException(
             status_code=400,
-            detail={
-                "message": "no task was accepted by any solver",
-                "findings": [f.model_dump() for f in translation.findings],
-            },
+            detail=NoTaskAccepted(
+                message="no task was accepted by any solver", findings=translation.findings
+            ).model_dump(),
         )
     db = get_required_database_service()
     comparisons = []

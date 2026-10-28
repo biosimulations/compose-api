@@ -15,6 +15,8 @@ from rich.console import Console
 from rich.table import Table
 from rich.tree import Tree
 
+from compose_api_client.ext.json_types import JsonValue
+
 MAX_FIELD_CHARS: Final = 500
 
 
@@ -38,7 +40,7 @@ def emit_text(text: str) -> None:
     print(text)
 
 
-def emit_json(document: Any) -> None:
+def emit_json(document: object) -> None:
     """One JSON document on stdout. Non-ASCII is escaped, so the output is safe to show as well as to parse."""
     print(json.dumps(document, ensure_ascii=True, default=str))
 
@@ -73,19 +75,21 @@ def resolve(fmt: Output) -> Output:
     return fmt
 
 
-def plain(value: Any) -> Any:
-    """A JSON-ready value: attrs models through ``to_dict()``, lists and dicts recursively."""
+def plain(value: object) -> JsonValue:
+    """A JSON-ready value: attrs models through ``to_dict()``, lists and dicts recursively; anything else as text."""
     to_dict = getattr(value, "to_dict", None)
     if callable(to_dict):
-        return to_dict()
+        return plain(to_dict())
     if isinstance(value, dict):
         return {str(k): plain(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return [plain(v) for v in value]
-    return value
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    return str(value)  # a date, a path, an enum: as json.dumps(default=str) printed it
 
 
-def emit(fmt: Output, data: Any, columns: Sequence[str] | None = None, title: str | None = None) -> None:
+def emit(fmt: Output, data: object, columns: Sequence[str] | None = None, title: str | None = None) -> None:
     """Print ``data`` (a record or a list of records) as JSON, or as a table of ``columns`` (all keys of a record
     when omitted)."""
     data = plain(data)
@@ -113,7 +117,7 @@ def emit(fmt: Output, data: Any, columns: Sequence[str] | None = None, title: st
     out.print(table)
 
 
-def _cell(v: Any) -> str:
+def _cell(v: object) -> str:
     if v is None:
         return ""
     if isinstance(v, (dict, list)):

@@ -57,7 +57,7 @@ def _split(expression: str) -> tuple[str, list[str]]:
 
 
 def accumulating_leaves(
-    schema: Any, named: dict[str, Any], path: str = "", seen: frozenset[str] = frozenset()
+    schema: object, named: dict[str, Any], path: str = "", seen: frozenset[str] = frozenset()
 ) -> list[str]:
     """Where in ``schema`` (a type expression, or a dict of them) an update adds or appends instead of replacing:
     ``path: type`` for each such leaf. ``named`` resolves type names (the environment's type tables); an unknown name

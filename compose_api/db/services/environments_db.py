@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, override
 
-from sqlalchemy import func, select, update
+from sqlalchemy import Select, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -193,7 +193,7 @@ class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
         self.async_session_maker = async_session_maker
 
     @staticmethod
-    def _named(environment: str) -> Any:
+    def _named(environment: str) -> Select[tuple[ORMEnvironmentVersion]]:
         """The versions of the environment currently called ``environment`` (a join on its id)."""
         return (
             select(ORMEnvironmentVersion)

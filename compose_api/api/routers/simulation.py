@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, UploadFile
 
+from compose_api.api.errors import Rejection, SubmissionError, error
 from compose_api.authentication import (
     AuthenticatedPrincipal,
     OptionalPrincipal,
@@ -56,11 +57,12 @@ logger = logging.getLogger(__name__)
 
 config = RouterConfig(router=APIRouter(), prefix="/simulation", dependencies=[Depends(get_optional_principal)])
 
-REJECTED_RESPONSE = {
-    "description": "The submission cannot run. For a problem with the request itself (empty file, unsupported type, "
+REJECTED_RESPONSE = error(
+    "The submission cannot run. For a problem with the request itself (empty file, unsupported type, "
     "interval out of range) `detail` is a string. For a problem with its contents (unreadable archive, or processes "
-    "the registry does not allow) `detail` is an object with a `message` and a `violations` list naming each address."
-}
+    "the registry does not allow) `detail` is an object with a `message` and a `violations` list naming each address.",
+    SubmissionError,
+)
 
 
 async def _named_environment(environment: str | None, simulator: str | None) -> tuple[str | None, str | None]:
@@ -272,7 +274,7 @@ async def submit_simulation(
         simulation_request.request_file_path.unlink(missing_ok=True)
         raise HTTPException(
             status_code=400,
-            detail={"message": e.message, "violations": [v.model_dump() for v in e.violations]},
+            detail=Rejection(message=e.message, violations=e.violations).model_dump(),
         ) from e
 
     simulation_request = wrap_document_in_omex(simulation_request)

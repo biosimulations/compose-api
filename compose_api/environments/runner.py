@@ -40,20 +40,31 @@ import tempfile
 import zipfile
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 TYPES_ENV = "COMPOSE_RUNNER_TYPES"
 COMPONENT = "compose_api.runner"
 
 
-def _jsonable(value: Any) -> Any:
+class _Emitter(Protocol):
+    """What the runner uses of process-bigraph's event emitter (``process_bigraph.events``, >= 1.8.5)."""
+
+    def span(self, name: str, **attributes: object) -> contextlib.AbstractContextManager[object]: ...
+
+    def event(self, event: str, /, **fields: object) -> None: ...
+
+    def flush(self) -> None: ...
+
+
+def _jsonable(value: object) -> object:
     """Numbers and arrays as JSON (NumPy is not imported unless the results hold its types)."""
     if isinstance(value, dict):
         return {str(k): _jsonable(v) for k, v in value.items()}
     if isinstance(value, list | tuple):
         return [_jsonable(v) for v in value]
-    if hasattr(value, "tolist"):  # numpy arrays and scalars
-        return value.tolist()
+    tolist = getattr(value, "tolist", None)
+    if callable(tolist):  # numpy arrays and scalars
+        return tolist()
     return value
 
 
@@ -79,7 +90,7 @@ def load_document(path: Path, workdir: Path) -> dict[str, Any]:
     return document if "state" in document else {"state": document}
 
 
-def build_core() -> Any:
+def build_core() -> object:
     """process-bigraph's core, with the type tables ``COMPOSE_RUNNER_TYPES`` names registered."""
     from process_bigraph import allocate_core
 
@@ -92,18 +103,19 @@ def build_core() -> Any:
     return core
 
 
-def _emitter() -> Any | None:
+def _emitter() -> _Emitter | None:
     """process-bigraph's event emitter (configured from the job's ``PBG_*`` variables), or None on an engine without
     events."""
     try:
         from process_bigraph import events
     except ImportError:
         return None
-    return events.get_emitter()
+    emitter: _Emitter = events.get_emitter()
+    return emitter
 
 
 @contextlib.contextmanager
-def _span(emitter: Any | None, name: str, **attributes: Any) -> Iterator[None]:
+def _span(emitter: _Emitter | None, name: str, **attributes: object) -> Iterator[None]:
     if emitter is None:
         yield
         return
@@ -111,7 +123,7 @@ def _span(emitter: Any | None, name: str, **attributes: Any) -> Iterator[None]:
         yield
 
 
-def _announce(emitter: Any | None, results: Path) -> None:
+def _announce(emitter: _Emitter | None, results: Path) -> None:
     """``artifact.written`` for the results file: compose-api records it as a dataset of kind ``results``."""
     if emitter is None:
         return

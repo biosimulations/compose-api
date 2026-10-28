@@ -56,6 +56,8 @@ from compose_api_client.ext import (
 )
 from compose_api_client.ext.credentials import TOKEN_ENV_VAR
 from compose_api_client.ext.errors import UsageError
+from compose_api_client.ext.json_types import JsonValue
+from compose_api_client.models import ImageStatus, SedmlRunResult, Verification
 from compose_api_client.types import Unset
 
 if TYPE_CHECKING:  # annotations only: importing these at run time would load the [auth] extra for every command
@@ -418,7 +420,7 @@ def handled_hidden_json(fn: F) -> F:
 
 def _handled(fn: F, json_option: inspect.Parameter) -> F:
     @functools.wraps(fn)
-    def wrapper(*args: Any, json_output: bool = False, **kwargs: Any) -> Any:
+    def wrapper(*args: object, json_output: bool = False, **kwargs: object) -> object:
         # Typer passes a plain click.Context, so test for that: a typer.Context check never matched, and the
         # --verbose re-raise below never saw the real settings.
         ctx = next((a for a in args if isinstance(a, click.Context)), kwargs.get("ctx"))
@@ -694,7 +696,7 @@ def environments_headers(
         print("\n".join(m.text for m in headers.modules), end="")
 
 
-def _emit_image_status(settings: Settings, status: Any) -> None:
+def _emit_image_status(settings: Settings, status: ImageStatus) -> None:
     """An image status: one row per image record (the available one first), or the status itself as JSON."""
     if settings.output is Output.JSON:
         emit(Output.JSON, status.to_dict())
@@ -751,9 +753,10 @@ _ENV_ARG = Annotated[str, typer.Argument(help="The environment, e.g. registry_en
 _NUMBER_ARG = Annotated[int, typer.Argument(help="The version's number (registry_env@3 is 3).")]
 
 
-def _version_row(v: Any) -> dict[str, Any]:
+def _version_row(v: object) -> dict[str, JsonValue]:
     row = {c: plain(getattr(v, c, None)) for c in _VERSION_COLUMNS}
-    row["lock_sha256"] = (row["lock_sha256"] or "")[:12] or None
+    lock = row["lock_sha256"]
+    row["lock_sha256"] = lock[:12] if isinstance(lock, str) and lock else None
     return row
 
 
@@ -920,7 +923,7 @@ def environments_retire(ctx: typer.Context, name: _ENV_ARG, number: _NUMBER_ARG)
         emit(settings.output, s.retire_environment_version(name, number))
 
 
-def _version_label(ref: Any) -> str | None:
+def _version_label(ref: object) -> str | None:
     """``registry_env@5`` from a version reference as ``to_dict`` gives it; None when there is none."""
     return f"{ref['environment']}@{ref['number']}" if isinstance(ref, dict) else None
 
@@ -1373,7 +1376,7 @@ def trace(
     settings = _settings(ctx)
     with make_session(settings) as s:
         if chrome is not None:
-            chrome.write_text(json.dumps(s.trace_chrome(simulation_id)))
+            chrome.write_text(json.dumps(s.trace_chrome(simulation_id).to_dict()))
             emit(settings.output, {"simulation_id": simulation_id, "files": [str(chrome)]})
             return
         tree = s.trace(simulation_id).to_dict()
@@ -1845,7 +1848,7 @@ def comparisons_show(
 VERIFICATION_COLUMNS = ["verification", "state", "simulators", "agree", "references", "error"]
 
 
-def _verification_row(v: Any) -> dict[str, Any]:
+def _verification_row(v: Verification) -> dict[str, Any]:
     d = v.to_dict()
     return {
         "verification": d["verification_id"],
@@ -1903,7 +1906,7 @@ def _save_archive(content: bytes, name: str, out: Path | None) -> Path:
     return path
 
 
-def _run_rows(result: Any) -> list[dict[str, Any]]:
+def _run_rows(result: SedmlRunResult) -> list[dict[str, Any]]:
     return [
         {"comparison": c.comparison_id, "task": c.task, "solver": m.solver, "simulation": m.simulation_id}
         for c in result.comparisons

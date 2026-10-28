@@ -6,11 +6,11 @@ from typing import Any, TypeVar
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-T = TypeVar("T", bound="GetSimulationTraceChromeResponseGetSimulationTraceChrome")
+T = TypeVar("T", bound="TraceEventArgs")
 
 
 @_attrs_define
-class GetSimulationTraceChromeResponseGetSimulationTraceChrome:
+class TraceEventArgs:
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -23,10 +23,10 @@ class GetSimulationTraceChromeResponseGetSimulationTraceChrome:
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        get_simulation_trace_chrome_response_get_simulation_trace_chrome = cls()
+        trace_event_args = cls()
 
-        get_simulation_trace_chrome_response_get_simulation_trace_chrome.additional_properties = d
-        return get_simulation_trace_chrome_response_get_simulation_trace_chrome
+        trace_event_args.additional_properties = d
+        return trace_event_args
 
     @property
     def additional_keys(self) -> list[str]:

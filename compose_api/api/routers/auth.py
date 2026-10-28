@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, Field
 
+from compose_api.api.errors import error
 from compose_api.authentication import BEARER_SCHEME_NAME, RequiredPrincipal, get_optional_principal
 from compose_api.authorization import capabilities
 from compose_api.common.gateway.models import RouterConfig
@@ -28,7 +29,7 @@ class CurrentPrincipalResponse(BaseModel):
     "/me",
     operation_id="get-current-principal",
     response_model=CurrentPrincipalResponse,
-    responses={401: {"description": "Missing or invalid bearer credentials"}},
+    responses={401: error("Missing or invalid bearer credentials")},
     openapi_extra={"security": [{BEARER_SCHEME_NAME: []}]},
     tags=["Authentication"],
     summary="Get the authenticated caller's identity",

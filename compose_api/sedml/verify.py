@@ -13,6 +13,7 @@ import io
 import time
 import xml.etree.ElementTree as ET
 import zipfile
+from collections.abc import Callable
 from enum import StrEnum
 from typing import Any
 
@@ -127,15 +128,15 @@ class VerifyClient:
             response = await client.post(
                 "/verify/omex", params=params, files={"uploaded_file": (filename, archive, "application/zip")}
             )
-        return VerifyOutput.model_validate(_checked(response))
+        return VerifyOutput.model_validate_json(_checked(response))
 
     async def get(self, workflow_id: str) -> VerifyOutput:
         async with self._client() as client:
             response = await client.get(f"/verify/{workflow_id}")
-        return VerifyOutput.model_validate(_checked(response))
+        return VerifyOutput.model_validate_json(_checked(response))
 
 
-def _checked(response: httpx.Response) -> Any:
+def _checked(response: httpx.Response) -> bytes:
     if response.status_code == httpx.codes.TOO_MANY_REQUESTS:
         try:
             retry_after = float(response.headers.get("Retry-After", "60"))
@@ -145,14 +146,14 @@ def _checked(response: httpx.Response) -> Any:
     if 400 <= response.status_code < 500:
         raise VerifyRejectedError(f"{response.status_code}: {response.text[:500]}")
     response.raise_for_status()
-    return response.json()
+    return response.content
 
 
 class RateBudget:
     """A token bucket: at most ``per_minute`` requests a minute, in a burst of at most ``burst``. biosim's budget is
     per caller over a fixed window; staying under it keeps the 429 the exception (D5)."""
 
-    def __init__(self, per_minute: float, burst: int = 1, clock: Any = time.monotonic) -> None:
+    def __init__(self, per_minute: float, burst: int = 1, clock: Callable[[], float] = time.monotonic) -> None:
         self.rate = per_minute / 60.0
         self.burst = float(burst)
         self.clock = clock

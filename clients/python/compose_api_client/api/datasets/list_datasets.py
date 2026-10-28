@@ -1,11 +1,12 @@
 from http import HTTPStatus
-from typing import Any, cast
+from typing import Any
 
 import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.dataset_page import DatasetPage
+from ...models.error_detail import ErrorDetail
 from ...models.http_validation_error import HTTPValidationError
 from ...types import UNSET, Response, Unset
 
@@ -67,14 +68,15 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Any | DatasetPage | HTTPValidationError | None:
+) -> DatasetPage | ErrorDetail | HTTPValidationError | None:
     if response.status_code == 200:
         response_200 = DatasetPage.from_dict(response.json())
 
         return response_200
 
     if response.status_code == 404:
-        response_404 = cast(Any, None)
+        response_404 = ErrorDetail.from_dict(response.json())
+
         return response_404
 
     if response.status_code == 422:
@@ -90,7 +92,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[Any | DatasetPage | HTTPValidationError]:
+) -> Response[DatasetPage | ErrorDetail | HTTPValidationError]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -108,7 +110,7 @@ def sync_detailed(
     available: bool | None | Unset = True,
     limit: int | Unset = 100,
     offset: int | Unset = 0,
-) -> Response[Any | DatasetPage | HTTPValidationError]:
+) -> Response[DatasetPage | ErrorDetail | HTTPValidationError]:
     """List the datasets runs advertised, newest simulations first
 
     Args:
@@ -125,7 +127,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | DatasetPage | HTTPValidationError]
+        Response[DatasetPage | ErrorDetail | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
@@ -153,7 +155,7 @@ def sync(
     available: bool | None | Unset = True,
     limit: int | Unset = 100,
     offset: int | Unset = 0,
-) -> Any | DatasetPage | HTTPValidationError | None:
+) -> DatasetPage | ErrorDetail | HTTPValidationError | None:
     """List the datasets runs advertised, newest simulations first
 
     Args:
@@ -170,7 +172,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | DatasetPage | HTTPValidationError
+        DatasetPage | ErrorDetail | HTTPValidationError
     """
 
     return sync_detailed(
@@ -193,7 +195,7 @@ async def asyncio_detailed(
     available: bool | None | Unset = True,
     limit: int | Unset = 100,
     offset: int | Unset = 0,
-) -> Response[Any | DatasetPage | HTTPValidationError]:
+) -> Response[DatasetPage | ErrorDetail | HTTPValidationError]:
     """List the datasets runs advertised, newest simulations first
 
     Args:
@@ -210,7 +212,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | DatasetPage | HTTPValidationError]
+        Response[DatasetPage | ErrorDetail | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
@@ -236,7 +238,7 @@ async def asyncio(
     available: bool | None | Unset = True,
     limit: int | Unset = 100,
     offset: int | Unset = 0,
-) -> Any | DatasetPage | HTTPValidationError | None:
+) -> DatasetPage | ErrorDetail | HTTPValidationError | None:
     """List the datasets runs advertised, newest simulations first
 
     Args:
@@ -253,7 +255,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | DatasetPage | HTTPValidationError
+        DatasetPage | ErrorDetail | HTTPValidationError
     """
 
     return (

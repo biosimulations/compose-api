@@ -215,6 +215,10 @@ paths:
             For a problem with its contents (unreadable archive, or processes the
             registry does not allow) `detail` is an object with a `message` and a
             `violations` list naming each address.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmissionError'
         '422':
           description: Validation Error
           content:
@@ -402,6 +406,10 @@ paths:
                 $ref: '#/components/schemas/SimulationDetail'
         '404':
           description: The simulation does not exist, or the caller may not read it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -526,6 +534,10 @@ paths:
                 $ref: '#/components/schemas/HpcRun'
         '404':
           description: The requested resource does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -551,9 +563,14 @@ paths:
           content:
             application/octet-stream:
               schema:
+                type: string
                 format: binary
         '404':
           description: The simulation does not exist, or its results are not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -582,6 +599,10 @@ paths:
                 $ref: '#/components/schemas/HpcRun'
         '404':
           description: The requested resource does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -611,6 +632,10 @@ paths:
                 type: string
         '404':
           description: The requested resource does not exist
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -688,6 +713,10 @@ paths:
                 $ref: '#/components/schemas/RunEventPage'
         '404':
           description: The requested resource does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -716,6 +745,10 @@ paths:
                 $ref: '#/components/schemas/RunTraceTree'
         '404':
           description: The requested resource does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -742,11 +775,13 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
-                title: Response Get-Simulation-Trace-Chrome
+                $ref: '#/components/schemas/TraceDocument'
         '404':
           description: The requested resource does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -875,6 +910,10 @@ paths:
                 $ref: '#/components/schemas/DatasetPage'
         '404':
           description: The simulation does not exist, or the caller may not read it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -904,6 +943,10 @@ paths:
                 $ref: '#/components/schemas/Dataset'
         '404':
           description: The dataset does not exist, or the caller may not read it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -930,13 +973,22 @@ paths:
           content:
             application/octet-stream:
               schema:
+                type: string
                 format: binary
         '404':
           description: The dataset does not exist, the caller may not read it, or
             its file is gone
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '409':
           description: 'The dataset is a directory (a zarr store): read its files
             with get-dataset-file'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -978,10 +1030,15 @@ paths:
           content:
             application/octet-stream:
               schema:
+                type: string
                 format: binary
         '404':
           description: The dataset does not exist, the caller may not read it, it
             is not a directory, or it has no such file
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -1035,6 +1092,10 @@ paths:
         '404':
           description: No such environment here, or no manifest has been generated
             for it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -1065,8 +1126,16 @@ paths:
         '404':
           description: No such environment here, or no manifest has been generated
             for it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '503':
           description: process-bigraph-lang is not installed in this deployment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -1130,6 +1199,10 @@ paths:
                 $ref: '#/components/schemas/ImageStatus'
         '404':
           description: No such environment here
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -1165,6 +1238,10 @@ paths:
                 $ref: '#/components/schemas/ImageStatus'
         '404':
           description: No such environment here
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -1193,6 +1270,10 @@ paths:
                 $ref: '#/components/schemas/EnvironmentVersions'
         '404':
           description: No such environment, or no such version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -1239,13 +1320,29 @@ paths:
                 $ref: '#/components/schemas/EnvironmentVersion'
         '404':
           description: No such environment, or no such version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '401':
           description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '403':
           description: Not an environment administrator, or environment administration
             is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: The request cannot make a version of this environment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnprocessableError'
   /registry/environments/{name}/versions/{number}:
     get:
       tags:
@@ -1287,9 +1384,17 @@ paths:
                 $ref: '#/components/schemas/EnvironmentVersionDetail'
         '404':
           description: No such environment, or no such version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '409':
           description: '`against` names a version, or this one is, with nothing read
             back from its image yet'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -1337,9 +1442,17 @@ paths:
                 $ref: '#/components/schemas/EnvironmentExport'
         '404':
           description: No such environment, or no such version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '409':
           description: The version has no lock in that format (prebuilt, older, or
             still resolving)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -1375,6 +1488,10 @@ paths:
                 $ref: '#/components/schemas/ComplianceReport'
         '404':
           description: No such environment, or no such version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -1409,13 +1526,29 @@ paths:
                 $ref: '#/components/schemas/ComplianceReport'
         '404':
           description: No such environment, or no such version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '401':
           description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '403':
           description: Not an environment administrator, or environment administration
             is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '409':
           description: The version is not ready, or not composed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -1455,14 +1588,30 @@ paths:
                 $ref: '#/components/schemas/EnvironmentVersion'
         '404':
           description: No such environment, or no such version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '401':
           description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '403':
           description: Not an environment administrator, or environment administration
             is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '409':
           description: A shared version whose image is not built yet, or no Kubernetes
             to run the Job on
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -1497,13 +1646,29 @@ paths:
                 $ref: '#/components/schemas/EnvironmentVersion'
         '404':
           description: No such environment, or no such version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '401':
           description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '403':
           description: Not an environment administrator, or environment administration
             is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '409':
           description: The version is not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -1539,13 +1704,29 @@ paths:
                 $ref: '#/components/schemas/EnvironmentVersion'
         '404':
           description: No such environment, or no such version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '401':
           description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '403':
           description: Not an environment administrator, or environment administration
             is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '409':
           description: It is the default; make another the default first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -1593,6 +1774,10 @@ paths:
         '404':
           description: No such simulator, or one neither a version nor used by a run
             you can read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -1622,6 +1807,10 @@ paths:
                 $ref: '#/components/schemas/ImageStatus'
         '404':
           description: No such simulator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -1657,6 +1846,10 @@ paths:
                 $ref: '#/components/schemas/ImageStatus'
         '404':
           description: No such simulator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -1808,8 +2001,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/SedmlRunResult'
         '400':
-          description: Not an archive, an unknown solver, a bad tag, or no task any
-            solver accepted
+          description: 'Not an archive, an unknown solver, a bad tag or version: `detail`
+            is a message. Processes the registry does not allow: `detail` has a `message`
+            and `violations`. No task any solver accepted: a `message` and the `findings`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SedmlRunError'
         '422':
           description: Validation Error
           content:
@@ -1886,6 +2084,10 @@ paths:
                 $ref: '#/components/schemas/Comparison'
         '404':
           description: No such comparison
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -1920,6 +2122,10 @@ paths:
                 $ref: '#/components/schemas/ComparisonSeries'
         '404':
           description: No such comparison or report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -1965,6 +2171,10 @@ paths:
                 $ref: '#/components/schemas/Verification'
         '404':
           description: No such comparison
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -1996,6 +2206,10 @@ paths:
                 title: Response List-Comparison-Verifications
         '404':
           description: No such comparison
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -2045,6 +2259,10 @@ paths:
                 title: Response Search-Biomodels
         '502':
           description: The upstream service did not answer as expected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -2073,8 +2291,16 @@ paths:
                 $ref: '#/components/schemas/BiomodelInfo'
         '404':
           description: No such model or project upstream
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '502':
           description: The upstream service did not answer as expected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -2096,11 +2322,24 @@ paths:
           title: Model Id
       responses:
         '200':
-          description: Successful Response
+          description: The archive
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
         '404':
           description: No such model or project upstream
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '502':
           description: The upstream service did not answer as expected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -2187,10 +2426,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SedmlRunResult'
+        '400':
+          description: 'Not an archive, an unknown solver, a bad tag or version: `detail`
+            is a message. Processes the registry does not allow: `detail` has a `message`
+            and `violations`. No task any solver accepted: a `message` and the `findings`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SedmlRunError'
         '404':
           description: No such model or project upstream
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '502':
           description: The upstream service did not answer as expected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -2233,6 +2488,10 @@ paths:
                 title: Response Search-Biosimulations-Projects
         '502':
           description: The upstream service did not answer as expected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -2262,8 +2521,16 @@ paths:
                 $ref: '#/components/schemas/ProjectInfo'
         '404':
           description: No such model or project upstream
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '502':
           description: The upstream service did not answer as expected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -2285,11 +2552,24 @@ paths:
           title: Project Id
       responses:
         '200':
-          description: Successful Response
+          description: The archive
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
         '404':
           description: No such model or project upstream
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '502':
           description: The upstream service did not answer as expected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -2325,8 +2605,16 @@ paths:
                 title: Response Get-Biosimulations-Reference
         '404':
           description: No such model or project upstream
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '502':
           description: The upstream service did not answer as expected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -2414,10 +2702,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SedmlRunResult'
+        '400':
+          description: 'Not an archive, an unknown solver, a bad tag or version: `detail`
+            is a message. Processes the registry does not allow: `detail` has a `message`
+            and `violations`. No task any solver accepted: a `message` and the `findings`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SedmlRunError'
         '404':
           description: No such model or project upstream
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '502':
           description: The upstream service did not answer as expected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -2465,6 +2769,10 @@ paths:
                 title: Response List-Suite-Runs
         '404':
           description: No such suite
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -2500,6 +2808,10 @@ paths:
                 $ref: '#/components/schemas/SuiteRunView'
         '404':
           description: No such suite or run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -2549,10 +2861,22 @@ paths:
                 $ref: '#/components/schemas/SuiteRunInfo'
         '400':
           description: A version not named, malformed, or that runs cannot use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '404':
           description: No such suite
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '409':
           description: A run of the suite is still submitting or running
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -2602,6 +2926,10 @@ paths:
                 $ref: '#/components/schemas/SuiteVerifyResult'
         '404':
           description: No such suite or run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -2644,6 +2972,10 @@ paths:
                 title: Response List-Suite-Problems
         '404':
           description: No such suite
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -2677,14 +3009,34 @@ paths:
                 $ref: '#/components/schemas/KnownProblem'
         '401':
           description: Anonymous
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '403':
           description: Not a suite curator, or suite curation is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '404':
           description: No such suite, problem or run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '400':
           description: A source or solver the suite does not have
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '409':
           description: A problem is already open for that source and solver
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -2725,10 +3077,22 @@ paths:
                 $ref: '#/components/schemas/KnownProblem'
         '401':
           description: Anonymous
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '403':
           description: Not a suite curator, or suite curation is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '404':
           description: No such suite, problem or run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -2770,12 +3134,28 @@ paths:
                 $ref: '#/components/schemas/KnownProblem'
         '401':
           description: Anonymous
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '403':
           description: Not a suite curator, or suite curation is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '404':
           description: No such suite, problem or run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '409':
           description: Already cleared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -2797,6 +3177,10 @@ paths:
                 $ref: '#/components/schemas/CurrentPrincipalResponse'
         '401':
           description: Missing or invalid bearer credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
       security:
       - BearerAuth: []
   /health:
@@ -2831,6 +3215,27 @@ paths:
                 title: Response Get Version Version Get
 components:
   schemas:
+    AddressViolation:
+      properties:
+        document:
+          type: string
+          title: Document
+        address:
+          type: string
+          title: Address
+        reason:
+          type: string
+          title: Reason
+        always_rejected:
+          type: boolean
+          title: Always Rejected
+          default: false
+      type: object
+      required:
+      - document
+      - address
+      - reason
+      title: AddressViolation
     BiGraphComputeType:
       type: string
       enum:
@@ -3978,13 +4383,8 @@ components:
       required:
       - detail
       title: ErrorDetail
-      description: 'An error''s body, as FastAPI''s ``HTTPException`` writes it. A
-        route declares it for its error responses so the
-
-        generated client parses them into this rather than typing them ``Any``, which
-        would make the whole return type
-
-        ``Any`` to a type checker.'
+      description: An error, as ``HTTPException(status_code, detail="...")`` writes
+        it.
     HTTPValidationError:
       properties:
         detail:
@@ -4405,6 +4805,23 @@ components:
         are retired:
 
         docs/plan-environment-composition.md, D8.5; versions made that way stay readable.)'
+    NoTaskAccepted:
+      properties:
+        message:
+          type: string
+          title: Message
+        findings:
+          items:
+            $ref: '#/components/schemas/SedmlFinding'
+          type: array
+          title: Findings
+      type: object
+      required:
+      - message
+      - findings
+      title: NoTaskAccepted
+      description: A SED-ML archive none of whose tasks any solver accepted, with
+        the translation's findings.
     PackageChange:
       properties:
         name:
@@ -4514,6 +4931,23 @@ components:
       required:
       - versions
       title: RegisteredSimulators
+    Rejection:
+      properties:
+        message:
+          type: string
+          title: Message
+        violations:
+          items:
+            $ref: '#/components/schemas/AddressViolation'
+          type: array
+          title: Violations
+      type: object
+      required:
+      - message
+      - violations
+      title: Rejection
+      description: 'A document refused at submission: the addresses it may not use,
+        and why (`registry.validation`).'
     RunEvent:
       properties:
         cursor:
@@ -4750,6 +5184,20 @@ components:
       - tasks
       - findings
       title: SedmlPreview
+    SedmlRunError:
+      properties:
+        detail:
+          anyOf:
+          - type: string
+          - $ref: '#/components/schemas/Rejection'
+          - $ref: '#/components/schemas/NoTaskAccepted'
+          title: Detail
+      type: object
+      required:
+      - detail
+      title: SedmlRunError
+      description: 'A SED-ML run refused: a message, the refused addresses, or the
+        findings when no task was accepted.'
     SedmlRunResult:
       properties:
         comparisons:
@@ -5273,6 +5721,18 @@ components:
       title: SpanTree
       description: A span with its own events (those whose ``span_id`` is the span's)
         and its children, by start time.
+    SubmissionError:
+      properties:
+        detail:
+          anyOf:
+          - type: string
+          - $ref: '#/components/schemas/Rejection'
+          title: Detail
+      type: object
+      required:
+      - detail
+      title: SubmissionError
+      description: 'A run refused: a message, or the refused addresses.'
     SubmissionInfo:
       properties:
         state:
@@ -5580,6 +6040,78 @@ components:
 
         `atol = max(abs_tol_min, max|a|*abs_tol_scale, max|b|*abs_tol_scale)` (docs/plan-sedml.md,
         D4).'
+    TraceDocument:
+      properties:
+        traceEvents:
+          items:
+            $ref: '#/components/schemas/TraceEvent'
+          type: array
+          title: Traceevents
+        displayTimeUnit:
+          type: string
+          title: Displaytimeunit
+        otherData:
+          additionalProperties:
+            type: string
+          type: object
+          title: Otherdata
+      type: object
+      required:
+      - traceEvents
+      - displayTimeUnit
+      - otherData
+      title: TraceDocument
+    TraceEvent:
+      properties:
+        ph:
+          type: string
+          title: Ph
+        pid:
+          type: integer
+          title: Pid
+        tid:
+          type: integer
+          title: Tid
+        name:
+          type: string
+          title: Name
+        cat:
+          type: string
+          title: Cat
+        ts:
+          type: integer
+          title: Ts
+        dur:
+          type: integer
+          title: Dur
+        s:
+          type: string
+          title: S
+        args:
+          additionalProperties: true
+          type: object
+          title: Args
+      type: object
+      required:
+      - ph
+      - pid
+      - tid
+      title: TraceEvent
+    UnprocessableError:
+      properties:
+        detail:
+          anyOf:
+          - type: string
+          - items:
+              $ref: '#/components/schemas/ValidationIssue'
+            type: array
+          title: Detail
+      type: object
+      required:
+      - detail
+      title: UnprocessableError
+      description: A 422 a route raises itself (a message), or FastAPI's validation
+        of the request (a list of issues).
     ValidationError:
       properties:
         loc:
@@ -5606,6 +6138,29 @@ components:
       - msg
       - type
       title: ValidationError
+    ValidationIssue:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Loc
+        msg:
+          type: string
+          title: Msg
+        type:
+          type: string
+          title: Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationIssue
+      description: One of FastAPI's request-validation errors (its ``HTTPValidationError``
+        items).
     Verification:
       properties:
         verification_id:

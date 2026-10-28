@@ -6,6 +6,7 @@ import pytest
 from compose_api_client import Client
 from compose_api_client.api.simulation import run_simulation
 from compose_api_client.models import (
+    ErrorDetail,
     HTTPValidationError,
 )
 from compose_api_client.models.body_run_simulation import BodyRunSimulation
@@ -42,7 +43,7 @@ async def test_sim_run(
             client=in_memory_api_client, body=BodyRunSimulation(uploaded_file=File(file_name=f.name, payload=f))
         )
 
-        results: Response[HTTPValidationError] = await check_experiment_run(
+        results: Response[ErrorDetail | File | HTTPValidationError] = await check_experiment_run(
             sim_experiment=sim_experiment, in_memory_api_client=in_memory_api_client
         )
 
@@ -79,7 +80,7 @@ async def test_sim_run(
 #                 tool_suite=tool,
 #             )
 #
-#             results: Response[HTTPValidationError] = await check_experiment_run(
+#             results: Response[ErrorDetail | File | HTTPValidationError] = await check_experiment_run(
 #                 sim_experiment=sim_experiment, in_memory_api_client=in_memory_api_client
 #             )
 #

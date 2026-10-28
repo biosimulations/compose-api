@@ -1,5 +1,5 @@
 from http import HTTPStatus
-from typing import Any, cast
+from typing import Any
 from urllib.parse import quote
 
 import httpx
@@ -7,6 +7,7 @@ import httpx
 from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.environment_export import EnvironmentExport
+from ...models.error_detail import ErrorDetail
 from ...models.http_validation_error import HTTPValidationError
 from ...types import UNSET, Response, Unset
 
@@ -43,18 +44,20 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Any | EnvironmentExport | HTTPValidationError | None:
+) -> EnvironmentExport | ErrorDetail | HTTPValidationError | None:
     if response.status_code == 200:
         response_200 = EnvironmentExport.from_dict(response.json())
 
         return response_200
 
     if response.status_code == 404:
-        response_404 = cast(Any, None)
+        response_404 = ErrorDetail.from_dict(response.json())
+
         return response_404
 
     if response.status_code == 409:
-        response_409 = cast(Any, None)
+        response_409 = ErrorDetail.from_dict(response.json())
+
         return response_409
 
     if response.status_code == 422:
@@ -70,7 +73,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[Any | EnvironmentExport | HTTPValidationError]:
+) -> Response[EnvironmentExport | ErrorDetail | HTTPValidationError]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -85,7 +88,7 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     format_: None | str | Unset = UNSET,
-) -> Response[Any | EnvironmentExport | HTTPValidationError]:
+) -> Response[EnvironmentExport | ErrorDetail | HTTPValidationError]:
     """A version as files to recreate it locally: pixi files, uv files (without conda), or requirements
 
     Args:
@@ -99,7 +102,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | EnvironmentExport | HTTPValidationError]
+        Response[EnvironmentExport | ErrorDetail | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
@@ -121,7 +124,7 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     format_: None | str | Unset = UNSET,
-) -> Any | EnvironmentExport | HTTPValidationError | None:
+) -> EnvironmentExport | ErrorDetail | HTTPValidationError | None:
     """A version as files to recreate it locally: pixi files, uv files (without conda), or requirements
 
     Args:
@@ -135,7 +138,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | EnvironmentExport | HTTPValidationError
+        EnvironmentExport | ErrorDetail | HTTPValidationError
     """
 
     return sync_detailed(
@@ -152,7 +155,7 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     format_: None | str | Unset = UNSET,
-) -> Response[Any | EnvironmentExport | HTTPValidationError]:
+) -> Response[EnvironmentExport | ErrorDetail | HTTPValidationError]:
     """A version as files to recreate it locally: pixi files, uv files (without conda), or requirements
 
     Args:
@@ -166,7 +169,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | EnvironmentExport | HTTPValidationError]
+        Response[EnvironmentExport | ErrorDetail | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
@@ -186,7 +189,7 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     format_: None | str | Unset = UNSET,
-) -> Any | EnvironmentExport | HTTPValidationError | None:
+) -> EnvironmentExport | ErrorDetail | HTTPValidationError | None:
     """A version as files to recreate it locally: pixi files, uv files (without conda), or requirements
 
     Args:
@@ -200,7 +203,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | EnvironmentExport | HTTPValidationError
+        EnvironmentExport | ErrorDetail | HTTPValidationError
     """
 
     return (
