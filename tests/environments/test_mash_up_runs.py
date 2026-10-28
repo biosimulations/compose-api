@@ -34,19 +34,25 @@ async def _ready_mash_up(database_service: DatabaseServiceSQL) -> tuple[str, int
     name = f"mash-{uuid.uuid4().hex[:10]}"
     async with database_service.async_sessionmaker() as session, session.begin():
         session.add(ORMEnvironment(name=name, kind="mash-up", entries=ENTRIES))
+    version_id = await _ready_version(database_service, name)
+    await database_service.get_environments_db().set_default(name, version_id)
+    return name, version_id
+
+
+async def _ready_version(database_service: DatabaseServiceSQL, name: str) -> int:
+    """A new ready composed version of the mash-up, as a build would leave it: its id."""
     environments_db = database_service.get_environments_db()
     spec = {"entries": [{"id": e} for e in ENTRIES]}
     source = VersionSource(spec=spec, origin="registry", runtime_contract=pixi.RUNTIME_CONTRACT)
     version = await environments_db.create_resolving(name, "mash-up", source)
     definition = ContainerizationFileRepr(
-        representation=f"Bootstrap: docker\nFrom: example/{name}\n",
+        representation=f"Bootstrap: docker\nFrom: example/{name}:{version.database_id}\n",
         containerization_engine=ContainerizationEngine.APPTAINER,
     )
     simulator = await database_service.get_simulator_db().insert_simulator(definition)
     await environments_db.set_resolved(version.database_id, simulator.database_id, "lock", uuid.uuid4().hex * 2)
     await environments_db.set_state(version.database_id, VersionState.READY)
-    await environments_db.set_default(name, version.database_id)
-    return name, version.database_id
+    return version.database_id
 
 
 def _document(tmp_path: Path, *addresses: str) -> Path:
@@ -133,3 +139,38 @@ async def test_a_mash_ups_compliance_cases_run_in_the_mash_up(
     assert submitted == len(sent) and submitted >= 3  # pbsim-common's two cases and viva-basic-processes' one
     assert {r.environment for r in sent} == {name}
     assert "viva-basic-processes/intervention-and-expression" in {r.labels["compliance"] for r in sent}
+
+
+@pytest.mark.asyncio
+async def test_an_administrator_chooses_a_mash_ups_default_and_retires_its_versions(
+    database_service: DatabaseServiceSQL,
+) -> None:
+    """A mash-up's later versions are an administrator's (`environments create`), and so are its default and its
+    retirements: the routes find it in the database, as the reading ones do (7c-5 found `PUT …/default` a 404)."""
+    from fastapi import FastAPI
+    from httpx import ASGITransport
+
+    from compose_api.api.routers import registry as registry_router
+    from compose_api.authorization import get_caller
+    from compose_api.config import override_settings
+    from tests.environments.test_version_routes import ADMIN, ROLE
+
+    name, first = await _ready_mash_up(database_service)
+    second = await _ready_version(database_service, name)
+    app = FastAPI()
+    app.include_router(registry_router.config.router, prefix=registry_router.config.prefix)
+    app.dependency_overrides[get_caller] = lambda: ADMIN
+    url = f"/registry/environments/{name}"
+    with override_settings(environment_admin_role=ROLE):
+        async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as admin:
+            made = await admin.put(f"{url}/default", json={"number": 2})
+            assert made.status_code == 200, made.text
+            listed = (await admin.get(f"{url}/versions")).json()
+            assert (listed["default"], listed["default_source"]) == (2, "api")
+            assert (await admin.post(f"{url}/versions/2/retire")).status_code == 409  # the default
+            retired = await admin.post(f"{url}/versions/1/retire")
+            assert retired.status_code == 200 and retired.json()["state"] == "retired"
+            unknown = await admin.put("/registry/environments/mash-ffffffffff/default", json={"number": 1})
+            assert unknown.status_code == 404
+    version, _ = await version_for(database_service, None, None, name)
+    assert version.database_id == second != first
