@@ -16,10 +16,12 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
 
+from compose_api.api.errors import UnprocessableError, error
 from compose_api.authentication import OptionalPrincipal, get_optional_principal
 from compose_api.authorization import EnvironmentAdmin, OptionalCaller, readable_clause
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.config import get_settings
+from compose_api.db.database_service import DatabaseService
 from compose_api.db.services.simulators_db import SimulatorUse
 from compose_api.dependencies import (
     get_database_service,
@@ -36,6 +38,7 @@ from compose_api.environments.service import VersionRequestError
 from compose_api.environments.versions import prebuilt_images, version_for
 from compose_api.registry.environments import (
     CatalogEntry,
+    EnvironmentSpec,
     EnvironmentSummary,
     InterfaceManifest,
     catalog_entries,
@@ -105,7 +108,7 @@ async def list_environments(principal: OptionalPrincipal) -> list[EnvironmentSum
     operation_id="get-environment-manifest",
     tags=["Registry"],
     summary="An environment's interface manifest (pbg-interfaces/1), each component with its registry entry",
-    responses={404: {"description": "No such environment here, or no manifest has been generated for it"}},
+    responses={404: error("No such environment here, or no manifest has been generated for it")},
 )
 async def get_environment_manifest(
     name: str, request: Request, response: Response, principal: OptionalPrincipal
@@ -137,7 +140,7 @@ async def _offered_interfaces(name: str) -> dict[str, Any]:
     return interfaces
 
 
-async def _mash_ups(database_service: Any) -> list[Any]:
+async def _mash_ups(database_service: DatabaseService | None) -> list[EnvironmentSpec]:
     return await lifecycle.mash_up_specs(database_service) if database_service is not None else []
 
 
@@ -148,8 +151,8 @@ async def _mash_ups(database_service: Any) -> list[Any]:
     tags=["Registry"],
     summary="An environment's interfaces as .pblang header files (one per module), and each class's declaration",
     responses={
-        404: {"description": "No such environment here, or no manifest has been generated for it"},
-        503: {"description": "process-bigraph-lang is not installed in this deployment"},
+        404: error("No such environment here, or no manifest has been generated for it"),
+        503: error("process-bigraph-lang is not installed in this deployment"),
     },
 )
 async def get_environment_headers(name: str, principal: OptionalPrincipal) -> EnvironmentHeaders:
@@ -241,7 +244,7 @@ async def _start_build(
     operation_id="get-environment-images",
     tags=["Registry"],
     summary="Whether an environment's current image is built, with its image records and newest build run",
-    responses={404: {"description": "No such environment here"}},
+    responses={404: error("No such environment here")},
 )
 async def get_environment_images(name: str, principal: OptionalPrincipal) -> ImageStatus:
     # public: the same for every caller
@@ -257,7 +260,7 @@ async def get_environment_images(name: str, principal: OptionalPrincipal) -> Ima
     summary="Make an environment's current image available: 200 if it is, 202 once its pull or build has started",
     responses={
         202: {"model": ImageStatus, "description": "Its pull or build has started (or was already under way)"},
-        404: {"description": "No such environment here"},
+        404: error("No such environment here"),
     },
 )
 async def build_environment(
@@ -269,10 +272,10 @@ async def build_environment(
 
 # --- environment versions (docs/plan-environment-versions.md, step 4) ----------------------------------------------
 
-_NO_ENVIRONMENT: dict[int | str, dict[str, Any]] = {404: {"description": "No such environment, or no such version"}}
+_NO_ENVIRONMENT: dict[int | str, dict[str, Any]] = {404: error("No such environment, or no such version")}
 _ADMIN: dict[int | str, dict[str, Any]] = {
-    401: {"description": "Not signed in"},
-    403: {"description": "Not an environment administrator, or environment administration is not configured"},
+    401: error("Not signed in"),
+    403: error("Not an environment administrator, or environment administration is not configured"),
 }
 
 
@@ -318,7 +321,7 @@ async def list_environment_versions(name: str, principal: OptionalPrincipal) -> 
     summary="One version of an environment: what it was made from, its lock, and what it installed and provides",
     responses={
         **_NO_ENVIRONMENT,
-        409: {"description": "`against` names a version, or this one is, with nothing read back from its image yet"},
+        409: error("`against` names a version, or this one is, with nothing read back from its image yet"),
     },
 )
 async def get_environment_version(
@@ -361,7 +364,7 @@ async def _read_back(name: str, version: EnvironmentVersionDetail) -> Environmen
     summary="A version as files to recreate it locally: pixi files, uv files (without conda), or requirements",
     responses={
         **_NO_ENVIRONMENT,
-        409: {"description": "The version has no lock in that format (prebuilt, older, or still resolving)"},
+        409: error("The version has no lock in that format (prebuilt, older, or still resolving)"),
     },
 )
 async def export_environment_version(
@@ -406,7 +409,7 @@ async def get_environment_version_compliance(name: str, number: int, principal: 
     operation_id="run-environment-version-compliance",
     tags=["Registry"],
     summary="Run a version's compliance cases again (its entries' cases, as committed now)",
-    responses={**_NO_ENVIRONMENT, **_ADMIN, 409: {"description": "The version is not ready, or not composed"}},
+    responses={**_NO_ENVIRONMENT, **_ADMIN, 409: error("The version is not ready, or not composed")},
 )
 async def run_environment_version_compliance(
     name: str, number: int, background_tasks: BackgroundTasks, caller: EnvironmentAdmin
@@ -433,7 +436,7 @@ async def run_environment_version_compliance(
         200: {"model": EnvironmentVersion, "description": "A version with this very definition exists: that one"},
         **_NO_ENVIRONMENT,
         **_ADMIN,
-        422: {"description": "The request cannot make a version of this environment"},
+        422: error("The request cannot make a version of this environment", UnprocessableError),
     },
 )
 async def create_environment_version(
@@ -486,7 +489,7 @@ async def create_environment_version(
     responses={
         **_NO_ENVIRONMENT,
         **_ADMIN,
-        409: {"description": "A shared version whose image is not built yet, or no Kubernetes to run the Job on"},
+        409: error("A shared version whose image is not built yet, or no Kubernetes to run the Job on"),
     },
 )
 async def inspect_environment_version(
@@ -512,7 +515,7 @@ async def inspect_environment_version(
     operation_id="set-environment-default",
     tags=["Registry"],
     summary="Make a ready version the one runs get when they name none",
-    responses={**_NO_ENVIRONMENT, **_ADMIN, 409: {"description": "The version is not ready"}},
+    responses={**_NO_ENVIRONMENT, **_ADMIN, 409: error("The version is not ready")},
 )
 async def set_environment_default(name: str, request: DefaultVersion, caller: EnvironmentAdmin) -> EnvironmentVersion:
     await _known_kind(name)
@@ -530,7 +533,7 @@ async def set_environment_default(name: str, request: DefaultVersion, caller: En
     operation_id="retire-environment-version",
     tags=["Registry"],
     summary="Retire a version: it refuses new runs, and its images are kept for the runs that used it",
-    responses={**_NO_ENVIRONMENT, **_ADMIN, 409: {"description": "It is the default; make another the default first"}},
+    responses={**_NO_ENVIRONMENT, **_ADMIN, 409: error("It is the default; make another the default first")},
 )
 async def retire_environment_version(name: str, number: int, caller: EnvironmentAdmin) -> EnvironmentVersion:
     await _known_kind(name)
@@ -590,7 +593,7 @@ async def list_simulators(caller: OptionalCaller) -> list[SimulatorSummary]:
     operation_id="get-simulator",
     tags=["Registry"],
     summary="One simulator: its container definition, the versions it is, and the runs you can read that used it",
-    responses={404: {"description": "No such simulator, or one neither a version nor used by a run you can read"}},
+    responses={404: error("No such simulator, or one neither a version nor used by a run you can read")},
 )
 async def get_simulator(simulator_id: int, caller: OptionalCaller) -> SimulatorDetail:
     found = await _simulator_uses(caller, only=simulator_id)
@@ -606,7 +609,7 @@ async def get_simulator(simulator_id: int, caller: OptionalCaller) -> SimulatorD
     operation_id="get-simulator-images",
     tags=["Registry"],
     summary="Whether a simulator's image is built, with its image records and newest build run",
-    responses={404: {"description": "No such simulator"}},
+    responses={404: error("No such simulator")},
 )
 async def get_simulator_images(simulator_id: int, principal: OptionalPrincipal) -> ImageStatus:
     # public: the same for every caller
@@ -621,7 +624,7 @@ async def get_simulator_images(simulator_id: int, principal: OptionalPrincipal) 
     summary="Make a simulator's image available: 200 if it is, 202 once its pull or build has started",
     responses={
         202: {"model": ImageStatus, "description": "Its pull or build has started (or was already under way)"},
-        404: {"description": "No such simulator"},
+        404: error("No such simulator"),
     },
 )
 async def build_simulator(

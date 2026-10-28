@@ -1,12 +1,14 @@
 from http import HTTPStatus
-from typing import Any, cast
+from io import BytesIO
+from typing import Any
 
 import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...models.error_detail import ErrorDetail
 from ...models.http_validation_error import HTTPValidationError
-from ...types import UNSET, Response
+from ...types import UNSET, File, Response
 
 
 def _get_kwargs(
@@ -31,13 +33,15 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Any | HTTPValidationError | None:
+) -> ErrorDetail | File | HTTPValidationError | None:
     if response.status_code == 200:
-        response_200 = cast(Any, response.content)
+        response_200 = File(payload=BytesIO(response.content))
+
         return response_200
 
     if response.status_code == 404:
-        response_404 = cast(Any, None)
+        response_404 = ErrorDetail.from_dict(response.json())
+
         return response_404
 
     if response.status_code == 422:
@@ -53,7 +57,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[Any | HTTPValidationError]:
+) -> Response[ErrorDetail | File | HTTPValidationError]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -66,7 +70,7 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     simulation_id: int,
-) -> Response[Any | HTTPValidationError]:
+) -> Response[ErrorDetail | File | HTTPValidationError]:
     """Get simulation results as a zip file
 
     Args:
@@ -77,7 +81,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | HTTPValidationError]
+        Response[ErrorDetail | File | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
@@ -95,7 +99,7 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     simulation_id: int,
-) -> Any | HTTPValidationError | None:
+) -> ErrorDetail | File | HTTPValidationError | None:
     """Get simulation results as a zip file
 
     Args:
@@ -106,7 +110,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | HTTPValidationError
+        ErrorDetail | File | HTTPValidationError
     """
 
     return sync_detailed(
@@ -119,7 +123,7 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     simulation_id: int,
-) -> Response[Any | HTTPValidationError]:
+) -> Response[ErrorDetail | File | HTTPValidationError]:
     """Get simulation results as a zip file
 
     Args:
@@ -130,7 +134,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | HTTPValidationError]
+        Response[ErrorDetail | File | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
@@ -146,7 +150,7 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     simulation_id: int,
-) -> Any | HTTPValidationError | None:
+) -> ErrorDetail | File | HTTPValidationError | None:
     """Get simulation results as a zip file
 
     Args:
@@ -157,7 +161,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | HTTPValidationError
+        ErrorDetail | File | HTTPValidationError
     """
 
     return (

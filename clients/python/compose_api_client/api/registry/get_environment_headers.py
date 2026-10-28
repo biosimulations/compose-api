@@ -1,5 +1,5 @@
 from http import HTTPStatus
-from typing import Any, cast
+from typing import Any
 from urllib.parse import quote
 
 import httpx
@@ -7,6 +7,7 @@ import httpx
 from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.environment_headers import EnvironmentHeaders
+from ...models.error_detail import ErrorDetail
 from ...models.http_validation_error import HTTPValidationError
 from ...types import Response
 
@@ -27,14 +28,15 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Any | EnvironmentHeaders | HTTPValidationError | None:
+) -> EnvironmentHeaders | ErrorDetail | HTTPValidationError | None:
     if response.status_code == 200:
         response_200 = EnvironmentHeaders.from_dict(response.json())
 
         return response_200
 
     if response.status_code == 404:
-        response_404 = cast(Any, None)
+        response_404 = ErrorDetail.from_dict(response.json())
+
         return response_404
 
     if response.status_code == 422:
@@ -43,7 +45,8 @@ def _parse_response(
         return response_422
 
     if response.status_code == 503:
-        response_503 = cast(Any, None)
+        response_503 = ErrorDetail.from_dict(response.json())
+
         return response_503
 
     if client.raise_on_unexpected_status:
@@ -54,7 +57,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[Any | EnvironmentHeaders | HTTPValidationError]:
+) -> Response[EnvironmentHeaders | ErrorDetail | HTTPValidationError]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -67,7 +70,7 @@ def sync_detailed(
     name: str,
     *,
     client: AuthenticatedClient | Client,
-) -> Response[Any | EnvironmentHeaders | HTTPValidationError]:
+) -> Response[EnvironmentHeaders | ErrorDetail | HTTPValidationError]:
     """An environment's interfaces as .pblang header files (one per module), and each class's declaration
 
     Args:
@@ -78,7 +81,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | EnvironmentHeaders | HTTPValidationError]
+        Response[EnvironmentHeaders | ErrorDetail | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
@@ -96,7 +99,7 @@ def sync(
     name: str,
     *,
     client: AuthenticatedClient | Client,
-) -> Any | EnvironmentHeaders | HTTPValidationError | None:
+) -> EnvironmentHeaders | ErrorDetail | HTTPValidationError | None:
     """An environment's interfaces as .pblang header files (one per module), and each class's declaration
 
     Args:
@@ -107,7 +110,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | EnvironmentHeaders | HTTPValidationError
+        EnvironmentHeaders | ErrorDetail | HTTPValidationError
     """
 
     return sync_detailed(
@@ -120,7 +123,7 @@ async def asyncio_detailed(
     name: str,
     *,
     client: AuthenticatedClient | Client,
-) -> Response[Any | EnvironmentHeaders | HTTPValidationError]:
+) -> Response[EnvironmentHeaders | ErrorDetail | HTTPValidationError]:
     """An environment's interfaces as .pblang header files (one per module), and each class's declaration
 
     Args:
@@ -131,7 +134,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | EnvironmentHeaders | HTTPValidationError]
+        Response[EnvironmentHeaders | ErrorDetail | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
@@ -147,7 +150,7 @@ async def asyncio(
     name: str,
     *,
     client: AuthenticatedClient | Client,
-) -> Any | EnvironmentHeaders | HTTPValidationError | None:
+) -> EnvironmentHeaders | ErrorDetail | HTTPValidationError | None:
     """An environment's interfaces as .pblang header files (one per module), and each class's declaration
 
     Args:
@@ -158,7 +161,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | EnvironmentHeaders | HTTPValidationError
+        EnvironmentHeaders | ErrorDetail | HTTPValidationError
     """
 
     return (

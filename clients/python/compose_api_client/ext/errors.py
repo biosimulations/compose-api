@@ -10,6 +10,7 @@ import json
 from enum import IntEnum
 from typing import Any, ClassVar
 
+from compose_api_client.ext.json_types import JsonValue
 from compose_api_client.types import Response
 
 
@@ -120,7 +121,7 @@ class ApiError(CliError):
     def __init__(
         self,
         message_or_status: str | int,
-        detail: Any = None,
+        detail: JsonValue = None,
         message: str | None = None,
         *,
         status_code: int | None = None,
@@ -204,15 +205,15 @@ class ApiTimeout(CliError, TimeoutError):
     exit_code = ExitCode.WAIT_TIMEOUT
     category = "wait_timeout"
 
-    def __init__(self, message: str, last: Any = None) -> None:
+    def __init__(self, message: str, last: object = None) -> None:
         self.last = last
         super().__init__(message)
 
 
-def detail_of(content: bytes) -> Any:
+def detail_of(content: bytes) -> JsonValue:
     """FastAPI's ``detail`` from an error body; the raw text when the body is not JSON."""
     try:
-        body = json.loads(content)
+        body: JsonValue = json.loads(content)
     except (ValueError, UnicodeDecodeError):
         return content.decode(errors="replace")
     return body.get("detail", body) if isinstance(body, dict) else body

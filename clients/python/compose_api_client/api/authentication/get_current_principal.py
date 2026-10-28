@@ -1,11 +1,12 @@
 from http import HTTPStatus
-from typing import Any, cast
+from typing import Any
 
 import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.current_principal_response import CurrentPrincipalResponse
+from ...models.error_detail import ErrorDetail
 from ...types import Response
 
 
@@ -21,14 +22,15 @@ def _get_kwargs() -> dict[str, Any]:
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Any | CurrentPrincipalResponse | None:
+) -> CurrentPrincipalResponse | ErrorDetail | None:
     if response.status_code == 200:
         response_200 = CurrentPrincipalResponse.from_dict(response.json())
 
         return response_200
 
     if response.status_code == 401:
-        response_401 = cast(Any, None)
+        response_401 = ErrorDetail.from_dict(response.json())
+
         return response_401
 
     if client.raise_on_unexpected_status:
@@ -39,7 +41,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[Any | CurrentPrincipalResponse]:
+) -> Response[CurrentPrincipalResponse | ErrorDetail]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -51,7 +53,7 @@ def _build_response(
 def sync_detailed(
     *,
     client: AuthenticatedClient,
-) -> Response[Any | CurrentPrincipalResponse]:
+) -> Response[CurrentPrincipalResponse | ErrorDetail]:
     """Get the authenticated caller's identity
 
     Raises:
@@ -59,7 +61,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | CurrentPrincipalResponse]
+        Response[CurrentPrincipalResponse | ErrorDetail]
     """
 
     kwargs = _get_kwargs()
@@ -74,7 +76,7 @@ def sync_detailed(
 def sync(
     *,
     client: AuthenticatedClient,
-) -> Any | CurrentPrincipalResponse | None:
+) -> CurrentPrincipalResponse | ErrorDetail | None:
     """Get the authenticated caller's identity
 
     Raises:
@@ -82,7 +84,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | CurrentPrincipalResponse
+        CurrentPrincipalResponse | ErrorDetail
     """
 
     return sync_detailed(
@@ -93,7 +95,7 @@ def sync(
 async def asyncio_detailed(
     *,
     client: AuthenticatedClient,
-) -> Response[Any | CurrentPrincipalResponse]:
+) -> Response[CurrentPrincipalResponse | ErrorDetail]:
     """Get the authenticated caller's identity
 
     Raises:
@@ -101,7 +103,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | CurrentPrincipalResponse]
+        Response[CurrentPrincipalResponse | ErrorDetail]
     """
 
     kwargs = _get_kwargs()
@@ -114,7 +116,7 @@ async def asyncio_detailed(
 async def asyncio(
     *,
     client: AuthenticatedClient,
-) -> Any | CurrentPrincipalResponse | None:
+) -> CurrentPrincipalResponse | ErrorDetail | None:
     """Get the authenticated caller's identity
 
     Raises:
@@ -122,7 +124,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | CurrentPrincipalResponse
+        CurrentPrincipalResponse | ErrorDetail
     """
 
     return (

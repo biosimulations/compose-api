@@ -1,6 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, override
+from collections.abc import Sequence
+from typing import override
 
 from sqlalchemy import Result, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -47,7 +48,7 @@ class PackageDatabaseService(ABC):
         pass
 
     @abstractmethod
-    async def list_all_computes(self, compute_type: BiGraphComputeType | None = None) -> Any:
+    async def list_all_computes(self, compute_type: BiGraphComputeType | None = None) -> Sequence[BiGraphCompute]:
         pass
 
     @abstractmethod
@@ -165,7 +166,7 @@ class PackageORMExecutor(PackageDatabaseService):
             return processes, steps
 
     @override
-    async def list_all_computes(self, compute_type: BiGraphComputeType | None = None) -> Any:
+    async def list_all_computes(self, compute_type: BiGraphComputeType | None = None) -> Sequence[BiGraphCompute]:
         async with self.async_session_maker() as session:
             stmt = select(ORMBiGraphCompute)
             if compute_type is not None:

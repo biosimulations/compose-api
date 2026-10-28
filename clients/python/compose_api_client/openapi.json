@@ -289,7 +289,14 @@
             }
           },
           "400": {
-            "description": "The submission cannot run. For a problem with the request itself (empty file, unsupported type, interval out of range) `detail` is a string. For a problem with its contents (unreadable archive, or processes the registry does not allow) `detail` is an object with a `message` and a `violations` list naming each address."
+            "description": "The submission cannot run. For a problem with the request itself (empty file, unsupported type, interval out of range) `detail` is a string. For a problem with its contents (unreadable archive, or processes the registry does not allow) `detail` is an object with a `message` and a `violations` list naming each address.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionError"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -577,7 +584,14 @@
             }
           },
           "404": {
-            "description": "The simulation does not exist, or the caller may not read it"
+            "description": "The simulation does not exist, or the caller may not read it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -762,7 +776,14 @@
             }
           },
           "404": {
-            "description": "The requested resource does not exist"
+            "description": "The requested resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -801,13 +822,21 @@
             "content": {
               "application/octet-stream": {
                 "schema": {
+                  "type": "string",
                   "format": "binary"
                 }
               }
             }
           },
           "404": {
-            "description": "The simulation does not exist, or its results are not available"
+            "description": "The simulation does not exist, or its results are not available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -852,7 +881,14 @@
             }
           },
           "404": {
-            "description": "The requested resource does not exist"
+            "description": "The requested resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -897,7 +933,14 @@
             }
           },
           "404": {
-            "description": "The requested resource does not exist"
+            "description": "The requested resource does not exist",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1026,7 +1069,14 @@
             }
           },
           "404": {
-            "description": "The requested resource does not exist"
+            "description": "The requested resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1071,7 +1121,14 @@
             }
           },
           "404": {
-            "description": "The requested resource does not exist"
+            "description": "The requested resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1110,15 +1167,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Get-Simulation-Trace-Chrome"
+                  "$ref": "#/components/schemas/TraceDocument"
                 }
               }
             }
           },
           "404": {
-            "description": "The requested resource does not exist"
+            "description": "The requested resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1324,7 +1386,14 @@
             }
           },
           "404": {
-            "description": "The simulation does not exist, or the caller may not read it"
+            "description": "The simulation does not exist, or the caller may not read it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1370,7 +1439,14 @@
             }
           },
           "404": {
-            "description": "The dataset does not exist, or the caller may not read it"
+            "description": "The dataset does not exist, or the caller may not read it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1410,16 +1486,31 @@
             "content": {
               "application/octet-stream": {
                 "schema": {
+                  "type": "string",
                   "format": "binary"
                 }
               }
             }
           },
           "404": {
-            "description": "The dataset does not exist, the caller may not read it, or its file is gone"
+            "description": "The dataset does not exist, the caller may not read it, or its file is gone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "409": {
-            "description": "The dataset is a directory (a zarr store): read its files with get-dataset-file"
+            "description": "The dataset is a directory (a zarr store): read its files with get-dataset-file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1469,13 +1560,21 @@
             "content": {
               "application/octet-stream": {
                 "schema": {
+                  "type": "string",
                   "format": "binary"
                 }
               }
             }
           },
           "404": {
-            "description": "The dataset does not exist, the caller may not read it, it is not a directory, or it has no such file"
+            "description": "The dataset does not exist, the caller may not read it, it is not a directory, or it has no such file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1547,7 +1646,14 @@
             }
           },
           "404": {
-            "description": "No such environment here, or no manifest has been generated for it"
+            "description": "No such environment here, or no manifest has been generated for it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1592,10 +1698,24 @@
             }
           },
           "404": {
-            "description": "No such environment here, or no manifest has been generated for it"
+            "description": "No such environment here, or no manifest has been generated for it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "503": {
-            "description": "process-bigraph-lang is not installed in this deployment"
+            "description": "process-bigraph-lang is not installed in this deployment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1690,7 +1810,14 @@
             }
           },
           "404": {
-            "description": "No such environment here"
+            "description": "No such environment here",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1745,7 +1872,14 @@
             }
           },
           "404": {
-            "description": "No such environment here"
+            "description": "No such environment here",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1790,7 +1924,14 @@
             }
           },
           "404": {
-            "description": "No such environment, or no such version"
+            "description": "No such environment, or no such version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1854,16 +1995,44 @@
             }
           },
           "404": {
-            "description": "No such environment, or no such version"
+            "description": "No such environment, or no such version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "401": {
-            "description": "Not signed in"
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Not an environment administrator, or environment administration is not configured"
+            "description": "Not an environment administrator, or environment administration is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
-            "description": "The request cannot make a version of this environment"
+            "description": "The request cannot make a version of this environment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnprocessableError"
+                }
+              }
+            }
           }
         }
       }
@@ -1925,10 +2094,24 @@
             }
           },
           "404": {
-            "description": "No such environment, or no such version"
+            "description": "No such environment, or no such version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "409": {
-            "description": "`against` names a version, or this one is, with nothing read back from its image yet"
+            "description": "`against` names a version, or this one is, with nothing read back from its image yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -2000,10 +2183,24 @@
             }
           },
           "404": {
-            "description": "No such environment, or no such version"
+            "description": "No such environment, or no such version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "409": {
-            "description": "The version has no lock in that format (prebuilt, older, or still resolving)"
+            "description": "The version has no lock in that format (prebuilt, older, or still resolving)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -2057,7 +2254,14 @@
             }
           },
           "404": {
-            "description": "No such environment, or no such version"
+            "description": "No such environment, or no such version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -2109,16 +2313,44 @@
             }
           },
           "404": {
-            "description": "No such environment, or no such version"
+            "description": "No such environment, or no such version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "401": {
-            "description": "Not signed in"
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Not an environment administrator, or environment administration is not configured"
+            "description": "Not an environment administrator, or environment administration is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "409": {
-            "description": "The version is not ready, or not composed"
+            "description": "The version is not ready, or not composed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -2173,16 +2405,44 @@
             }
           },
           "404": {
-            "description": "No such environment, or no such version"
+            "description": "No such environment, or no such version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "401": {
-            "description": "Not signed in"
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Not an environment administrator, or environment administration is not configured"
+            "description": "Not an environment administrator, or environment administration is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "409": {
-            "description": "A shared version whose image is not built yet, or no Kubernetes to run the Job on"
+            "description": "A shared version whose image is not built yet, or no Kubernetes to run the Job on",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -2237,16 +2497,44 @@
             }
           },
           "404": {
-            "description": "No such environment, or no such version"
+            "description": "No such environment, or no such version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "401": {
-            "description": "Not signed in"
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Not an environment administrator, or environment administration is not configured"
+            "description": "Not an environment administrator, or environment administration is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "409": {
-            "description": "The version is not ready"
+            "description": "The version is not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -2300,16 +2588,44 @@
             }
           },
           "404": {
-            "description": "No such environment, or no such version"
+            "description": "No such environment, or no such version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "401": {
-            "description": "Not signed in"
+            "description": "Not signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Not an environment administrator, or environment administration is not configured"
+            "description": "Not an environment administrator, or environment administration is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "409": {
-            "description": "It is the default; make another the default first"
+            "description": "It is the default; make another the default first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -2379,7 +2695,14 @@
             }
           },
           "404": {
-            "description": "No such simulator, or one neither a version nor used by a run you can read"
+            "description": "No such simulator, or one neither a version nor used by a run you can read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -2424,7 +2747,14 @@
             }
           },
           "404": {
-            "description": "No such simulator"
+            "description": "No such simulator",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -2479,7 +2809,14 @@
             }
           },
           "404": {
-            "description": "No such simulator"
+            "description": "No such simulator",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -2722,7 +3059,14 @@
             }
           },
           "400": {
-            "description": "Not an archive, an unknown solver, a bad tag, or no task any solver accepted"
+            "description": "Not an archive, an unknown solver, a bad tag or version: `detail` is a message. Processes the registry does not allow: `detail` has a `message` and `violations`. No task any solver accepted: a `message` and the `findings`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SedmlRunError"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -2841,7 +3185,14 @@
             }
           },
           "404": {
-            "description": "No such comparison"
+            "description": "No such comparison",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -2895,7 +3246,14 @@
             }
           },
           "404": {
-            "description": "No such comparison or report"
+            "description": "No such comparison or report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -2967,7 +3325,14 @@
             }
           },
           "404": {
-            "description": "No such comparison"
+            "description": "No such comparison",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3016,7 +3381,14 @@
             }
           },
           "404": {
-            "description": "No such comparison"
+            "description": "No such comparison",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3089,7 +3461,14 @@
             }
           },
           "502": {
-            "description": "The upstream service did not answer as expected"
+            "description": "The upstream service did not answer as expected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3134,10 +3513,24 @@
             }
           },
           "404": {
-            "description": "No such model or project upstream"
+            "description": "No such model or project upstream",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "502": {
-            "description": "The upstream service did not answer as expected"
+            "description": "The upstream service did not answer as expected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3172,13 +3565,35 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response"
+            "description": "The archive",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
           },
           "404": {
-            "description": "No such model or project upstream"
+            "description": "No such model or project upstream",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "502": {
-            "description": "The upstream service did not answer as expected"
+            "description": "The upstream service did not answer as expected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3322,11 +3737,35 @@
               }
             }
           },
+          "400": {
+            "description": "Not an archive, an unknown solver, a bad tag or version: `detail` is a message. Processes the registry does not allow: `detail` has a `message` and `violations`. No task any solver accepted: a `message` and the `findings`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SedmlRunError"
+                }
+              }
+            }
+          },
           "404": {
-            "description": "No such model or project upstream"
+            "description": "No such model or project upstream",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "502": {
-            "description": "The upstream service did not answer as expected"
+            "description": "The upstream service did not answer as expected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3389,7 +3828,14 @@
             }
           },
           "502": {
-            "description": "The upstream service did not answer as expected"
+            "description": "The upstream service did not answer as expected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3434,10 +3880,24 @@
             }
           },
           "404": {
-            "description": "No such model or project upstream"
+            "description": "No such model or project upstream",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "502": {
-            "description": "The upstream service did not answer as expected"
+            "description": "The upstream service did not answer as expected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3472,13 +3932,35 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response"
+            "description": "The archive",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
           },
           "404": {
-            "description": "No such model or project upstream"
+            "description": "No such model or project upstream",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "502": {
-            "description": "The upstream service did not answer as expected"
+            "description": "The upstream service did not answer as expected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3533,10 +4015,24 @@
             }
           },
           "404": {
-            "description": "No such model or project upstream"
+            "description": "No such model or project upstream",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "502": {
-            "description": "The upstream service did not answer as expected"
+            "description": "The upstream service did not answer as expected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3680,11 +4176,35 @@
               }
             }
           },
+          "400": {
+            "description": "Not an archive, an unknown solver, a bad tag or version: `detail` is a message. Processes the registry does not allow: `detail` has a `message` and `violations`. No task any solver accepted: a `message` and the `findings`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SedmlRunError"
+                }
+              }
+            }
+          },
           "404": {
-            "description": "No such model or project upstream"
+            "description": "No such model or project upstream",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "502": {
-            "description": "The upstream service did not answer as expected"
+            "description": "The upstream service did not answer as expected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3758,7 +4278,14 @@
             }
           },
           "404": {
-            "description": "No such suite"
+            "description": "No such suite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3812,7 +4339,14 @@
             }
           },
           "404": {
-            "description": "No such suite or run"
+            "description": "No such suite or run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3873,13 +4407,34 @@
             }
           },
           "400": {
-            "description": "A version not named, malformed, or that runs cannot use"
+            "description": "A version not named, malformed, or that runs cannot use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "404": {
-            "description": "No such suite"
+            "description": "No such suite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "409": {
-            "description": "A run of the suite is still submitting or running"
+            "description": "A run of the suite is still submitting or running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3949,7 +4504,14 @@
             }
           },
           "404": {
-            "description": "No such suite or run"
+            "description": "No such suite or run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -4016,7 +4578,14 @@
             }
           },
           "404": {
-            "description": "No such suite"
+            "description": "No such suite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -4069,19 +4638,54 @@
             }
           },
           "401": {
-            "description": "Anonymous"
+            "description": "Anonymous",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Not a suite curator, or suite curation is not configured"
+            "description": "Not a suite curator, or suite curation is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "404": {
-            "description": "No such suite, problem or run"
+            "description": "No such suite, problem or run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "400": {
-            "description": "A source or solver the suite does not have"
+            "description": "A source or solver the suite does not have",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "409": {
-            "description": "A problem is already open for that source and solver"
+            "description": "A problem is already open for that source and solver",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -4145,13 +4749,34 @@
             }
           },
           "401": {
-            "description": "Anonymous"
+            "description": "Anonymous",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Not a suite curator, or suite curation is not configured"
+            "description": "Not a suite curator, or suite curation is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "404": {
-            "description": "No such suite, problem or run"
+            "description": "No such suite, problem or run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -4215,16 +4840,44 @@
             }
           },
           "401": {
-            "description": "Anonymous"
+            "description": "Anonymous",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Not a suite curator, or suite curation is not configured"
+            "description": "Not a suite curator, or suite curation is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "404": {
-            "description": "No such suite, problem or run"
+            "description": "No such suite, problem or run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "409": {
-            "description": "Already cleared"
+            "description": "Already cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -4258,7 +4911,14 @@
             }
           },
           "401": {
-            "description": "Missing or invalid bearer credentials"
+            "description": "Missing or invalid bearer credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -4318,6 +4978,34 @@
   },
   "components": {
     "schemas": {
+      "AddressViolation": {
+        "properties": {
+          "document": {
+            "type": "string",
+            "title": "Document"
+          },
+          "address": {
+            "type": "string",
+            "title": "Address"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "always_rejected": {
+            "type": "boolean",
+            "title": "Always Rejected",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "document",
+          "address",
+          "reason"
+        ],
+        "title": "AddressViolation"
+      },
       "BiGraphComputeType": {
         "type": "string",
         "enum": [
@@ -6054,7 +6742,7 @@
           "detail"
         ],
         "title": "ErrorDetail",
-        "description": "An error's body, as FastAPI's ``HTTPException`` writes it. A route declares it for its error responses so the\ngenerated client parses them into this rather than typing them ``Any``, which would make the whole return type\n``Any`` to a type checker."
+        "description": "An error, as ``HTTPException(status_code, detail=\"...\")`` writes it."
       },
       "HTTPValidationError": {
         "properties": {
@@ -6719,6 +7407,28 @@
         "title": "NewEnvironmentVersion",
         "description": "What to make a version from. A composed environment (one that lists its registry entries): a date to resolve\nits entries at (default now); a mash-up is an environment of its own, never a version of another. A prebuilt one:\nits image by digest. (Library lists, the shared uv path's `custom` versions, are retired:\ndocs/plan-environment-composition.md, D8.5; versions made that way stay readable.)"
       },
+      "NoTaskAccepted": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/SedmlFinding"
+            },
+            "type": "array",
+            "title": "Findings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "findings"
+        ],
+        "title": "NoTaskAccepted",
+        "description": "A SED-ML archive none of whose tasks any solver accepted, with the translation's findings."
+      },
       "PackageChange": {
         "properties": {
           "name": {
@@ -6895,6 +7605,28 @@
           "versions"
         ],
         "title": "RegisteredSimulators"
+      },
+      "Rejection": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "violations": {
+            "items": {
+              "$ref": "#/components/schemas/AddressViolation"
+            },
+            "type": "array",
+            "title": "Violations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "violations"
+        ],
+        "title": "Rejection",
+        "description": "A document refused at submission: the addresses it may not use, and why (`registry.validation`)."
       },
       "RunEvent": {
         "properties": {
@@ -7292,6 +8024,30 @@
           "findings"
         ],
         "title": "SedmlPreview"
+      },
+      "SedmlRunError": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/components/schemas/Rejection"
+              },
+              {
+                "$ref": "#/components/schemas/NoTaskAccepted"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "SedmlRunError",
+        "description": "A SED-ML run refused: a message, the refused addresses, or the findings when no task was accepted."
       },
       "SedmlRunResult": {
         "properties": {
@@ -8106,6 +8862,27 @@
         "title": "SpanTree",
         "description": "A span with its own events (those whose ``span_id`` is the span's) and its children, by start time."
       },
+      "SubmissionError": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/components/schemas/Rejection"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "SubmissionError",
+        "description": "A run refused: a message, or the refused addresses."
+      },
       "SubmissionInfo": {
         "properties": {
           "state": {
@@ -8574,6 +9351,107 @@
         "title": "Tolerances",
         "description": "The platform's closeness score: close when `max |a-b| / (atol + rtol*|b|) < 1`, with\n`atol = max(abs_tol_min, max|a|*abs_tol_scale, max|b|*abs_tol_scale)` (docs/plan-sedml.md, D4)."
       },
+      "TraceDocument": {
+        "properties": {
+          "traceEvents": {
+            "items": {
+              "$ref": "#/components/schemas/TraceEvent"
+            },
+            "type": "array",
+            "title": "Traceevents"
+          },
+          "displayTimeUnit": {
+            "type": "string",
+            "title": "Displaytimeunit"
+          },
+          "otherData": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Otherdata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "traceEvents",
+          "displayTimeUnit",
+          "otherData"
+        ],
+        "title": "TraceDocument"
+      },
+      "TraceEvent": {
+        "properties": {
+          "ph": {
+            "type": "string",
+            "title": "Ph"
+          },
+          "pid": {
+            "type": "integer",
+            "title": "Pid"
+          },
+          "tid": {
+            "type": "integer",
+            "title": "Tid"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "cat": {
+            "type": "string",
+            "title": "Cat"
+          },
+          "ts": {
+            "type": "integer",
+            "title": "Ts"
+          },
+          "dur": {
+            "type": "integer",
+            "title": "Dur"
+          },
+          "s": {
+            "type": "string",
+            "title": "S"
+          },
+          "args": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Args"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ph",
+          "pid",
+          "tid"
+        ],
+        "title": "TraceEvent"
+      },
+      "UnprocessableError": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ValidationIssue"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "UnprocessableError",
+        "description": "A 422 a route raises itself (a message), or FastAPI's validation of the request (a list of issues)."
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -8613,6 +9491,40 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "ValidationIssue": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Loc"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Msg"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationIssue",
+        "description": "One of FastAPI's request-validation errors (its ``HTTPValidationError`` items)."
       },
       "Verification": {
         "properties": {

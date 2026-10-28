@@ -1,11 +1,12 @@
 from http import HTTPStatus
-from typing import Any, cast
+from typing import Any
 from urllib.parse import quote
 
 import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...models.error_detail import ErrorDetail
 from ...models.get_biosimulations_reference_response_get_biosimulations_reference import (
     GetBiosimulationsReferenceResponseGetBiosimulationsReference,
 )
@@ -29,14 +30,15 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Any | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError | None:
+) -> ErrorDetail | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError | None:
     if response.status_code == 200:
         response_200 = GetBiosimulationsReferenceResponseGetBiosimulationsReference.from_dict(response.json())
 
         return response_200
 
     if response.status_code == 404:
-        response_404 = cast(Any, None)
+        response_404 = ErrorDetail.from_dict(response.json())
+
         return response_404
 
     if response.status_code == 422:
@@ -45,7 +47,8 @@ def _parse_response(
         return response_422
 
     if response.status_code == 502:
-        response_502 = cast(Any, None)
+        response_502 = ErrorDetail.from_dict(response.json())
+
         return response_502
 
     if client.raise_on_unexpected_status:
@@ -56,7 +59,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[Any | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError]:
+) -> Response[ErrorDetail | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -69,7 +72,7 @@ def sync_detailed(
     project_id: str,
     *,
     client: AuthenticatedClient | Client,
-) -> Response[Any | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError]:
+) -> Response[ErrorDetail | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError]:
     """The project's original results: each report as {label: values}
 
     Args:
@@ -80,7 +83,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError]
+        Response[ErrorDetail | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
@@ -98,7 +101,7 @@ def sync(
     project_id: str,
     *,
     client: AuthenticatedClient | Client,
-) -> Any | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError | None:
+) -> ErrorDetail | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError | None:
     """The project's original results: each report as {label: values}
 
     Args:
@@ -109,7 +112,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError
+        ErrorDetail | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError
     """
 
     return sync_detailed(
@@ -122,7 +125,7 @@ async def asyncio_detailed(
     project_id: str,
     *,
     client: AuthenticatedClient | Client,
-) -> Response[Any | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError]:
+) -> Response[ErrorDetail | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError]:
     """The project's original results: each report as {label: values}
 
     Args:
@@ -133,7 +136,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError]
+        Response[ErrorDetail | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
@@ -149,7 +152,7 @@ async def asyncio(
     project_id: str,
     *,
     client: AuthenticatedClient | Client,
-) -> Any | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError | None:
+) -> ErrorDetail | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError | None:
     """The project's original results: each report as {label: values}
 
     Args:
@@ -160,7 +163,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError
+        ErrorDetail | GetBiosimulationsReferenceResponseGetBiosimulationsReference | HTTPValidationError
     """
 
     return (

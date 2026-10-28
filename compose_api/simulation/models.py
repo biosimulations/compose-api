@@ -555,14 +555,6 @@ class SimulationDetail(SimulationSummary):
     dataset_count: int = 0
 
 
-class ErrorDetail(BaseModel):
-    """An error's body, as FastAPI's ``HTTPException`` writes it. A route declares it for its error responses so the
-    generated client parses them into this rather than typing them ``Any``, which would make the whole return type
-    ``Any`` to a type checker."""
-
-    detail: str
-
-
 class SimulationCancellation(BaseModel):
     """A cancellation accepted. ``withdrawn``: the run was taken off the queue before SLURM had it, and is cancelled
     now. Otherwise SLURM was asked to cancel ``slurm_job_id``, and the run's status reads ``cancelled`` once the job

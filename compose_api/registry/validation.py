@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, JsonValue
 
 from compose_api.registry.manifest import HPC_MINIMUM_LEVEL, SERVICE_BUNDLE, Manifest, RegistryEntry, load_manifest
 from compose_api.simulation.models import SimulationFileType
@@ -26,6 +26,10 @@ _DOCUMENT_SUFFIXES = (".pbg", ".json")
 _NESTED_ARCHIVE_SUFFIX = ".omex"
 # A bundle nests archives one level deep; anything deeper is not something a client produces.
 _MAX_NESTING = 3
+
+
+#: A process address as a document writes it: `local:<module>.<Class>`, or `{"protocol": ..., "data": ...}`.
+Address = str | dict[str, Any]
 
 
 class AddressPolicy(enum.StrEnum):
@@ -79,14 +83,15 @@ def _documents_in_archive(data: bytes, name: str, depth: int = 0) -> Iterator[tu
                 yield from _documents_in_archive(archive.read(member), member_name, depth + 1)
 
 
-def _parse_document(data: bytes, name: str) -> Any:
+def _parse_document(data: bytes, name: str) -> JsonValue:
     try:
-        return json.loads(data)
+        document: JsonValue = json.loads(data)
     except (UnicodeDecodeError, json.JSONDecodeError) as e:
         raise SubmissionRejectedError(f"{name} is not a valid JSON composite document") from e
+    return document
 
 
-def _addresses(node: Any) -> Iterator[Any]:
+def _addresses(node: JsonValue) -> Iterator[Address]:
     """Every process address in a document, in string or {protocol, data} form.
 
     A dict under an `address` key without a `protocol` is a type declaration, such as a quoted default, not an
@@ -103,7 +108,7 @@ def _addresses(node: Any) -> Iterator[Any]:
             yield from _addresses(item)
 
 
-def _split_address(address: Any) -> tuple[str, str | None]:
+def _split_address(address: Address) -> tuple[str, str | None]:
     """(protocol, target) for an address in string or {protocol, data} form; a bare string defaults to `local`."""
     if isinstance(address, dict):
         target = address.get("data")
@@ -186,7 +191,7 @@ def _core_reason(entry: RegistryEntry, standing: Standing | None, environment: s
 
 
 def check_address(
-    address: Any,
+    address: Address,
     document: str,
     manifest: Manifest,
     standing: Standing | None = None,

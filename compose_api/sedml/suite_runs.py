@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import BackgroundTasks
 from pydantic import BaseModel, Field
 
-from compose_api.db.services.comparisons_db import ClaimedSuiteRun
+from compose_api.db.services.comparisons_db import ClaimedSuiteRun, ComparisonRow
 from compose_api.dependencies import get_required_database_service
 from compose_api.sedml import service, sources, suites
 from compose_api.sedml.compare import compare
@@ -370,7 +370,7 @@ def _num(value: float | str | None) -> float:
     return float("inf") if value == "inf" else float(value or 0.0)
 
 
-async def _drift(current: Any, before: Any) -> dict[str, Drift]:
+async def _drift(current: ComparisonRow, before: ComparisonRow) -> dict[str, Drift]:
     """Each solver against its own baseline result, by the comparison's tolerances."""
     from compose_api.sedml.models import Tolerances
 

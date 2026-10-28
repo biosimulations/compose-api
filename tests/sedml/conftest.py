@@ -89,13 +89,15 @@ def recorded_sources(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterato
         f"{sources.BIOSIMULATIONS}/results/{run}/download": (RECORDED / "ciliberto_results.zip").read_bytes(),
     }
 
-    async def get(url: str, *, json: bool = True, params: dict[str, Any] | None = None) -> Any:
+    async def get_bytes(url: str, *, params: dict[str, str | int] | None = None, accept_json: bool = False) -> bytes:
         asked.append(url)
         if url not in answers:
             raise sources.SourceNotFoundError(url)
-        return answers[url]
+        answer = answers[url]
+        return answer if isinstance(answer, bytes) else json.dumps(answer).encode()
 
-    monkeypatch.setattr(sources, "_get", get)
-    monkeypatch.setattr(sources, "_memo", {})
+    monkeypatch.setattr(sources, "_get_bytes", get_bytes)
+    sources.forget_cached()
     with override_settings(sources_cache_dir=str(tmp_path / "cache")):
         yield asked
+    sources.forget_cached()

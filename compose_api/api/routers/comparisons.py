@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
 
+from compose_api.api.errors import error
 from compose_api.authentication import get_optional_principal
 from compose_api.authorization import OptionalCaller, readable_clause, readable_simulation_ids
 from compose_api.common.gateway.models import RouterConfig
@@ -59,7 +60,7 @@ async def list_comparisons(
     operation_id="get-comparison",
     tags=["SED-ML"],
     summary="One comparison: its runs, and per report and data set each solver pair's score",
-    responses={404: {"description": "No such comparison"}},
+    responses={404: error("No such comparison")},
 )
 async def get_comparison(comparison_id: int, caller: OptionalCaller) -> Comparison:
     row = await _readable_comparison(comparison_id, caller)
@@ -74,7 +75,7 @@ async def get_comparison(comparison_id: int, caller: OptionalCaller) -> Comparis
     operation_id="get-comparison-series",
     tags=["SED-ML"],
     summary="One report's columns from each run and each reference, for overlays",
-    responses={404: {"description": "No such comparison or report"}},
+    responses={404: error("No such comparison or report")},
 )
 async def get_comparison_series(comparison_id: int, report: str, caller: OptionalCaller) -> ComparisonSeries:
     row = await _readable_comparison(comparison_id, caller)
@@ -109,7 +110,7 @@ async def get_comparison_series(comparison_id: int, report: str, caller: Optiona
             "biosim was still working on it and is now polled again; it is returned",
         },
         201: {"description": "Queued"},
-        404: {"description": "No such comparison"},
+        404: error("No such comparison"),
     },
 )
 async def verify_comparison(
@@ -132,7 +133,7 @@ async def verify_comparison(
     operation_id="list-comparison-verifications",
     tags=["SED-ML"],
     summary="A comparison's verifications against biosim's /verify, oldest first",
-    responses={404: {"description": "No such comparison"}},
+    responses={404: error("No such comparison")},
 )
 async def list_comparison_verifications(comparison_id: int, caller: OptionalCaller) -> list[Verification]:
     row = await _readable_comparison(comparison_id, caller)

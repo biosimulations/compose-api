@@ -17,6 +17,7 @@ import pytest_asyncio
 import yaml
 from compose_api_client import AuthenticatedClient, Client
 from compose_api_client.api.results import get_simulation_status
+from compose_api_client.models import ErrorDetail
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.dependencies.models import Dependant
@@ -834,7 +835,7 @@ def test_generated_client_keeps_optional_bearer_and_documented_404(authenticated
         assert request.headers.get("authorization") == ("Bearer test-token" if authenticated else None)
         assert request.url.path == "/results/simulation/status"
         assert request.url.params["simulation_id"] == "999"
-        return httpx.Response(404)
+        return httpx.Response(404, json={"detail": "Simulation 999 not found"})  # as FastAPI writes it
 
     options: dict[str, Any] = {"transport": httpx.MockTransport(respond)}
     client = (
@@ -845,4 +846,5 @@ def test_generated_client_keeps_optional_bearer_and_documented_404(authenticated
     with client:
         response = get_simulation_status.sync_detailed(client=client, simulation_id=999)
     assert response.status_code == 404
-    assert response.parsed is None
+    # the documented 404's body is typed (compose_api/api/errors.py), not None
+    assert isinstance(response.parsed, ErrorDetail) and response.parsed.detail == "Simulation 999 not found"

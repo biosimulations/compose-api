@@ -1,10 +1,11 @@
 from http import HTTPStatus
-from typing import Any, cast
+from typing import Any
 
 import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...models.error_detail import ErrorDetail
 from ...models.http_validation_error import HTTPValidationError
 from ...models.project_info import ProjectInfo
 from ...types import UNSET, Response, Unset
@@ -35,7 +36,7 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Any | HTTPValidationError | list[ProjectInfo] | None:
+) -> ErrorDetail | HTTPValidationError | list[ProjectInfo] | None:
     if response.status_code == 200:
         response_200 = []
         _response_200 = response.json()
@@ -52,7 +53,8 @@ def _parse_response(
         return response_422
 
     if response.status_code == 502:
-        response_502 = cast(Any, None)
+        response_502 = ErrorDetail.from_dict(response.json())
+
         return response_502
 
     if client.raise_on_unexpected_status:
@@ -63,7 +65,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[Any | HTTPValidationError | list[ProjectInfo]]:
+) -> Response[ErrorDetail | HTTPValidationError | list[ProjectInfo]]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -77,7 +79,7 @@ def sync_detailed(
     client: AuthenticatedClient | Client,
     q: str | Unset = "",
     limit: int | Unset = 20,
-) -> Response[Any | HTTPValidationError | list[ProjectInfo]]:
+) -> Response[ErrorDetail | HTTPValidationError | list[ProjectInfo]]:
     """biosimulations.org projects whose id contains q
 
     Args:
@@ -89,7 +91,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | HTTPValidationError | list[ProjectInfo]]
+        Response[ErrorDetail | HTTPValidationError | list[ProjectInfo]]
     """
 
     kwargs = _get_kwargs(
@@ -109,7 +111,7 @@ def sync(
     client: AuthenticatedClient | Client,
     q: str | Unset = "",
     limit: int | Unset = 20,
-) -> Any | HTTPValidationError | list[ProjectInfo] | None:
+) -> ErrorDetail | HTTPValidationError | list[ProjectInfo] | None:
     """biosimulations.org projects whose id contains q
 
     Args:
@@ -121,7 +123,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | HTTPValidationError | list[ProjectInfo]
+        ErrorDetail | HTTPValidationError | list[ProjectInfo]
     """
 
     return sync_detailed(
@@ -136,7 +138,7 @@ async def asyncio_detailed(
     client: AuthenticatedClient | Client,
     q: str | Unset = "",
     limit: int | Unset = 20,
-) -> Response[Any | HTTPValidationError | list[ProjectInfo]]:
+) -> Response[ErrorDetail | HTTPValidationError | list[ProjectInfo]]:
     """biosimulations.org projects whose id contains q
 
     Args:
@@ -148,7 +150,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | HTTPValidationError | list[ProjectInfo]]
+        Response[ErrorDetail | HTTPValidationError | list[ProjectInfo]]
     """
 
     kwargs = _get_kwargs(
@@ -166,7 +168,7 @@ async def asyncio(
     client: AuthenticatedClient | Client,
     q: str | Unset = "",
     limit: int | Unset = 20,
-) -> Any | HTTPValidationError | list[ProjectInfo] | None:
+) -> ErrorDetail | HTTPValidationError | list[ProjectInfo] | None:
     """biosimulations.org projects whose id contains q
 
     Args:
@@ -178,7 +180,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | HTTPValidationError | list[ProjectInfo]
+        ErrorDetail | HTTPValidationError | list[ProjectInfo]
     """
 
     return (

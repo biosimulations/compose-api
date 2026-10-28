@@ -11,6 +11,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.responses import FileResponse
 
+from compose_api.api.errors import error
 from compose_api.authentication import get_optional_principal
 from compose_api.authorization import OptionalCaller, can_read, readable_clause
 from compose_api.common.gateway.models import Namespace, RouterConfig
@@ -22,7 +23,12 @@ from compose_api.simulation.hpc_utils import get_internal_experiment_dir
 
 logger = logging.getLogger(__name__)
 
-NOT_FOUND_RESPONSE = {"description": "The dataset does not exist, or the caller may not read it"}
+# a file, which the generated client returns as `File` (a schema without `type: string` would make it `Any`)
+FILE_BODY = {
+    "content": {"application/octet-stream": {"schema": {"type": "string", "format": "binary"}}},
+    "description": "The file",
+}
+NOT_FOUND_RESPONSE = error("The dataset does not exist, or the caller may not read it")
 
 config = RouterConfig(router=APIRouter(), prefix="/datasets", dependencies=[Depends(get_optional_principal)])
 
@@ -66,7 +72,7 @@ async def _dataset_path(dataset: Dataset) -> Path | None:
     path="",
     response_model=DatasetPage,
     operation_id="list-datasets",
-    responses={404: {"description": "The simulation does not exist, or the caller may not read it"}},
+    responses={404: error("The simulation does not exist, or the caller may not read it")},
     tags=["Datasets"],
     summary="List the datasets runs advertised, newest simulations first",
 )
@@ -107,9 +113,9 @@ async def get_dataset(dataset_id: uuid.UUID, caller: OptionalCaller) -> Dataset:
     response_class=FileResponse,
     operation_id="get-dataset-content",
     responses={
-        200: {"content": {"application/octet-stream": {"schema": {"format": "binary"}}}, "description": "The file"},
-        404: {"description": "The dataset does not exist, the caller may not read it, or its file is gone"},
-        409: {"description": "The dataset is a directory (a zarr store): read its files with get-dataset-file"},
+        200: FILE_BODY,
+        404: error("The dataset does not exist, the caller may not read it, or its file is gone"),
+        409: error("The dataset is a directory (a zarr store): read its files with get-dataset-file"),
     },
     tags=["Datasets"],
     summary="Read a dataset's file (supports HTTP Range requests)",
@@ -139,11 +145,10 @@ async def get_dataset_content(dataset_id: uuid.UUID, caller: OptionalCaller) -> 
     response_class=FileResponse,
     operation_id="get-dataset-file",
     responses={
-        200: {"content": {"application/octet-stream": {"schema": {"format": "binary"}}}, "description": "The file"},
-        404: {
-            "description": "The dataset does not exist, the caller may not read it, it is not a directory, "
-            "or it has no such file"
-        },
+        200: FILE_BODY,
+        404: error(
+            "The dataset does not exist, the caller may not read it, it is not a directory, or it has no such file"
+        ),
     },
     tags=["Datasets"],
     summary="Read one file inside a directory dataset, e.g. a zarr store's metadata or chunk (supports HTTP Range)",

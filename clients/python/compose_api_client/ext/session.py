@@ -10,14 +10,15 @@ from __future__ import annotations
 import asyncio
 import datetime
 import io
+import ssl
 import time
 import uuid
 import zipfile
-from collections.abc import Awaitable, Callable, Iterator, Sequence
+from collections.abc import Awaitable, Callable, Coroutine, Iterator, Sequence
 from contextlib import suppress
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, TypeVar, cast
 
 import httpx
 from attrs import define
@@ -138,6 +139,7 @@ from compose_api_client.models import (
     BodyRunSimulation,
     BodyRunTellurium,
     CatalogEntry,
+    CheckHealthHealthGetResponseCheckHealthHealthGet,
     Comparison,
     ComparisonPage,
     ComparisonSeries,
@@ -179,11 +181,16 @@ from compose_api_client.models import (
     SuiteRunInfo,
     SuiteRunView,
     SuiteVerifyResult,
+    TraceDocument,
     Verification,
     VerifyRequest,
     VerifySuiteRunWhich,
 )
 from compose_api_client.types import UNSET, File, Response
+
+T = TypeVar("T")
+#: An ASGI application (the FastAPI app), as httpx.ASGITransport takes it
+ASGIApp = Callable[..., Coroutine[None, None, None]]
 
 DEFAULT_URL = "https://compose.cam.uchc.edu"
 SUBMITTING = "submitting"
@@ -258,7 +265,8 @@ def _raise_for(response: Response[Any], op: Operation) -> None:
     raise error
 
 
-def _parsed(response: Response[Any], *, op: Operation | None = None) -> Any:
+def _body(response: Response[Any], *, op: Operation | None = None) -> object:
+    """The parsed body of a successful answer; raises for an error, a redirect, or an unreadable answer."""
     code = int(response.status_code)
     if 300 <= code < 400:
         label = str(op) if op is not None else "request"
@@ -286,13 +294,36 @@ def _parsed(response: Response[Any], *, op: Operation | None = None) -> Any:
             f"the API's answer to {op} could not be read. {_UNKNOWN_OUTCOME}.",
             exit_code=ExitCode.FAILURE,
         )
-    return response.parsed
+    parsed: object = response.parsed
+    return parsed
+
+
+def _parsed(response: Response[Any], kind: type[T], *, op: Operation | None = None) -> T:
+    """The successful answer's body, which must be a ``kind``: the generated client types each answer as the union of
+    every body the operation declares (its errors too); past the status checks only the success body is left."""
+    body = _body(response, op=op)
+    if not isinstance(body, kind):
+        raise ProtocolError(f"the API's answer to {op or 'the request'} was not a {kind.__name__}")
+    return body
+
+
+def _parsed_list(response: Response[Any], item: type[T], *, op: Operation | None = None) -> list[T]:
+    """As :func:`_parsed`, for an answer that is a list of ``item``."""
+    body = _body(response, op=op)
+    if not isinstance(body, list):
+        raise ProtocolError(f"the API's answer to {op or 'the request'} was not a list")
+    items: list[T] = []
+    for value in body:
+        if not isinstance(value, item):
+            raise ProtocolError(f"the API's answer to {op or 'the request'} was not a list of {item.__name__}")
+        items.append(value)
+    return items
 
 
 def _state(response: Response[Any], *, op: Operation | None = None) -> JobState:
     if int(response.status_code) == 404:
         return JobState(SUBMITTING)
-    run = _parsed(response, op=op)
+    run = _parsed(response, HpcRun, op=op)
     return JobState.of(run)
 
 
@@ -342,7 +373,7 @@ def _make_client(
     timeout: float,
     transport: httpx.BaseTransport | httpx.AsyncBaseTransport | None,
     *,
-    verify_ssl: Any = True,
+    verify_ssl: str | bool | ssl.SSLContext = True,
     guard: _DestinationGuard | None = None,
     is_async: bool = False,
     on_response: Callable[[httpx.Response], None] | None = None,
@@ -542,7 +573,7 @@ class ComposeSession:
             CURRENT_PRINCIPAL,
             lambda c: get_current_principal.sync_detailed(client=cast(AuthenticatedClient, c)),
         )
-        principal: CurrentPrincipalResponse = _parsed(r, op=CURRENT_PRINCIPAL)
+        principal = _parsed(r, CurrentPrincipalResponse, op=CURRENT_PRINCIPAL)
         if (
             credential is not None
             and credential.issuer is not None
@@ -560,75 +591,76 @@ class ComposeSession:
     def health(self) -> dict[str, str]:
         op = Operation("GET", "/health", replayable=True)
         r, _ = self._send(op, lambda c: check_health_health_get.sync_detailed(client=c))
-        return dict(_parsed(r, op=op).to_dict())
+        health = _parsed(r, CheckHealthHealthGetResponseCheckHealthHealthGet, op=op)
+        return {key: str(value) for key, value in health.additional_properties.items()}
 
     def version(self) -> str:
         op = Operation("GET", "/version", replayable=True)
         r, _ = self._send(op, lambda c: get_version_version_get.sync_detailed(client=c))
-        return str(_parsed(r, op=op))
+        return _parsed(r, str, op=op)
 
     def simulators(self) -> RegisteredSimulators:
         op = Operation("GET", "/core/simulator/list", replayable=True)
         r, _ = self._send(op, lambda c: get_simulator_list.sync_detailed(client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, RegisteredSimulators, op=op)
 
     def processes(self) -> list[BiGraphProcess]:
         op = Operation("GET", "/core/processes/list", replayable=True)
         r, _ = self._send(op, lambda c: get_processes_list.sync_detailed(client=c))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, BiGraphProcess, op=op)
 
     def steps(self) -> list[BiGraphStep]:
         op = Operation("GET", "/core/steps/list", replayable=True)
         r, _ = self._send(op, lambda c: get_steps_list.sync_detailed(client=c))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, BiGraphStep, op=op)
 
     def environments(self) -> list[EnvironmentSummary]:
         """The environments documents run in, with what their interface manifests hold."""
         op = Operation("GET", "/registry/environments", replayable=True)
         r, _ = self._send(op, lambda c: list_environments.sync_detailed(client=c))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, EnvironmentSummary, op=op)
 
     def catalog(self) -> list[CatalogEntry]:
         """Every registry entry with its curation level and the environments that provide its classes."""
         op = Operation("GET", "/registry/entries", replayable=True)
         r, _ = self._send(op, lambda c: list_registry_entries.sync_detailed(client=c))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, CatalogEntry, op=op)
 
     def solvers(self) -> list[Solver]:
         """The solvers SED-ML runs can use: class, environment, KiSAO algorithms, what each returns."""
         op = Operation("GET", "/registry/solvers", replayable=True)
         r, _ = self._send(op, lambda c: list_solvers.sync_detailed(client=c))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, Solver, op=op)
 
     def environment_manifest(self, name: str) -> InterfaceManifest:
         """An environment's interface manifest (pbg-interfaces/1)."""
         op = Operation("GET", f"/registry/environments/{name}/manifest", replayable=True)
         r, _ = self._send(op, lambda c: get_environment_manifest.sync_detailed(name, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, InterfaceManifest, op=op)
 
     def environment_headers(self, name: str) -> EnvironmentHeaders:
         """An environment's interfaces as .pblang header files, and each class's declaration."""
         op = Operation("GET", f"/registry/environments/{name}/headers", replayable=True)
         r, _ = self._send(op, lambda c: get_environment_headers.sync_detailed(name, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, EnvironmentHeaders, op=op)
 
     def environment_images(self, name: str) -> ImageStatus:
         """Whether an environment's current image is built, with its image records and newest build run."""
         op = Operation("GET", f"/registry/environments/{name}/images", replayable=True)
         r, _ = self._send(op, lambda c: get_environment_images.sync_detailed(name, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, ImageStatus, op=op)
 
     def build_environment(self, name: str) -> ImageStatus:
         """Make an environment's current image available: pulled or built unless it is, joining a build under way."""
         op = Operation("POST", f"/registry/environments/{name}/build", replayable=False)
         r, _ = self._send(op, lambda c: build_environment.sync_detailed(name, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, ImageStatus, op=op)
 
     def environment_versions(self, name: str) -> EnvironmentVersions:
         """An environment's versions, newest first, and its default (docs/plan-environment-versions.md)."""
         op = Operation("GET", f"/registry/environments/{name}/versions", replayable=True)
         r, _ = self._send(op, lambda c: list_environment_versions.sync_detailed(name, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, EnvironmentVersions, op=op)
 
     def environment_version(self, name: str, number: int, *, against: int | None = None) -> EnvironmentVersionDetail:
         """One version: what it was made from, its lock, and what it installed and provides; with ``against``, how its
@@ -640,27 +672,27 @@ class ComposeSession:
                 name, number, client=c, against=against if against is not None else UNSET
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, EnvironmentVersionDetail, op=op)
 
     def export_environment_version(self, name: str, number: int, *, format: str | None = None) -> EnvironmentExport:  # noqa: A002
         """The files that recreate a version locally: pixi.toml and pixi.lock, or a uv requirements lock."""
         op = Operation("GET", f"/registry/environments/{name}/versions/{number}/export", replayable=True)
         fmt = format if format is not None else UNSET
         r, _ = self._send(op, lambda c: export_environment_version.sync_detailed(name, number, client=c, format_=fmt))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, EnvironmentExport, op=op)
 
     def environment_compliance(self, name: str, number: int) -> ComplianceReport:
         """Where each entry of a version stands there (its cases' runs), and the components a generic check refuses."""
         op = Operation("GET", f"/registry/environments/{name}/versions/{number}/compliance", replayable=True)
         r, _ = self._send(op, lambda c: get_environment_version_compliance.sync_detailed(name, number, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, ComplianceReport, op=op)
 
     def run_environment_compliance(self, name: str, number: int) -> ComplianceReport:
         """Run a version's compliance cases again (new runs: sent once, never retried). Needs the environment
         administrator role."""
         op = Operation("POST", f"/registry/environments/{name}/versions/{number}/compliance", replayable=False)
         r, _ = self._send(op, lambda c: run_environment_version_compliance.sync_detailed(name, number, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, ComplianceReport, op=op)
 
     def create_environment_version(
         self,
@@ -680,52 +712,52 @@ class ComposeSession:
             note=note if note is not None else UNSET,
         )
         r, _ = self._send(op, lambda c: create_environment_version.sync_detailed(name, client=c, body=body))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, EnvironmentVersion, op=op)
 
     def set_environment_default(self, name: str, number: int) -> EnvironmentVersion:
         """Make a ready version the one runs get when they name none. Needs the environment administrator role."""
         op = Operation("PUT", f"/registry/environments/{name}/default", replayable=True)
         body = DefaultVersion(number=number)
         r, _ = self._send(op, lambda c: set_environment_default.sync_detailed(name, client=c, body=body))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, EnvironmentVersion, op=op)
 
     def retire_environment_version(self, name: str, number: int) -> EnvironmentVersion:
         """Retire a version: it refuses new runs; its images are kept. Needs the environment administrator role."""
         op = Operation("POST", f"/registry/environments/{name}/versions/{number}/retire", replayable=True)
         r, _ = self._send(op, lambda c: retire_environment_version.sync_detailed(name, number, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, EnvironmentVersion, op=op)
 
     def inspect_environment_version(self, name: str, number: int) -> EnvironmentVersion:
         """Read a prebuilt version's image back again (what it installed and provides), in the background. Needs the
         environment administrator role."""
         op = Operation("POST", f"/registry/environments/{name}/versions/{number}/inspect", replayable=True)
         r, _ = self._send(op, lambda c: inspect_environment_version.sync_detailed(name, number, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, EnvironmentVersion, op=op)
 
     def simulators_used(self) -> list[SimulatorSummary]:
         """Every simulator that is an environment version or that runs you can read used, newest first: the versions
         it is (none for one from before versions) and how many runs used it."""
         op = Operation("GET", "/registry/simulators", replayable=True)
         r, _ = self._send(op, lambda c: list_simulators.sync_detailed(client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed_list(r, SimulatorSummary, op=op)
 
     def simulator(self, simulator_id: int) -> SimulatorDetail:
         """One simulator: its container definition, the versions it is, and the runs that used it."""
         op = Operation("GET", f"/registry/simulators/{simulator_id}", replayable=True)
         r, _ = self._send(op, lambda c: get_simulator.sync_detailed(simulator_id, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SimulatorDetail, op=op)
 
     def simulator_images(self, simulator_id: int) -> ImageStatus:
         """Whether a simulator's image is built, with its image records and newest build run."""
         op = Operation("GET", f"/registry/simulators/{simulator_id}/images", replayable=True)
         r, _ = self._send(op, lambda c: get_simulator_images.sync_detailed(simulator_id, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, ImageStatus, op=op)
 
     def build_simulator(self, simulator_id: int) -> ImageStatus:
         """Make a simulator's image available: pulled or built unless it is, joining a build under way."""
         op = Operation("POST", f"/registry/simulators/{simulator_id}/build", replayable=False)
         r, _ = self._send(op, lambda c: build_simulator.sync_detailed(simulator_id, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, ImageStatus, op=op)
 
     # -- submit -----------------------------------------------------------------------------------------------------
 
@@ -760,7 +792,7 @@ class ComposeSession:
                 environment=environment if environment is not None else UNSET,
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SimulationExperiment, op=op)
 
     def submit_copasi(self, sbml: FileSource, *, start: float, duration: float, points: int) -> SimulationExperiment:
         op = Operation("POST", "/curated/copasi", replayable=False)
@@ -774,7 +806,7 @@ class ComposeSession:
                 num_data_points=points,
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SimulationExperiment, op=op)
 
     def submit_tellurium(self, sbml: FileSource, *, start: float, end: float, points: int) -> SimulationExperiment:
         op = Operation("POST", "/curated/tellurium", replayable=False)
@@ -788,7 +820,7 @@ class ComposeSession:
                 num_data_points=points,
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SimulationExperiment, op=op)
 
     # -- status and waiting ---------------------------------------------------------------------------------------
 
@@ -801,7 +833,7 @@ class ComposeSession:
         """Several simulations' job records in one call (only those with a SLURM job yet)."""
         op = Operation("GET", "/results/simulations/status/batch", replayable=True)
         r, _ = self._send(op, lambda c: get_simulations_status_batch.sync_detailed(client=c, body=list(simulation_ids)))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, HpcRun, op=op)
 
     def build_log(self, simulator_id: int) -> str:
         """The SLURM log of the simulator's newest container build (its last 200 KB)."""
@@ -867,7 +899,7 @@ class ComposeSession:
                 mine=mine or UNSET,
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SimulationPage, op=op)
 
     # -- SED-ML -----------------------------------------------------------------------------------------------------
 
@@ -882,7 +914,7 @@ class ComposeSession:
                 solvers=list(solvers) if solvers else UNSET,
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SedmlPreview, op=op)
 
     def sedml_run(
         self,
@@ -909,19 +941,19 @@ class ComposeSession:
                 environment_version=list(environment_versions) if environment_versions else UNSET,
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SedmlRunResult, op=op)
 
     # -- sources (BioModels, biosimulations.org) --------------------------------------------------------------------
 
     def biomodels_search(self, query: str, *, limit: int = 20, curated: bool = True) -> list[BiomodelHit]:
         op = Operation("GET", "/sources/biomodels/search", replayable=True)
         r, _ = self._send(op, lambda c: search_biomodels.sync_detailed(client=c, q=query, limit=limit, curated=curated))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, BiomodelHit, op=op)
 
     def biomodel(self, model_id: str) -> BiomodelInfo:
         op = Operation("GET", f"/sources/biomodels/{model_id}", replayable=True)
         r, _ = self._send(op, lambda c: get_biomodel.sync_detailed(model_id, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, BiomodelInfo, op=op)
 
     def biomodel_omex(self, model_id: str) -> bytes:
         op = Operation("GET", f"/sources/biomodels/{model_id}/omex", replayable=True)
@@ -948,17 +980,17 @@ class ComposeSession:
                 environment_version=list(environment_versions) if environment_versions else UNSET,
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SedmlRunResult, op=op)
 
     def biosimulations_search(self, query: str = "", *, limit: int = 20) -> list[ProjectInfo]:
         op = Operation("GET", "/sources/biosimulations/projects", replayable=True)
         r, _ = self._send(op, lambda c: search_biosimulations_projects.sync_detailed(client=c, q=query, limit=limit))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, ProjectInfo, op=op)
 
     def biosimulations_project(self, project_id: str) -> ProjectInfo:
         op = Operation("GET", f"/sources/biosimulations/{project_id}", replayable=True)
         r, _ = self._send(op, lambda c: get_biosimulations_project.sync_detailed(project_id, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, ProjectInfo, op=op)
 
     def biosimulations_omex(self, project_id: str) -> bytes:
         op = Operation("GET", f"/sources/biosimulations/{project_id}/omex", replayable=True)
@@ -993,25 +1025,25 @@ class ComposeSession:
                 environment_version=list(environment_versions) if environment_versions else UNSET,
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SedmlRunResult, op=op)
 
     # -- suites -----------------------------------------------------------------------------------------------------
 
     def suites(self) -> list[Suite]:
         op = Operation("GET", "/suites", replayable=True)
         r, _ = self._send(op, lambda c: list_suites.sync_detailed(client=c))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, Suite, op=op)
 
     def suite_runs(self, name: str) -> list[SuiteRunInfo]:
         op = Operation("GET", f"/suites/{name}/runs", replayable=True)
         r, _ = self._send(op, lambda c: list_suite_runs.sync_detailed(name, client=c))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, SuiteRunInfo, op=op)
 
     def suite_run(self, name: str, number: int) -> SuiteRunView:
         """One suite run: per source, agreement, references, and drift from the baseline run."""
         op = Operation("GET", f"/suites/{name}/runs/{number}", replayable=True)
         r, _ = self._send(op, lambda c: get_suite_run.sync_detailed(name, number, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SuiteRunView, op=op)
 
     def run_suite(self, name: str, *, environment_versions: Sequence[str]) -> SuiteRunInfo:
         """Run every source of the suite (submitted in the background) in the environment versions named:
@@ -1020,7 +1052,7 @@ class ComposeSession:
         r, _ = self._send(
             op, lambda c: run_suite.sync_detailed(name, client=c, environment_version=list(environment_versions))
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SuiteRunInfo, op=op)
 
     def comparisons(self, *, source: str | None = None, limit: int = 25, offset: int = 0) -> ComparisonPage:
         op = Operation("GET", "/comparisons", replayable=True)
@@ -1030,19 +1062,19 @@ class ComposeSession:
                 client=c, source=source if source is not None else UNSET, limit=limit, offset=offset
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, ComparisonPage, op=op)
 
     def comparison_series(self, comparison_id: int, report: str) -> ComparisonSeries:
         """One report's columns from each run and each reference."""
         op = Operation("GET", f"/comparisons/{comparison_id}/series", replayable=True)
         r, _ = self._send(op, lambda c: get_comparison_series.sync_detailed(comparison_id, client=c, report=report))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, ComparisonSeries, op=op)
 
     def comparison(self, comparison_id: int) -> Comparison:
         """One comparison: its runs, and per report and data set each solver pair's score once all have finished."""
         op = Operation("GET", f"/comparisons/{comparison_id}", replayable=True)
         r, _ = self._send(op, lambda c: get_comparison.sync_detailed(comparison_id, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, Comparison, op=op)
 
     def verify_comparison(self, comparison_id: int, simulators: list[str] | None = None) -> Verification:
         """Queue a check of the comparison against BioSimulators' simulators (biosim's /verify); one already queued
@@ -1050,13 +1082,13 @@ class ComposeSession:
         op = Operation("POST", f"/comparisons/{comparison_id}/verify", replayable=False)
         body = VerifyRequest(simulators=simulators) if simulators else None  # no body: the service's default
         r, _ = self._send(op, lambda c: verify_comparison.sync_detailed(comparison_id, client=c, body=body))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, Verification, op=op)
 
     def comparison_verifications(self, comparison_id: int) -> list[Verification]:
         """The comparison's verifications, oldest first."""
         op = Operation("GET", f"/comparisons/{comparison_id}/verifications", replayable=True)
         r, _ = self._send(op, lambda c: list_comparison_verifications.sync_detailed(comparison_id, client=c))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, Verification, op=op)
 
     def verify_suite_run(self, name: str, number: int, *, which: str = "failing") -> SuiteVerifyResult:
         """Queue verifications for a suite run's finished comparisons: ``failing`` ones, or ``all``."""
@@ -1064,14 +1096,14 @@ class ComposeSession:
         r, _ = self._send(
             op, lambda c: verify_suite_run.sync_detailed(name, number, client=c, which=VerifySuiteRunWhich(which))
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SuiteVerifyResult, op=op)
 
     def suite_problems(self, name: str, *, cleared: bool | None = None) -> list[KnownProblem]:
         """A suite's known problems, oldest first: every one, or only the cleared (True) or open (False) ones."""
         op = Operation("GET", f"/suites/{name}/problems", replayable=True)
         flag = cleared if cleared is not None else UNSET
         r, _ = self._send(op, lambda c: list_suite_problems.sync_detailed(name, client=c, cleared=flag))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, KnownProblem, op=op)
 
     def mark_suite_problem(
         self,
@@ -1094,7 +1126,7 @@ class ComposeSession:
             seen_run=seen_run if seen_run is not None else UNSET,
         )
         r, _ = self._send(op, lambda c: mark_suite_problem.sync_detailed(name, client=c, body=mark))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, KnownProblem, op=op)
 
     def edit_suite_problem(
         self, name: str, problem_id: int, *, category: str | None = None, reason: str | None = None
@@ -1105,26 +1137,26 @@ class ComposeSession:
             category=category if category is not None else UNSET, reason=reason if reason is not None else UNSET
         )
         r, _ = self._send(op, lambda c: edit_suite_problem.sync_detailed(name, problem_id, client=c, body=edit))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, KnownProblem, op=op)
 
     def clear_suite_problem(self, name: str, problem_id: int, run: int) -> KnownProblem:
         """Clear a known problem at the suite run that shows it fixed. Needs the suite curator role."""
         op = Operation("POST", f"/suites/{name}/problems/{problem_id}/clear", replayable=True)
         body = KnownProblemClear(run=run)
         r, _ = self._send(op, lambda c: clear_suite_problem.sync_detailed(name, problem_id, client=c, body=body))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, KnownProblem, op=op)
 
     def simulation(self, simulation_id: int) -> SimulationDetail:
         """One simulation: its latest SLURM job and how many events and datasets its run recorded."""
         op = Operation("GET", f"/simulations/{simulation_id}", replayable=True)
         r, _ = self._send(op, lambda c: get_simulation.sync_detailed(simulation_id, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SimulationDetail, op=op)
 
     def cancel_simulation(self, simulation_id: int) -> SimulationCancellation:
         """Cancel a run (needs a signed-in session): withdrawn from the queue, or SLURM asked to cancel its job."""
         op = Operation("DELETE", f"/simulations/{simulation_id}", replayable=False)
         r, _ = self._send(op, lambda c: cancel_simulation.sync_detailed(simulation_id, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SimulationCancellation, op=op)
 
     # -- events and traces ----------------------------------------------------------------------------------------
 
@@ -1147,7 +1179,7 @@ class ComposeSession:
                 client=c, simulation_id=simulation_id, **_event_filters(after, limit, level, event, span_id)
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, RunEventPage, op=op)
 
     def iter_events(
         self,
@@ -1176,15 +1208,15 @@ class ComposeSession:
         """The run's spans as a tree, each span with its own events."""
         op = Operation("GET", "/results/simulation/trace", replayable=True)
         r, _ = self._send(op, lambda c: get_simulation_trace.sync_detailed(client=c, simulation_id=simulation_id))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, RunTraceTree, op=op)
 
-    def trace_chrome(self, simulation_id: int) -> dict[str, Any]:
+    def trace_chrome(self, simulation_id: int) -> TraceDocument:
         """The run's trace as a Chrome Trace Event document: save it as JSON and open it in ui.perfetto.dev."""
         op = Operation("GET", "/results/simulation/trace/chrome", replayable=True)
         r, _ = self._send(
             op, lambda c: get_simulation_trace_chrome.sync_detailed(client=c, simulation_id=simulation_id)
         )
-        return dict(_parsed(r, op=op).to_dict())
+        return _parsed(r, TraceDocument, op=op)
 
     # -- datasets ---------------------------------------------------------------------------------------------------
 
@@ -1206,12 +1238,12 @@ class ComposeSession:
                 client=c, **_dataset_filters(simulation_id, kind, q, available, limit, offset)
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, DatasetPage, op=op)
 
     def dataset(self, dataset_id: str | uuid.UUID) -> Dataset:
         op = Operation("GET", f"/datasets/{dataset_id}", replayable=True)
         r, _ = self._send(op, lambda c: get_dataset.sync_detailed(uuid.UUID(str(dataset_id)), client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, Dataset, op=op)
 
     def dataset_content(self, dataset_id: str | uuid.UUID) -> bytes:
         op = Operation("GET", f"/datasets/{dataset_id}/content", replayable=True)
@@ -1327,7 +1359,7 @@ class AsyncComposeSession:
     @classmethod
     def in_process(
         cls,
-        app: Any,
+        app: ASGIApp,
         base_url: str = "http://testserver",
         *,
         token: str | None = None,
@@ -1462,7 +1494,7 @@ class AsyncComposeSession:
             CURRENT_PRINCIPAL,
             lambda c: get_current_principal.asyncio_detailed(client=cast(AuthenticatedClient, c)),
         )
-        principal: CurrentPrincipalResponse = _parsed(r, op=CURRENT_PRINCIPAL)
+        principal = _parsed(r, CurrentPrincipalResponse, op=CURRENT_PRINCIPAL)
         if (
             credential is not None
             and credential.issuer is not None
@@ -1480,75 +1512,76 @@ class AsyncComposeSession:
     async def health(self) -> dict[str, str]:
         op = Operation("GET", "/health", replayable=True)
         r, _ = await self._send(op, lambda c: check_health_health_get.asyncio_detailed(client=c))
-        return dict(_parsed(r, op=op).to_dict())
+        health = _parsed(r, CheckHealthHealthGetResponseCheckHealthHealthGet, op=op)
+        return {key: str(value) for key, value in health.additional_properties.items()}
 
     async def version(self) -> str:
         op = Operation("GET", "/version", replayable=True)
         r, _ = await self._send(op, lambda c: get_version_version_get.asyncio_detailed(client=c))
-        return str(_parsed(r, op=op))
+        return _parsed(r, str, op=op)
 
     async def simulators(self) -> RegisteredSimulators:
         op = Operation("GET", "/core/simulator/list", replayable=True)
         r, _ = await self._send(op, lambda c: get_simulator_list.asyncio_detailed(client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, RegisteredSimulators, op=op)
 
     async def processes(self) -> list[BiGraphProcess]:
         op = Operation("GET", "/core/processes/list", replayable=True)
         r, _ = await self._send(op, lambda c: get_processes_list.asyncio_detailed(client=c))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, BiGraphProcess, op=op)
 
     async def steps(self) -> list[BiGraphStep]:
         op = Operation("GET", "/core/steps/list", replayable=True)
         r, _ = await self._send(op, lambda c: get_steps_list.asyncio_detailed(client=c))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, BiGraphStep, op=op)
 
     async def environments(self) -> list[EnvironmentSummary]:
         """The environments documents run in, with what their interface manifests hold."""
         op = Operation("GET", "/registry/environments", replayable=True)
         r, _ = await self._send(op, lambda c: list_environments.asyncio_detailed(client=c))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, EnvironmentSummary, op=op)
 
     async def catalog(self) -> list[CatalogEntry]:
         """Every registry entry with its curation level and the environments that provide its classes."""
         op = Operation("GET", "/registry/entries", replayable=True)
         r, _ = await self._send(op, lambda c: list_registry_entries.asyncio_detailed(client=c))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, CatalogEntry, op=op)
 
     async def solvers(self) -> list[Solver]:
         """The solvers SED-ML runs can use: class, environment, KiSAO algorithms, what each returns."""
         op = Operation("GET", "/registry/solvers", replayable=True)
         r, _ = await self._send(op, lambda c: list_solvers.asyncio_detailed(client=c))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, Solver, op=op)
 
     async def environment_manifest(self, name: str) -> InterfaceManifest:
         """An environment's interface manifest (pbg-interfaces/1)."""
         op = Operation("GET", f"/registry/environments/{name}/manifest", replayable=True)
         r, _ = await self._send(op, lambda c: get_environment_manifest.asyncio_detailed(name, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, InterfaceManifest, op=op)
 
     async def environment_headers(self, name: str) -> EnvironmentHeaders:
         """An environment's interfaces as .pblang header files, and each class's declaration."""
         op = Operation("GET", f"/registry/environments/{name}/headers", replayable=True)
         r, _ = await self._send(op, lambda c: get_environment_headers.asyncio_detailed(name, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, EnvironmentHeaders, op=op)
 
     async def environment_images(self, name: str) -> ImageStatus:
         """Whether an environment's current image is built, with its image records and newest build run."""
         op = Operation("GET", f"/registry/environments/{name}/images", replayable=True)
         r, _ = await self._send(op, lambda c: get_environment_images.asyncio_detailed(name, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, ImageStatus, op=op)
 
     async def build_environment(self, name: str) -> ImageStatus:
         """Make an environment's current image available: pulled or built unless it is, joining a build under way."""
         op = Operation("POST", f"/registry/environments/{name}/build", replayable=False)
         r, _ = await self._send(op, lambda c: build_environment.asyncio_detailed(name, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, ImageStatus, op=op)
 
     async def environment_versions(self, name: str) -> EnvironmentVersions:
         """An environment's versions, newest first, and its default (docs/plan-environment-versions.md)."""
         op = Operation("GET", f"/registry/environments/{name}/versions", replayable=True)
         r, _ = await self._send(op, lambda c: list_environment_versions.asyncio_detailed(name, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, EnvironmentVersions, op=op)
 
     async def environment_version(
         self, name: str, number: int, *, against: int | None = None
@@ -1562,7 +1595,7 @@ class AsyncComposeSession:
                 name, number, client=c, against=against if against is not None else UNSET
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, EnvironmentVersionDetail, op=op)
 
     async def export_environment_version(
         self,
@@ -1577,7 +1610,7 @@ class AsyncComposeSession:
         r, _ = await self._send(
             op, lambda c: export_environment_version.asyncio_detailed(name, number, client=c, format_=fmt)
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, EnvironmentExport, op=op)
 
     async def environment_compliance(self, name: str, number: int) -> ComplianceReport:
         """Where each entry of a version stands there (its cases' runs), and the components a generic check refuses."""
@@ -1585,7 +1618,7 @@ class AsyncComposeSession:
         r, _ = await self._send(
             op, lambda c: get_environment_version_compliance.asyncio_detailed(name, number, client=c)
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, ComplianceReport, op=op)
 
     async def run_environment_compliance(self, name: str, number: int) -> ComplianceReport:
         """Run a version's compliance cases again (new runs: sent once, never retried). Needs the environment
@@ -1594,7 +1627,7 @@ class AsyncComposeSession:
         r, _ = await self._send(
             op, lambda c: run_environment_version_compliance.asyncio_detailed(name, number, client=c)
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, ComplianceReport, op=op)
 
     async def create_environment_version(
         self,
@@ -1614,49 +1647,49 @@ class AsyncComposeSession:
             note=note if note is not None else UNSET,
         )
         r, _ = await self._send(op, lambda c: create_environment_version.asyncio_detailed(name, client=c, body=body))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, EnvironmentVersion, op=op)
 
     async def set_environment_default(self, name: str, number: int) -> EnvironmentVersion:
         """Make a ready version the one runs get when they name none. Needs the environment administrator role."""
         op = Operation("PUT", f"/registry/environments/{name}/default", replayable=True)
         body = DefaultVersion(number=number)
         r, _ = await self._send(op, lambda c: set_environment_default.asyncio_detailed(name, client=c, body=body))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, EnvironmentVersion, op=op)
 
     async def retire_environment_version(self, name: str, number: int) -> EnvironmentVersion:
         """Retire a version: it refuses new runs; its images are kept. Needs the environment administrator role."""
         op = Operation("POST", f"/registry/environments/{name}/versions/{number}/retire", replayable=True)
         r, _ = await self._send(op, lambda c: retire_environment_version.asyncio_detailed(name, number, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, EnvironmentVersion, op=op)
 
     async def inspect_environment_version(self, name: str, number: int) -> EnvironmentVersion:
         """Read a prebuilt version's image back again (what it installed and provides), in the background. Needs the
         environment administrator role."""
         op = Operation("POST", f"/registry/environments/{name}/versions/{number}/inspect", replayable=True)
         r, _ = await self._send(op, lambda c: inspect_environment_version.asyncio_detailed(name, number, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, EnvironmentVersion, op=op)
 
     async def simulators_used(self) -> list[SimulatorSummary]:
         op = Operation("GET", "/registry/simulators", replayable=True)
         r, _ = await self._send(op, lambda c: list_simulators.asyncio_detailed(client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed_list(r, SimulatorSummary, op=op)
 
     async def simulator(self, simulator_id: int) -> SimulatorDetail:
         op = Operation("GET", f"/registry/simulators/{simulator_id}", replayable=True)
         r, _ = await self._send(op, lambda c: get_simulator.asyncio_detailed(simulator_id, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SimulatorDetail, op=op)
 
     async def simulator_images(self, simulator_id: int) -> ImageStatus:
         """Whether a simulator's image is built, with its image records and newest build run."""
         op = Operation("GET", f"/registry/simulators/{simulator_id}/images", replayable=True)
         r, _ = await self._send(op, lambda c: get_simulator_images.asyncio_detailed(simulator_id, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, ImageStatus, op=op)
 
     async def build_simulator(self, simulator_id: int) -> ImageStatus:
         """Make a simulator's image available: pulled or built unless it is, joining a build under way."""
         op = Operation("POST", f"/registry/simulators/{simulator_id}/build", replayable=False)
         r, _ = await self._send(op, lambda c: build_simulator.asyncio_detailed(simulator_id, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, ImageStatus, op=op)
 
     async def submit(
         self,
@@ -1685,7 +1718,7 @@ class AsyncComposeSession:
                 environment=environment if environment is not None else UNSET,
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SimulationExperiment, op=op)
 
     async def submit_copasi(
         self, sbml: FileSource, *, start: float, duration: float, points: int
@@ -1701,7 +1734,7 @@ class AsyncComposeSession:
                 num_data_points=points,
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SimulationExperiment, op=op)
 
     async def submit_tellurium(
         self, sbml: FileSource, *, start: float, end: float, points: int
@@ -1717,7 +1750,7 @@ class AsyncComposeSession:
                 num_data_points=points,
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SimulationExperiment, op=op)
 
     async def status(self, simulation_id: int) -> JobState:
         op = Operation("GET", "/results/simulation/status", replayable=True)
@@ -1731,7 +1764,7 @@ class AsyncComposeSession:
         r, _ = await self._send(
             op, lambda c: get_simulations_status_batch.asyncio_detailed(client=c, body=list(simulation_ids))
         )
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, HpcRun, op=op)
 
     async def build_log(self, simulator_id: int) -> str:
         """The SLURM log of the simulator's newest container build (its last 200 KB)."""
@@ -1794,7 +1827,7 @@ class AsyncComposeSession:
                 mine=mine or UNSET,
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SimulationPage, op=op)
 
     # -- SED-ML -----------------------------------------------------------------------------------------------------
 
@@ -1809,7 +1842,7 @@ class AsyncComposeSession:
                 solvers=list(solvers) if solvers else UNSET,
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SedmlPreview, op=op)
 
     async def sedml_run(
         self,
@@ -1836,7 +1869,7 @@ class AsyncComposeSession:
                 environment_version=list(environment_versions) if environment_versions else UNSET,
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SedmlRunResult, op=op)
 
     # -- sources (BioModels, biosimulations.org) --------------------------------------------------------------------
 
@@ -1845,12 +1878,12 @@ class AsyncComposeSession:
         r, _ = await self._send(
             op, lambda c: search_biomodels.asyncio_detailed(client=c, q=query, limit=limit, curated=curated)
         )
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, BiomodelHit, op=op)
 
     async def biomodel(self, model_id: str) -> BiomodelInfo:
         op = Operation("GET", f"/sources/biomodels/{model_id}", replayable=True)
         r, _ = await self._send(op, lambda c: get_biomodel.asyncio_detailed(model_id, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, BiomodelInfo, op=op)
 
     async def biomodel_omex(self, model_id: str) -> bytes:
         op = Operation("GET", f"/sources/biomodels/{model_id}/omex", replayable=True)
@@ -1877,19 +1910,19 @@ class AsyncComposeSession:
                 environment_version=list(environment_versions) if environment_versions else UNSET,
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SedmlRunResult, op=op)
 
     async def biosimulations_search(self, query: str = "", *, limit: int = 20) -> list[ProjectInfo]:
         op = Operation("GET", "/sources/biosimulations/projects", replayable=True)
         r, _ = await self._send(
             op, lambda c: search_biosimulations_projects.asyncio_detailed(client=c, q=query, limit=limit)
         )
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, ProjectInfo, op=op)
 
     async def biosimulations_project(self, project_id: str) -> ProjectInfo:
         op = Operation("GET", f"/sources/biosimulations/{project_id}", replayable=True)
         r, _ = await self._send(op, lambda c: get_biosimulations_project.asyncio_detailed(project_id, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, ProjectInfo, op=op)
 
     async def biosimulations_omex(self, project_id: str) -> bytes:
         op = Operation("GET", f"/sources/biosimulations/{project_id}/omex", replayable=True)
@@ -1926,25 +1959,25 @@ class AsyncComposeSession:
                 environment_version=list(environment_versions) if environment_versions else UNSET,
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SedmlRunResult, op=op)
 
     # -- suites -----------------------------------------------------------------------------------------------------
 
     async def suites(self) -> list[Suite]:
         op = Operation("GET", "/suites", replayable=True)
         r, _ = await self._send(op, lambda c: list_suites.asyncio_detailed(client=c))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, Suite, op=op)
 
     async def suite_runs(self, name: str) -> list[SuiteRunInfo]:
         op = Operation("GET", f"/suites/{name}/runs", replayable=True)
         r, _ = await self._send(op, lambda c: list_suite_runs.asyncio_detailed(name, client=c))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, SuiteRunInfo, op=op)
 
     async def suite_run(self, name: str, number: int) -> SuiteRunView:
         """One suite run: per source, agreement, references, and drift from the baseline run."""
         op = Operation("GET", f"/suites/{name}/runs/{number}", replayable=True)
         r, _ = await self._send(op, lambda c: get_suite_run.asyncio_detailed(name, number, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SuiteRunView, op=op)
 
     async def run_suite(self, name: str, *, environment_versions: Sequence[str]) -> SuiteRunInfo:
         """Run every source of the suite (submitted in the background) in the environment versions named:
@@ -1953,7 +1986,7 @@ class AsyncComposeSession:
         r, _ = await self._send(
             op, lambda c: run_suite.asyncio_detailed(name, client=c, environment_version=list(environment_versions))
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SuiteRunInfo, op=op)
 
     async def comparisons(self, *, source: str | None = None, limit: int = 25, offset: int = 0) -> ComparisonPage:
         op = Operation("GET", "/comparisons", replayable=True)
@@ -1963,7 +1996,7 @@ class AsyncComposeSession:
                 client=c, source=source if source is not None else UNSET, limit=limit, offset=offset
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, ComparisonPage, op=op)
 
     async def comparison_series(self, comparison_id: int, report: str) -> ComparisonSeries:
         """One report's columns from each run and each reference."""
@@ -1971,13 +2004,13 @@ class AsyncComposeSession:
         r, _ = await self._send(
             op, lambda c: get_comparison_series.asyncio_detailed(comparison_id, client=c, report=report)
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, ComparisonSeries, op=op)
 
     async def comparison(self, comparison_id: int) -> Comparison:
         """One comparison: its runs, and per report and data set each solver pair's score once all have finished."""
         op = Operation("GET", f"/comparisons/{comparison_id}", replayable=True)
         r, _ = await self._send(op, lambda c: get_comparison.asyncio_detailed(comparison_id, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, Comparison, op=op)
 
     async def verify_comparison(self, comparison_id: int, simulators: list[str] | None = None) -> Verification:
         """Queue a check of the comparison against BioSimulators' simulators (biosim's /verify); one already queued
@@ -1985,13 +2018,13 @@ class AsyncComposeSession:
         op = Operation("POST", f"/comparisons/{comparison_id}/verify", replayable=False)
         body = VerifyRequest(simulators=simulators) if simulators else None  # no body: the service's default
         r, _ = await self._send(op, lambda c: verify_comparison.asyncio_detailed(comparison_id, client=c, body=body))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, Verification, op=op)
 
     async def comparison_verifications(self, comparison_id: int) -> list[Verification]:
         """The comparison's verifications, oldest first."""
         op = Operation("GET", f"/comparisons/{comparison_id}/verifications", replayable=True)
         r, _ = await self._send(op, lambda c: list_comparison_verifications.asyncio_detailed(comparison_id, client=c))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, Verification, op=op)
 
     async def verify_suite_run(self, name: str, number: int, *, which: str = "failing") -> SuiteVerifyResult:
         """Queue verifications for a suite run's finished comparisons: ``failing`` ones, or ``all``."""
@@ -1999,14 +2032,14 @@ class AsyncComposeSession:
         r, _ = await self._send(
             op, lambda c: verify_suite_run.asyncio_detailed(name, number, client=c, which=VerifySuiteRunWhich(which))
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SuiteVerifyResult, op=op)
 
     async def suite_problems(self, name: str, *, cleared: bool | None = None) -> list[KnownProblem]:
         """A suite's known problems, oldest first: every one, or only the cleared (True) or open (False) ones."""
         op = Operation("GET", f"/suites/{name}/problems", replayable=True)
         flag = cleared if cleared is not None else UNSET
         r, _ = await self._send(op, lambda c: list_suite_problems.asyncio_detailed(name, client=c, cleared=flag))
-        return list(_parsed(r, op=op))
+        return _parsed_list(r, KnownProblem, op=op)
 
     async def mark_suite_problem(
         self,
@@ -2029,7 +2062,7 @@ class AsyncComposeSession:
             seen_run=seen_run if seen_run is not None else UNSET,
         )
         r, _ = await self._send(op, lambda c: mark_suite_problem.asyncio_detailed(name, client=c, body=mark))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, KnownProblem, op=op)
 
     async def edit_suite_problem(
         self, name: str, problem_id: int, *, category: str | None = None, reason: str | None = None
@@ -2042,7 +2075,7 @@ class AsyncComposeSession:
         r, _ = await self._send(
             op, lambda c: edit_suite_problem.asyncio_detailed(name, problem_id, client=c, body=edit)
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, KnownProblem, op=op)
 
     async def clear_suite_problem(self, name: str, problem_id: int, run: int) -> KnownProblem:
         """Clear a known problem at the suite run that shows it fixed. Needs the suite curator role."""
@@ -2051,17 +2084,17 @@ class AsyncComposeSession:
         r, _ = await self._send(
             op, lambda c: clear_suite_problem.asyncio_detailed(name, problem_id, client=c, body=body)
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, KnownProblem, op=op)
 
     async def simulation(self, simulation_id: int) -> SimulationDetail:
         op = Operation("GET", f"/simulations/{simulation_id}", replayable=True)
         r, _ = await self._send(op, lambda c: get_simulation.asyncio_detailed(simulation_id, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SimulationDetail, op=op)
 
     async def cancel_simulation(self, simulation_id: int) -> SimulationCancellation:
         op = Operation("DELETE", f"/simulations/{simulation_id}", replayable=False)
         r, _ = await self._send(op, lambda c: cancel_simulation.asyncio_detailed(simulation_id, client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, SimulationCancellation, op=op)
 
     async def events(
         self,
@@ -2080,21 +2113,21 @@ class AsyncComposeSession:
                 client=c, simulation_id=simulation_id, **_event_filters(after, limit, level, event, span_id)
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, RunEventPage, op=op)
 
     async def trace(self, simulation_id: int) -> RunTraceTree:
         op = Operation("GET", "/results/simulation/trace", replayable=True)
         r, _ = await self._send(
             op, lambda c: get_simulation_trace.asyncio_detailed(client=c, simulation_id=simulation_id)
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, RunTraceTree, op=op)
 
-    async def trace_chrome(self, simulation_id: int) -> dict[str, Any]:
+    async def trace_chrome(self, simulation_id: int) -> TraceDocument:
         op = Operation("GET", "/results/simulation/trace/chrome", replayable=True)
         r, _ = await self._send(
             op, lambda c: get_simulation_trace_chrome.asyncio_detailed(client=c, simulation_id=simulation_id)
         )
-        return dict(_parsed(r, op=op).to_dict())
+        return _parsed(r, TraceDocument, op=op)
 
     async def datasets(
         self,
@@ -2113,12 +2146,12 @@ class AsyncComposeSession:
                 client=c, **_dataset_filters(simulation_id, kind, q, available, limit, offset)
             ),
         )
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, DatasetPage, op=op)
 
     async def dataset(self, dataset_id: str | uuid.UUID) -> Dataset:
         op = Operation("GET", f"/datasets/{dataset_id}", replayable=True)
         r, _ = await self._send(op, lambda c: get_dataset.asyncio_detailed(uuid.UUID(str(dataset_id)), client=c))
-        return _parsed(r, op=op)  # type: ignore[no-any-return]
+        return _parsed(r, Dataset, op=op)
 
     async def dataset_content(self, dataset_id: str | uuid.UUID) -> bytes:
         op = Operation("GET", f"/datasets/{dataset_id}/content", replayable=True)

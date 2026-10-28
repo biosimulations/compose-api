@@ -147,7 +147,7 @@ def _instructions(authorization: DeviceAuthorization, provider: Provider | None,
     return "\n".join(lines)
 
 
-def _tenant_page(value: Any, tenant_host: str, field: str) -> str:
+def _tenant_page(value: object, tenant_host: str, field: str) -> str:
     if not isinstance(value, str) or not value.isascii() or not value.isprintable() or " " in value:
         raise ProtocolError(f"the device sign-in response has a missing or malformed {field}")
     parts = urlsplit(value)

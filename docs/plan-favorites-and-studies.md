@@ -6,9 +6,10 @@ release, as usual.
 
 | Step | What | State |
 |---|---|---|
-| 0 | This document | in review |
-| 1a | Owners stamped at submit; a "Mine" filter (API, CLI, web); cancelling an owned run is its owner's | — |
+| 0 | This document | merged (#469) |
+| 1a | Owners stamped at submit; a "Mine" filter (API, CLI, web); cancelling an owned run is its owner's | merged (#470) |
 | 1b | Visibility chosen at submit and changed later (`PATCH`); the default for a signed-in submitter | waits on F3 |
+| 1c | No `Any` in the API's types: every error body declared, the client typed end to end (inserted 2026-10-28, before step 2's new routes) | in review |
 | 2 | Favorites: a private star on a simulation, a comparison or a suite run; a "Favorites" filter (API, CLI) | — |
 | 2b | The web pages: a star on each row and in each page's header; the Mine and Favorites filters | — |
 | 3 | Studies: their own plan, settling S1–S4 below | — |
@@ -99,6 +100,24 @@ release, as usual.
   and a compliance run's are not; `mine=true` lists only the caller's, and is a 401 anonymous; another user cannot
   cancel an owned run; the owner can.
 - **No migration:** the column and its index exist.
+
+### 1c. No `Any` in the API's types (asked 2026-10-28)
+#470's new 401 widened `list-simulations`' generated return type to `Any`. 52 of 69 operations already returned an
+`Any` union: an error response declared with a description and no body is typed `Any` by openapi-python-client.
+- **Bodies** (`compose_api/api/errors.py`): `ErrorDetail` (`{detail: str}`) for every error, through `error(...)`;
+  `SubmissionError`, `SedmlRunError` and `UnprocessableError` where `detail` is also structured (refused addresses,
+  a translation's findings, request validation). Refusals are raised from those models.
+- **Files** declare `type: string, format: binary` (a zip through a content-type override), so the client returns
+  `File`; the Chrome trace declares its `TraceDocument`.
+- **The client layer**: `_parsed(response, Model)` and `_parsed_list` check the body's type; 88 `type: ignore`s gone;
+  JSON is `JsonValue`, not `Any`.
+- **Server code**: upstream answers (BioModels, biosimulations.org, biosim's /verify) validated into models; no
+  function parameter or return is `Any` (ruff `ANN401`, `*args`/`**kwargs` excepted; tests exempt).
+- **Guards**: `tests/api/test_error_bodies.py` fails on a response with no body schema, or a generated operation
+  returning `Any`.
+- **A client behaviour change**: a declared error status now parses its JSON body (an `ErrorDetail`) instead of
+  `None`; a non-JSON body for a declared status (an ingress's HTML 502) raises in the generated functions. The CLI
+  and `ext` layer already read such an answer as unreadable and classify it by status; pbest checks the status first.
 
 ### 1b. Visibility (after F3)
 - `visibility` on `/simulation/run` and `/sedml/run`, defaulting per F3; `PATCH /simulations/{id}` with

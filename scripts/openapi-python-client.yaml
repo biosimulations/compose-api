@@ -1,3 +1,6 @@
 # openapi-python-client settings for scripts/generate-api-client.sh (docs/plan-cli.md, step A).
 # No post-hooks: the script formats the output itself with the locked ruff, so the result is machine-independent.
 post_hooks: []
+# A COMBINE archive download is a file, as application/octet-stream is (openapi-python-client does not know zip)
+content_type_overrides:
+  application/zip: application/octet-stream

@@ -8,6 +8,7 @@ import pytest
 from compose_api_client import AuthenticatedClient
 from compose_api_client.api.authentication import get_current_principal
 from compose_api_client.models.current_principal_response import CurrentPrincipalResponse
+from compose_api_client.models.error_detail import ErrorDetail
 
 from compose_api.api.main import app
 from compose_api.authentication import ROLES_CLAIM
@@ -133,8 +134,8 @@ async def test_generated_identity_client_uses_bearer_and_handles_401(fake_auth0:
         assert response.parsed.subject == "google-oauth2|sdk-user"
         assert response.parsed.roles == ["user"]
         assert response.headers["cache-control"] == "no-store"
-    else:
-        assert response.parsed is None
+    else:  # the 401's body is typed (compose_api/api/errors.py), and says why without echoing the token
+        assert isinstance(response.parsed, ErrorDetail) and token not in response.parsed.detail
 
 
 def test_generated_identity_operation_requires_authenticated_client() -> None:

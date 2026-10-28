@@ -9,6 +9,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 
+from compose_api.api.errors import SEDML_REFUSED, error
 from compose_api.authentication import OptionalPrincipal, get_optional_principal
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.sedml import sources
@@ -17,8 +18,14 @@ from compose_api.sedml.sources import BiomodelHit, BiomodelInfo, ProjectInfo
 
 config = RouterConfig(router=APIRouter(), prefix="/sources", dependencies=[Depends(get_optional_principal)])
 
-NOT_FOUND: dict[int | str, dict[str, Any]] = {404: {"description": "No such model or project upstream"}}
-UNAVAILABLE: dict[int | str, dict[str, Any]] = {502: {"description": "The upstream service did not answer as expected"}}
+ARCHIVE: dict[int | str, dict[str, Any]] = {
+    200: {
+        "content": {"application/zip": {"schema": {"type": "string", "format": "binary"}}},
+        "description": "The archive",
+    }
+}
+NOT_FOUND: dict[int | str, dict[str, Any]] = {404: error("No such model or project upstream")}
+UNAVAILABLE: dict[int | str, dict[str, Any]] = {502: error("The upstream service did not answer as expected")}
 Solvers = Annotated[list[str] | None, Query(description="Solvers to run (registry/solvers.yaml); all when omitted")]
 EnvironmentVersionRefs = Annotated[
     list[str] | None,
@@ -66,7 +73,7 @@ async def get_biomodel(model_id: str, principal: OptionalPrincipal) -> BiomodelI
 
 @config.router.get(
     "/biomodels/{model_id}/omex", response_class=FileResponse, operation_id="get-biomodel-omex", tags=["Sources"],
-    summary="The entry's COMBINE archive (its latest revision)", responses={**NOT_FOUND, **UNAVAILABLE},
+    summary="The entry's COMBINE archive (its latest revision)", responses={**ARCHIVE, **NOT_FOUND, **UNAVAILABLE},
 )  # fmt: skip
 async def get_biomodel_omex(model_id: str, principal: OptionalPrincipal) -> FileResponse:
     try:
@@ -78,7 +85,8 @@ async def get_biomodel_omex(model_id: str, principal: OptionalPrincipal) -> File
 
 @config.router.post(
     "/biomodels/{model_id}/run", response_model=SedmlRunResult, operation_id="run-biomodel", tags=["Sources"],
-    summary="Run a BioModels entry's SED-ML on several solvers (as /sedml/run)", responses={**NOT_FOUND, **UNAVAILABLE},
+    summary="Run a BioModels entry's SED-ML on several solvers (as /sedml/run)",
+    responses={400: SEDML_REFUSED, **NOT_FOUND, **UNAVAILABLE},
 )  # fmt: skip
 async def run_biomodel(
     model_id: str, background_tasks: BackgroundTasks, principal: OptionalPrincipal,
@@ -129,7 +137,7 @@ async def get_project(project_id: str, principal: OptionalPrincipal) -> ProjectI
 
 @config.router.get(
     "/biosimulations/{project_id}/omex", response_class=FileResponse, operation_id="get-biosimulations-omex",
-    tags=["Sources"], summary="The project's archive", responses={**NOT_FOUND, **UNAVAILABLE},
+    tags=["Sources"], summary="The project's archive", responses={**ARCHIVE, **NOT_FOUND, **UNAVAILABLE},
 )  # fmt: skip
 async def get_project_omex(project_id: str, principal: OptionalPrincipal) -> FileResponse:
     try:
@@ -153,7 +161,7 @@ async def get_project_reference(project_id: str, principal: OptionalPrincipal) -
 @config.router.post(
     "/biosimulations/{project_id}/run", response_model=SedmlRunResult, operation_id="run-biosimulations-project",
     tags=["Sources"], summary="Run a project's SED-ML on several solvers, its original results as the reference",
-    responses={**NOT_FOUND, **UNAVAILABLE},
+    responses={400: SEDML_REFUSED, **NOT_FOUND, **UNAVAILABLE},
 )  # fmt: skip
 async def run_project(
     project_id: str, background_tasks: BackgroundTasks, principal: OptionalPrincipal,

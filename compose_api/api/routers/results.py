@@ -1,11 +1,12 @@
 import asyncio
 import logging
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.responses import FileResponse, PlainTextResponse
 
+from compose_api.api.errors import error
 from compose_api.authentication import OptionalPrincipal, get_optional_principal
 from compose_api.authorization import OptionalCaller, readable_simulation, readable_simulation_ids
 from compose_api.common.gateway.models import Namespace, RouterConfig
@@ -18,7 +19,7 @@ from compose_api.dependencies import (
     get_required_database_service,
     get_simulation_service,
 )
-from compose_api.observability.chrome_trace import chrome_trace_document
+from compose_api.observability.chrome_trace import TraceDocument, chrome_trace_document
 from compose_api.observability.events import RunEvent, RunEventPage, RunSpan, RunTraceTree, build_span_tree
 from compose_api.simulation.models import (
     HpcRun,
@@ -32,7 +33,7 @@ logger = logging.getLogger(__name__)
 # client has no notion of a 404: configured strictly it raises on one, and by default it
 # returns a parsed value of None that a caller can mistake for "no data yet". The server
 # has always returned 404 for some of these; the spec simply never said so.
-NOT_FOUND_RESPONSE = {"description": "The requested resource does not exist"}
+NOT_FOUND_RESPONSE = error("The requested resource does not exist")
 
 # The simulation named by the `simulation_id` query parameter, if the caller may read it (404 otherwise).
 ReadableSimulation = Annotated[SimulationAccess, Depends(readable_simulation)]
@@ -125,10 +126,10 @@ async def get_simulation_status(simulation: ReadableSimulation) -> HpcRun:
     response_class=FileResponse,
     responses={
         200: {
-            "content": {"application/octet-stream": {"schema": {"format": "binary"}}},
+            "content": {"application/octet-stream": {"schema": {"type": "string", "format": "binary"}}},
             "description": "Simulation result zip file",
         },
-        404: {"description": "The simulation does not exist, or its results are not available"},
+        404: error("The simulation does not exist, or its results are not available"),
     },
     operation_id="get-simulation-results-file",
     tags=["Results"],
@@ -268,13 +269,13 @@ async def get_simulation_trace(simulation: ReadableSimulation) -> RunTraceTree:
 
 @config.router.get(
     path="/simulation/trace/chrome",
-    response_model=dict[str, Any],
+    response_model=TraceDocument,
     operation_id="get-simulation-trace-chrome",
     responses={404: NOT_FOUND_RESPONSE},
     tags=["Results"],
     summary="Get a simulation's trace as a Chrome Trace Event document (open it in ui.perfetto.dev)",
 )
-async def get_simulation_trace_chrome(simulation: ReadableSimulation) -> dict[str, Any]:
+async def get_simulation_trace_chrome(simulation: ReadableSimulation) -> TraceDocument:
     trace_id, live, spans, events = await _trace_of(simulation)
     document = chrome_trace_document(
         spans,
@@ -283,4 +284,4 @@ async def get_simulation_trace_chrome(simulation: ReadableSimulation) -> dict[st
         other_data={"simulation_id": str(simulation.simulation_id)},
         live=live,
     )
-    return dict(document)
+    return document

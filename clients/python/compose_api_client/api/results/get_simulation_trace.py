@@ -1,10 +1,11 @@
 from http import HTTPStatus
-from typing import Any, cast
+from typing import Any
 
 import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...models.error_detail import ErrorDetail
 from ...models.http_validation_error import HTTPValidationError
 from ...models.run_trace_tree import RunTraceTree
 from ...types import UNSET, Response
@@ -32,14 +33,15 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Any | HTTPValidationError | RunTraceTree | None:
+) -> ErrorDetail | HTTPValidationError | RunTraceTree | None:
     if response.status_code == 200:
         response_200 = RunTraceTree.from_dict(response.json())
 
         return response_200
 
     if response.status_code == 404:
-        response_404 = cast(Any, None)
+        response_404 = ErrorDetail.from_dict(response.json())
+
         return response_404
 
     if response.status_code == 422:
@@ -55,7 +57,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[Any | HTTPValidationError | RunTraceTree]:
+) -> Response[ErrorDetail | HTTPValidationError | RunTraceTree]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -68,7 +70,7 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     simulation_id: int,
-) -> Response[Any | HTTPValidationError | RunTraceTree]:
+) -> Response[ErrorDetail | HTTPValidationError | RunTraceTree]:
     """Get a simulation's spans as a tree, each span with its own events
 
     Args:
@@ -79,7 +81,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | HTTPValidationError | RunTraceTree]
+        Response[ErrorDetail | HTTPValidationError | RunTraceTree]
     """
 
     kwargs = _get_kwargs(
@@ -97,7 +99,7 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     simulation_id: int,
-) -> Any | HTTPValidationError | RunTraceTree | None:
+) -> ErrorDetail | HTTPValidationError | RunTraceTree | None:
     """Get a simulation's spans as a tree, each span with its own events
 
     Args:
@@ -108,7 +110,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | HTTPValidationError | RunTraceTree
+        ErrorDetail | HTTPValidationError | RunTraceTree
     """
 
     return sync_detailed(
@@ -121,7 +123,7 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     simulation_id: int,
-) -> Response[Any | HTTPValidationError | RunTraceTree]:
+) -> Response[ErrorDetail | HTTPValidationError | RunTraceTree]:
     """Get a simulation's spans as a tree, each span with its own events
 
     Args:
@@ -132,7 +134,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | HTTPValidationError | RunTraceTree]
+        Response[ErrorDetail | HTTPValidationError | RunTraceTree]
     """
 
     kwargs = _get_kwargs(
@@ -148,7 +150,7 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     simulation_id: int,
-) -> Any | HTTPValidationError | RunTraceTree | None:
+) -> ErrorDetail | HTTPValidationError | RunTraceTree | None:
     """Get a simulation's spans as a tree, each span with its own events
 
     Args:
@@ -159,7 +161,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | HTTPValidationError | RunTraceTree
+        ErrorDetail | HTTPValidationError | RunTraceTree
     """
 
     return (

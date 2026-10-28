@@ -2,7 +2,6 @@ import copy
 import json
 import os
 import sys
-from typing import Any
 
 import yaml
 
@@ -18,7 +17,7 @@ from compose_api.api.main import app
 _OCTET_STREAM = "application/octet-stream"
 
 
-def _restore_binary_format(node: Any) -> None:
+def _restore_binary_format(node: object) -> None:
     if isinstance(node, dict):
         if node.get("type") == "string" and node.get("contentMediaType") == _OCTET_STREAM:
             del node["contentMediaType"]

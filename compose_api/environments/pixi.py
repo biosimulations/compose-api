@@ -29,7 +29,7 @@ PYTHON = ("/bin/bash", "-c", f'source {SHELL_HOOK} && exec python "$@"', "python
 DEFAULT_PYTHON_VERSION = "3.12"
 
 
-def _toml(value: Any) -> str:
+def _toml(value: object) -> str:
     """A TOML value from strings, lists of strings and inline tables (JSON's string escapes are TOML's)."""
     if isinstance(value, dict):
         return "{ " + ", ".join(f"{json.dumps(k)} = {_toml(v)}" for k, v in value.items()) + " }"

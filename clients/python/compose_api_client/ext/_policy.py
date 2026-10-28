@@ -200,7 +200,7 @@ def classify_failure(
     return ApiError(f"the API answered {operation} with HTTP {status}", status_code=status)
 
 
-def invalid_fields(parsed: Any) -> list[str]:
+def invalid_fields(parsed: object) -> list[str]:
     """Where the API says the request was invalid, as field paths only: never its messages or the input it echoes."""
     if not isinstance(parsed, HTTPValidationError) or not isinstance(parsed.detail, list):
         return []

@@ -1,5 +1,6 @@
 """Contains all the data models used in inputs/outputs"""
 
+from .address_violation import AddressViolation
 from .bi_graph_compute_type import BiGraphComputeType
 from .bi_graph_process import BiGraphProcess
 from .bi_graph_step import BiGraphStep
@@ -59,9 +60,6 @@ from .get_biosimulations_reference_response_get_biosimulations_reference import 
 from .get_biosimulations_reference_response_get_biosimulations_reference_additional_property import (
     GetBiosimulationsReferenceResponseGetBiosimulationsReferenceAdditionalProperty,
 )
-from .get_simulation_trace_chrome_response_get_simulation_trace_chrome import (
-    GetSimulationTraceChromeResponseGetSimulationTraceChrome,
-)
 from .header_module import HeaderModule
 from .hpc_run import HpcRun
 from .http_validation_error import HTTPValidationError
@@ -83,11 +81,13 @@ from .known_problem_edit import KnownProblemEdit
 from .known_problem_mark import KnownProblemMark
 from .list_simulations_status_type_0 import ListSimulationsStatusType0
 from .new_environment_version import NewEnvironmentVersion
+from .no_task_accepted import NoTaskAccepted
 from .package_change import PackageChange
 from .package_type import PackageType
 from .project_info import ProjectInfo
 from .registered_package import RegisteredPackage
 from .registered_simulators import RegisteredSimulators
+from .rejection import Rejection
 from .run_event import RunEvent
 from .run_event_baggage_type_0 import RunEventBaggageType0
 from .run_event_page import RunEventPage
@@ -99,6 +99,7 @@ from .run_trace_tree import RunTraceTree
 from .sedml_finding import SedmlFinding
 from .sedml_finding_severity import SedmlFindingSeverity
 from .sedml_preview import SedmlPreview
+from .sedml_run_error import SedmlRunError
 from .sedml_run_result import SedmlRunResult
 from .sedml_task import SedmlTask
 from .simulation_cancellation import SimulationCancellation
@@ -114,6 +115,7 @@ from .simulator_summary import SimulatorSummary
 from .simulator_version import SimulatorVersion
 from .solver import Solver
 from .span_tree import SpanTree
+from .submission_error import SubmissionError
 from .submission_info import SubmissionInfo
 from .submission_state import SubmissionState
 from .suite import Suite
@@ -128,8 +130,14 @@ from .suite_run_view_summary import SuiteRunViewSummary
 from .suite_verify import SuiteVerify
 from .suite_verify_result import SuiteVerifyResult
 from .tolerances import Tolerances
+from .trace_document import TraceDocument
+from .trace_document_otherdata import TraceDocumentOtherdata
+from .trace_event import TraceEvent
+from .trace_event_args import TraceEventArgs
+from .unprocessable_error import UnprocessableError
 from .validation_error import ValidationError
 from .validation_error_context import ValidationErrorContext
+from .validation_issue import ValidationIssue
 from .verification import Verification
 from .verification_failed_simulators_item import VerificationFailedSimulatorsItem
 from .verification_state import VerificationState
@@ -140,6 +148,7 @@ from .version_state import VersionState
 from .visibility import Visibility
 
 __all__ = (
+    "AddressViolation",
     "BiGraphComputeType",
     "BiGraphProcess",
     "BiGraphStep",
@@ -195,7 +204,6 @@ __all__ = (
     "ErrorDetail",
     "GetBiosimulationsReferenceResponseGetBiosimulationsReference",
     "GetBiosimulationsReferenceResponseGetBiosimulationsReferenceAdditionalProperty",
-    "GetSimulationTraceChromeResponseGetSimulationTraceChrome",
     "HeaderModule",
     "HpcRun",
     "HTTPValidationError",
@@ -217,11 +225,13 @@ __all__ = (
     "KnownProblemMark",
     "ListSimulationsStatusType0",
     "NewEnvironmentVersion",
+    "NoTaskAccepted",
     "PackageChange",
     "PackageType",
     "ProjectInfo",
     "RegisteredPackage",
     "RegisteredSimulators",
+    "Rejection",
     "RunEvent",
     "RunEventBaggageType0",
     "RunEventPage",
@@ -233,6 +243,7 @@ __all__ = (
     "SedmlFinding",
     "SedmlFindingSeverity",
     "SedmlPreview",
+    "SedmlRunError",
     "SedmlRunResult",
     "SedmlTask",
     "SimulationCancellation",
@@ -248,6 +259,7 @@ __all__ = (
     "SimulatorVersion",
     "Solver",
     "SpanTree",
+    "SubmissionError",
     "SubmissionInfo",
     "SubmissionState",
     "Suite",
@@ -262,8 +274,14 @@ __all__ = (
     "SuiteVerify",
     "SuiteVerifyResult",
     "Tolerances",
+    "TraceDocument",
+    "TraceDocumentOtherdata",
+    "TraceEvent",
+    "TraceEventArgs",
+    "UnprocessableError",
     "ValidationError",
     "ValidationErrorContext",
+    "ValidationIssue",
     "Verification",
     "VerificationFailedSimulatorsItem",
     "VerificationState",
