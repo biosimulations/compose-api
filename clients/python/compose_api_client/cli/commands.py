@@ -57,7 +57,7 @@ from compose_api_client.ext import (
 from compose_api_client.ext.credentials import TOKEN_ENV_VAR
 from compose_api_client.ext.errors import UsageError
 from compose_api_client.ext.json_types import JsonValue
-from compose_api_client.models import ImageStatus, SedmlRunResult, Verification
+from compose_api_client.models import FavoriteKind, ImageStatus, SedmlRunResult, Verification
 from compose_api_client.types import Unset
 
 if TYPE_CHECKING:  # annotations only: importing these at run time would load the [auth] extra for every command
@@ -256,12 +256,19 @@ auth_app = typer.Typer(help="Sign up, sign in, check or end a session.", no_args
 app.add_typer(auth_app, name="auth")
 config_app = typer.Typer(help="Inspect the CLI configuration.", no_args_is_help=True)
 app.add_typer(config_app, name="config")
+favorites_app = typer.Typer(
+    help="Your stars on simulations, comparisons and suite runs (needs `compose-api auth login`).",
+    no_args_is_help=True,
+)
+app.add_typer(favorites_app, name="favorites")
 
 # Literal lists, so building the CLI does not import the auth package; tests/cli/test_commands.py keeps them in step.
 #: The identity providers `auth signup` / `auth login` can start with (`compose_api_client.auth.models.Provider`).
 PROVIDERS = click.Choice(["email", "google"])
 #: How a sign-in reaches the person (`compose_api_client.auth.models.SignInMethod`).
 METHODS = click.Choice(["auto", "browser", "url", "device"])
+#: What can be starred (`compose_api_client.models.FavoriteKind`).
+FAVORITE_KINDS = click.Choice([k.value for k in FavoriteKind])
 
 
 def _print_version(value: bool) -> None:
@@ -1281,6 +1288,9 @@ def simulations_list(
         list[str] | None, typer.Option(help="Only those with this tag (repeatable, all must match).")
     ] = None,
     mine: Annotated[bool, typer.Option("--mine", help="Only those you submitted (needs `compose-api login`).")] = False,
+    favorite: Annotated[
+        bool, typer.Option("--favorite", help="Only those you starred (`compose-api favorites add`).")
+    ] = False,
     limit: Annotated[int, typer.Option(help="At most this many.")] = 50,
     offset: Annotated[int, typer.Option(help="Skip this many (for the next page).")] = 0,
 ) -> None:
@@ -1300,6 +1310,7 @@ def simulations_list(
             environment=environment,
             environment_version=environment_version,
             mine=mine,
+            favorite=favorite,
         )
     rows = [
         {
@@ -1336,6 +1347,52 @@ def simulations_cancel(
     settings = _settings(ctx)
     with make_session(settings) as s:
         emit(settings.output, s.cancel_simulation(simulation_id).to_dict())
+
+
+# -- favorites ---------------------------------------------------------------------------------------------------------
+
+FAVORITE_KIND = typer.Argument(help="simulation, comparison or suite_run.", click_type=FAVORITE_KINDS)
+FAVORITE_REF = typer.Argument(
+    help="A simulation's or a comparison's id; a suite run as <suite>@<number>, e.g. smoke@22."
+)
+
+
+@favorites_app.command("add")
+@claims("favorites add", "add-favorite")
+@handled
+def favorites_add(ctx: typer.Context, kind: Annotated[str, FAVORITE_KIND], ref: Annotated[str, FAVORITE_REF]) -> None:
+    """Star a simulation, a comparison or a suite run. Your stars are yours alone; starring it again changes
+    nothing."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.add_favorite(kind, ref).to_dict())
+
+
+@favorites_app.command("remove")
+@claims("favorites remove", "remove-favorite")
+@handled
+def favorites_remove(
+    ctx: typer.Context, kind: Annotated[str, FAVORITE_KIND], ref: Annotated[str, FAVORITE_REF]
+) -> None:
+    """Unstar it."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.remove_favorite(kind, ref).to_dict())
+
+
+@favorites_app.command("list")
+@claims("favorites list", "list-favorites")
+@handled
+def favorites_list(
+    ctx: typer.Context,
+    kind: Annotated[
+        str | None, typer.Option(help="Only this kind: simulation, comparison or suite_run.", click_type=FAVORITE_KINDS)
+    ] = None,
+) -> None:
+    """Your stars, newest first. `simulations list --favorite` and `comparisons list --favorite` show them in full."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, [f.to_dict() for f in s.favorites(kind)], ["kind", "ref", "created_at"])
 
 
 # -- events and traces --------------------------------------------------------------------------------------------
@@ -1812,13 +1869,16 @@ def sedml_run(
 def comparisons_list(
     ctx: typer.Context,
     source: Annotated[str | None, typer.Option(help="Only this source, e.g. upload:x.omex.")] = None,
+    favorite: Annotated[
+        bool, typer.Option("--favorite", help="Only those you starred (`compose-api favorites add`).")
+    ] = False,
     limit: Annotated[int, typer.Option(help="At most this many.")] = 25,
     offset: Annotated[int, typer.Option(help="Skip this many.")] = 0,
 ) -> None:
     """Comparisons, newest first."""
     settings = _settings(ctx)
     with make_session(settings) as s:
-        page = s.comparisons(source=source, limit=limit, offset=offset)
+        page = s.comparisons(source=source, favorite=favorite, limit=limit, offset=offset)
     rows = [
         {
             "comparison": c.comparison_id,

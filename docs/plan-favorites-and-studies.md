@@ -1,6 +1,6 @@
 # Favorites and studies: a signed-in user's own runs, the runs they mark, and groups of runs they share
 
-**Status (2026-10-28): proposed.** Asked for by Jim on 2026-10-28: a per-user favorites filter on the simulations
+**Status (2026-10-28): in progress** (1a and 1c live in 0.7.70; step 2 in review). Asked for by Jim on 2026-10-28: a per-user favorites filter on the simulations
 list, and then projects, studies or investigations. One PR per step, each merged with a merge commit; deploying is a
 release, as usual.
 
@@ -8,9 +8,9 @@ release, as usual.
 |---|---|---|
 | 0 | This document | merged (#469) |
 | 1a | Owners stamped at submit; a "Mine" filter (API, CLI, web); cancelling an owned run is its owner's | merged (#470) |
-| 1b | Visibility chosen at submit and changed later (`PATCH`); the default for a signed-in submitter | waits on F3 |
-| 1c | No `Any` in the API's types: every error body declared, the client typed end to end (inserted 2026-10-28, before step 2's new routes) | in review |
-| 2 | Favorites: a private star on a simulation, a comparison or a suite run; a "Favorites" filter (API, CLI) | — |
+| 1b | Visibility chosen at submit and changed later (`PATCH`); private by default for a signed-in submitter (F3) | — |
+| 1c | No `Any` in the API's types: every error body declared, the client typed end to end (inserted 2026-10-28, before step 2's new routes) | merged (#471); 0.7.70 |
+| 2 | Favorites: a private star on a simulation, a comparison or a suite run; a "Favorites" filter (API, CLI) | in review |
 | 2b | The web pages: a star on each row and in each page's header; the Mine and Favorites filters | — |
 | 3 | Studies: their own plan, settling S1–S4 below | — |
 
@@ -54,7 +54,8 @@ release, as usual.
 - **F2. An owner's identity is not shown to others.** A subject is an Auth0 id (`google-oauth2|1075…`), which says
   who someone is. Listings and pages say `mine: true/false` to the caller instead of naming the owner. Admins see the
   same.
-- **F3. Visibility (step 1b), to be reconfirmed.** Observability's open question 1 was decided on 2026-10-07:
+- **F3. Visibility (step 1b): private by default, reconfirmed by Jim on 2026-10-28.** Observability's open
+  question 1 was decided on 2026-10-07:
   *private by default for a signed-in submitter, with a flag to make a simulation public; anonymous submissions stay
   public.* Private by default has consequences that were not in view then:
   - a comparison is readable only when every member is (`/comparisons`), so a signed-in user's SED-ML comparisons
@@ -62,8 +63,8 @@ release, as usual.
     they are not);
   - a link to a run, sent to a colleague, stops working until it is made public.
 
-  Step 1a changes no visibility. Step 1b implements whichever default is confirmed: private (as decided), or public
-  with a flag to make a run private.
+  Step 1a changes no visibility. Step 1b makes a signed-in submitter's runs private unless they ask for public, and
+  lets the owner change it later, which answers the colleague's link.
 - **F4. Cancelling.** An owned run can be cancelled by its owner or an admin. An unowned one, by any signed-in caller
   who can read it, as now (the route's own comment anticipates this).
 - **F5. A favorite is private to the user, and is not a tag.**
@@ -127,7 +128,11 @@ release, as usual.
 ### 2. Favorites
 - The `favorite` table (F5), created by `create_all` (a new table needs no revision).
 - `PUT` and `DELETE /favorites/{kind}/{ref}`, `GET /favorites[?kind=]`, signed in only; `favorite=true` on
-  `GET /simulations` and `GET /comparisons`; a `favorite` flag where `mine` is.
+  `GET /simulations` and `GET /comparisons`; a `favorite` flag on each simulation and comparison.
+  - `ref` is a simulation's or a comparison's id, or a suite run as `<suite>@<number>`, stored normalized.
+  - `PUT` is idempotent and needs read access (404 otherwise); `DELETE` answers whether there was a star, not a 204,
+    because a response without a body is typed `Any` by the generated client (step 1c).
+  - Suite runs carry no flag: the web page asks `GET /favorites?kind=suite_run`.
 - CLI: `compose-api favorites add|remove|list`, and `--favorite` on the list commands.
 
 ### 2b. The web pages
@@ -146,7 +151,7 @@ people group is visible.
   account.
 
 ## Open questions
-1. F3: private or public by default for a signed-in submitter.
+1. ~~F3: private or public by default for a signed-in submitter.~~ Private (Jim, 2026-10-28).
 2. F1's alternative: should the person who presses a suite's Run own its runs?
 3. `submission.requested_by` is never set and never read. Drop it (a migration), or keep it for fair scheduling when
    that is built? Separately, should a suite run record who started it (`suite_run.started_by`, a migration)?

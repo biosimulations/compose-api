@@ -675,3 +675,35 @@ def test_simulators_history_names_versions_and_simulations_filter_by_where_they_
     assert (params["environment_version"], params["simulator_id"]) == ("registry_env@5", "290")
     assert "environment" not in params
     assert json.loads(invoke("simulations", "list").stdout)[0]["environment_version"]["number"] == 5
+
+
+def test_favorites_add_list_remove_and_the_favorite_filters(monkeypatch: pytest.MonkeyPatch) -> None:
+    star = {"kind": "suite_run", "ref": "smoke@22", "created_at": "2026-10-28T21:00:00Z"}
+    seen: list[httpx.Request] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.url.path == "/favorites":
+            return httpx.Response(200, json=[star])
+        if request.url.path in ("/simulations", "/comparisons"):
+            key = request.url.path.strip("/")
+            return httpx.Response(200, json={key: [], "total": 0})
+        if request.method == "DELETE":
+            return httpx.Response(200, json={"kind": "suite_run", "ref": "smoke@22", "removed": True})
+        return httpx.Response(200, json=star)
+
+    monkeypatch.setattr(
+        cli_module, "make_session", lambda s: ComposeSession(s.url, transport=httpx.MockTransport(answer))
+    )
+    assert json.loads(invoke("favorites", "add", "suite_run", "smoke@22").stdout) == star
+    assert (seen[-1].method, seen[-1].url.path) == ("PUT", "/favorites/suite_run/smoke@22")
+    assert json.loads(invoke("favorites", "list", "--kind", "suite_run").stdout) == [star]
+    assert dict(seen[-1].url.params) == {"kind": "suite_run"}
+    assert json.loads(invoke("favorites", "remove", "suite_run", "smoke@22").stdout)["removed"] is True
+    assert seen[-1].method == "DELETE"
+    assert invoke("favorites", "add", "project", "1").exit_code == 2
+
+    assert invoke("simulations", "list", "--favorite").exit_code == 0
+    assert seen[-1].url.params["favorite"] == "true"
+    assert invoke("comparisons", "list", "--favorite").exit_code == 0
+    assert (seen[-1].url.path, seen[-1].url.params["favorite"]) == ("/comparisons", "true")

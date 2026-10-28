@@ -33,6 +33,7 @@ class SimulationSummary:
         visibility (Visibility | Unset): Who may read a simulation and everything it produced (plan-observability O7).
         mine (bool | Unset): The caller submitted it, signed in; its owner is never named (docs/plan-favorites-and-
             studies.md) Default: False.
+        favorite (bool | Unset): The signed-in caller starred it (`PUT /favorites/simulation/{id}`) Default: False.
         slurm_job_id (int | None | Unset):
         start_time (None | str | Unset):
         end_time (None | str | Unset):
@@ -56,6 +57,7 @@ class SimulationSummary:
     simulator: None | str | Unset = UNSET
     visibility: Visibility | Unset = UNSET
     mine: bool | Unset = False
+    favorite: bool | Unset = False
     slurm_job_id: int | None | Unset = UNSET
     start_time: None | str | Unset = UNSET
     end_time: None | str | Unset = UNSET
@@ -100,6 +102,8 @@ class SimulationSummary:
             visibility = self.visibility.value
 
         mine = self.mine
+
+        favorite = self.favorite
 
         slurm_job_id: int | None | Unset
         if isinstance(self.slurm_job_id, Unset):
@@ -184,6 +188,8 @@ class SimulationSummary:
             field_dict["visibility"] = visibility
         if mine is not UNSET:
             field_dict["mine"] = mine
+        if favorite is not UNSET:
+            field_dict["favorite"] = favorite
         if slurm_job_id is not UNSET:
             field_dict["slurm_job_id"] = slurm_job_id
         if start_time is not UNSET:
@@ -252,6 +258,8 @@ class SimulationSummary:
             visibility = Visibility(_visibility)
 
         mine = d.pop("mine", UNSET)
+
+        favorite = d.pop("favorite", UNSET)
 
         def _parse_slurm_job_id(data: object) -> int | None | Unset:
             if data is None:
@@ -369,6 +377,7 @@ class SimulationSummary:
             simulator=simulator,
             visibility=visibility,
             mine=mine,
+            favorite=favorite,
             slurm_job_id=slurm_job_id,
             start_time=start_time,
             end_time=end_time,

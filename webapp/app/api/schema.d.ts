@@ -1131,6 +1131,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/favorites/{kind}/{ref}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Star a simulation, a comparison or a suite run (`<suite>@<number>`); starring it again changes nothing */
+        put: operations["add-favorite"];
+        post?: never;
+        /** Unstar it; unstarring what is not starred changes nothing */
+        delete: operations["remove-favorite"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/favorites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's stars, newest first; a star on something the caller can no longer read is not listed */
+        get: operations["list-favorites"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1350,6 +1385,12 @@ export interface components {
              * @description every compared data set close, every member completed
              */
             close?: boolean | null;
+            /**
+             * Favorite
+             * @description The signed-in caller starred it (`PUT /favorites/comparison/{id}`)
+             * @default false
+             */
+            favorite: boolean;
         };
         /** ComparisonMember */
         ComparisonMember: {
@@ -1867,6 +1908,39 @@ export interface components {
         ErrorDetail: {
             /** Detail */
             detail: string;
+        };
+        /**
+         * Favorite
+         * @description One of the caller's stars.
+         */
+        Favorite: {
+            kind: components["schemas"]["FavoriteKind"];
+            /**
+             * Ref
+             * @description A simulation's or a comparison's id; a suite run as `<suite>@<number>`
+             */
+            ref: string;
+            /** Created At */
+            created_at?: string | null;
+        };
+        /**
+         * FavoriteKind
+         * @enum {string}
+         */
+        FavoriteKind: "simulation" | "comparison" | "suite_run";
+        /**
+         * FavoriteRemoval
+         * @description What unstarring did.
+         */
+        FavoriteRemoval: {
+            kind: components["schemas"]["FavoriteKind"];
+            /** Ref */
+            ref: string;
+            /**
+             * Removed
+             * @description It was starred, and is not now
+             */
+            removed: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2390,6 +2464,12 @@ export interface components {
              * @default false
              */
             mine: boolean;
+            /**
+             * Favorite
+             * @description The signed-in caller starred it (`PUT /favorites/simulation/{id}`)
+             * @default false
+             */
+            favorite: boolean;
             /** Status */
             status: string;
             /** Slurm Job Id */
@@ -2473,6 +2553,12 @@ export interface components {
              * @default false
              */
             mine: boolean;
+            /**
+             * Favorite
+             * @description The signed-in caller starred it (`PUT /favorites/simulation/{id}`)
+             * @default false
+             */
+            favorite: boolean;
             /** Status */
             status: string;
             /** Slurm Job Id */
@@ -3115,6 +3201,8 @@ export interface operations {
                 tag?: string[] | null;
                 /** @description Only those the caller submitted, signed in; needs a signed-in caller */
                 mine?: boolean;
+                /** @description Only those the caller starred (`PUT /favorites/simulation/{id}`); needs a signed-in caller */
+                favorite?: boolean;
                 limit?: number;
                 offset?: number;
             };
@@ -3133,7 +3221,7 @@ export interface operations {
                     "application/json": components["schemas"]["SimulationPage"];
                 };
             };
-            /** @description `mine` without a signed-in caller */
+            /** @description `mine` or `favorite` without a signed-in caller */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -4846,6 +4934,8 @@ export interface operations {
             query?: {
                 /** @description Only this source, e.g. upload:x.omex or biomodels:BIOMD… */
                 source?: string | null;
+                /** @description Only those the caller starred (`PUT /favorites/comparison/{id}`); needs a signed-in caller */
+                favorite?: boolean;
                 limit?: number;
                 offset?: number;
             };
@@ -4862,6 +4952,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ComparisonPage"];
+                };
+            };
+            /** @description `favorite` without a signed-in caller */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
                 };
             };
             /** @description Validation Error */
@@ -6007,6 +6106,156 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+        };
+    };
+    "add-favorite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["FavoriteKind"];
+                ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Favorite"];
+                };
+            };
+            /** @description The reference cannot name anything of its kind */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Favorites need a signed-in caller */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description It does not exist, or the caller may not read it */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "remove-favorite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["FavoriteKind"];
+                ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FavoriteRemoval"];
+                };
+            };
+            /** @description The reference cannot name anything of its kind */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Favorites need a signed-in caller */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "list-favorites": {
+        parameters: {
+            query?: {
+                /** @description Only stars of this kind */
+                kind?: components["schemas"]["FavoriteKind"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Favorite"][];
+                };
+            };
+            /** @description Favorites need a signed-in caller */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

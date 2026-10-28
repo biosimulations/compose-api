@@ -54,6 +54,9 @@ from .environment_version_detail_spec_type_0 import EnvironmentVersionDetailSpec
 from .environment_version_spec_type_0 import EnvironmentVersionSpecType0
 from .environment_versions import EnvironmentVersions
 from .error_detail import ErrorDetail
+from .favorite import Favorite
+from .favorite_kind import FavoriteKind
+from .favorite_removal import FavoriteRemoval
 from .get_biosimulations_reference_response_get_biosimulations_reference import (
     GetBiosimulationsReferenceResponseGetBiosimulationsReference,
 )
@@ -202,6 +205,9 @@ __all__ = (
     "EnvironmentVersions",
     "EnvironmentVersionSpecType0",
     "ErrorDetail",
+    "Favorite",
+    "FavoriteKind",
+    "FavoriteRemoval",
     "GetBiosimulationsReferenceResponseGetBiosimulationsReference",
     "GetBiosimulationsReferenceResponseGetBiosimulationsReferenceAdditionalProperty",
     "HeaderModule",

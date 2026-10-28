@@ -67,6 +67,9 @@ class Comparison(BaseModel):
     members: list[ComparisonMember]
     result: dict[str, Any] | None = None
     close: bool | None = Field(default=None, description="every compared data set close, every member completed")
+    favorite: bool = Field(
+        default=False, description="The signed-in caller starred it (`PUT /favorites/comparison/{id}`)"
+    )
 
 
 class ComparisonPage(BaseModel):

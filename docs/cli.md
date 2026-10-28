@@ -284,6 +284,7 @@ $ compose-api [OPTIONS] COMMAND [ARGS]...
 * `suites`: Regression and reproducibility suites of...
 * `auth`: Sign up, sign in, check or end a session.
 * `config`: Inspect the CLI configuration.
+* `favorites`: Your stars on simulations, comparisons and...
 
 ## `compose-api health`
 
@@ -933,6 +934,7 @@ $ compose-api simulations list [OPTIONS]
 * `--label TEXT`: Only those with this label, key:value, e.g. source:biomodels (repeatable, all must match).
 * `--tag TEXT`: Only those with this tag (repeatable, all must match).
 * `--mine`: Only those you submitted (needs `compose-api login`).
+* `--favorite`: Only those you starred (`compose-api favorites add`).
 * `--limit INTEGER`: At most this many.  [default: 50]
 * `--offset INTEGER`: Skip this many (for the next page).  [default: 0]
 * `--json`: Print JSON (the same as --output json).
@@ -1378,6 +1380,7 @@ $ compose-api comparisons list [OPTIONS]
 **Options**:
 
 * `--source TEXT`: Only this source, e.g. upload:x.omex.
+* `--favorite`: Only those you starred (`compose-api favorites add`).
 * `--limit INTEGER`: At most this many.  [default: 25]
 * `--offset INTEGER`: Skip this many.  [default: 0]
 * `--json`: Print JSON (the same as --output json).
@@ -2010,5 +2013,82 @@ $ compose-api config show [OPTIONS]
 
 **Options**:
 
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+## `compose-api favorites`
+
+Your stars on simulations, comparisons and suite runs (needs `compose-api auth login`).
+
+**Usage**:
+
+```console
+$ compose-api favorites [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `add`: Star a simulation, a comparison or a suite...
+* `remove`: Unstar it.
+* `list`: Your stars, newest first.
+
+### `compose-api favorites add`
+
+Star a simulation, a comparison or a suite run. Your stars are yours alone; starring it again changes
+nothing.
+
+**Usage**:
+
+```console
+$ compose-api favorites add [OPTIONS] KIND:{comparison|simulation|suite_run} REF
+```
+
+**Arguments**:
+
+* `KIND:{comparison|simulation|suite_run}`: simulation, comparison or suite_run.  [required]
+* `REF`: A simulation's or a comparison's id; a suite run as &lt;suite&gt;@&lt;number&gt;, e.g. smoke@22.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api favorites remove`
+
+Unstar it.
+
+**Usage**:
+
+```console
+$ compose-api favorites remove [OPTIONS] KIND:{comparison|simulation|suite_run} REF
+```
+
+**Arguments**:
+
+* `KIND:{comparison|simulation|suite_run}`: simulation, comparison or suite_run.  [required]
+* `REF`: A simulation's or a comparison's id; a suite run as &lt;suite&gt;@&lt;number&gt;, e.g. smoke@22.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api favorites list`
+
+Your stars, newest first. `simulations list --favorite` and `comparisons list --favorite` show them in full.
+
+**Usage**:
+
+```console
+$ compose-api favorites list [OPTIONS]
+```
+
+**Options**:
+
+* `--kind [comparison|simulation|suite_run]`: Only this kind: simulation, comparison or suite_run.
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.

@@ -19,6 +19,7 @@ from sqlalchemy import ColumnElement, or_
 
 from compose_api.authentication import OptionalPrincipal
 from compose_api.config import get_settings
+from compose_api.db.services.comparisons_db import ComparisonRow
 from compose_api.db.tables.simulator_tables import ORMSimulation
 from compose_api.dependencies import get_required_database_service
 from compose_api.simulation.models import SimulationAccess, Visibility
@@ -145,3 +146,13 @@ async def readable_simulation_ids(caller: Caller | None, simulation_ids: list[in
     found = await get_required_database_service().get_simulator_db().get_simulations_access(simulation_ids)
     readable = {s.simulation_id for s in found if can_read(caller, s)}
     return [i for i in simulation_ids if i in readable]
+
+
+async def readable_comparison(caller: Caller | None, comparison_id: int) -> ComparisonRow | None:
+    """The comparison, if it exists and the caller may read every run in it. A comparison shows its members'
+    results, so one the caller may not read is reported as not found."""
+    row = await get_required_database_service().get_comparisons_db().get(comparison_id)
+    if row is None:
+        return None
+    ids = [m.simulation_id for m in row.members]
+    return row if len(await readable_simulation_ids(caller, ids)) == len(ids) else None

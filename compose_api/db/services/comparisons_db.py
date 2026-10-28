@@ -8,6 +8,7 @@ from typing import Any, override
 from sqlalchemy import ColumnElement, exists, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from compose_api.db.services.favorites_db import starred
 from compose_api.db.tables.comparison_tables import (
     ORMComparison,
     ORMComparisonMember,
@@ -18,6 +19,7 @@ from compose_api.db.tables.comparison_tables import (
 )
 from compose_api.db.tables.environment_tables import ORMEnvironment, ORMEnvironmentVersion
 from compose_api.db.tables.simulator_tables import ORMSimulation
+from compose_api.favorites import FavoriteKind
 from compose_api.sedml.models import KnownProblem, KnownProblemMark
 
 
@@ -128,10 +130,15 @@ class ComparisonsDatabaseService(ABC):
 
     @abstractmethod
     async def page(
-        self, limit: int, offset: int, source: str | None = None, readable: ColumnElement[bool] | None = None
+        self,
+        limit: int,
+        offset: int,
+        source: str | None = None,
+        readable: ColumnElement[bool] | None = None,
+        favorite_of: str | None = None,
     ) -> tuple[list[ComparisonRow], int]:
         """Comparisons, newest first, with their members; and the total. With ``readable``, only comparisons every
-        member simulation of which satisfies it."""
+        member simulation of which satisfies it; with ``favorite_of``, only those that subject starred."""
 
     @abstractmethod
     async def set_result(self, comparison_id: int, status: str, result: dict[str, Any] | None) -> None: ...
@@ -504,11 +511,18 @@ class ComparisonsORMExecutor(ComparisonsDatabaseService):
 
     @override
     async def page(
-        self, limit: int, offset: int, source: str | None = None, readable: ColumnElement[bool] | None = None
+        self,
+        limit: int,
+        offset: int,
+        source: str | None = None,
+        readable: ColumnElement[bool] | None = None,
+        favorite_of: str | None = None,
     ) -> tuple[list[ComparisonRow], int]:
         stmt = select(ORMComparison)
         if source is not None:
             stmt = stmt.where(ORMComparison.source == source)
+        if favorite_of is not None:
+            stmt = stmt.where(starred(ORMComparison.id, favorite_of, FavoriteKind.COMPARISON))
         if readable is not None:
             hidden_member = (
                 select(ORMComparisonMember.id)
