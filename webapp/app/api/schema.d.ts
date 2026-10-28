@@ -1846,6 +1846,16 @@ export interface components {
             /** Versions */
             versions?: components["schemas"]["EnvironmentVersion"][];
         };
+        /**
+         * ErrorDetail
+         * @description An error's body, as FastAPI's ``HTTPException`` writes it. A route declares it for its error responses so the
+         *     generated client parses them into this rather than typing them ``Any``, which would make the whole return type
+         *     ``Any`` to a type checker.
+         */
+        ErrorDetail: {
+            /** Detail */
+            detail: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -3024,7 +3034,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -3100,28 +3112,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
             };
             /** @description The simulation has an owner, and the caller is neither it nor an admin */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
             };
             /** @description The simulation does not exist, or the caller may not read it */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
             };
             /** @description The run has finished, or is being submitted to SLURM right now */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -3137,7 +3157,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
             };
         };
     };

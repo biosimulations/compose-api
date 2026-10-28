@@ -22,6 +22,7 @@ from compose_api.simulation import handlers
 from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.labels import LABEL_KEYS, LabelError, parse_label_filters
 from compose_api.simulation.models import (
+    ErrorDetail,
     SimulationCancellation,
     SimulationDetail,
     SimulationPage,
@@ -156,7 +157,7 @@ def _container_hash(simulator: str, images: Mapping[str, str]) -> str:
     path="",
     response_model=SimulationPage,
     operation_id="list-simulations",
-    responses={401: {"description": "`mine` without a signed-in caller"}},
+    responses={401: {"model": ErrorDetail, "description": "`mine` without a signed-in caller"}},
     tags=["Simulations"],
     summary="List simulations, newest first, each with its latest SLURM job",
 )
@@ -258,11 +259,14 @@ async def get_simulation(simulation_id: int, caller: OptionalCaller) -> Simulati
     status_code=202,
     operation_id="cancel-simulation",
     responses={
-        401: {"description": "Cancelling needs a signed-in caller"},
-        403: {"description": "The simulation has an owner, and the caller is neither it nor an admin"},
-        404: {"description": "The simulation does not exist, or the caller may not read it"},
-        409: {"description": "The run has finished, or is being submitted to SLURM right now"},
-        502: {"description": "SLURM could not be asked to cancel the job; try again"},
+        401: {"model": ErrorDetail, "description": "Cancelling needs a signed-in caller"},
+        403: {
+            "model": ErrorDetail,
+            "description": "The simulation has an owner, and the caller is neither it nor an admin",
+        },
+        404: {"model": ErrorDetail, "description": "The simulation does not exist, or the caller may not read it"},
+        409: {"model": ErrorDetail, "description": "The run has finished, or is being submitted to SLURM right now"},
+        502: {"model": ErrorDetail, "description": "SLURM could not be asked to cancel the job; try again"},
     },
     tags=["Simulations"],
     summary="Cancel a run: withdraw it from the queue, or ask SLURM to cancel its job",

@@ -369,6 +369,10 @@ paths:
                 $ref: '#/components/schemas/SimulationPage'
         '401':
           description: '`mine` without a signed-in caller'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -433,16 +437,36 @@ paths:
                 $ref: '#/components/schemas/SimulationCancellation'
         '401':
           description: Cancelling needs a signed-in caller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '403':
           description: The simulation has an owner, and the caller is neither it nor
             an admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '404':
           description: The simulation does not exist, or the caller may not read it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '409':
           description: The run has finished, or is being submitted to SLURM right
             now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '502':
           description: SLURM could not be asked to cancel the job; try again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
         '422':
           description: Validation Error
           content:
@@ -3945,6 +3969,22 @@ components:
       title: EnvironmentVersions
       description: An environment's versions, newest first, and which one a run that
         names none gets.
+    ErrorDetail:
+      properties:
+        detail:
+          type: string
+          title: Detail
+      type: object
+      required:
+      - detail
+      title: ErrorDetail
+      description: 'An error''s body, as FastAPI''s ``HTTPException`` writes it. A
+        route declares it for its error responses so the
+
+        generated client parses them into this rather than typing them ``Any``, which
+        would make the whole return type
+
+        ``Any`` to a type checker.'
     HTTPValidationError:
       properties:
         detail:
