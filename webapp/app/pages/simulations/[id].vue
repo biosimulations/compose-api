@@ -152,9 +152,26 @@ const fields = computed(() => {
 
         <UTabs v-model="tab" :items="tabs" variant="link" class="w-full" :unmount-on-hide="false">
           <template #overview>
-            <div class="grid lg:grid-cols-2 gap-4 pt-4">
+            <!-- the run itself: what it ran in and when; its environment's build is on the page "Ran in" links to, its
+                 input on the Input tab -->
+            <div class="flex flex-col gap-4 pt-4 max-w-3xl">
+              <UAlert
+                v-if="sim?.error_message"
+                color="error"
+                variant="subtle"
+                icon="i-lucide-circle-x"
+                title="Error"
+                :description="sim.error_message"
+              />
+              <UAlert
+                v-if="build?.error_message"
+                color="error"
+                variant="subtle"
+                icon="i-lucide-hammer"
+                title="Its environment's image did not build"
+                :description="build.error_message"
+              />
               <UCard>
-                <template #header><h3 class="font-semibold">Run</h3></template>
                 <dl class="grid grid-cols-[9rem_1fr] gap-y-2 text-sm">
                   <template v-if="sim?.description">
                     <dt class="text-muted">Description</dt>
@@ -174,56 +191,6 @@ const fields = computed(() => {
                   </template>
                 </dl>
               </UCard>
-              <div class="flex flex-col gap-4">
-                <UAlert
-                  v-if="sim?.error_message"
-                  color="error"
-                  variant="subtle"
-                  icon="i-lucide-circle-x"
-                  title="Error"
-                  :description="sim.error_message"
-                />
-                <UCard v-if="build">
-                  <template #header>
-                    <div class="flex items-center justify-between">
-                      <h3 class="font-semibold">Container build</h3>
-                      <StatusBadge :status="build.status" />
-                    </div>
-                  </template>
-                  <dl class="grid grid-cols-[9rem_1fr] gap-y-2 text-sm">
-                    <dt class="text-muted">SLURM job</dt><dd class="font-mono text-xs">{{ build.slurmjobid }}</dd>
-                    <dt class="text-muted">Started</dt><dd>{{ formatTime(build.start_time) }}</dd>
-                    <dt class="text-muted">Ended</dt><dd>{{ formatTime(build.end_time) }}</dd>
-                    <template v-if="build.error_message">
-                      <dt class="text-muted">Error</dt><dd class="text-error text-xs">{{ build.error_message }}</dd>
-                    </template>
-                  </dl>
-                </UCard>
-                <UCard v-if="input">
-                  <template #header>
-                    <div class="flex items-center justify-between">
-                      <h3 class="font-semibold">Input</h3>
-                      <div class="flex gap-1">
-                        <template v-if="input.available">
-                          <UButton icon="i-lucide-eye" variant="ghost" color="neutral" title="View" aria-label="View" @click="tab = 'input'" />
-                          <UButton icon="i-lucide-download" variant="ghost" color="neutral" title="Download" aria-label="Download" @click="saveInput(input)" />
-                        </template>
-                      </div>
-                    </div>
-                  </template>
-                  <UAlert v-if="inputError" color="error" variant="subtle" :description="inputError" class="mb-2" />
-                  <dl class="grid grid-cols-[9rem_1fr] gap-y-2 text-sm">
-                    <dt class="text-muted">File</dt><dd class="font-mono text-xs break-all self-center">{{ input.path }}</dd>
-                    <dt class="text-muted">Size</dt><dd>{{ formatBytes(input.size_bytes) }}</dd>
-                    <template v-if="input.attributes?.end_time != null">
-                      <dt class="text-muted">End time</dt><dd>{{ input.attributes.end_time }}</dd>
-                    </template>
-                    <template v-if="input.sha256">
-                      <dt class="text-muted">SHA-256</dt><dd class="font-mono text-xs break-all self-center">{{ input.sha256 }}</dd>
-                    </template>
-                  </dl>
-                </UCard>
-              </div>
             </div>
           </template>
           <template #input>
@@ -231,6 +198,11 @@ const fields = computed(() => {
               <div class="flex flex-wrap items-center gap-2 text-sm">
                 <span class="font-mono text-xs break-all">{{ input.path }}</span>
                 <UBadge variant="outline" color="neutral">{{ formatBytes(input.size_bytes) }}</UBadge>
+                <!-- the interval it was submitted to run for -->
+                <UBadge v-if="input.attributes?.end_time != null" variant="outline" color="neutral">run to t = {{ input.attributes.end_time }}</UBadge>
+                <UTooltip v-if="input.sha256" :text="`SHA-256 ${input.sha256}`">
+                  <span class="font-mono text-xs text-muted">sha256 {{ input.sha256.slice(0, 12) }}…</span>
+                </UTooltip>
                 <span class="grow" />
                 <UButton v-if="input.available" icon="i-lucide-download" variant="ghost" color="neutral" label="Download" @click="saveInput(input)" />
               </div>
