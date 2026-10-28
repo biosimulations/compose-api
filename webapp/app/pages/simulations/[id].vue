@@ -207,9 +207,10 @@ const fields = computed(() => {
                     <div class="flex items-center justify-between">
                       <h3 class="font-semibold">Input</h3>
                       <div class="flex gap-1">
-                        <UButton icon="i-lucide-eye" variant="ghost" color="neutral" title="View" :disabled="!input.available" @click="tab = 'input'" />
-                        <UButton icon="i-lucide-maximize-2" variant="ghost" color="neutral" title="Open" :to="`/datasets/${input.id}`" :disabled="!input.available" />
-                        <UButton icon="i-lucide-download" variant="ghost" color="neutral" title="Download" :disabled="!input.available" @click="saveInput(input)" />
+                        <template v-if="input.available">
+                          <UButton icon="i-lucide-eye" variant="ghost" color="neutral" title="View" aria-label="View" @click="tab = 'input'" />
+                          <UButton icon="i-lucide-download" variant="ghost" color="neutral" title="Download" aria-label="Download" @click="saveInput(input)" />
+                        </template>
                       </div>
                     </div>
                   </template>
@@ -247,8 +248,7 @@ const fields = computed(() => {
                 <span class="font-mono text-xs break-all">{{ input.path }}</span>
                 <UBadge variant="outline" color="neutral">{{ formatBytes(input.size_bytes) }}</UBadge>
                 <span class="grow" />
-                <UButton icon="i-lucide-maximize-2" variant="ghost" color="neutral" label="Open" :to="`/datasets/${input.id}`" :disabled="!input.available" />
-                <UButton icon="i-lucide-download" variant="ghost" color="neutral" label="Download" :disabled="!input.available" @click="saveInput(input)" />
+                <UButton v-if="input.available" icon="i-lucide-download" variant="ghost" color="neutral" label="Download" @click="saveInput(input)" />
               </div>
               <UAlert v-if="inputError" color="error" variant="subtle" :description="inputError" />
               <UAlert v-if="!input.available" color="neutral" variant="subtle" description="The input is no longer available." />
@@ -267,7 +267,7 @@ const fields = computed(() => {
                     <div class="flex items-center gap-2">
                       <h3 class="font-semibold truncate" :title="f.path">{{ f.display_name }}</h3>
                       <span class="grow" />
-                      <UButton icon="i-lucide-maximize-2" variant="ghost" color="neutral" size="sm" title="Open" :to="`/datasets/${f.id}`" />
+                      <UButton v-if="f.available" icon="i-lucide-maximize-2" variant="ghost" color="neutral" size="sm" title="Full size" aria-label="Full size" :to="`/datasets/${f.id}`" />
                     </div>
                   </template>
                   <p v-if="!f.available" class="text-sm text-muted">No longer available.</p>
