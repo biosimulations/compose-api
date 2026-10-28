@@ -223,19 +223,6 @@ const fields = computed(() => {
                     </template>
                   </dl>
                 </UCard>
-                <UCard>
-                  <template #header><h3 class="font-semibold">Recorded</h3></template>
-                  <div class="flex gap-8">
-                    <button class="text-left" @click="tab = 'events'">
-                      <p class="text-3xl font-bold tabular-nums">{{ sim?.event_count ?? '—' }}</p>
-                      <p class="text-sm text-muted">events</p>
-                    </button>
-                    <button class="text-left" @click="tab = 'datasets'">
-                      <p class="text-3xl font-bold tabular-nums">{{ sim?.dataset_count ?? '—' }}</p>
-                      <p class="text-sm text-muted">datasets</p>
-                    </button>
-                  </div>
-                </UCard>
               </div>
             </div>
           </template>
