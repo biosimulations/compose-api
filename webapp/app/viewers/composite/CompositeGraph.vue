@@ -20,7 +20,7 @@ const truncate = (s: string, n = 28) => (s.length > n ? `${s.slice(0, n - 1)}…
   <div class="flex flex-col gap-2">
     <p v-if="title" class="text-sm font-medium">{{ title }}</p>
     <p v-if="!graph.nodes.length && !graph.stores.length" class="text-sm text-muted">
-      Nothing to draw: the document has no processes, steps or stores at its top level. If the Text tab shows the
+      Nothing to draw: the document has no processes, steps or stores at its top level. If the pblang tab shows the
       composite's content inside a <code>meta</code> block, this build does not yet read this document's form.
     </p>
     <div v-else class="overflow-auto rounded border border-default bg-elevated/30">

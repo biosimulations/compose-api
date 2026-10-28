@@ -15,7 +15,7 @@ import { type Component, ComponentIndex, interfaceMarkdown, reindentJson } from 
  * submission (./composite/archive.ts); when it holds several, one is picked. The document is decompiled in the browser with process-bigraph-lang, checked against the interface manifest
  * of the environment its run used (so its processes resolve to their ports and config), and shown read-only in Monaco
  * with the checker's findings as markers. Large values the printer moved to sidecar assets are listed below the text.
- * The Document tab shows the JSON that was submitted and run, re-indented only. Hovering a class's name in the text,
+ * The JSON tab shows the document that was submitted and run, re-indented only. Hovering a class's name in the text,
  * or its address in the document, shows its interface from that manifest, with a link to the environment's page.
  */
 const props = defineProps<{ dataset: Dataset }>()
@@ -56,8 +56,8 @@ const counts = computed(() => ({
   info: diagnostics.value.filter(d => d.severity !== 'error' && d.severity !== 'warning').length
 }))
 const tabs = computed(() => [
-  { label: 'Text', icon: 'i-lucide-file-code', value: 'text', slot: 'text' as const },
-  { label: 'Document', icon: 'i-lucide-braces', value: 'document', slot: 'document' as const },
+  { label: 'pblang', icon: 'i-lucide-file-code', value: 'text', slot: 'text' as const },
+  { label: 'JSON', icon: 'i-lucide-braces', value: 'document', slot: 'document' as const },
   { label: 'Graph', icon: 'i-lucide-workflow', value: 'graph', slot: 'graph' as const },
   { label: `Findings (${diagnostics.value.length})`, icon: 'i-lucide-list-checks', value: 'findings', slot: 'findings' as const }
 ])
