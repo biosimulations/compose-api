@@ -112,6 +112,9 @@ function runSession(): Promise<Pblang> {
   })()
   return session
 }
+// started now, not once the file has arrived: finding the run's environment and its manifest takes three requests of
+// its own, which then overlap the download
+void runSession()
 
 watch(chosen, async (path) => {
   const document = documents.value.find(d => d.path === path)
