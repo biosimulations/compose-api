@@ -1,0 +1,2506 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An API server for reproducible biological workflows and cosimulations.">
+      
+      
+        <meta name="author" content="Jim Schaff">
+      
+      
+        <link rel="canonical" href="https://biosimulations.github.io/compose-api/cli/">
+      
+      
+        <link rel="prev" href="../webapp/">
+      
+      
+        <link rel="next" href="../modules/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Command line - compose-api</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="deep-orange">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#the-compose-api-command-line" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="compose-api" class="md-header__button md-logo" aria-label="compose-api" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            compose-api
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Command line
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="deep-orange"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="deep-orange"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/biosimulations/compose-api" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    biosimulations/compose-api
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="compose-api" class="md-nav__button md-logo" aria-label="compose-api" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    compose-api
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/biosimulations/compose-api" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    biosimulations/compose-api
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../authentication/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../webapp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#connect-and-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Connect and Profiles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sign-up-and-sign-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sign up and sign in
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-run-start-to-finish" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A run, start to finish
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#json-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JSON output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-run-did-events-and-traces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a run did: events and traces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-run-produced-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a run produced: datasets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-and-exit-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output and exit status
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#from-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From Python
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../modules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Modules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#connect-and-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Connect and Profiles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sign-up-and-sign-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sign up and sign in
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-run-start-to-finish" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A run, start to finish
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#json-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JSON output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-run-did-events-and-traces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a run did: events and traces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-run-produced-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a run produced: datasets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-and-exit-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output and exit status
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#from-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From Python
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="the-compose-api-command-line">The <code>compose-api</code> command line<a class="headerlink" href="#the-compose-api-command-line" title="Permanent link">&para;</a></h1>
+<p><code>compose-api</code> drives the compose-api service from a terminal or a script: sign up or in through Auth0 in your browser,
+keep the session in your operating system's credential store, submit simulations, wait for them, fetch their results,
+and inspect what the service has registered. It covers every operation in the API (a test fails if an operation is
+added without a command). How it is built and why: <a href="../plan-cli/">plan-cli.md</a>.</p>
+<p>Signing in identifies you to the API. It does not make your simulations private: anyone with a simulation's numeric ID
+can read its status and results (see <a href="../authentication/#authentication-does-not-make-a-simulation-private">Authentication</a>).
+Roles are labels on your identity, not access controls on simulations.</p>
+<h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
+<pre><code class="language-console">$ pip install 'compose-api-client[cli]'      # or: uv tool install 'compose-api-client[cli]'
+$ compose-api --help
+</code></pre>
+<p>The base package (<code>pip install compose-api-client</code>) is the Python client alone: httpx, attrs and python-dateutil, no
+server dependencies. The <code>[auth]</code> extra adds the Auth0 / keyring session layer, and <code>[cli]</code> includes <code>[auth]</code> plus the
+terminal UI. In this repository, <code>uv run compose-api ...</code> works with no install.</p>
+<h2 id="connect-and-profiles">Connect and Profiles<a class="headerlink" href="#connect-and-profiles" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Option</th>
+<th>Environment</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Profile</td>
+<td><code>--profile</code></td>
+<td><code>COMPOSE_API_CLI_PROFILE</code></td>
+<td><code>production</code></td>
+</tr>
+<tr>
+<td>Service</td>
+<td><code>--url</code></td>
+<td><code>COMPOSE_API_URL</code></td>
+<td>the selected profile's <code>api_base_url</code></td>
+</tr>
+<tr>
+<td>HTTP timeout</td>
+<td><code>--timeout</code></td>
+<td><code>COMPOSE_API_TIMEOUT</code></td>
+<td>300 s (downloads; other requests cap at 60 s)</td>
+</tr>
+<tr>
+<td>Output</td>
+<td><code>-o/--output auto\|table\|json</code></td>
+<td><code>COMPOSE_API_OUTPUT</code></td>
+<td><code>auto</code>: a table on a terminal, JSON when piped</td>
+</tr>
+<tr>
+<td>Automation token</td>
+<td>— (env-only)</td>
+<td><code>COMPOSE_API_TOKEN</code></td>
+<td>none (uses stored session, else anonymous)</td>
+</tr>
+</tbody>
+</table>
+<p>Global options go before the command: <code>compose-api -o json status 4192</code>. Results go to stdout; progress lines and
+errors go to stderr, so <code>compose-api -o json ... | jq</code> always sees clean JSON.</p>
+<p>A profile says which API to call and how to sign in to it. Two are built in:</p>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>API</th>
+<th>Auth0 audience</th>
+<th>Client ID</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>production</code> (default)</td>
+<td><code>https://compose.cam.uchc.edu</code></td>
+<td><code>https://api.compose.cam.uchc.edu</code></td>
+<td><code>1FV43fysEjhTrYYRNaMEGvCteu4g2ay4</code></td>
+</tr>
+<tr>
+<td><code>local</code></td>
+<td><code>https://api.compose-api-local</code></td>
+<td><code>https://api.compose.local</code></td>
+<td><code>Fp3QmULWNIhdutlBRVFm2HjPGapqdnKV</code></td>
+</tr>
+</tbody>
+</table>
+<p>Both use the tenant <code>dev-bu7yo7484tyxu6a1.us.auth0.com</code>, the database connection <code>Username-Password-Authentication</code>,
+the Google connection <code>google-oauth2</code> and callback port 8400. The client IDs belong to public native applications:
+they are identifiers, not secrets, and there is no client secret anywhere in the CLI.</p>
+<p>Choose a profile with <code>--profile NAME</code> or <code>COMPOSE_API_CLI_PROFILE</code>. Each setting is then taken from its environment
+variable, else from <code>[profiles.&lt;name&gt;]</code> in <code>config.toml</code> (under your user configuration directory), else from the
+built-in value. <code>compose-api config show</code> prints every effective value and where it came from.</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Environment variable</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>api_base_url</code></td>
+<td><code>COMPOSE_API_CLI_API_BASE_URL</code></td>
+<td>The API origin. <code>https</code> only, except a loopback host (<code>http://localhost:8000</code>). No path, query or credentials.</td>
+</tr>
+<tr>
+<td><code>auth0_domain</code></td>
+<td><code>COMPOSE_API_CLI_AUTH0_DOMAIN</code></td>
+<td>The tenant's bare host. The issuer is derived from it.</td>
+</tr>
+<tr>
+<td><code>auth0_audience</code></td>
+<td><code>COMPOSE_API_CLI_AUTH0_AUDIENCE</code></td>
+<td>The API identifier, exactly as the server's <code>AUTH0_AUDIENCE</code>. It is not the URL you call.</td>
+</tr>
+<tr>
+<td><code>auth0_client_id</code></td>
+<td><code>COMPOSE_API_CLI_AUTH0_CLIENT_ID</code></td>
+<td>The native application's public client ID.</td>
+</tr>
+<tr>
+<td><code>database_connection</code></td>
+<td><code>COMPOSE_API_CLI_DATABASE_CONNECTION</code></td>
+<td>Optional: steers <code>--provider email</code> to this connection.</td>
+</tr>
+<tr>
+<td><code>google_connection</code></td>
+<td><code>COMPOSE_API_CLI_GOOGLE_CONNECTION</code></td>
+<td>Needed for <code>--provider google</code> in the browser.</td>
+</tr>
+<tr>
+<td><code>callback_port</code></td>
+<td><code>COMPOSE_API_CLI_CALLBACK_PORT</code></td>
+<td>The registered loopback callback port, <code>http://127.0.0.1:&lt;port&gt;/callback</code>. Default 8400.</td>
+</tr>
+<tr>
+<td><code>ca_bundle</code></td>
+<td><code>COMPOSE_API_CLI_CA_BUNDLE</code></td>
+<td>Absolute path to extra CA certificates (PEM) for an API with a private CA.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sign-up-and-sign-in">Sign up and sign in<a class="headerlink" href="#sign-up-and-sign-in" title="Permanent link">&para;</a></h2>
+<p>Passwords, MFA, email verification and Google consent all happen on Auth0's pages in your own browser. The CLI never
+asks for a password, and never accepts a password or <code>--token</code> flag on the command line.</p>
+<pre><code class="language-bash">compose-api auth signup                     # create an email-and-password account
+compose-api auth signup --provider google   # first sign-in with Google creates the account
+compose-api auth login                      # returning user: choose email or Google on the page
+compose-api auth login --provider google
+compose-api auth login --method device      # sign in on another device (SSH, containers)
+compose-api auth status                     # what is stored locally; contacts nothing
+compose-api auth status --verify            # renews if needed and asks GET /auth/me to confirm the identity
+compose-api auth logout                     # revokes the refresh token with Auth0, then erases the session
+compose-api auth logout --local-only
+</code></pre>
+<p><code>--method</code> chooses how a sign-in reaches you: <code>auto</code> (the default) picks from the environment: the device code over
+SSH (<code>SSH_CONNECTION</code>), on a headless host or in a GitHub Codespace, and the browser otherwise. Over SSH or without a
+display, a recognized VS Code <code>bin/helpers/browser.sh</code> or <code>browser.cmd</code> helper, or WSL's <code>wslview</code>, still gets the
+browser, since they forward the callback port. VS Code or WSL environment markers alone do not qualify: a text
+browser, an unknown command or a fallback list in <code>$BROWSER</code> gets the device code. An unrecognized helper can still be
+chosen explicitly with <code>--method browser</code>. A Codespace still gets
+the device code, because one opened in a web browser cannot receive the callback. Whenever <code>auto</code> picks anything but
+your desktop's browser, the command says why and how to choose another way. <code>browser</code> opens the system browser, or
+<code>$BROWSER</code> without a display. A text browser there (<code>w3m</code>, <code>lynx</code>, <code>links</code>, <code>elinks</code>, <code>www-browser</code>) would take over
+the terminal, so it counts as none and the command says to use <code>url</code> or <code>device</code>. <code>url</code> prints the sign-in link instead
+of opening anything; <code>device</code> is RFC 8628, for signing in on another device. The same option works with
+<code>--ephemeral-auth</code> before any command.</p>
+<p>The session is one record in your operating system's credential store (macOS Keychain, Linux Secret Service or
+Windows Credential Manager), under <code>compose-api.cli.v1.&lt;digest&gt;</code>. Plaintext and unknown keyring backends are refused;
+there is no file fallback. On hosts without a credential store, use <code>--ephemeral-auth</code> before the command (for example
+<code>compose-api --ephemeral-auth --method device simulators list</code>),
+which signs in for a single command in memory without requesting a refresh token.</p>
+<p>The browser flow listens on <code>http://127.0.0.1:8400/callback</code>, the only callback the tenant's applications register,
+so <code>COMPOSE_API_CLI_CALLBACK_PORT</code> cannot move it. If port 8400 is already in use, sign-in stops before the browser
+opens; over SSH, <code>ssh -L 8400:127.0.0.1:8400</code> forwards the callback to your own computer, which makes
+<code>--method url</code> work there.</p>
+<p>For CI and non-interactive automation, set <code>COMPOSE_API_TOKEN</code> in the environment. When set, it takes precedence over a
+stored session for the active profile (printing a one-line notice to stderr), is never renewed or printed, and is still
+bound by the destination guard (<code>_DestinationGuard</code>), redirect refusal (<code>follow_redirects=False</code>) and environment
+isolation (<code>trust_env=False</code>). If <code>--url</code> is overridden to an origin different from the profile's <code>api_base_url</code>,
+neither a stored session nor <code>COMPOSE_API_TOKEN</code> is sent to it.</p>
+<h2 id="a-run-start-to-finish">A run, start to finish<a class="headerlink" href="#a-run-start-to-finish" title="Permanent link">&para;</a></h2>
+<pre><code class="language-console">$ compose-api run experiment.omex --simulator viva-pde-particle --wait --download out/ --extract
+submitted simulation 4195
+    0s simulation 4195: submitting
+    5s simulation 4195: running (slurm 4137519)
+   31s simulation 4195: completed (slurm 4137519)
+{ &quot;simulation_id&quot;: 4195, &quot;status&quot;: &quot;completed&quot;, ..., &quot;files&quot;: [&quot;out/results_2026-10-07#08-24-19.pber&quot;] }
+</code></pre>
+<p>Or in steps:</p>
+<pre><code class="language-console">$ compose-api run experiment.omex --simulator viva-pde-particle     # prints simulation_database_id
+$ compose-api status 4195                                            # &quot;submitting&quot; until the SLURM job exists
+$ compose-api wait 4195
+$ compose-api results 4195 --extract out/
+</code></pre>
+<p>Once signed in (<code>compose-api auth login</code>), every command sends the profile's session; without one, commands call the
+API anonymously, as it allows. Neither ever starts a sign-in on its own:</p>
+<pre><code class="language-bash">compose-api simulations list                               # with the stored session, or anonymously
+compose-api --ephemeral-auth run experiment.omex           # sign in for this one command; keep nothing
+</code></pre>
+<ul>
+<li><strong>Simulation ids.</strong> A simulation id is what <code>run</code> prints (<code>simulation_database_id</code>), and what <code>status</code>, <code>wait</code>,
+  <code>results</code>, <code>events</code>, <code>trace</code> and <code>datasets list --sim</code> take. To find one later:</li>
+</ul>
+<p><code>console
+  $ compose-api simulations list                          # newest first, with status and SLURM job
+  $ compose-api simulations list --status running --since 6h
+  $ compose-api simulations list --simulator viva-pde-particle --limit 20
+  $ compose-api simulations list --label source:biomodels --tag repressilator
+  $ compose-api simulations show 4334                     # plus how many events and datasets it recorded</code></p>
+<p>Runs carry <strong>labels</strong>, written by the service (<code>source</code>, <code>environment</code>, <code>solver</code>, <code>model</code>, ...), and <strong>tags</strong> and a
+  <strong>description</strong> given at submission: <code>compose-api run x.omex --tag demo --tag repressilator --description "..."</code>.
+  <code>--label key:value</code> and <code>--tag</code> filter the list; each is repeatable, and all must match.
+- <code>--simulator</code> names a prebuilt simulator image the service is configured with. Without it, the service builds one
+  from the document's dependencies, and <code>build-status &lt;simulator_database_id&gt;</code> follows that build.
+- <code>status</code> takes several ids and asks for them in one call.
+- <code>curated copasi</code> and <code>curated tellurium</code> run an SBML model with those simulators.
+- <code>simulators list</code>, <code>processes list</code> and <code>steps list</code> show what is registered.
+- <code>openapi --diff</code> reports whether this client and the live service disagree on the API.</p>
+<h2 id="json-output">JSON output<a class="headerlink" href="#json-output" title="Permanent link">&para;</a></h2>
+<p>Every command takes <code>--json</code>, which prints JSON instead of a table. It's the same as <code>--output json</code> before the
+command name, and it overrides that option. The <code>auth</code> commands accept <code>--json</code> without listing it in their help:
+<code>-o json</code> is the spelling documented for them. JSON is also the default whenever output isn't a terminal, so
+<code>compose-api simulations list | jq</code> needs neither.</p>
+<h2 id="what-a-run-did-events-and-traces">What a run did: events and traces<a class="headerlink" href="#what-a-run-did-events-and-traces" title="Permanent link">&para;</a></h2>
+<p>Every run records events: the service's own (<code>dispatch.submitted</code>, then <code>slurm.&lt;state&gt;</code> on each change), the job
+script's (<code>job.start</code>, and <code>job.end</code> with the exit code, inside a <code>job</code> span), and, if the simulator is built on
+process-bigraph 1.8.5 or later, the engine's (<code>run.start</code>, <code>run.end</code>, <code>process.exception</code>, its spans).</p>
+<pre><code class="language-console">$ compose-api events 4195                  # everything recorded so far
+$ compose-api events 4195 --follow         # and new ones as they arrive, until the job has finished
+$ compose-api events 4195 --level error    # only what went wrong
+$ compose-api trace 4195                   # the spans as a tree, each with its own events
+$ compose-api trace 4195 --chrome t.json   # a file for ui.perfetto.dev
+</code></pre>
+<p>With <code>--output json</code>, <code>events</code> prints JSON lines, one event per line. The service reads a run's events while it runs
+and for a few minutes after it ends, so a <code>--follow</code> may print a last few events after the job is done.</p>
+<h2 id="what-a-run-produced-datasets">What a run produced: datasets<a class="headerlink" href="#what-a-run-produced-datasets" title="Permanent link">&para;</a></h2>
+<p>Each file a run leaves in its <code>output/</code> directory, and its <code>results.zip</code>, is a dataset. The job script records each
+with its size and sha256 when the run ends. A simulator can announce its own files with an <code>artifact.written</code> event,
+adding a kind, a name and attributes.</p>
+<pre><code class="language-console">$ compose-api datasets list --sim 4195            # one run's files
+$ compose-api datasets list --kind results         # every results file you can read
+$ compose-api datasets show &lt;id&gt;
+$ compose-api datasets get &lt;id&gt; -O out/            # just that file, not the whole archive
+</code></pre>
+<p>A run's SLURM log is a dataset too (<code>job.out</code>, kind <code>log</code>): <code>compose-api datasets list --sim 4195 --kind log</code>, then
+<code>datasets get</code> on its id. A dataset is readable by whoever can read its simulation.</p>
+<h2 id="output-and-exit-status">Output and exit status<a class="headerlink" href="#output-and-exit-status" title="Permanent link">&para;</a></h2>
+<p>Results go to stdout; progress, prompts and human error lines go to stderr. With <code>--json</code>, an error is also printed to
+stdout as <code>{"error": {"category": ..., "message": ..., "exit_code": ...}}</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Exit</th>
+<th>Category</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td></td>
+<td>Success; with <code>--wait</code>, the job completed</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>not_found</code>, <code>invalid_request</code>, <code>server_error</code>, <code>api_error</code>, <code>job_failed</code>, <code>uncertain</code>, <code>internal</code></td>
+<td>The API answered unsuccessfully (404, 400/422, 500, other), the job ended other than completed, a submission outcome was ambiguous, or the CLI hit an internal bug</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>usage</code></td>
+<td>A malformed command line, a removed option (<code>--token</code>), or a file argument that cannot be used</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>authentication</code></td>
+<td>No session, an expired one that cannot be renewed, a refused or cancelled sign-in, or credentials the API rejected</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>forbidden</code></td>
+<td>The API refused the request for this account (403)</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>network</code>, <code>rate_limited</code>, <code>uncertain</code></td>
+<td>Auth0 or the API could not be reached, timed out, is unavailable (502/503/504), or is rate limiting (429)</td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>configuration</code>, <code>storage</code>, <code>protocol</code>, <code>interaction</code></td>
+<td>A profile, credential-store, protocol or local-browser problem</td>
+</tr>
+<tr>
+<td>7</td>
+<td><code>wait_timeout</code></td>
+<td><code>--wait-timeout</code> passed before the job finished</td>
+</tr>
+<tr>
+<td>130</td>
+<td></td>
+<td>Cancelled (Ctrl-C)</td>
+</tr>
+</tbody>
+</table>
+<p>So <code>compose-api run x.omex --wait &amp;&amp; next-step</code> runs <code>next-step</code> only if the simulation completed.</p>
+<h2 id="from-python">From Python<a class="headerlink" href="#from-python" title="Permanent link">&para;</a></h2>
+<p>The command line is a thin layer over <code>compose_api_client.ext</code>, which applications can use directly:</p>
+<pre><code class="language-python">from compose_api_client.ext import ComposeSession
+
+with ComposeSession() as s:  # https://compose.cam.uchc.edu
+    sim, state, files = s.run_and_wait(&quot;experiment.omex&quot;, simulator=&quot;viva-pde-particle&quot;, dest=&quot;out/&quot;, extract=True)
+</code></pre>
+<p><code>AsyncComposeSession</code> has the same methods as coroutines, and <code>AsyncComposeSession.in_process(app)</code> runs against a
+FastAPI app in a test with no network.</p>
+<!-- BEGIN generated reference: `make cli-docs` rewrites everything below this line -->
+
+<h1 id="command-reference">Command reference<a class="headerlink" href="#command-reference" title="Permanent link">&para;</a></h1>
+<p>Drive compose-api: submit simulations, wait for them, fetch results, inspect the catalogue.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api [OPTIONS] COMMAND [ARGS]...
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--url TEXT</code>: Service base URL.  [env var: COMPOSE_API_URL]</li>
+<li><code>--profile TEXT</code>: Profile to use (default: production).  [env var: COMPOSE_API_CLI_PROFILE]</li>
+<li><code>--timeout FLOAT</code>: HTTP timeout, seconds (downloads use the full value; other requests cap at 60 s).  [env var: COMPOSE_API_TIMEOUT; default: 300.0]</li>
+<li><code>-o, --output [auto|table|json]</code>: auto: table on a terminal, else json.  [env var: COMPOSE_API_OUTPUT; default: auto]</li>
+<li><code>-v, --verbose</code>: Log HTTP requests; tracebacks on errors.</li>
+<li><code>-q, --quiet</code>: No progress lines.</li>
+<li><code>--ephemeral-auth</code>: Sign in for this command only, keeping credentials in memory (for hosts without a credential store).</li>
+<li><code>--method [auto|browser|url|device]</code>: How --ephemeral-auth signs in: auto (device over SSH, else browser), browser, url or device.  [default: auto]</li>
+<li><code>--version</code>: Print this program's version and exit.</li>
+<li><code>--install-completion</code>: Install completion for the current shell.</li>
+<li><code>--show-completion</code>: Show completion for the current shell, to copy it or customize the installation.</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<p><strong>Commands</strong>:</p>
+<ul>
+<li><code>health</code>: Is the service up, and which version.</li>
+<li><code>version</code>: The service's version.</li>
+<li><code>catalog</code>: The catalog: every registry entry with its...</li>
+<li><code>solvers</code>: The solvers SED-ML runs can use: each...</li>
+<li><code>run</code>: Submit a simulation.</li>
+<li><code>status</code>: Job state of one simulation, or of several...</li>
+<li><code>wait</code>: Wait until each simulation finishes; exit...</li>
+<li><code>results</code>: Fetch a finished simulation's results...</li>
+<li><code>events</code>: A simulation's events: from the API, the...</li>
+<li><code>trace</code>: A simulation's spans as a tree, each with...</li>
+<li><code>build-status</code>: State of a simulator's container build.</li>
+<li><code>openapi</code>: The OpenAPI document: this client's...</li>
+<li><code>build-log</code>: The SLURM log of a simulator's newest...</li>
+<li><code>simulators</code>: Registered simulator versions.</li>
+<li><code>processes</code>: Registered process-bigraph processes.</li>
+<li><code>steps</code>: Registered process-bigraph steps.</li>
+<li><code>curated</code>: Run an SBML model with a curated simulator.</li>
+<li><code>datasets</code>: The files runs produced.</li>
+<li><code>simulations</code>: Find simulations and their ids.</li>
+<li><code>environments</code>: The environments documents run in, and the...</li>
+<li><code>sedml</code>: Run SED-ML archives on several solvers and...</li>
+<li><code>comparisons</code>: A SED-ML task's runs on several solvers,...</li>
+<li><code>biomodels</code>: EBI BioModels: search, describe, download,...</li>
+<li><code>biosimulations</code>: biosimulations.org projects: search,...</li>
+<li><code>suites</code>: Regression and reproducibility suites of...</li>
+<li><code>auth</code>: Sign up, sign in, check or end a session.</li>
+<li><code>config</code>: Inspect the CLI configuration.</li>
+<li><code>favorites</code>: Your stars on simulations, comparisons and...</li>
+</ul>
+<h2 id="compose-api-health"><code>compose-api health</code><a class="headerlink" href="#compose-api-health" title="Permanent link">&para;</a></h2>
+<p>Is the service up, and which version.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api health [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-version"><code>compose-api version</code><a class="headerlink" href="#compose-api-version" title="Permanent link">&para;</a></h2>
+<p>The service's version.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api version [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-catalog"><code>compose-api catalog</code><a class="headerlink" href="#compose-api-catalog" title="Permanent link">&para;</a></h2>
+<p>The catalog: every registry entry with its curation level, and the environments that provide its classes.</p>
+<p>Discovery and trust, not runnability: most <code>listed</code> entries are in no environment (docs/plan-sedml.md).</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api catalog [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-solvers"><code>compose-api solvers</code><a class="headerlink" href="#compose-api-solvers" title="Permanent link">&para;</a></h2>
+<p>The solvers SED-ML runs can use: each one's class, environment, KiSAO algorithms (default first).</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api solvers [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-run"><code>compose-api run</code><a class="headerlink" href="#compose-api-run" title="Permanent link">&para;</a></h2>
+<p>Submit a simulation. Prints its ids; with --wait, its final state (and the files, with --download).</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api run [OPTIONS] DOCUMENT
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>DOCUMENT</code>: The .omex (or .pbg) to run.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--simulator TEXT</code>: A prebuilt simulator image by name (the older form of --environment).</li>
+<li><code>--environment TEXT</code>: The environment to run in (<code>environments list</code>); omitted: inferred from the document's classes.</li>
+<li><code>--interval FLOAT</code>: Simulation interval passed to the runner.  [default: 1.0]</li>
+<li><code>--batch / --no-batch</code>: Submit as a batch job (smaller partition, 1 CPU).  [default: no-batch]</li>
+<li><code>-t, --tag TEXT</code>: A tag to find the run by later (repeatable).</li>
+<li><code>--description TEXT</code>: What the run is for.</li>
+<li><code>--environment-version INTEGER RANGE</code>: The version of the environment to run in (registry_env@3 is 3); omitted: its default.  [x&gt;=1]</li>
+<li><code>--visibility [private|public]</code>: private (the default signed in: you and admins) or public (anyone); anonymous runs are public.</li>
+<li><code>-w, --wait</code>: Wait for the job to finish; exit 1 unless it completed.</li>
+<li><code>-d, --download PATH</code>: With --wait: save the results archive into this directory.</li>
+<li><code>--extract / --no-extract</code>: With --download: unpack the archive instead of saving the zip.  [default: no-extract]</li>
+<li><code>--poll FLOAT</code>: Seconds between status checks.  [default: 5.0]</li>
+<li><code>--wait-timeout FLOAT</code>: Give up waiting after this many seconds (exit 5).</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-status"><code>compose-api status</code><a class="headerlink" href="#compose-api-status" title="Permanent link">&para;</a></h2>
+<p>Job state of one simulation, or of several in one call. &quot;submitting&quot; means no SLURM job yet.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api status [OPTIONS] SIMULATION_IDS...
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>SIMULATION_IDS...</code>: One or more simulation ids.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-wait"><code>compose-api wait</code><a class="headerlink" href="#compose-api-wait" title="Permanent link">&para;</a></h2>
+<p>Wait until each simulation finishes; exit 1 unless all completed.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api wait [OPTIONS] SIMULATION_IDS...
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>SIMULATION_IDS...</code>: One or more simulation ids.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--poll FLOAT</code>: Seconds between status checks.  [default: 5.0]</li>
+<li><code>--wait-timeout FLOAT</code>: Give up waiting after this many seconds (exit 5).</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-results"><code>compose-api results</code><a class="headerlink" href="#compose-api-results" title="Permanent link">&para;</a></h2>
+<p>Fetch a finished simulation's results archive.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api results [OPTIONS] SIMULATION_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>SIMULATION_ID</code>: The simulation id.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>-O, --out PATH</code>: Write the zip here (a file, or a directory).</li>
+<li><code>--extract PATH</code>: Unpack the archive into this directory instead.</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-events"><code>compose-api events</code><a class="headerlink" href="#compose-api-events" title="Permanent link">&para;</a></h2>
+<p>A simulation's events: from the API, the job script and the simulator's engine. JSON output is JSON lines.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api events [OPTIONS] SIMULATION_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>SIMULATION_ID</code>: The simulation id.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>-f, --follow</code>: Keep printing new events until the job has finished.</li>
+<li><code>--level TEXT</code>: Only events at this level: debug, info, warning, error.</li>
+<li><code>--event TEXT</code>: Only events with this name, e.g. job.end.</li>
+<li><code>--poll FLOAT</code>: Seconds between status checks.  [default: 5.0]</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-trace"><code>compose-api trace</code><a class="headerlink" href="#compose-api-trace" title="Permanent link">&para;</a></h2>
+<p>A simulation's spans as a tree, each with its own events; or, with --chrome, a file for Perfetto.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api trace [OPTIONS] SIMULATION_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>SIMULATION_ID</code>: The simulation id.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--chrome PATH</code>: Save the trace as a Chrome Trace Event file instead; open it in ui.perfetto.dev.</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-build-status"><code>compose-api build-status</code><a class="headerlink" href="#compose-api-build-status" title="Permanent link">&para;</a></h2>
+<p>State of a simulator's container build.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api build-status [OPTIONS] SIMULATOR_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>SIMULATOR_ID</code>: The simulator id (from a submission's simulator_database_id).  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>-w, --wait</code>: Wait for the job to finish; exit 1 unless it completed.</li>
+<li><code>--poll FLOAT</code>: Seconds between status checks.  [default: 5.0]</li>
+<li><code>--wait-timeout FLOAT</code>: Give up waiting after this many seconds (exit 5).</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-openapi"><code>compose-api openapi</code><a class="headerlink" href="#compose-api-openapi" title="Permanent link">&para;</a></h2>
+<p>The OpenAPI document: this client's (default) or the service's; --diff reports skew between them.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api openapi [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--server / --no-server</code>: Fetch the live service's /openapi.json instead.  [default: no-server]</li>
+<li><code>--diff / --no-diff</code>: Compare this client's operations with the live service's; exit 1 on skew.  [default: no-diff]</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-build-log"><code>compose-api build-log</code><a class="headerlink" href="#compose-api-build-log" title="Permanent link">&para;</a></h2>
+<p>The SLURM log of a simulator's newest container build.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api build-log [OPTIONS] SIMULATOR_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>SIMULATOR_ID</code>: The simulator id (a run's simulator_id).  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-simulators"><code>compose-api simulators</code><a class="headerlink" href="#compose-api-simulators" title="Permanent link">&para;</a></h2>
+<p>Registered simulator versions.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api simulators [OPTIONS] COMMAND [ARGS]...
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<p><strong>Commands</strong>:</p>
+<ul>
+<li><code>list</code>: Simulator versions: id, definition hash,...</li>
+<li><code>history</code>: Every simulator that is an environment...</li>
+<li><code>show</code>: One simulator: its container definition,...</li>
+<li><code>images</code>: Whether a simulator's image is built: its...</li>
+<li><code>build</code>: Make a simulator's image available: pulled...</li>
+</ul>
+<h3 id="compose-api-simulators-list"><code>compose-api simulators list</code><a class="headerlink" href="#compose-api-simulators-list" title="Permanent link">&para;</a></h3>
+<p>Simulator versions: id, definition hash, base image, creation time.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api simulators list [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-simulators-history"><code>compose-api simulators history</code><a class="headerlink" href="#compose-api-simulators-history" title="Permanent link">&para;</a></h3>
+<p>Every simulator that is an environment version or that runs you can read used, newest first: the versions it
+is (none for one from before versions), and how many runs used it and when.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api simulators history [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-simulators-show"><code>compose-api simulators show</code><a class="headerlink" href="#compose-api-simulators-show" title="Permanent link">&para;</a></h3>
+<p>One simulator: its container definition, the versions it is, and the runs that used it (<code>simulations list
+--simulator-id</code> lists them).</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api simulators show [OPTIONS] SIMULATOR_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>SIMULATOR_ID</code>: The simulator's id.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-simulators-images"><code>compose-api simulators images</code><a class="headerlink" href="#compose-api-simulators-images" title="Permanent link">&para;</a></h3>
+<p>Whether a simulator's image is built: its image records and its newest build run.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api simulators images [OPTIONS] SIMULATOR_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>SIMULATOR_ID</code>: The simulator's id.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-simulators-build"><code>compose-api simulators build</code><a class="headerlink" href="#compose-api-simulators-build" title="Permanent link">&para;</a></h3>
+<p>Make a simulator's image available: pulled or built unless it is, joining a build under way.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api simulators build [OPTIONS] SIMULATOR_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>SIMULATOR_ID</code>: The simulator's id.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-processes"><code>compose-api processes</code><a class="headerlink" href="#compose-api-processes" title="Permanent link">&para;</a></h2>
+<p>Registered process-bigraph processes.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api processes [OPTIONS] COMMAND [ARGS]...
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<p><strong>Commands</strong>:</p>
+<ul>
+<li><code>list</code>: Registered processes.</li>
+</ul>
+<h3 id="compose-api-processes-list"><code>compose-api processes list</code><a class="headerlink" href="#compose-api-processes-list" title="Permanent link">&para;</a></h3>
+<p>Registered processes.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api processes list [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-steps"><code>compose-api steps</code><a class="headerlink" href="#compose-api-steps" title="Permanent link">&para;</a></h2>
+<p>Registered process-bigraph steps.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api steps [OPTIONS] COMMAND [ARGS]...
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<p><strong>Commands</strong>:</p>
+<ul>
+<li><code>list</code>: Registered steps.</li>
+</ul>
+<h3 id="compose-api-steps-list"><code>compose-api steps list</code><a class="headerlink" href="#compose-api-steps-list" title="Permanent link">&para;</a></h3>
+<p>Registered steps.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api steps list [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-curated"><code>compose-api curated</code><a class="headerlink" href="#compose-api-curated" title="Permanent link">&para;</a></h2>
+<p>Run an SBML model with a curated simulator.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api curated [OPTIONS] COMMAND [ARGS]...
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<p><strong>Commands</strong>:</p>
+<ul>
+<li><code>copasi</code>: Run an SBML model with COPASI.</li>
+<li><code>tellurium</code>: Run an SBML model with Tellurium.</li>
+</ul>
+<h3 id="compose-api-curated-copasi"><code>compose-api curated copasi</code><a class="headerlink" href="#compose-api-curated-copasi" title="Permanent link">&para;</a></h3>
+<p>Run an SBML model with COPASI.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api curated copasi [OPTIONS] SBML
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>SBML</code>: The SBML model.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--start FLOAT</code>: Start time.  [required]</li>
+<li><code>--duration FLOAT</code>: Duration.  [required]</li>
+<li><code>--points INTEGER</code>: Number of output points.  [required]</li>
+<li><code>--visibility [private|public]</code>: private (the default signed in: you and admins) or public (anyone); anonymous runs are public.</li>
+<li><code>-w, --wait</code>: Wait for the job to finish; exit 1 unless it completed.</li>
+<li><code>-d, --download PATH</code>: With --wait: save the results archive into this directory.</li>
+<li><code>--extract / --no-extract</code>: With --download: unpack the archive instead of saving the zip.  [default: no-extract]</li>
+<li><code>--poll FLOAT</code>: Seconds between status checks.  [default: 5.0]</li>
+<li><code>--wait-timeout FLOAT</code>: Give up waiting after this many seconds (exit 5).</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-curated-tellurium"><code>compose-api curated tellurium</code><a class="headerlink" href="#compose-api-curated-tellurium" title="Permanent link">&para;</a></h3>
+<p>Run an SBML model with Tellurium.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api curated tellurium [OPTIONS] SBML
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>SBML</code>: The SBML model.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--start FLOAT</code>: Start time.  [required]</li>
+<li><code>--end FLOAT</code>: End time.  [required]</li>
+<li><code>--points INTEGER</code>: Number of output points.  [required]</li>
+<li><code>--visibility [private|public]</code>: private (the default signed in: you and admins) or public (anyone); anonymous runs are public.</li>
+<li><code>-w, --wait</code>: Wait for the job to finish; exit 1 unless it completed.</li>
+<li><code>-d, --download PATH</code>: With --wait: save the results archive into this directory.</li>
+<li><code>--extract / --no-extract</code>: With --download: unpack the archive instead of saving the zip.  [default: no-extract]</li>
+<li><code>--poll FLOAT</code>: Seconds between status checks.  [default: 5.0]</li>
+<li><code>--wait-timeout FLOAT</code>: Give up waiting after this many seconds (exit 5).</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-datasets"><code>compose-api datasets</code><a class="headerlink" href="#compose-api-datasets" title="Permanent link">&para;</a></h2>
+<p>The files runs produced.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api datasets [OPTIONS] COMMAND [ARGS]...
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<p><strong>Commands</strong>:</p>
+<ul>
+<li><code>list</code>: The files runs produced: one simulation's,...</li>
+<li><code>show</code>: Everything recorded about one dataset.</li>
+<li><code>get</code>: Download a dataset's file.</li>
+<li><code>file</code>: Download one file from inside a directory...</li>
+</ul>
+<h3 id="compose-api-datasets-list"><code>compose-api datasets list</code><a class="headerlink" href="#compose-api-datasets-list" title="Permanent link">&para;</a></h3>
+<p>The files runs produced: one simulation's, or every one you may read, newest simulations first.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api datasets list [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--sim INTEGER</code>: Only this simulation's datasets.</li>
+<li><code>--kind TEXT</code>: Only this kind: results, table, figure, archive, ...</li>
+<li><code>--match TEXT</code>: Only paths or names containing this.</li>
+<li><code>--missing / --no-missing</code>: List datasets whose file is gone instead.  [default: no-missing]</li>
+<li><code>--limit INTEGER</code>: At most this many.  [default: 100]</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-datasets-show"><code>compose-api datasets show</code><a class="headerlink" href="#compose-api-datasets-show" title="Permanent link">&para;</a></h3>
+<p>Everything recorded about one dataset.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api datasets show [OPTIONS] DATASET_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>DATASET_ID</code>: The dataset id.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-datasets-get"><code>compose-api datasets get</code><a class="headerlink" href="#compose-api-datasets-get" title="Permanent link">&para;</a></h3>
+<p>Download a dataset's file.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api datasets get [OPTIONS] DATASET_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>DATASET_ID</code>: The dataset id.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>-O, --out PATH</code>: Write it here (a file, or a directory). Default: here.</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-datasets-file"><code>compose-api datasets file</code><a class="headerlink" href="#compose-api-datasets-file" title="Permanent link">&para;</a></h3>
+<p>Download one file from inside a directory dataset.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api datasets file [OPTIONS] DATASET_ID SUBPATH
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>DATASET_ID</code>: The dataset id (a directory dataset: a results bundle or zarr).  [required]</li>
+<li><code>SUBPATH</code>: The file inside it, e.g. .zattrs or u/0.0.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>-O, --out PATH</code>: Write it here (a file, or a directory). Default: here.</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-simulations"><code>compose-api simulations</code><a class="headerlink" href="#compose-api-simulations" title="Permanent link">&para;</a></h2>
+<p>Find simulations and their ids.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api simulations [OPTIONS] COMMAND [ARGS]...
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<p><strong>Commands</strong>:</p>
+<ul>
+<li><code>list</code>: Simulations you can read, newest first,...</li>
+<li><code>show</code>: One simulation: its simulator, its latest...</li>
+<li><code>cancel</code>: Cancel a run (sign in first: `compose-api...</li>
+<li><code>visibility</code>: Make a run you own public or private.</li>
+</ul>
+<h3 id="compose-api-simulations-list"><code>compose-api simulations list</code><a class="headerlink" href="#compose-api-simulations-list" title="Permanent link">&para;</a></h3>
+<p>Simulations you can read, newest first, each with its latest SLURM job. The ids are what every other command
+takes.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api simulations list [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--status TEXT</code>: Only this state: submitting, running, completed, failed, timeout, ...</li>
+<li><code>--simulator TEXT</code>: Only this prebuilt simulator (name), or a container-definition hash prefix.</li>
+<li><code>--simulator-id INTEGER</code>: Only those that used this simulator (<code>simulators history</code> lists them).</li>
+<li><code>--environment TEXT</code>: Only those that ran in a version of this environment.</li>
+<li><code>--environment-version TEXT</code>: Only those that ran in this version, name@number, e.g. registry_env@5.</li>
+<li><code>--since TEXT</code>: Only those created since: 30m, 6h, 2d, 1w, or an ISO time.</li>
+<li><code>--label TEXT</code>: Only those with this label, key:value, e.g. source:biomodels (repeatable, all must match).</li>
+<li><code>--tag TEXT</code>: Only those with this tag (repeatable, all must match).</li>
+<li><code>--mine</code>: Only those you submitted (needs <code>compose-api login</code>).</li>
+<li><code>--favorite</code>: Only those you starred (<code>compose-api favorites add</code>).</li>
+<li><code>--limit INTEGER</code>: At most this many.  [default: 50]</li>
+<li><code>--offset INTEGER</code>: Skip this many (for the next page).  [default: 0]</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-simulations-show"><code>compose-api simulations show</code><a class="headerlink" href="#compose-api-simulations-show" title="Permanent link">&para;</a></h3>
+<p>One simulation: its simulator, its latest SLURM job, and how many events and datasets its run recorded.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api simulations show [OPTIONS] SIMULATION_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>SIMULATION_ID</code>: The simulation id.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-simulations-cancel"><code>compose-api simulations cancel</code><a class="headerlink" href="#compose-api-simulations-cancel" title="Permanent link">&para;</a></h3>
+<p>Cancel a run (sign in first: <code>compose-api auth login</code>). A queued run is withdrawn at once; a run SLURM has is
+cancelled there, and its status reads cancelled once the service sees that.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api simulations cancel [OPTIONS] SIMULATION_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>SIMULATION_ID</code>: The simulation id.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-simulations-visibility"><code>compose-api simulations visibility</code><a class="headerlink" href="#compose-api-simulations-visibility" title="Permanent link">&para;</a></h3>
+<p>Make a run you own public or private. The other runs of every comparison it is in change with it.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api simulations visibility [OPTIONS] SIMULATION_ID VISIBILITY:{private|public}
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>SIMULATION_ID</code>: The simulation id.  [required]</li>
+<li><code>VISIBILITY:{private|public}</code>: public or private.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-environments"><code>compose-api environments</code><a class="headerlink" href="#compose-api-environments" title="Permanent link">&para;</a></h2>
+<p>The environments documents run in, and the process interfaces each provides.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api environments [OPTIONS] COMMAND [ARGS]...
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<p><strong>Commands</strong>:</p>
+<ul>
+<li><code>list</code>: Environments: the <code>--simulator</code> to run in...</li>
+<li><code>manifest</code>: An environment's interface manifest: its...</li>
+<li><code>headers</code>: An environment's interfaces as .pblang...</li>
+<li><code>images</code>: Whether an environment's current image is...</li>
+<li><code>build</code>: Make an environment's current image...</li>
+<li><code>versions</code>: An environment's versions, newest first,...</li>
+<li><code>version</code>: One version: what it was made from, its...</li>
+<li><code>export</code>: Write the files that recreate a version...</li>
+<li><code>compliance</code>: Where each entry of a version stands...</li>
+<li><code>create</code>: Make a new version (or answer the existing...</li>
+<li><code>default</code>: Make a ready version the one runs get when...</li>
+<li><code>inspect</code>: Read a version's image back again: what it...</li>
+<li><code>retire</code>: Retire a version: it refuses new runs; its...</li>
+</ul>
+<h3 id="compose-api-environments-list"><code>compose-api environments list</code><a class="headerlink" href="#compose-api-environments-list" title="Permanent link">&para;</a></h3>
+<p>Environments: the <code>--simulator</code> to run in each, its image, and whether its manifest is current.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api environments list [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-environments-manifest"><code>compose-api environments manifest</code><a class="headerlink" href="#compose-api-environments-manifest" title="Permanent link">&para;</a></h3>
+<p>An environment's interface manifest: its steps and processes, their config schemas and ports.</p>
+<p><code>--output json</code> prints the manifest itself (pbg-interfaces/1), which other tools read as it is.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api environments manifest [OPTIONS] NAME
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The environment, e.g. registry_env.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-environments-headers"><code>compose-api environments headers</code><a class="headerlink" href="#compose-api-environments-headers" title="Permanent link">&para;</a></h3>
+<p>An environment's interfaces as .pblang header files: what a composite imports (<code>import module.{Name};</code>).</p>
+<p>Prints every module's file, or writes them into <code>--out</code>; <code>--output json</code> prints them with each class's
+declaration.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api environments headers [OPTIONS] NAME
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The environment, e.g. registry_env.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>-o, --out PATH</code>: Write one &lt;module&gt;.pbl per module into this directory.</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-environments-images"><code>compose-api environments images</code><a class="headerlink" href="#compose-api-environments-images" title="Permanent link">&para;</a></h3>
+<p>Whether an environment's current image is built: its image records and its newest build run.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api environments images [OPTIONS] NAME
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The environment, e.g. registry_env.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-environments-build"><code>compose-api environments build</code><a class="headerlink" href="#compose-api-environments-build" title="Permanent link">&para;</a></h3>
+<p>Make an environment's current image available: pulled or built unless it is, joining a build under way.</p>
+<p>Returns at once; <code>environments images</code> follows the build.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api environments build [OPTIONS] NAME
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The environment, e.g. registry_env.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-environments-versions"><code>compose-api environments versions</code><a class="headerlink" href="#compose-api-environments-versions" title="Permanent link">&para;</a></h3>
+<p>An environment's versions, newest first, and the default a run that names none gets.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api environments versions [OPTIONS] NAME
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The environment, e.g. registry_env.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-environments-version"><code>compose-api environments version</code><a class="headerlink" href="#compose-api-environments-version" title="Permanent link">&para;</a></h3>
+<p>One version: what it was made from, its lock, and what it installed and provides. With --against, the
+packages added, removed or at another version since that one, as their images installed them.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api environments version [OPTIONS] NAME NUMBER
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The environment, e.g. registry_env.  [required]</li>
+<li><code>NUMBER</code>: The version's number (registry_env@3 is 3).  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--against INTEGER</code>: Another version's number: list how this one's packages differ from it.</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-environments-export"><code>compose-api environments export</code><a class="headerlink" href="#compose-api-environments-export" title="Permanent link">&para;</a></h3>
+<p>Write the files that recreate a version locally: a composed version's pixi.toml and pixi.lock (then
+<code>pixi install --frozen</code>) or, when it needs nothing from conda, its pyproject.toml and uv.lock (then <code>uv sync</code>);
+a shared one's uv lock as requirements.txt (then <code>uv pip install -r</code>). Both describe CPython on Linux x86-64, the
+platform the image runs.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api environments export [OPTIONS] NAME NUMBER
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The environment, e.g. registry_env.  [required]</li>
+<li><code>NUMBER</code>: The version's number (registry_env@3 is 3).  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>-o, --out PATH</code>: Directory to write the files into.  [default: .]</li>
+<li><code>--format TEXT</code>: pixi (pixi.toml, pixi.lock), uv (pyproject.toml, uv.lock; without conda) or requirements; pixi by default for a composed version.</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-environments-compliance"><code>compose-api environments compliance</code><a class="headerlink" href="#compose-api-environments-compliance" title="Permanent link">&para;</a></h3>
+<p>Where each entry of a version stands there: <code>tested</code> when its compliance cases passed in it, and the components
+a generic check refuses (a step whose results accumulate, say).</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api environments compliance [OPTIONS] NAME NUMBER
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The environment, e.g. registry_env.  [required]</li>
+<li><code>NUMBER</code>: The version's number (registry_env@3 is 3).  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--run</code>: Run the cases again first (needs the environment administrator role).</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-environments-create"><code>compose-api environments create</code><a class="headerlink" href="#compose-api-environments-create" title="Permanent link">&para;</a></h3>
+<p>Make a new version (or answer the existing one with the same definition). Its image builds in the background
+(<code>environments versions</code> shows it ready); it does not become the default. Needs the environment administrator
+role.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api environments create [OPTIONS] NAME
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The environment, e.g. registry_env.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--resolved-at [%Y-%m-%d|%Y-%m-%dT%H:%M:%S|%Y-%m-%d %H:%M:%S]</code>: A shared environment: resolve as of this time (UTC); default now.</li>
+<li><code>--image TEXT</code>: A prebuilt environment: its image, by digest.</li>
+<li><code>--note TEXT</code>: Why this version exists.</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-environments-default"><code>compose-api environments default</code><a class="headerlink" href="#compose-api-environments-default" title="Permanent link">&para;</a></h3>
+<p>Make a ready version the one runs get when they name none. Needs the environment administrator role.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api environments default [OPTIONS] NAME NUMBER
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The environment, e.g. registry_env.  [required]</li>
+<li><code>NUMBER</code>: The version's number (registry_env@3 is 3).  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-environments-inspect"><code>compose-api environments inspect</code><a class="headerlink" href="#compose-api-environments-inspect" title="Permanent link">&para;</a></h3>
+<p>Read a version's image back again: what it installed and the interfaces it provides (in the background;
+<code>environments version</code> shows them). For a prebuilt image, or a shared one built before builds read images back.
+Needs the environment administrator role.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api environments inspect [OPTIONS] NAME NUMBER
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The environment, e.g. registry_env.  [required]</li>
+<li><code>NUMBER</code>: The version's number (registry_env@3 is 3).  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-environments-retire"><code>compose-api environments retire</code><a class="headerlink" href="#compose-api-environments-retire" title="Permanent link">&para;</a></h3>
+<p>Retire a version: it refuses new runs; its images are kept. Needs the environment administrator role.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api environments retire [OPTIONS] NAME NUMBER
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The environment, e.g. registry_env.  [required]</li>
+<li><code>NUMBER</code>: The version's number (registry_env@3 is 3).  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-sedml"><code>compose-api sedml</code><a class="headerlink" href="#compose-api-sedml" title="Permanent link">&para;</a></h2>
+<p>Run SED-ML archives on several solvers and compare them.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api sedml [OPTIONS] COMMAND [ARGS]...
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<p><strong>Commands</strong>:</p>
+<ul>
+<li><code>preview</code>: Translate an archive without running it:...</li>
+<li><code>run</code>: Run each task once per solver; prints each...</li>
+</ul>
+<h3 id="compose-api-sedml-preview"><code>compose-api sedml preview</code><a class="headerlink" href="#compose-api-sedml-preview" title="Permanent link">&para;</a></h3>
+<p>Translate an archive without running it: its tasks, the solvers that accept each, and the findings.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api sedml preview [OPTIONS] ARCHIVE
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>ARCHIVE</code>: A COMBINE/OMEX archive with SED-ML and its models.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>-s, --solver TEXT</code>: A solver id (repeatable); all when omitted.</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-sedml-run"><code>compose-api sedml run</code><a class="headerlink" href="#compose-api-sedml-run" title="Permanent link">&para;</a></h3>
+<p>Run each task once per solver; prints each task's comparison and its runs.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api sedml run [OPTIONS] ARCHIVE
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>ARCHIVE</code>: A COMBINE/OMEX archive with SED-ML and its models.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>-s, --solver TEXT</code>: A solver id (repeatable); all when omitted.</li>
+<li><code>--task TEXT</code>: A SED-ML task id (repeatable); all when omitted.</li>
+<li><code>-t, --tag TEXT</code>: A tag for every run (repeatable).</li>
+<li><code>--description TEXT</code>: What the runs are for.</li>
+<li><code>--environment-version TEXT</code>: An environment version to run in: environment@number (registry_env@2) or environment@default (repeatable); an environment not named runs at its default.</li>
+<li><code>--visibility [private|public]</code>: private (the default signed in: you and admins) or public (anyone); anonymous runs are public.</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-comparisons"><code>compose-api comparisons</code><a class="headerlink" href="#compose-api-comparisons" title="Permanent link">&para;</a></h2>
+<p>A SED-ML task's runs on several solvers, and how they compare.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api comparisons [OPTIONS] COMMAND [ARGS]...
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<p><strong>Commands</strong>:</p>
+<ul>
+<li><code>list</code>: Comparisons, newest first.</li>
+<li><code>show</code>: One comparison: its runs, and per report...</li>
+<li><code>verify</code>: Check a comparison against BioSimulators'...</li>
+<li><code>verifications</code>: A comparison's verifications, oldest...</li>
+<li><code>series</code>: One report's columns from each run and...</li>
+</ul>
+<h3 id="compose-api-comparisons-list"><code>compose-api comparisons list</code><a class="headerlink" href="#compose-api-comparisons-list" title="Permanent link">&para;</a></h3>
+<p>Comparisons, newest first.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api comparisons list [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--source TEXT</code>: Only this source, e.g. upload:x.omex.</li>
+<li><code>--favorite</code>: Only those you starred (<code>compose-api favorites add</code>).</li>
+<li><code>--limit INTEGER</code>: At most this many.  [default: 25]</li>
+<li><code>--offset INTEGER</code>: Skip this many.  [default: 0]</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-comparisons-show"><code>compose-api comparisons show</code><a class="headerlink" href="#compose-api-comparisons-show" title="Permanent link">&para;</a></h3>
+<p>One comparison: its runs, and per report the worst data set once every run has finished.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api comparisons show [OPTIONS] COMPARISON_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>COMPARISON_ID</code>: The comparison id.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-comparisons-verify"><code>compose-api comparisons verify</code><a class="headerlink" href="#compose-api-comparisons-verify" title="Permanent link">&para;</a></h3>
+<p>Check a comparison against BioSimulators' simulators through biosim's /verify (queued; poll with
+<code>comparisons verifications</code>).</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api comparisons verify [OPTIONS] COMPARISON_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>COMPARISON_ID</code>: The comparison id.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--simulator TEXT</code>: A simulator, name or name:version; repeat. Default: the service's.</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-comparisons-verifications"><code>compose-api comparisons verifications</code><a class="headerlink" href="#compose-api-comparisons-verifications" title="Permanent link">&para;</a></h3>
+<p>A comparison's verifications, oldest first: their state, and whether BioSimulators' simulators agree.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api comparisons verifications [OPTIONS] COMPARISON_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>COMPARISON_ID</code>: The comparison id.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-comparisons-series"><code>compose-api comparisons series</code><a class="headerlink" href="#compose-api-comparisons-series" title="Permanent link">&para;</a></h3>
+<p>One report's columns from each run and each reference (JSON; a table lists what is there).</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api comparisons series [OPTIONS] COMPARISON_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>COMPARISON_ID</code>: The comparison id.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--report TEXT</code>: The SED-ML report id.  [required]</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-biomodels"><code>compose-api biomodels</code><a class="headerlink" href="#compose-api-biomodels" title="Permanent link">&para;</a></h2>
+<p>EBI BioModels: search, describe, download, run.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api biomodels [OPTIONS] COMMAND [ARGS]...
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<p><strong>Commands</strong>:</p>
+<ul>
+<li><code>search</code>: Search EBI BioModels (manually curated...</li>
+<li><code>show</code>: One BioModels entry: name, curation...</li>
+<li><code>get</code>: Download the entry's COMBINE archive.</li>
+<li><code>run</code>: Run the entry's SED-ML once per solver;...</li>
+</ul>
+<h3 id="compose-api-biomodels-search"><code>compose-api biomodels search</code><a class="headerlink" href="#compose-api-biomodels-search" title="Permanent link">&para;</a></h3>
+<p>Search EBI BioModels (manually curated models unless --all).</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api biomodels search [OPTIONS] QUERY
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>QUERY</code>: Words to search for.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--limit INTEGER</code>: At most this many.  [default: 20]</li>
+<li><code>--all</code>: Not only manually curated models.</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-biomodels-show"><code>compose-api biomodels show</code><a class="headerlink" href="#compose-api-biomodels-show" title="Permanent link">&para;</a></h3>
+<p>One BioModels entry: name, curation status, latest revision.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api biomodels show [OPTIONS] MODEL_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>MODEL_ID</code>: e.g. BIOMD0000000012  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-biomodels-get"><code>compose-api biomodels get</code><a class="headerlink" href="#compose-api-biomodels-get" title="Permanent link">&para;</a></h3>
+<p>Download the entry's COMBINE archive.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api biomodels get [OPTIONS] MODEL_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>MODEL_ID</code>: e.g. BIOMD0000000012  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>-O, --out PATH</code>: Write the archive here (a file or a directory).</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-biomodels-run"><code>compose-api biomodels run</code><a class="headerlink" href="#compose-api-biomodels-run" title="Permanent link">&para;</a></h3>
+<p>Run the entry's SED-ML once per solver; prints each task's comparison and its runs.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api biomodels run [OPTIONS] MODEL_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>MODEL_ID</code>: e.g. BIOMD0000000012  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>-s, --solver TEXT</code>: A solver id (repeatable); all when omitted.</li>
+<li><code>-t, --tag TEXT</code>: A tag for every run (repeatable).</li>
+<li><code>--environment-version TEXT</code>: An environment version to run in: environment@number (registry_env@2) or environment@default (repeatable); an environment not named runs at its default.</li>
+<li><code>--visibility [private|public]</code>: private (the default signed in: you and admins) or public (anyone); anonymous runs are public.</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-biosimulations"><code>compose-api biosimulations</code><a class="headerlink" href="#compose-api-biosimulations" title="Permanent link">&para;</a></h2>
+<p>biosimulations.org projects: search, describe, download, run.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api biosimulations [OPTIONS] COMMAND [ARGS]...
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<p><strong>Commands</strong>:</p>
+<ul>
+<li><code>search</code>: biosimulations.org projects whose id...</li>
+<li><code>show</code>: One project: its run and the simulator...</li>
+<li><code>get</code>: Download the project's archive.</li>
+<li><code>reference</code>: The project's original results: each...</li>
+<li><code>run</code>: Run the project's SED-ML once per solver,...</li>
+</ul>
+<h3 id="compose-api-biosimulations-search"><code>compose-api biosimulations search</code><a class="headerlink" href="#compose-api-biosimulations-search" title="Permanent link">&para;</a></h3>
+<p>biosimulations.org projects whose id contains the query.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api biosimulations search [OPTIONS] [QUERY]
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>[QUERY]</code>: Part of a project id.</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--limit INTEGER</code>: At most this many.  [default: 20]</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-biosimulations-show"><code>compose-api biosimulations show</code><a class="headerlink" href="#compose-api-biosimulations-show" title="Permanent link">&para;</a></h3>
+<p>One project: its run and the simulator that ran it.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api biosimulations show [OPTIONS] PROJECT_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>PROJECT_ID</code>: The project id.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-biosimulations-get"><code>compose-api biosimulations get</code><a class="headerlink" href="#compose-api-biosimulations-get" title="Permanent link">&para;</a></h3>
+<p>Download the project's archive.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api biosimulations get [OPTIONS] PROJECT_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>PROJECT_ID</code>: The project id.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>-O, --out PATH</code>: Write the archive here (a file or a directory).</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-biosimulations-reference"><code>compose-api biosimulations reference</code><a class="headerlink" href="#compose-api-biosimulations-reference" title="Permanent link">&para;</a></h3>
+<p>The project's original results: each report's labels and number of points (--output json for the values).</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api biosimulations reference [OPTIONS] PROJECT_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>PROJECT_ID</code>: The project id.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-biosimulations-run"><code>compose-api biosimulations run</code><a class="headerlink" href="#compose-api-biosimulations-run" title="Permanent link">&para;</a></h3>
+<p>Run the project's SED-ML once per solver, its original results as the reference.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api biosimulations run [OPTIONS] PROJECT_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>PROJECT_ID</code>: The project id.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>-s, --solver TEXT</code>: A solver id (repeatable); all when omitted.</li>
+<li><code>-t, --tag TEXT</code>: A tag for every run (repeatable).</li>
+<li><code>--environment-version TEXT</code>: An environment version to run in: environment@number (registry_env@2) or environment@default (repeatable); an environment not named runs at its default.</li>
+<li><code>--visibility [private|public]</code>: private (the default signed in: you and admins) or public (anyone); anonymous runs are public.</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-suites"><code>compose-api suites</code><a class="headerlink" href="#compose-api-suites" title="Permanent link">&para;</a></h2>
+<p>Regression and reproducibility suites of SED-ML models.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api suites [OPTIONS] COMMAND [ARGS]...
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<p><strong>Commands</strong>:</p>
+<ul>
+<li><code>list</code>: The suites: their sources, solvers and...</li>
+<li><code>runs</code>: A suite's runs, newest first.</li>
+<li><code>show</code>: One suite run: per source, whether the...</li>
+<li><code>run</code>: Run every source of the suite on its...</li>
+<li><code>verify</code>: Queue a check against biosim's /verify for...</li>
+<li><code>problems</code>: A suite's known problems, oldest first:...</li>
+<li><code>mark-problem</code>: Record a known problem: the solver's...</li>
+<li><code>edit-problem</code>: Change a known problem's category or reason.</li>
+<li><code>clear-problem</code>: Clear a known problem that no longer...</li>
+</ul>
+<h3 id="compose-api-suites-list"><code>compose-api suites list</code><a class="headerlink" href="#compose-api-suites-list" title="Permanent link">&para;</a></h3>
+<p>The suites: their sources, solvers and accepted baseline run.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api suites list [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-suites-runs"><code>compose-api suites runs</code><a class="headerlink" href="#compose-api-suites-runs" title="Permanent link">&para;</a></h3>
+<p>A suite's runs, newest first.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api suites runs [OPTIONS] NAME
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The suite, e.g. biomodels-ode-sample.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-suites-show"><code>compose-api suites show</code><a class="headerlink" href="#compose-api-suites-show" title="Permanent link">&para;</a></h3>
+<p>One suite run: per source, whether the solvers agree, match references, and drifted from the baseline.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api suites show [OPTIONS] NAME NUMBER
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The suite, e.g. biomodels-ode-sample.  [required]</li>
+<li><code>NUMBER</code>: The run's number.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-suites-run"><code>compose-api suites run</code><a class="headerlink" href="#compose-api-suites-run" title="Permanent link">&para;</a></h3>
+<p>Run every source of the suite on its solvers; prints the new run's number and the versions it runs in.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api suites run [OPTIONS] NAME
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The suite, e.g. biomodels-ode-sample.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--environment-version TEXT</code>: Required (repeatable): the environment versions the suite runs in, environment@number (registry_env@2), environment@default, or default (every environment at its default). The run records them as numbers.  [required]</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-suites-verify"><code>compose-api suites verify</code><a class="headerlink" href="#compose-api-suites-verify" title="Permanent link">&para;</a></h3>
+<p>Queue a check against biosim's /verify for a suite run's finished comparisons.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api suites verify [OPTIONS] NAME NUMBER
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The suite, e.g. biomodels-ode-sample.  [required]</li>
+<li><code>NUMBER</code>: The run's number.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--all</code>: Every finished comparison, not only those that differ or lack agreeing references.</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-suites-problems"><code>compose-api suites problems</code><a class="headerlink" href="#compose-api-suites-problems" title="Permanent link">&para;</a></h3>
+<p>A suite's known problems, oldest first: each solver's expected failures, excused in its runs until cleared.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api suites problems [OPTIONS] NAME
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The suite, e.g. biomodels-ode-sample.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--open</code>: Only the open ones.</li>
+<li><code>--cleared</code>: Only the cleared ones.</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-suites-mark-problem"><code>compose-api suites mark-problem</code><a class="headerlink" href="#compose-api-suites-mark-problem" title="Permanent link">&para;</a></h3>
+<p>Record a known problem: the solver's failure or disagreement on the source is excused until it is cleared.
+Needs the suite curator role.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api suites mark-problem [OPTIONS] NAME SOURCE
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The suite, e.g. biomodels-ode-sample.  [required]</li>
+<li><code>SOURCE</code>: The suite's source, e.g. biomodels:BIOMD0000000039.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--category TEXT</code>: What kind of problem, e.g. NONINTEGER_STOICH.  [required]</li>
+<li><code>--reason TEXT</code>: Why it fails or differs.  [required]</li>
+<li><code>--solver TEXT</code>: The solver it applies to; omit for a problem of the whole source.</li>
+<li><code>--seen-run INTEGER</code>: The suite run it was first seen in.</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-suites-edit-problem"><code>compose-api suites edit-problem</code><a class="headerlink" href="#compose-api-suites-edit-problem" title="Permanent link">&para;</a></h3>
+<p>Change a known problem's category or reason. Needs the suite curator role.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api suites edit-problem [OPTIONS] NAME PROBLEM_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The suite, e.g. biomodels-ode-sample.  [required]</li>
+<li><code>PROBLEM_ID</code>: The problem's id (suites problems).  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--category TEXT</code>: A new category.</li>
+<li><code>--reason TEXT</code>: A new reason.</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-suites-clear-problem"><code>compose-api suites clear-problem</code><a class="headerlink" href="#compose-api-suites-clear-problem" title="Permanent link">&para;</a></h3>
+<p>Clear a known problem that no longer occurs (a suite run lists it as resolved). Needs the suite curator role.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api suites clear-problem [OPTIONS] NAME PROBLEM_ID
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>NAME</code>: The suite, e.g. biomodels-ode-sample.  [required]</li>
+<li><code>PROBLEM_ID</code>: The problem's id (suites problems).  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--run INTEGER</code>: The suite run that shows it fixed; earlier runs still excuse it.  [required]</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-auth"><code>compose-api auth</code><a class="headerlink" href="#compose-api-auth" title="Permanent link">&para;</a></h2>
+<p>Sign up, sign in, check or end a session.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api auth [OPTIONS] COMMAND [ARGS]...
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<p><strong>Commands</strong>:</p>
+<ul>
+<li><code>signup</code>: Create an account in the browser, then...</li>
+<li><code>login</code>: Sign in in the browser or with a device code.</li>
+<li><code>status</code>: Show the stored session without contacting...</li>
+<li><code>logout</code>: Revoke the refresh token with Auth0 and...</li>
+</ul>
+<h3 id="compose-api-auth-signup"><code>compose-api auth signup</code><a class="headerlink" href="#compose-api-auth-signup" title="Permanent link">&para;</a></h3>
+<p>Create an account in the browser, then sign in.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api auth signup [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--provider [email|google]</code>: Identity provider: email or google. With --method device it is advice: the page chooses.  [default: email]</li>
+<li><code>--method [auto|browser|url|device]</code>: How to sign in: auto (device over SSH, else browser), browser, url (print the link) or device.  [default: auto]</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-auth-login"><code>compose-api auth login</code><a class="headerlink" href="#compose-api-auth-login" title="Permanent link">&para;</a></h3>
+<p>Sign in in the browser or with a device code.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api auth login [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--provider [email|google]</code>: Identity provider: email or google. With --method device it is advice: the page chooses.</li>
+<li><code>--method [auto|browser|url|device]</code>: How to sign in: auto (device over SSH, else browser), browser, url (print the link) or device.  [default: auto]</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-auth-status"><code>compose-api auth status</code><a class="headerlink" href="#compose-api-auth-status" title="Permanent link">&para;</a></h3>
+<p>Show the stored session without contacting any server, unless --verify is given.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api auth status [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--verify</code>: Refresh if needed and confirm the identity with the API.</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-auth-logout"><code>compose-api auth logout</code><a class="headerlink" href="#compose-api-auth-logout" title="Permanent link">&para;</a></h3>
+<p>Revoke the refresh token with Auth0 and erase the stored session.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api auth logout [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--local-only</code>: Erase the local session without contacting Auth0.</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-config"><code>compose-api config</code><a class="headerlink" href="#compose-api-config" title="Permanent link">&para;</a></h2>
+<p>Inspect the CLI configuration.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api config [OPTIONS] COMMAND [ARGS]...
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<p><strong>Commands</strong>:</p>
+<ul>
+<li><code>show</code>: Print the effective profile and where each...</li>
+</ul>
+<h3 id="compose-api-config-show"><code>compose-api config show</code><a class="headerlink" href="#compose-api-config-show" title="Permanent link">&para;</a></h3>
+<p>Print the effective profile and where each value came from. Profiles hold no secrets.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api config show [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h2 id="compose-api-favorites"><code>compose-api favorites</code><a class="headerlink" href="#compose-api-favorites" title="Permanent link">&para;</a></h2>
+<p>Your stars on simulations, comparisons and suite runs (needs <code>compose-api auth login</code>).</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api favorites [OPTIONS] COMMAND [ARGS]...
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<p><strong>Commands</strong>:</p>
+<ul>
+<li><code>add</code>: Star a simulation, a comparison or a suite...</li>
+<li><code>remove</code>: Unstar it.</li>
+<li><code>list</code>: Your stars, newest first.</li>
+</ul>
+<h3 id="compose-api-favorites-add"><code>compose-api favorites add</code><a class="headerlink" href="#compose-api-favorites-add" title="Permanent link">&para;</a></h3>
+<p>Star a simulation, a comparison or a suite run. Your stars are yours alone; starring it again changes
+nothing.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api favorites add [OPTIONS] KIND:{comparison|simulation|suite_run} REF
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>KIND:{comparison|simulation|suite_run}</code>: simulation, comparison or suite_run.  [required]</li>
+<li><code>REF</code>: A simulation's or a comparison's id; a suite run as &lt;suite&gt;@&lt;number&gt;, e.g. smoke@22.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-favorites-remove"><code>compose-api favorites remove</code><a class="headerlink" href="#compose-api-favorites-remove" title="Permanent link">&para;</a></h3>
+<p>Unstar it.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api favorites remove [OPTIONS] KIND:{comparison|simulation|suite_run} REF
+</code></pre>
+<p><strong>Arguments</strong>:</p>
+<ul>
+<li><code>KIND:{comparison|simulation|suite_run}</code>: simulation, comparison or suite_run.  [required]</li>
+<li><code>REF</code>: A simulation's or a comparison's id; a suite run as &lt;suite&gt;@&lt;number&gt;, e.g. smoke@22.  [required]</li>
+</ul>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+<h3 id="compose-api-favorites-list"><code>compose-api favorites list</code><a class="headerlink" href="#compose-api-favorites-list" title="Permanent link">&para;</a></h3>
+<p>Your stars, newest first. <code>simulations list --favorite</code> and <code>comparisons list --favorite</code> show them in full.</p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-console">$ compose-api favorites list [OPTIONS]
+</code></pre>
+<p><strong>Options</strong>:</p>
+<ul>
+<li><code>--kind [comparison|simulation|suite_run]</code>: Only this kind: simulation, comparison or suite_run.</li>
+<li><code>--json</code>: Print JSON (the same as --output json).</li>
+<li><code>--help</code>: Show this message and exit.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Maintained by <a href="https://biosimulations.com">Florian</a>.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/biosimulations/compose-api" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

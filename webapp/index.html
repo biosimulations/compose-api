@@ -1,0 +1,938 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An API server for reproducible biological workflows and cosimulations.">
+      
+      
+        <meta name="author" content="Jim Schaff">
+      
+      
+        <link rel="canonical" href="https://biosimulations.github.io/compose-api/webapp/">
+      
+      
+        <link rel="prev" href="../authentication/">
+      
+      
+        <link rel="next" href="../cli/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Web UI - compose-api</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="deep-orange">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#web-ui" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="compose-api" class="md-header__button md-logo" aria-label="compose-api" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            compose-api
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Web UI
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="deep-orange"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="deep-orange"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/biosimulations/compose-api" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    biosimulations/compose-api
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="compose-api" class="md-nav__button md-logo" aria-label="compose-api" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    compose-api
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/biosimulations/compose-api" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    biosimulations/compose-api
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../authentication/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-covers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it covers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-is-built-and-served" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it is built and served
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sign-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sign-in
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#administration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Administration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#development" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Development
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#toward-one-frontend-with-the-platform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Toward one frontend with the platform
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../modules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Modules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-covers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it covers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-is-built-and-served" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it is built and served
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sign-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sign-in
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#administration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Administration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#development" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Development
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#toward-one-frontend-with-the-platform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Toward one frontend with the platform
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="web-ui">Web UI<a class="headerlink" href="#web-ui" title="Permanent link">&para;</a></h1>
+<p>A proof-of-concept browser UI for this API lives in <code>webapp/</code>. It is a static single-page app built with
+Nuxt 4, Nuxt UI 4 and Tailwind v4, the same stack as the BioSimulations platform frontend
+(<code>biosimulations/platform</code>, <code>frontend/</code>), whose shell, theme and page patterns it adapts. The API
+serves it at <strong><code>/ui</code></strong> on the same host, and <code>/</code> redirects there.</p>
+<h2 id="what-it-covers">What it covers<a class="headerlink" href="#what-it-covers" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Page</th>
+<th>API operations</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/ui/</code> dashboard: counts by status, recent runs</td>
+<td><code>list-simulations</code>, <code>/version</code></td>
+</tr>
+<tr>
+<td><code>/ui/simulations</code>: paged and filterable by status, simulator, date, labels (<code>key:value</code>) and tags; label and tag chips filter the list; where each run ran ("Ran in"), and the runs of one environment, version or simulator (linked from their pages); download <code>results.zip</code></td>
+<td><code>list-simulations</code>, <code>get-simulation-results-file</code></td>
+</tr>
+<tr>
+<td><code>/ui/simulations/new</code>: upload a <code>.pbg</code>, <code>.omex</code> or <code>.sbml</code>, or a curated COPASI/Tellurium time course from SBML. Registry rejections are listed address by address</td>
+<td><code>run-simulation</code>, <code>run-copasi</code>, <code>run-tellurium</code></td>
+</tr>
+<tr>
+<td><code>/ui/simulations/{id}</code>: where it ran (its environment version, or its simulator for a run from before versions), status (polled until terminal), SLURM and container-build details, live event log, span tree and Chrome trace (for Perfetto), datasets with inline previews (images, CSV/TSV plotted with Plotly, JSON, text)</td>
+<td><code>get-simulation</code>, <code>get-simulation-status</code>, <code>get-simulator-build-status</code>, <code>get-simulation-events</code>, <code>get-simulation-trace</code>, <code>get-simulation-trace-chrome</code>, <code>list-datasets</code>, <code>get-dataset-content</code>, <code>get-simulation-results-file</code></td>
+</tr>
+<tr>
+<td><code>/ui/datasets</code>: every run's files</td>
+<td><code>list-datasets</code>, <code>get-dataset-content</code></td>
+</tr>
+<tr>
+<td><code>/ui/datasets/{id}</code>: one dataset full width in its viewers (a results bundle file by file)</td>
+<td><code>get-dataset</code>, <code>get-dataset-content</code>, <code>get-dataset-file</code></td>
+</tr>
+<tr>
+<td><code>/ui/composites/new</code>: write a composite in <code>.pblang</code>, checked as you type, and run it (below)</td>
+<td><code>list-environments</code>, <code>get-environment-manifest</code>, <code>run-simulation</code></td>
+</tr>
+<tr>
+<td><code>/ui/sedml</code>: a SED-ML archive (upload, BioModels, biosimulations.org) previewed and run on several solvers (<a href="../plan-sedml/">plan-sedml.md</a>)</td>
+<td><code>preview-sedml</code>, <code>run-sedml</code>, <code>search-biomodels</code>, <code>get-biomodel-omex</code>, <code>run-biomodel</code>, <code>search-biosimulations-projects</code>, <code>get-biosimulations-omex</code>, <code>run-biosimulations-project</code>, <code>list-solvers</code></td>
+</tr>
+<tr>
+<td><code>/ui/comparisons</code>, <code>/ui/comparisons/{id}</code>: a task's runs, scores per report and data set, overlays of data sets and SED-ML plots</td>
+<td><code>list-comparisons</code>, <code>get-comparison</code>, <code>get-comparison-series</code>, <code>list-datasets</code>, <code>get-dataset-content</code></td>
+</tr>
+<tr>
+<td><code>/ui/suites</code>, <code>/ui/suites/{name}</code>: regression and reproducibility suites, their runs (each with the environment versions it ran in), agreement, references and drift from the baseline per model; "Run the suite" (signed in) picks a version of each environment its solvers use and confirms first; with <code>suites:curate</code>, mark, edit and clear each solver's known problems, each confirmed (<a href="../plan-known-problems/">plan-known-problems</a>)</td>
+<td><code>list-suites</code>, <code>list-suite-runs</code>, <code>get-suite-run</code>, <code>run-suite</code>, <code>list-solvers</code>, <code>list-environment-versions</code>, <code>list-suite-problems</code>, <code>mark-suite-problem</code>, <code>edit-suite-problem</code>, <code>clear-suite-problem</code></td>
+</tr>
+<tr>
+<td><code>/ui/environments</code>: where composites run, and the simulators runs used before environments had versions; <code>/ui/environments/{name}</code>: its image, versions (each linked to its runs), registry entries, and every class it provides with its config and ports (<code>#Name</code> opens on one); administration, below</td>
+<td><code>list-environments</code>, <code>get-environment-manifest</code>, <code>list-environment-versions</code>, <code>list-simulators</code></td>
+</tr>
+<tr>
+<td><code>/ui/environments/{name}/versions/{n}</code>: one version: its installed packages and a diff against another version, its lock and the pixi/uv files that recreate it, its entries with their compliance cases, its classes, and its runs</td>
+<td><code>get-environment-version</code>, <code>export-environment-version</code>, <code>get-environment-version-compliance</code></td>
+</tr>
+<tr>
+<td><code>/ui/simulators/{id}</code>: one simulator (a container definition, identified by its hash): its definition, the versions it is, and its runs. A simulator from before versions belongs to no environment, and this page is the only place it is described</td>
+<td><code>get-simulator</code></td>
+</tr>
+<tr>
+<td><code>/ui/catalog</code>: every registry entry with its curation level, pin and evidence, and the environments that run its classes (<a href="../plan-sedml/">plan-sedml.md</a>, "Concepts")</td>
+<td><code>list-registry-entries</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Viewers are registered per dataset type</strong> (<code>webapp/app/viewers/registry.ts</code>, <a href="../plan-viewers/">plan</a>). Each one
+declares which datasets it fits (by kind, media type and attributes) and is an async component, so a viewer and its
+libraries download only when first opened. <code>/ui/datasets/&lt;id&gt;</code> opens a dataset full width; the table's preview shows
+the same viewers. Built in: composite (below), image, table (plotted when numeric), text, a Plotly figure (<code>application/vnd.plotly.v1+json</code>,
+SED-ML plots), and for results bundles (<code>*.fenics</code>) a
+statistics view and a <strong>3D view</strong> (vtk.js) read chunk by chunk with zarrita from <code>/datasets/{id}/files/</code>. The 3D view
+draws the bundle's web extension (a precomputed surface per domain, viva-pde-particle <code>docs/web-bundle.md</code>) coloured by
+one variable, fetches one row per frame, shows particles, and follows a running simulation.</p>
+<p><strong>The submitted composite</strong> (the <code>input</code> dataset: a <code>.pbg</code> document, or an OMEX archive holding one or more, found
+as the service finds them at submission: <code>.pbg</code> and <code>.json</code> members, nested <code>.omex</code> archives at most three deep; with
+several, a picker chooses one) opens in the composite viewer
+(<code>webapp/app/viewers/CompositeViewer.vue</code>): the document is decompiled in the browser into <code>.pblang</code> text by
+<a href="https://github.com/biosimulations/process-bigraph-lang">process-bigraph-lang</a> (the npm package of its <code>dsl/</code>), checked, and shown read-only in Monaco with
+the checker's findings as markers and as a list. The <strong>Document</strong> tab shows the process-bigraph JSON that was submitted
+and run, re-indented only (every token as submitted: <code>100.0</code> stays a float), with a download; the <strong>Graph</strong> tab draws
+the wiring (<code>viewers/composite/layout.ts</code>, stores left, processes and steps right, a link per wired port, nested
+composites below). The checker resolves addresses against interface manifests: one per environment documents run in,
+generated in CI inside each image and served by the API at <code>GET /registry/environments</code> and
+<code>GET /registry/environments/{name}/manifest</code> (same origin; in development, from whatever <code>NUXT_PUBLIC_API_BASE</code> points
+at). The viewer uses the manifest of the environment the run used (a prebuilt run is matched by its image's
+repository, whatever its digest). Hovering a class's name in the text, or its <code>address</code> in the document, shows the
+class's interface from that manifest (<code>viewers/composite/interfaces.ts</code>), linked to its environment's page; the
+"checked against" badge links there too.</p>
+<p><strong>Writing a composite</strong> (<code>/ui/composites/new</code>, or "Edit a copy" from the viewer) opens <code>.pblang</code> text in an editable
+Monaco with process-bigraph-lang's language server running in a web worker (<code>viewers/composite/languageClient.ts</code>):
+findings appear as you type, hover shows a process's interface, and completion offers processes, ports, config keys
+and stores, all from the manifest of the environment picked above the editor. <strong>Run</strong> compiles the text in the
+browser (addresses in the <code>local:module.Class</code> form the service accepts; sidecar files compiled back in) and submits
+the document as a <code>.pbg</code> to <code>/simulation/run</code> in that environment.</p>
+<p><code>get-simulations-status-batch</code> is not used: it is a GET with a JSON body, which browsers cannot send. The list page
+re-fetches while any row is still running.</p>
+<h2 id="how-it-is-built-and-served">How it is built and served<a class="headerlink" href="#how-it-is-built-and-served" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>npm run generate</code> writes static files to <code>webapp/.output/public</code>. The image builds them in a Node stage of
+  <code>Dockerfile-api</code> and copies them in.</li>
+<li><code>compose_api/api/webapp.py</code> mounts that directory at <code>/ui</code> when it exists (<code>settings.webapp_dist_dir</code>). A path
+  without a file suffix gets the app shell (<code>200.html</code>), so deep links work. Without a build, the API runs as
+  before.</li>
+<li>The API calls are typed from the committed OpenAPI spec. <code>npm run types</code> (also run by <code>make clients</code>) regenerates
+  <code>webapp/app/api/schema.d.ts</code> with <code>openapi-typescript</code>, and the calls go through <code>openapi-fetch</code>. CI fails if that
+  file is stale. Never hand-edit it.</li>
+<li>There is no ingress change: the existing <code>/</code> → <code>api:8000</code> rule already covers <code>/ui</code>.</li>
+</ul>
+<h2 id="sign-in">Sign-in<a class="headerlink" href="#sign-in" title="Permanent link">&para;</a></h2>
+<p>The API accepts anonymous calls (<a href="../authentication/">Authentication</a>), so the UI works without signing in. The UI
+offers an Auth0 login (<code>@auth0/auth0-vue</code>, after the platform frontend's plugin) only when the API publishes all
+three of these at <code>GET /webapp/config</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AUTH0_DOMAIN</code></td>
+<td>the tenant, shared with token verification</td>
+</tr>
+<tr>
+<td><code>AUTH0_AUDIENCE</code></td>
+<td>the API identifier the UI requests a token for</td>
+</tr>
+<tr>
+<td><code>AUTH0_SPA_CLIENT_ID</code></td>
+<td>an Auth0 <strong>Single Page Application</strong> whose allowed callback, logout and web origins include <code>https://compose.cam.uchc.edu/ui/</code> (and <code>http://localhost:4200/ui/</code> for development), and which may request that audience</td>
+</tr>
+</tbody>
+</table>
+<p>Rules for the token:</p>
+<ul>
+<li>Only API requests carry it: a request gets the token only when its destination is the API's own origin and path
+  (<code>app/utils/apiAuth.ts</code>, after the platform's <code>isPlatformApiRequest</code>), never another host or a lookalike.</li>
+<li>When the API rejects it (401), the UI drops it, carries on anonymously, and shows a banner. It does not retry.</li>
+<li>When the session can no longer be renewed (the refresh token expired or was revoked), the UI signs the person out
+  locally and says so, with a button to sign in again.</li>
+<li>Downloads by a signed-in user are fetched with the token, because a plain link cannot carry the header.</li>
+<li>After sign-in the UI asks <code>GET /auth/me</code> who the caller is, once. A token the API rejects shows up at once, and the
+  account menu lists the roles the API sees.</li>
+<li>"Create account" opens Auth0's sign-up page. Signing in returns to the page the person started from.</li>
+<li>The account menu shows what the API says the caller may do (<code>capabilities</code> from <code>GET /auth/me</code>); with
+  <code>environments:admin</code> it links "You can administer environments".</li>
+</ul>
+<p>The token is kept in the browser's local storage, with rotating refresh tokens, as the platform frontend does
+(decision D1 in <a href="../plan-webapp-login/">plan-webapp-login</a>). Because script injection could read it, every <code>/ui</code>
+response carries these security headers:</p>
+<ul>
+<li>A <code>Content-Security-Policy</code> that allows scripts only from this origin, plus the hashes of the build's inline
+  scripts, which the API computes from the files it serves. Connections are allowed only to this origin and the Auth0
+  tenant. The page cannot be framed. Production enforces it (<code>WEBAPP_CSP_ENFORCE=true</code>); without that setting it only reports. Browsers post violations
+  to <code>POST /webapp/csp-report</code>, which the API logs as <code>CSP violation report</code>.</li>
+<li><code>X-Frame-Options: DENY</code>, <code>X-Content-Type-Options: nosniff</code> and <code>Referrer-Policy: no-referrer</code>.</li>
+</ul>
+<p>A token changes nothing a caller can read, because every simulation is public. It changes what a caller may do
+only through the capabilities below.</p>
+<p>The SPA applications are created by auth0-pulumi (UCHHPC/auth0-pulumi#5): <code>p7uif3ex4LijqPwSOJsPBnhCdClnxSMM</code> for
+production, whose callbacks also include the dev server's, and <code>fEbf0F5Orb6FD4TySB8yWSZTj5hhBNJV</code> for the local
+cluster. Their ids are set in <code>kustomize/config/compose-api-rke/api.env</code> and
+<code>kustomize/overlays/compose-api-local/auth0.env</code>.</p>
+<h2 id="administration">Administration<a class="headerlink" href="#administration" title="Permanent link">&para;</a></h2>
+<p>Environment versions are administered on the environment's own page (<a href="../plan-webapp-admin/">plan-webapp-admin</a>,
+A2), not in a separate area. The controls appear only when <code>GET /auth/me</code> lists <strong><code>environments:admin</code></strong>, which a
+caller has when they hold the deployment's <code>ENVIRONMENT_ADMIN_ROLE</code> (production: the tenant's <code>admin</code> role). The UI
+only displays the capability: the API checks every request again and answers 403 to anyone else, so a hidden button
+is never the protection.</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Offered for</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>New version</td>
+<td>a composed environment (<code>registry_env</code>, a mash-up)</td>
+<td>resolves its registry entries as of a date (today: now) and locks them, then builds the image and runs its compliance cases; an identical lock gives the existing version</td>
+</tr>
+<tr>
+<td>Register an image</td>
+<td>a prebuilt environment</td>
+<td>registers an image by digest (<code>repository@sha256:…</code>; tags are refused), pulls it and reads it back</td>
+</tr>
+<tr>
+<td>Make default</td>
+<td>a ready version that is not the default</td>
+<td>runs that name no version run in it; recorded runs and suite runs, which name their versions, do not change</td>
+</tr>
+<tr>
+<td>Retire</td>
+<td>a ready or failed version that is not the default</td>
+<td>it refuses new runs; recorded runs keep it, and its images are kept</td>
+</tr>
+<tr>
+<td>Re-read contents</td>
+<td>a ready version, or any prebuilt image</td>
+<td>runs its image again, in the background, to record what it installed and the classes it provides; a build does this by itself, so it is for a prebuilt image or a record that is missing or wrong. Runs and the default are unaffected</td>
+</tr>
+</tbody>
+</table>
+<p>Every action is confirmed in a dialog that names the environment, the version and the effect (A3). Making a version
+the default shows its packages against the current default's (<code>?against=</code>), since a new version changes nothing
+until it is the default. After a new version is made, the page follows it every five seconds until it is ready or
+failed, and shows why it failed. Custom library lists are not offered: that path is retired (composition D8.5).</p>
+<p>The same actions are <code>compose-api environments create|default|retire|inspect</code> on the <a href="../cli/">command line</a>.</p>
+<h2 id="development">Development<a class="headerlink" href="#development" title="Permanent link">&para;</a></h2>
+<pre><code class="language-bash">nvm use                   # Node 24: webapp/.nvmrc, linked from the repo root's .nvmrc (CI reads the same file)
+make webapp-install       # npm ci
+make run                  # the API on :8000
+make webapp-dev           # the UI on http://localhost:4200/ui/, calling the API on :8000
+COMPOSE_API_URL=https://compose.cam.uchc.edu make webapp-dev   # against production instead (CORS allows :4200)
+make webapp-check         # lint, typecheck, API types current
+make webapp-build         # static build; `make run` then serves it at http://localhost:8000/ui/
+</code></pre>
+<p>To sign in from the dev server against <code>make run</code>, set <code>AUTH0_AUDIENCE</code> and <code>AUTH0_SPA_CLIENT_ID</code> in <code>.dev_env</code> as
+<code>.dev_env_TEMPLATE</code> describes: the production SPA is the only one whose callbacks include <code>http://localhost:4200/ui/</code>.</p>
+<p><code>npm audit</code> reports advisories in build-time tooling (the Nitro dev server and its dependencies). None of it ships:
+the image serves only the generated static files.</p>
+<h2 id="toward-one-frontend-with-the-platform">Toward one frontend with the platform<a class="headerlink" href="#toward-one-frontend-with-the-platform" title="Permanent link">&para;</a></h2>
+<p>The platform frontend is server-rendered and deployed on GKE (<code>biosim.biosimulations.org</code>). This UI is static and
+served by the API on the on-premise RKE2 cluster (<code>compose.cam.uchc.edu</code>). Because they share a stack, components
+move between the two without rewriting. There are two ways to reconcile them:</p>
+<ol>
+<li><strong>The platform frontend gains a compose backend.</strong> These pages become a section of the platform app with a
+   configurable base URL for this API, and <code>/ui</code> here is retired. This needs CORS for the platform origin and the
+   same Auth0 audience setup.</li>
+<li><strong>Nuxt layers.</strong> These pages ship as a Nuxt layer that both apps extend: the platform app on GKE, and a thin
+   shell here for the on-premise deployment.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Maintained by <a href="https://biosimulations.com">Florian</a>.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/biosimulations/compose-api" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
