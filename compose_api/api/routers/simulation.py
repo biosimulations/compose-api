@@ -12,6 +12,7 @@ from compose_api.authentication import (
     describe_caller,
     get_optional_principal,
 )
+from compose_api.authorization import RequestedVisibility, ownership_at_submit
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.common.gateway.utils import get_simulation_request_from_uploaded_file, wrap_document_in_omex
 from compose_api.config import get_settings
@@ -210,6 +211,7 @@ async def submit_simulation(
             " named); omitted: its default. GET /registry/environments/{name}/versions lists them",
         ),
     ] = None,
+    visibility: RequestedVisibility = None,
 ) -> SimulationExperiment:
     """`environment` names the environment to run in; `simulator` is the older way to name a prebuilt one (an
     owner-published image registered as a version of its environment). With neither, and no
@@ -223,6 +225,7 @@ async def submit_simulation(
     stored with it as given (compose_api/simulation/labels.py) and filter `GET /simulations`."""
     logger.info("Simulation submission from %s", describe_caller(principal))
     run_tags, run_description = _checked_options(simulator, interval_time, tags, description)
+    ownership = ownership_at_submit(principal, visibility)
     simulator, composed = await _named_environment(environment, simulator)
     named = environment is not None or simulator is not None or environment_version is not None
     if environment_version is not None:
@@ -299,7 +302,7 @@ async def submit_simulation(
             simulation_service_slurm=sim_service,
             background_tasks=background_tasks,
             job_monitor=job_monitor,
-            owner_sub=principal.subject if principal else None,  # docs/plan-favorites-and-studies.md, F1
+            ownership=ownership,  # docs/plan-favorites-and-studies.md, F1, F3
         )
     except Exception as e:
         logger.exception("Error running simulation")

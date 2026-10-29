@@ -707,3 +707,31 @@ def test_favorites_add_list_remove_and_the_favorite_filters(monkeypatch: pytest.
     assert seen[-1].url.params["favorite"] == "true"
     assert invoke("comparisons", "list", "--favorite").exit_code == 0
     assert (seen[-1].url.path, seen[-1].url.params["favorite"]) == ("/comparisons", "true")
+
+
+def test_simulations_visibility_and_the_run_commands_visibility_option(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    seen: list[httpx.Request] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.method == "PATCH":
+            return httpx.Response(200, json={"visibility": "public", "simulation_ids": [7, 8]})
+        return httpx.Response(200, json={"comparisons": [], "findings": []})
+
+    monkeypatch.setattr(
+        cli_module, "make_session", lambda s: ComposeSession(s.url, transport=httpx.MockTransport(answer))
+    )
+    changed = json.loads(invoke("simulations", "visibility", "7", "public").stdout)
+    assert changed == {"visibility": "public", "simulation_ids": [7, 8]}
+    assert (seen[-1].method, seen[-1].url.path, json.loads(seen[-1].content)) == (
+        "PATCH",
+        "/simulations/7",
+        {"visibility": "public"},
+    )
+    assert invoke("simulations", "visibility", "7", "secret").exit_code == 2
+
+    assert invoke("biomodels", "run", "BIOMD0000000012", "--visibility", "public").exit_code == 0
+    assert seen[-1].url.params["visibility"] == "public"
+    assert invoke("biomodels", "run", "BIOMD0000000012", "--visibility", "hidden").exit_code == 2

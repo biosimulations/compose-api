@@ -19,7 +19,7 @@ from compose_api.environments.versions import VersionUnavailableError, version_f
 from compose_api.simulation import handlers
 from compose_api.simulation.containerization import ContainerizationEngine, ContainerizationFileRepr
 from compose_api.simulation.job_monitor import JobMonitor
-from compose_api.simulation.models import SimulationFileType, SimulationRequest, VersionState
+from compose_api.simulation.models import Ownership, SimulationFileType, SimulationRequest, VersionState, Visibility
 from compose_api.simulation.simulation_service import SimulationService
 from tests.fixtures.mocks import TestBackgroundTask
 
@@ -91,10 +91,11 @@ async def test_a_run_naming_a_mash_up_runs_in_its_default_version(
         simulation_service_slurm=cast(SimulationService, None),
         job_monitor=cast(JobMonitor, None),
         background_tasks=TestBackgroundTask(),
-        owner_sub="auth0|submitter",
+        ownership=Ownership(owner_sub="auth0|submitter"),
     )
     owned_row = await database_service.get_simulator_db().get_simulation_row(owned.simulation_database_id)
     assert owned_row is not None and owned_row.simulation.owner_sub == "auth0|submitter"  # on the simulation only
+    assert owned_row.simulation.visibility == Visibility.PRIVATE  # private by default (F3)
     assert row.simulation.labels["environment_version"] == f"{name}@1"
     with pytest.raises(VersionUnavailableError, match="no default"):
         await version_for(database_service, None, None, "mash-0000000000")  # unknown: nothing to adopt

@@ -16,7 +16,7 @@ from compose_api.config import get_settings, override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.sedml import service, sources
 from compose_api.simulation.hpc_utils import get_singularity_hash
-from compose_api.simulation.models import SimulationExperiment, SimulationRequest
+from compose_api.simulation.models import Ownership, SimulationExperiment, SimulationRequest, Visibility
 from compose_api.simulation.prebuilt import prebuilt_definition
 
 RESOURCES = Path(__file__).resolve().parents[1] / "fixtures" / "resources"
@@ -42,10 +42,16 @@ async def submitted(
     recorded: dict[str, Any] = {"runs": []}
 
     async def run_simulation(
-        simulation_request: SimulationRequest, owner_sub: str | None = None, **_: object
+        simulation_request: SimulationRequest, ownership: Ownership | None = None, **_: object
     ) -> SimulationExperiment:
         experiment_id = f"exp-sedml-{next(_ids)}-{tmp_path.name}"
-        sim = await sim_db.insert_simulation(simulation_request, experiment_id, simulator, owner_sub=owner_sub)
+        sim = await sim_db.insert_simulation(
+            simulation_request,
+            experiment_id,
+            simulator,
+            owner_sub=ownership.owner_sub if ownership is not None else None,
+            visibility=ownership.visibility if ownership is not None else Visibility.PUBLIC,
+        )
         recorded["runs"].append((simulation_request, sim.database_id, experiment_id))
         return SimulationExperiment(simulation_database_id=sim.database_id, simulator_database_id=simulator.database_id)
 

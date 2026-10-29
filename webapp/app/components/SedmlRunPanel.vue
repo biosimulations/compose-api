@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { Schemas } from '~/composables/useApi'
 import type { ArchiveSource, SedmlPreview, Solver } from '~/composables/useSedml'
 
 // A SED-ML archive's translation (its tasks, which solvers accept each, the findings) and the choice to run it: the
@@ -9,6 +10,8 @@ const solvers = ref<Solver[]>([])
 const chosen = ref<string[]>([])
 const tags = ref<string[]>([])
 const description = ref('')
+const visibility = ref<Schemas['Visibility']>('private')
+const { isAuthenticated } = useAuth()
 const preview = shallowRef<SedmlPreview | null>(null)
 const loading = ref(false)
 const running = ref(false)
@@ -44,7 +47,12 @@ async function run() {
   running.value = true
   error.value = null
   try {
-    const outcome = await runSedml(props.source, { solvers: chosen.value, tags: tags.value, description: description.value })
+    const outcome = await runSedml(props.source, {
+      solvers: chosen.value,
+      tags: tags.value,
+      description: description.value,
+      visibility: isAuthenticated.value ? visibility.value : undefined
+    })
     if (!outcome.ok) {
       error.value = outcome.error
       if (outcome.findings.length) findings.value = outcome.findings
@@ -103,6 +111,7 @@ const shownTemplate = ref<string | null>(null)
         <UFormField label="Description" class="grow">
           <UInput v-model="description" placeholder="optional" class="w-full" />
         </UFormField>
+        <VisibilityChoice v-model="visibility" class="w-full" />
         <UButton icon="i-lucide-play" label="Run on each solver" :loading="running" :disabled="!runnable" @click="run" />
       </div>
     </div>

@@ -499,6 +499,31 @@ class Visibility(StrEnum):
     PRIVATE = "private"
 
 
+class Ownership(BaseModel):
+    """Who owns a run and who may read it, set at submission (docs/plan-favorites-and-studies.md, F1, F3): the
+    signed-in submitter's subject, and its visibility. A run with no owner (anonymous, or started by the service) has
+    none of this, and is public."""
+
+    model_config = ConfigDict(frozen=True)
+
+    owner_sub: str
+    visibility: Visibility = Visibility.PRIVATE
+
+
+class VisibilityChange(BaseModel):
+    """``PATCH /simulations/{id}``'s body: who may read the run."""
+
+    visibility: Visibility
+
+
+class VisibilityChanged(BaseModel):
+    """What a visibility change changed: the run, and the other runs of every comparison it belongs to, which change
+    with it so a comparison is never half private."""
+
+    visibility: Visibility
+    simulation_ids: list[int]
+
+
 class SimulationAccess(BaseModel):
     """What an authorization decision about a simulation needs: its owner and visibility (plan-observability O7, O8)."""
 

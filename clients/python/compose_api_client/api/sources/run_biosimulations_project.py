@@ -10,6 +10,7 @@ from ...models.error_detail import ErrorDetail
 from ...models.http_validation_error import HTTPValidationError
 from ...models.sedml_run_error import SedmlRunError
 from ...models.sedml_run_result import SedmlRunResult
+from ...models.visibility import Visibility
 from ...types import UNSET, Response, Unset
 
 
@@ -21,6 +22,7 @@ def _get_kwargs(
     tags: list[str] | None | Unset = UNSET,
     description: None | str | Unset = UNSET,
     environment_version: list[str] | None | Unset = UNSET,
+    visibility: None | Unset | Visibility = UNSET,
 ) -> dict[str, Any]:
 
     params: dict[str, Any] = {}
@@ -71,6 +73,15 @@ def _get_kwargs(
     else:
         json_environment_version = environment_version
     params["environment_version"] = json_environment_version
+
+    json_visibility: None | str | Unset
+    if isinstance(visibility, Unset):
+        json_visibility = UNSET
+    elif isinstance(visibility, Visibility):
+        json_visibility = visibility.value
+    else:
+        json_visibility = visibility
+    params["visibility"] = json_visibility
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -139,6 +150,7 @@ def sync_detailed(
     tags: list[str] | None | Unset = UNSET,
     description: None | str | Unset = UNSET,
     environment_version: list[str] | None | Unset = UNSET,
+    visibility: None | Unset | Visibility = UNSET,
 ) -> Response[ErrorDetail | HTTPValidationError | SedmlRunError | SedmlRunResult]:
     """Run a project's SED-ML on several solvers, its original results as the reference
 
@@ -152,6 +164,9 @@ def sync_detailed(
         environment_version (list[str] | None | Unset): Environment versions to run in:
             environment@number (registry_env@2) or environment@default, repeatable; an environment not
             named runs at its default
+        visibility (None | Unset | Visibility): Who may read the run: `private` (the default when
+            signed in: you, and admins) or `public` (anyone). Anonymous runs are public; asking for
+            private needs signing in. The owner can change it later (PATCH /simulations/{id})
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -168,6 +183,7 @@ def sync_detailed(
         tags=tags,
         description=description,
         environment_version=environment_version,
+        visibility=visibility,
     )
 
     response = client.get_httpx_client().request(
@@ -186,6 +202,7 @@ def sync(
     tags: list[str] | None | Unset = UNSET,
     description: None | str | Unset = UNSET,
     environment_version: list[str] | None | Unset = UNSET,
+    visibility: None | Unset | Visibility = UNSET,
 ) -> ErrorDetail | HTTPValidationError | SedmlRunError | SedmlRunResult | None:
     """Run a project's SED-ML on several solvers, its original results as the reference
 
@@ -199,6 +216,9 @@ def sync(
         environment_version (list[str] | None | Unset): Environment versions to run in:
             environment@number (registry_env@2) or environment@default, repeatable; an environment not
             named runs at its default
+        visibility (None | Unset | Visibility): Who may read the run: `private` (the default when
+            signed in: you, and admins) or `public` (anyone). Anonymous runs are public; asking for
+            private needs signing in. The owner can change it later (PATCH /simulations/{id})
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -216,6 +236,7 @@ def sync(
         tags=tags,
         description=description,
         environment_version=environment_version,
+        visibility=visibility,
     ).parsed
 
 
@@ -228,6 +249,7 @@ async def asyncio_detailed(
     tags: list[str] | None | Unset = UNSET,
     description: None | str | Unset = UNSET,
     environment_version: list[str] | None | Unset = UNSET,
+    visibility: None | Unset | Visibility = UNSET,
 ) -> Response[ErrorDetail | HTTPValidationError | SedmlRunError | SedmlRunResult]:
     """Run a project's SED-ML on several solvers, its original results as the reference
 
@@ -241,6 +263,9 @@ async def asyncio_detailed(
         environment_version (list[str] | None | Unset): Environment versions to run in:
             environment@number (registry_env@2) or environment@default, repeatable; an environment not
             named runs at its default
+        visibility (None | Unset | Visibility): Who may read the run: `private` (the default when
+            signed in: you, and admins) or `public` (anyone). Anonymous runs are public; asking for
+            private needs signing in. The owner can change it later (PATCH /simulations/{id})
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -257,6 +282,7 @@ async def asyncio_detailed(
         tags=tags,
         description=description,
         environment_version=environment_version,
+        visibility=visibility,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -273,6 +299,7 @@ async def asyncio(
     tags: list[str] | None | Unset = UNSET,
     description: None | str | Unset = UNSET,
     environment_version: list[str] | None | Unset = UNSET,
+    visibility: None | Unset | Visibility = UNSET,
 ) -> ErrorDetail | HTTPValidationError | SedmlRunError | SedmlRunResult | None:
     """Run a project's SED-ML on several solvers, its original results as the reference
 
@@ -286,6 +313,9 @@ async def asyncio(
         environment_version (list[str] | None | Unset): Environment versions to run in:
             environment@number (registry_env@2) or environment@default, repeatable; an environment not
             named runs at its default
+        visibility (None | Unset | Visibility): Who may read the run: `private` (the default when
+            signed in: you, and admins) or `public` (anyone). Anonymous runs are public; asking for
+            private needs signing in. The owner can change it later (PATCH /simulations/{id})
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -304,5 +334,6 @@ async def asyncio(
             tags=tags,
             description=description,
             environment_version=environment_version,
+            visibility=visibility,
         )
     ).parsed

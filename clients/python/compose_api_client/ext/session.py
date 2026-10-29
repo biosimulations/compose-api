@@ -72,7 +72,12 @@ from compose_api_client.api.sed_ml import (
     verify_comparison,
 )
 from compose_api_client.api.simulation import run_simulation
-from compose_api_client.api.simulations import cancel_simulation, get_simulation, list_simulations
+from compose_api_client.api.simulations import (
+    cancel_simulation,
+    change_simulation_visibility,
+    get_simulation,
+    list_simulations,
+)
 from compose_api_client.api.sources import (
     get_biomodel,
     get_biomodel_omex,
@@ -189,8 +194,11 @@ from compose_api_client.models import (
     Verification,
     VerifyRequest,
     VerifySuiteRunWhich,
+    Visibility,
+    VisibilityChange,
+    VisibilityChanged,
 )
-from compose_api_client.types import UNSET, File, Response
+from compose_api_client.types import UNSET, File, Response, Unset
 
 T = TypeVar("T")
 #: An ASGI application (the FastAPI app), as httpx.ASGITransport takes it
@@ -226,6 +234,11 @@ class JobState:
     @classmethod
     def of(cls, run: HpcRun) -> JobState:
         return cls(str(run.status) if run.status else "unknown", run)
+
+
+def _visibility(visibility: str | None) -> Visibility | Unset:
+    """A run's requested visibility: ``private`` (the service's default when signed in) or ``public``."""
+    return Visibility(visibility) if visibility is not None else UNSET
 
 
 def _file(source: FileSource, name: str | None = None) -> File:
@@ -776,6 +789,7 @@ class ComposeSession:
         description: str | None = None,
         environment_version: int | None = None,
         environment: str | None = None,
+        visibility: str | None = None,
     ) -> SimulationExperiment:
         """Submit an ``.omex`` (or ``.pbg``). ``environment`` names the environment to run in (``simulator`` is the
         older name for a prebuilt one); with neither, the service infers it from the document's classes.
@@ -786,6 +800,7 @@ class ComposeSession:
             op,
             lambda c: run_simulation.sync_detailed(
                 client=c,
+                visibility=_visibility(visibility),
                 body=BodyRunSimulation(uploaded_file=_file(document)),
                 interval_time=interval,
                 batch_submission=batch,
@@ -798,12 +813,15 @@ class ComposeSession:
         )
         return _parsed(r, SimulationExperiment, op=op)
 
-    def submit_copasi(self, sbml: FileSource, *, start: float, duration: float, points: int) -> SimulationExperiment:
+    def submit_copasi(
+        self, sbml: FileSource, *, start: float, duration: float, points: int, visibility: str | None = None
+    ) -> SimulationExperiment:
         op = Operation("POST", "/curated/copasi", replayable=False)
         r, _ = self._send(
             op,
             lambda c: run_copasi.sync_detailed(
                 client=c,
+                visibility=_visibility(visibility),
                 body=BodyRunCopasi(sbml=_file(sbml)),
                 start_time=start,
                 duration=duration,
@@ -812,12 +830,15 @@ class ComposeSession:
         )
         return _parsed(r, SimulationExperiment, op=op)
 
-    def submit_tellurium(self, sbml: FileSource, *, start: float, end: float, points: int) -> SimulationExperiment:
+    def submit_tellurium(
+        self, sbml: FileSource, *, start: float, end: float, points: int, visibility: str | None = None
+    ) -> SimulationExperiment:
         op = Operation("POST", "/curated/tellurium", replayable=False)
         r, _ = self._send(
             op,
             lambda c: run_tellurium.sync_detailed(
                 client=c,
+                visibility=_visibility(visibility),
                 body=BodyRunTellurium(sbml=_file(sbml)),
                 start_time=start,
                 end_time=end,
@@ -931,6 +952,7 @@ class ComposeSession:
         tags: Sequence[str] = (),
         description: str | None = None,
         environment_versions: Sequence[str] = (),
+        visibility: str | None = None,
     ) -> SedmlRunResult:
         """Run each task of a SED-ML archive once per solver; one comparison per task. ``environment_versions``:
         ``environment@number`` or ``environment@default``; an environment not named runs at its default."""
@@ -939,6 +961,7 @@ class ComposeSession:
             op,
             lambda c: run_sedml.sync_detailed(
                 client=c,
+                visibility=_visibility(visibility),
                 body=BodyRunSedml(archive=_file(archive)),
                 solvers=list(solvers) if solvers else UNSET,
                 task=list(tasks) if tasks else UNSET,
@@ -974,6 +997,7 @@ class ComposeSession:
         solvers: Sequence[str] = (),
         tags: Sequence[str] = (),
         environment_versions: Sequence[str] = (),
+        visibility: str | None = None,
     ) -> SedmlRunResult:
         op = Operation("POST", f"/sources/biomodels/{model_id}/run", replayable=False)
         r, _ = self._send(
@@ -981,6 +1005,7 @@ class ComposeSession:
             lambda c: run_biomodel.sync_detailed(
                 model_id,
                 client=c,
+                visibility=_visibility(visibility),
                 solvers=list(solvers) if solvers else UNSET,
                 tags=list(tags) if tags else UNSET,
                 environment_version=list(environment_versions) if environment_versions else UNSET,
@@ -1019,6 +1044,7 @@ class ComposeSession:
         solvers: Sequence[str] = (),
         tags: Sequence[str] = (),
         environment_versions: Sequence[str] = (),
+        visibility: str | None = None,
     ) -> SedmlRunResult:
         op = Operation("POST", f"/sources/biosimulations/{project_id}/run", replayable=False)
         r, _ = self._send(
@@ -1026,6 +1052,7 @@ class ComposeSession:
             lambda c: run_biosimulations_project.sync_detailed(
                 project_id,
                 client=c,
+                visibility=_visibility(visibility),
                 solvers=list(solvers) if solvers else UNSET,
                 tags=list(tags) if tags else UNSET,
                 environment_version=list(environment_versions) if environment_versions else UNSET,
@@ -1186,6 +1213,14 @@ class ComposeSession:
         op = Operation("GET", f"/simulations/{simulation_id}", replayable=True)
         r, _ = self._send(op, lambda c: get_simulation.sync_detailed(simulation_id, client=c))
         return _parsed(r, SimulationDetail, op=op)
+
+    def change_simulation_visibility(self, simulation_id: int, visibility: str) -> VisibilityChanged:
+        """Make a run ``public`` or ``private`` (its owner or an admin); the other runs of every comparison it is in
+        change with it."""
+        op = Operation("PATCH", f"/simulations/{simulation_id}", replayable=True)
+        body = VisibilityChange(visibility=Visibility(visibility))
+        r, _ = self._send(op, lambda c: change_simulation_visibility.sync_detailed(simulation_id, client=c, body=body))
+        return _parsed(r, VisibilityChanged, op=op)
 
     def cancel_simulation(self, simulation_id: int) -> SimulationCancellation:
         """Cancel a run (needs a signed-in session): withdrawn from the queue, or SLURM asked to cancel its job."""
@@ -1737,12 +1772,14 @@ class AsyncComposeSession:
         description: str | None = None,
         environment_version: int | None = None,
         environment: str | None = None,
+        visibility: str | None = None,
     ) -> SimulationExperiment:
         op = Operation("POST", "/simulation/run", replayable=False)
         r, _ = await self._send(
             op,
             lambda c: run_simulation.asyncio_detailed(
                 client=c,
+                visibility=_visibility(visibility),
                 body=BodyRunSimulation(uploaded_file=_file(document)),
                 interval_time=interval,
                 batch_submission=batch,
@@ -1756,13 +1793,14 @@ class AsyncComposeSession:
         return _parsed(r, SimulationExperiment, op=op)
 
     async def submit_copasi(
-        self, sbml: FileSource, *, start: float, duration: float, points: int
+        self, sbml: FileSource, *, start: float, duration: float, points: int, visibility: str | None = None
     ) -> SimulationExperiment:
         op = Operation("POST", "/curated/copasi", replayable=False)
         r, _ = await self._send(
             op,
             lambda c: run_copasi.asyncio_detailed(
                 client=c,
+                visibility=_visibility(visibility),
                 body=BodyRunCopasi(sbml=_file(sbml)),
                 start_time=start,
                 duration=duration,
@@ -1772,13 +1810,14 @@ class AsyncComposeSession:
         return _parsed(r, SimulationExperiment, op=op)
 
     async def submit_tellurium(
-        self, sbml: FileSource, *, start: float, end: float, points: int
+        self, sbml: FileSource, *, start: float, end: float, points: int, visibility: str | None = None
     ) -> SimulationExperiment:
         op = Operation("POST", "/curated/tellurium", replayable=False)
         r, _ = await self._send(
             op,
             lambda c: run_tellurium.asyncio_detailed(
                 client=c,
+                visibility=_visibility(visibility),
                 body=BodyRunTellurium(sbml=_file(sbml)),
                 start_time=start,
                 end_time=end,
@@ -1890,6 +1929,7 @@ class AsyncComposeSession:
         tags: Sequence[str] = (),
         description: str | None = None,
         environment_versions: Sequence[str] = (),
+        visibility: str | None = None,
     ) -> SedmlRunResult:
         """Run each task of a SED-ML archive once per solver; one comparison per task. ``environment_versions``:
         ``environment@number`` or ``environment@default``; an environment not named runs at its default."""
@@ -1898,6 +1938,7 @@ class AsyncComposeSession:
             op,
             lambda c: run_sedml.asyncio_detailed(
                 client=c,
+                visibility=_visibility(visibility),
                 body=BodyRunSedml(archive=_file(archive)),
                 solvers=list(solvers) if solvers else UNSET,
                 task=list(tasks) if tasks else UNSET,
@@ -1935,6 +1976,7 @@ class AsyncComposeSession:
         solvers: Sequence[str] = (),
         tags: Sequence[str] = (),
         environment_versions: Sequence[str] = (),
+        visibility: str | None = None,
     ) -> SedmlRunResult:
         op = Operation("POST", f"/sources/biomodels/{model_id}/run", replayable=False)
         r, _ = await self._send(
@@ -1942,6 +1984,7 @@ class AsyncComposeSession:
             lambda c: run_biomodel.asyncio_detailed(
                 model_id,
                 client=c,
+                visibility=_visibility(visibility),
                 solvers=list(solvers) if solvers else UNSET,
                 tags=list(tags) if tags else UNSET,
                 environment_version=list(environment_versions) if environment_versions else UNSET,
@@ -1984,6 +2027,7 @@ class AsyncComposeSession:
         solvers: Sequence[str] = (),
         tags: Sequence[str] = (),
         environment_versions: Sequence[str] = (),
+        visibility: str | None = None,
     ) -> SedmlRunResult:
         op = Operation("POST", f"/sources/biosimulations/{project_id}/run", replayable=False)
         r, _ = await self._send(
@@ -1991,6 +2035,7 @@ class AsyncComposeSession:
             lambda c: run_biosimulations_project.asyncio_detailed(
                 project_id,
                 client=c,
+                visibility=_visibility(visibility),
                 solvers=list(solvers) if solvers else UNSET,
                 tags=list(tags) if tags else UNSET,
                 environment_version=list(environment_versions) if environment_versions else UNSET,
@@ -2159,6 +2204,16 @@ class AsyncComposeSession:
         op = Operation("GET", f"/simulations/{simulation_id}", replayable=True)
         r, _ = await self._send(op, lambda c: get_simulation.asyncio_detailed(simulation_id, client=c))
         return _parsed(r, SimulationDetail, op=op)
+
+    async def change_simulation_visibility(self, simulation_id: int, visibility: str) -> VisibilityChanged:
+        """Make a run ``public`` or ``private`` (its owner or an admin); the other runs of every comparison it is in
+        change with it."""
+        op = Operation("PATCH", f"/simulations/{simulation_id}", replayable=True)
+        body = VisibilityChange(visibility=Visibility(visibility))
+        r, _ = await self._send(
+            op, lambda c: change_simulation_visibility.asyncio_detailed(simulation_id, client=c, body=body)
+        )
+        return _parsed(r, VisibilityChanged, op=op)
 
     async def cancel_simulation(self, simulation_id: int) -> SimulationCancellation:
         op = Operation("DELETE", f"/simulations/{simulation_id}", replayable=False)

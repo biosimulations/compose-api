@@ -149,6 +149,8 @@ from .verify_suite_run_which import VerifySuiteRunWhich
 from .version_ref import VersionRef
 from .version_state import VersionState
 from .visibility import Visibility
+from .visibility_change import VisibilityChange
+from .visibility_changed import VisibilityChanged
 
 __all__ = (
     "AddressViolation",
@@ -296,4 +298,6 @@ __all__ = (
     "VersionRef",
     "VersionState",
     "Visibility",
+    "VisibilityChange",
+    "VisibilityChanged",
 )

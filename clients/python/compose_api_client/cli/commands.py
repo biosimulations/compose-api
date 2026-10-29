@@ -57,7 +57,7 @@ from compose_api_client.ext import (
 from compose_api_client.ext.credentials import TOKEN_ENV_VAR
 from compose_api_client.ext.errors import UsageError
 from compose_api_client.ext.json_types import JsonValue
-from compose_api_client.models import FavoriteKind, ImageStatus, SedmlRunResult, Verification
+from compose_api_client.models import FavoriteKind, ImageStatus, SedmlRunResult, Verification, Visibility
 from compose_api_client.types import Unset
 
 if TYPE_CHECKING:  # annotations only: importing these at run time would load the [auth] extra for every command
@@ -267,6 +267,8 @@ app.add_typer(favorites_app, name="favorites")
 PROVIDERS = click.Choice(["email", "google"])
 #: How a sign-in reaches the person (`compose_api_client.auth.models.SignInMethod`).
 METHODS = click.Choice(["auto", "browser", "url", "device"])
+#: Who may read a run (`compose_api_client.models.Visibility`).
+VISIBILITIES = click.Choice([v.value for v in Visibility])
 #: What can be starred (`compose_api_client.models.FavoriteKind`).
 FAVORITE_KINDS = click.Choice([k.value for k in FavoriteKind])
 
@@ -1001,6 +1003,14 @@ def simulators_build(
 Poll = Annotated[float, typer.Option(help="Seconds between status checks.")]
 WaitTimeout = Annotated[float | None, typer.Option(help="Give up waiting after this many seconds (exit 5).")]
 Wait = Annotated[bool, typer.Option("--wait", "-w", help="Wait for the job to finish; exit 1 unless it completed.")]
+#: who may read a new run (docs/plan-favorites-and-studies.md, F3)
+RunVisibility = Annotated[
+    str | None,
+    typer.Option(
+        help="private (the default signed in: you and admins) or public (anyone); anonymous runs are public.",
+        click_type=VISIBILITIES,
+    ),
+]
 Download = Annotated[
     Path | None, typer.Option("--download", "-d", help="With --wait: save the results archive into this directory.")
 ]
@@ -1061,6 +1071,7 @@ def run(
             min=1, help="The version of the environment to run in (registry_env@3 is 3); omitted: its default."
         ),
     ] = None,
+    visibility: RunVisibility = None,
     wait: Wait = False,
     download: Download = None,
     extract: Extract = False,
@@ -1080,6 +1091,7 @@ def run(
             description=description,
             environment_version=environment_version,
             environment=environment,
+            visibility=visibility,
         )
         if not wait:
             emit(settings.output, sim)
@@ -1100,6 +1112,7 @@ def curated_copasi(
     start: Annotated[float, typer.Option(help="Start time.")],
     duration: Annotated[float, typer.Option(help="Duration.")],
     points: Annotated[int, typer.Option(help="Number of output points.")],
+    visibility: RunVisibility = None,
     wait: Wait = False,
     download: Download = None,
     extract: Extract = False,
@@ -1109,7 +1122,7 @@ def curated_copasi(
     """Run an SBML model with COPASI."""
     settings = _settings(ctx)
     with make_session(settings) as s:
-        sim = s.submit_copasi(sbml, start=start, duration=duration, points=points)
+        sim = s.submit_copasi(sbml, start=start, duration=duration, points=points, visibility=visibility)
         if not wait:
             emit(settings.output, sim)
             return
@@ -1127,6 +1140,7 @@ def curated_tellurium(
     start: Annotated[float, typer.Option(help="Start time.")],
     end: Annotated[float, typer.Option(help="End time.")],
     points: Annotated[int, typer.Option(help="Number of output points.")],
+    visibility: RunVisibility = None,
     wait: Wait = False,
     download: Download = None,
     extract: Extract = False,
@@ -1136,7 +1150,7 @@ def curated_tellurium(
     """Run an SBML model with Tellurium."""
     settings = _settings(ctx)
     with make_session(settings) as s:
-        sim = s.submit_tellurium(sbml, start=start, end=end, points=points)
+        sim = s.submit_tellurium(sbml, start=start, end=end, points=points, visibility=visibility)
         if not wait:
             emit(settings.output, sim)
             return
@@ -1347,6 +1361,20 @@ def simulations_cancel(
     settings = _settings(ctx)
     with make_session(settings) as s:
         emit(settings.output, s.cancel_simulation(simulation_id).to_dict())
+
+
+@simulations_app.command("visibility")
+@claims("simulations visibility", "change-simulation-visibility")
+@handled
+def simulations_visibility(
+    ctx: typer.Context,
+    simulation_id: Annotated[int, typer.Argument(help="The simulation id.")],
+    visibility: Annotated[str, typer.Argument(help="public or private.", click_type=VISIBILITIES)],
+) -> None:
+    """Make a run you own public or private. The other runs of every comparison it is in change with it."""
+    settings = _settings(ctx)
+    with make_session(settings) as s:
+        emit(settings.output, s.change_simulation_visibility(simulation_id, visibility).to_dict())
 
 
 # -- favorites ---------------------------------------------------------------------------------------------------------
@@ -1840,6 +1868,7 @@ def sedml_run(
     tag: Annotated[list[str] | None, typer.Option("--tag", "-t", help="A tag for every run (repeatable).")] = None,
     description: Annotated[str | None, typer.Option(help="What the runs are for.")] = None,
     environment_version: VersionsOption = None,
+    visibility: RunVisibility = None,
 ) -> None:
     """Run each task once per solver; prints each task's comparison and its runs."""
     settings = _settings(ctx)
@@ -1851,6 +1880,7 @@ def sedml_run(
             tags=tag or (),
             description=description,
             environment_versions=environment_version or (),
+            visibility=visibility,
         )
     if settings.output is Output.JSON:
         emit(Output.JSON, result.to_dict())
@@ -2022,12 +2052,17 @@ def biomodels_run(
     solver: SolverOption = None,
     tag: Annotated[list[str] | None, typer.Option("--tag", "-t", help="A tag for every run (repeatable).")] = None,
     environment_version: VersionsOption = None,
+    visibility: RunVisibility = None,
 ) -> None:
     """Run the entry's SED-ML once per solver; prints each task's comparison and its runs."""
     settings = _settings(ctx)
     with make_session(settings) as s:
         result = s.run_biomodel(
-            model_id, solvers=solver or (), tags=tag or (), environment_versions=environment_version or ()
+            model_id,
+            solvers=solver or (),
+            tags=tag or (),
+            environment_versions=environment_version or (),
+            visibility=visibility,
         )
     emit(settings.output, _run_rows(result) if settings.output is not Output.JSON else result.to_dict(),
          ["comparison", "task", "solver", "simulation"])  # fmt: skip
@@ -2097,12 +2132,17 @@ def biosimulations_run(
     solver: SolverOption = None,
     tag: Annotated[list[str] | None, typer.Option("--tag", "-t", help="A tag for every run (repeatable).")] = None,
     environment_version: VersionsOption = None,
+    visibility: RunVisibility = None,
 ) -> None:
     """Run the project's SED-ML once per solver, its original results as the reference."""
     settings = _settings(ctx)
     with make_session(settings) as s:
         result = s.run_biosimulations_project(
-            project_id, solvers=solver or (), tags=tag or (), environment_versions=environment_version or ()
+            project_id,
+            solvers=solver or (),
+            tags=tag or (),
+            environment_versions=environment_version or (),
+            visibility=visibility,
         )
     emit(settings.output, _run_rows(result) if settings.output is not Output.JSON else result.to_dict(),
          ["comparison", "task", "solver", "simulation"])  # fmt: skip

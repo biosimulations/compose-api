@@ -22,6 +22,8 @@ export interface RunChoice {
   solvers: string[]
   tags: string[]
   description: string
+  /** who may read the runs; omitted, the service's default (private signed in, public anonymous) */
+  visibility?: Schemas['Visibility']
 }
 
 export type Outcome<T> = { ok: true, value: T } | { ok: false, error: string, violations: Violation[], findings: Schemas['SedmlFinding'][] }
@@ -68,7 +70,8 @@ export async function runSedml(source: ArchiveSource, choice: RunChoice): Promis
   const query = {
     solvers: choice.solvers.length ? choice.solvers : undefined,
     tags: choice.tags.length ? choice.tags : undefined,
-    description: choice.description.trim() || undefined
+    description: choice.description.trim() || undefined,
+    visibility: choice.visibility
   }
   const api = useApi()
   const result = source.kind === 'upload'

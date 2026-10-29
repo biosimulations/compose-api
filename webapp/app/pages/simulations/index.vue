@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TableColumn } from '@nuxt/ui'
+import type { TableColumn, TableRow } from '@nuxt/ui'
 import type { SimulationSummary } from '~/composables/useApi'
 
 // Paged, filterable list. After ../platform/frontend/app/pages/simulations/index.vue; the filters live in the
@@ -91,7 +91,7 @@ useIntervalFn(() => {
   if (live.value && !loading.value) load()
 }, 10000)
 
-const UButton = resolveComponent('UButton')
+const UIcon = resolveComponent('UIcon')
 const NuxtLink = resolveComponent('NuxtLink')
 const StatusBadge = resolveComponent('StatusBadge')
 const RunLabels = resolveComponent('RunLabels')
@@ -105,37 +105,27 @@ watch(() => route.query, (q) => {
   if (nextTags.join('\n') !== tags.value.join('\n')) tags.value = nextTags
 })
 
-async function saveResults(id: number) {
-  try {
-    await downloadFile('/results/simulation/results/file', { simulation_id: id }, `simulation-${id}-results.zip`)
-  } catch (e) {
-    error.value = (e as Error).message
-  }
+// A row opens its run (whose page has its results.zip and SLURM job); a link or chip in it keeps its own action.
+function open(e: Event, row: TableRow<SimulationSummary>) {
+  if ((e.target as HTMLElement | null)?.closest('a, button')) return
+  navigateTo(`/simulations/${row.original.simulation_id}`)
 }
+const meta = { class: { tr: 'cursor-pointer' } }
 
 const columns: TableColumn<SimulationSummary>[] = [
   {
     accessorKey: 'simulation_id',
     header: 'ID',
-    cell: ({ row }) => h(NuxtLink, { to: `/simulations/${row.original.simulation_id}`, class: 'font-mono text-primary' }, () => `#${row.original.simulation_id}`)
+    cell: ({ row }) => h('span', { class: 'inline-flex items-center gap-1' }, [
+      h(NuxtLink, { to: `/simulations/${row.original.simulation_id}`, class: 'font-mono text-primary' }, () => `#${row.original.simulation_id}`),
+      row.original.visibility === 'private' ? h(UIcon, { name: 'i-lucide-lock', class: 'size-3.5 text-warning', title: 'Private: you and administrators' }) : null
+    ])
   },
   { accessorKey: 'status', header: 'Status', cell: ({ row }) => h(StatusBadge, { status: row.original.status, submission: row.original.submission }) },
-  {
-    accessorKey: 'simulator',
-    header: 'Simulator',
-    cell: ({ row }) => row.original.simulator
-      ? h('span', { class: 'block max-w-72 truncate', title: row.original.simulator }, row.original.simulator)
-      : h('span', { class: 'font-mono text-xs text-muted', title: row.original.container_def_hash }, `built ${row.original.container_def_hash.slice(0, 10)}`)
-  },
   {
     id: 'ran_in',
     header: 'Ran in',
     cell: ({ row }) => h(RanIn, { version: row.original.environment_version, simulatorId: row.original.simulator_id, class: 'text-xs whitespace-nowrap' })
-  },
-  {
-    accessorKey: 'experiment_id',
-    header: 'Experiment',
-    cell: ({ row }) => h('span', { class: 'block max-w-56 truncate font-mono text-xs', title: row.original.experiment_id }, row.original.experiment_id)
   },
   {
     id: 'labels',
@@ -143,21 +133,6 @@ const columns: TableColumn<SimulationSummary>[] = [
     cell: ({ row }) => h(RunLabels, { labels: row.original.labels, tags: row.original.tags, size: 'sm', class: 'max-w-96' })
   },
   { accessorKey: 'created_at', header: 'Submitted', cell: ({ row }) => formatTime(row.original.created_at) },
-  { accessorKey: 'slurm_job_id', header: 'SLURM job', cell: ({ row }) => row.original.slurm_job_id ?? '—' },
-  {
-    id: 'actions',
-    cell: ({ row }) => h('div', { class: 'flex justify-end gap-1' }, [
-      h(UButton, { icon: 'i-lucide-eye', variant: 'ghost', color: 'neutral', title: 'Details', to: `/simulations/${row.original.simulation_id}` }),
-      h(UButton, {
-        icon: 'i-lucide-file-archive',
-        variant: 'ghost',
-        color: 'neutral',
-        title: 'Download results.zip',
-        disabled: row.original.status !== 'completed',
-        onClick: () => saveResults(row.original.simulation_id)
-      })
-    ])
-  }
 ]
 </script>
 
@@ -180,7 +155,7 @@ const columns: TableColumn<SimulationSummary>[] = [
         <UButton icon="i-lucide-refresh-cw" variant="ghost" color="neutral" :loading="loading" @click="load" />
       </div>
       <UAlert v-if="error" color="error" variant="subtle" icon="i-lucide-circle-alert" :description="error" />
-      <UTable :data="rows" :columns="columns" :loading="loading" empty="No simulations match." />
+      <UTable :data="rows" :columns="columns" :meta="meta" :loading="loading" empty="No simulations match." @select="open" />
       <div class="flex justify-end">
         <UPagination v-model:page="page" :total="total" :items-per-page="PAGE" />
       </div>

@@ -1,4 +1,4 @@
-import type { Violation } from './useApi'
+import type { Schemas, Violation } from './useApi'
 
 export interface RunOptions {
   /** the runner's interval, 0 to 1000 */
@@ -11,6 +11,8 @@ export interface RunOptions {
   tags?: string[]
   /** what the run is for */
   description?: string | null
+  /** who may read it; omitted, the service's default (private signed in, public anonymous) */
+  visibility?: Schemas['Visibility']
 }
 
 export type RunOutcome =
@@ -28,7 +30,8 @@ export async function submitRun(file: File, options: RunOptions): Promise<RunOut
         batch_submission: options.batch ?? false,
         simulator: options.simulator || undefined,
         tags: options.tags?.length ? options.tags : undefined,
-        description: options.description?.trim() || undefined
+        description: options.description?.trim() || undefined,
+        visibility: options.visibility
       }
     },
     body: form as never,

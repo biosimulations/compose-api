@@ -21,6 +21,7 @@ from sqlalchemy import (
     or_,
     select,
     text,
+    update,
 )
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
@@ -164,6 +165,10 @@ class SimulatorDatabaseService(ABC):
     async def get_simulations_access(self, simulation_ids: list[int]) -> list[SimulationAccess]:
         """The owner and visibility of each simulation that exists, in no particular order."""
         pass
+
+    @abstractmethod
+    async def set_visibility(self, simulation_ids: list[int], visibility: Visibility) -> None:
+        """Make these simulations public or private (docs/plan-favorites-and-studies.md, step 1b)."""
 
     @abstractmethod
     async def get_simulation(self, simulation_id: int) -> SubmittedSimulation | None:
@@ -601,6 +606,13 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
         async with self.async_session_maker() as session:
             result = await session.execute(select(ORMSimulation).where(ORMSimulation.id.in_(simulation_ids)))
             return [orm_simulation.to_simulation_access() for orm_simulation in result.scalars().all()]
+
+    @override
+    async def set_visibility(self, simulation_ids: list[int], visibility: Visibility) -> None:
+        async with self.async_session_maker() as session, session.begin():
+            await session.execute(
+                update(ORMSimulation).where(ORMSimulation.id.in_(simulation_ids)).values(visibility=visibility.value)
+            )
 
     @override
     async def get_simulation_statuses(self, simulation_ids: list[int]) -> dict[int, str]:

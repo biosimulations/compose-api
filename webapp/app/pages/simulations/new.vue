@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { StepperItem } from '@nuxt/ui'
+import type { Schemas } from '~/composables/useApi'
 
 // Submit a run. A three-step UStepper after ../platform/frontend/app/pages/simulations/run.vue:
 // what to run, how to run it, review and submit.
@@ -16,6 +17,10 @@ const batch = ref(false)
 const simulator = ref<string | undefined>(undefined)
 const tags = ref<string[]>([])
 const description = ref('')
+const visibility = ref<Schemas['Visibility']>('private')
+const { isAuthenticated } = useAuth()
+// what to send: nothing signed out (an anonymous run is public)
+const chosenVisibility = computed(() => (isAuthenticated.value ? visibility.value : undefined))
 // /curated/*
 const startTime = ref(0)
 const duration = ref(10)
@@ -67,7 +72,8 @@ async function submit() {
       batch: batch.value,
       simulator: simulator.value,
       tags: tags.value,
-      description: description.value
+      description: description.value,
+      visibility: chosenVisibility.value
     })
     submitting.value = false
     if (!outcome.ok) {
@@ -84,14 +90,14 @@ async function submit() {
   if (mode.value === 'copasi') {
     form.append('sbml', asSbml(file.value))
     result = await api.POST('/curated/copasi', {
-      params: { query: { start_time: startTime.value, duration: duration.value, num_data_points: points.value } },
+      params: { query: { start_time: startTime.value, duration: duration.value, num_data_points: points.value, visibility: chosenVisibility.value } },
       body: form as never,
       ...asIs
     })
   } else {
     form.append('sbml', asSbml(file.value))
     result = await api.POST('/curated/tellurium', {
-      params: { query: { start_time: startTime.value, end_time: endTime.value, num_data_points: points.value } },
+      params: { query: { start_time: startTime.value, end_time: endTime.value, num_data_points: points.value, visibility: chosenVisibility.value } },
       body: form as never,
       ...asIs
     })
@@ -156,6 +162,7 @@ async function submit() {
           <UFormField v-else label="End time"><UInputNumber v-model="endTime" :min="0" class="w-48" /></UFormField>
           <UFormField label="Data points"><UInputNumber v-model="points" :min="1" class="w-48" /></UFormField>
         </template>
+        <VisibilityChoice v-model="visibility" />
         <div class="flex justify-between">
           <UButton label="Back" variant="ghost" leading-icon="i-lucide-arrow-left" @click="step = 0" />
           <UButton label="Next" trailing-icon="i-lucide-arrow-right" :disabled="!optionsOk" @click="step = 2" />
@@ -167,6 +174,7 @@ async function submit() {
           <dl class="grid grid-cols-[10rem_1fr] gap-y-2 text-sm">
             <dt class="text-muted">File</dt><dd class="font-mono">{{ file?.name }} ({{ formatBytes(file?.size) }})</dd>
             <dt class="text-muted">Run as</dt><dd>{{ modes.find(m => m.value === mode)?.label }}</dd>
+            <dt class="text-muted">Visibility</dt><dd>{{ chosenVisibility ?? 'public (signed out)' }}</dd>
             <template v-if="mode === 'archive'">
               <dt class="text-muted">Simulator</dt><dd>{{ simulator || 'Shared container' }}</dd>
               <dt class="text-muted">Interval time</dt><dd>{{ intervalTime }}</dd>

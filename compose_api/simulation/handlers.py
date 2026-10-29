@@ -30,6 +30,7 @@ from compose_api.simulation.models import (
     HpcRun,
     JobStatus,
     JobType,
+    Ownership,
     RegisteredSimulators,
     RemoteContainerImage,
     SimulationCancellation,
@@ -39,6 +40,7 @@ from compose_api.simulation.models import (
     SimulatorVersion,
     SubmissionSpec,
     SubmissionState,
+    Visibility,
 )
 from compose_api.simulation.prebuilt import prebuilt_image_of
 from compose_api.simulation.simulation_service import SimulationService
@@ -72,12 +74,13 @@ async def run_simulation(
     queue: str = "interactive",
     priority: int = 0,
     requested_by: str | None = None,
-    owner_sub: str | None = None,
+    ownership: Ownership | None = None,
 ) -> SimulationExperiment:
     """Record a run and queue it for the submission worker; its ids. ``queue`` and ``priority`` place it in line
     (docs/plan-durable-submission.md, Q3); ``requested_by`` is the caller's subject, kept for fair scheduling.
-    ``owner_sub`` is the signed-in submitter's subject, stored on the simulation as its owner, the one record of who
-    owns a run (docs/plan-favorites-and-studies.md, F1). None: no owner (anonymous, or a run the service starts)."""
+    ``ownership`` is the signed-in submitter's subject and the run's visibility, stored on the simulation, the one
+    record of who owns a run (docs/plan-favorites-and-studies.md, F1, F3). None: no owner and public (anonymous, or a
+    run the service starts)."""
     # the environment version it runs in (docs/plan-environment-versions.md): the one it names, or the default
     version, simulator_version = await version_for(
         database_service,
@@ -101,7 +104,8 @@ async def run_simulation(
         experiment_id=experiment_id,
         simulator_version=simulator_version,
         environment_version_id=version.database_id,
-        owner_sub=owner_sub,
+        owner_sub=ownership.owner_sub if ownership is not None else None,
+        visibility=ownership.visibility if ownership is not None else Visibility.PUBLIC,
         submission=SubmissionSpec(staged_on_store=on_store, queue=queue, priority=priority, requested_by=requested_by),
     )
     worker = get_submission_worker()
@@ -120,7 +124,7 @@ async def run_curated_pbif(
     background_tasks: BackgroundTasks,
     loaded_sbml: Path,
     use_interesting: bool = True,
-    owner_sub: str | None = None,
+    ownership: Ownership | None = None,
 ) -> SimulationExperiment:
     # Create OMEX with all necessary files
     with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
@@ -154,7 +158,7 @@ async def run_curated_pbif(
                 simulation_service_slurm=sim_service,
                 job_monitor=job_monitor,
                 background_tasks=background_tasks,
-                owner_sub=owner_sub,
+                ownership=ownership,
             )
         except Exception as e:
             logger.exception(msg=f"Failed to start {simulator_name} run", exc_info=e)
