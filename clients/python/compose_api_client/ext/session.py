@@ -14,7 +14,7 @@ import ssl
 import time
 import uuid
 import zipfile
-from collections.abc import Awaitable, Callable, Coroutine, Iterator, Sequence
+from collections.abc import Awaitable, Callable, Coroutine, Iterator, Mapping, Sequence
 from contextlib import suppress
 from http import HTTPStatus
 from pathlib import Path
@@ -172,6 +172,7 @@ from compose_api_client.models import (
     KnownProblemMark,
     ListSimulationsStatusType0,
     NewEnvironmentVersion,
+    NewEnvironmentVersionEntries,
     ProjectInfo,
     RegisteredSimulators,
     RunEvent,
@@ -718,15 +719,18 @@ class ComposeSession:
         resolved_at: datetime.datetime | None = None,
         image: str | None = None,
         note: str | None = None,
+        entries: Mapping[str, str] | None = None,
     ) -> EnvironmentVersion:
         """A new version (or the existing one with the same definition): a shared environment resolved at
-        ``resolved_at`` (default now), or a prebuilt one's ``image`` by digest. Its image is built in the background;
-        it does not become the default. Needs the environment administrator role."""
+        ``resolved_at`` (default now), or a prebuilt one's ``image`` by digest; ``entries`` moves flagged entries to
+        other commits (docs/plan-entry-updates.md). Its image is built in the background; it does not become the
+        default. Needs the environment administrator role."""
         op = Operation("POST", f"/registry/environments/{name}/versions", replayable=False)
         body = NewEnvironmentVersion(
             resolved_at=resolved_at if resolved_at is not None else UNSET,
             image=image if image is not None else UNSET,
             note=note if note is not None else UNSET,
+            entries=NewEnvironmentVersionEntries.from_dict(dict(entries)) if entries else UNSET,
         )
         r, _ = self._send(op, lambda c: create_environment_version.sync_detailed(name, client=c, body=body))
         return _parsed(r, EnvironmentVersion, op=op)
@@ -1706,15 +1710,18 @@ class AsyncComposeSession:
         resolved_at: datetime.datetime | None = None,
         image: str | None = None,
         note: str | None = None,
+        entries: Mapping[str, str] | None = None,
     ) -> EnvironmentVersion:
         """A new version (or the existing one with the same definition): a shared environment resolved at
-        ``resolved_at`` (default now), or a prebuilt one's ``image`` by digest. Its image is built in the background;
-        it does not become the default. Needs the environment administrator role."""
+        ``resolved_at`` (default now), or a prebuilt one's ``image`` by digest; ``entries`` moves flagged entries to
+        other commits (docs/plan-entry-updates.md). Its image is built in the background; it does not become the
+        default. Needs the environment administrator role."""
         op = Operation("POST", f"/registry/environments/{name}/versions", replayable=False)
         body = NewEnvironmentVersion(
             resolved_at=resolved_at if resolved_at is not None else UNSET,
             image=image if image is not None else UNSET,
             note=note if note is not None else UNSET,
+            entries=NewEnvironmentVersionEntries.from_dict(dict(entries)) if entries else UNSET,
         )
         r, _ = await self._send(op, lambda c: create_environment_version.asyncio_detailed(name, client=c, body=body))
         return _parsed(r, EnvironmentVersion, op=op)

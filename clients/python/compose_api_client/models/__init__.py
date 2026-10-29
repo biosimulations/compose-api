@@ -84,6 +84,7 @@ from .known_problem_edit import KnownProblemEdit
 from .known_problem_mark import KnownProblemMark
 from .list_simulations_status_type_0 import ListSimulationsStatusType0
 from .new_environment_version import NewEnvironmentVersion
+from .new_environment_version_entries import NewEnvironmentVersionEntries
 from .no_task_accepted import NoTaskAccepted
 from .package_change import PackageChange
 from .package_type import PackageType
@@ -233,6 +234,7 @@ __all__ = (
     "KnownProblemMark",
     "ListSimulationsStatusType0",
     "NewEnvironmentVersion",
+    "NewEnvironmentVersionEntries",
     "NoTaskAccepted",
     "PackageChange",
     "PackageType",

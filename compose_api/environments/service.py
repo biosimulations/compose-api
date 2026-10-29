@@ -9,8 +9,9 @@ import re
 from compose_api.db.database_service import DatabaseService
 from compose_api.db.services.environments_db import VersionSource
 from compose_api.environments import pixi, uv_export
+from compose_api.registry import upstream
 from compose_api.registry.environments import EnvironmentSpec, load_environments, spec_problems
-from compose_api.registry.manifest import load_manifest
+from compose_api.registry.manifest import Manifest, load_manifest
 from compose_api.simulation import builds
 from compose_api.simulation.models import (
     EnvironmentExport,
@@ -31,6 +32,10 @@ class VersionRequestError(ValueError):
     """The request cannot make a version of this environment (a 422)."""
 
 
+class UpstreamCheckError(RuntimeError):
+    """A moved entry's commit could not be checked with GitHub (a 502)."""
+
+
 def environment_spec(name: str) -> EnvironmentSpec | None:
     """An environment the service knows (``environments.yaml``), whether or not this deployment pins an image."""
     return next((e for e in load_environments().environments if e.name == name), None)
@@ -49,7 +54,7 @@ async def create(
         raise VersionRequestError(f"{environment.name} is composed: its versions are made by create_composed")
     if environment.kind != "prebuilt":
         raise VersionRequestError(f"{environment.name} lists no entries to compose a version from")
-    if request.resolved_at is not None:
+    if request.resolved_at is not None or request.entries:
         raise VersionRequestError(f"{environment.name} is prebuilt: a version is an image, given by digest")
     if request.image is None or not _DIGEST.match(request.image):
         raise VersionRequestError("a prebuilt version needs its image by digest: <repository>@sha256:<64 hex>")
@@ -58,6 +63,35 @@ async def create(
     return await database_service.get_environments_db().create_version(
         environment.name, environment.kind, simulator.database_id, source
     )
+
+
+async def _moved(
+    environment: EnvironmentSpec, manifest: Manifest, requested: dict[str, str]
+) -> tuple[Manifest, dict[str, dict[str, str]]]:
+    """The manifest with the requested entries at their new commits, and what moved (docs/plan-entry-updates.md,
+    E2, E3): only an entry of this environment that the manifest flags with `updates`, only to a commit GitHub says
+    that flag allows. A commit equal to the manifest's moves nothing."""
+    by_id = {e.id: e for e in manifest.entries}
+    moved: dict[str, dict[str, str]] = {}
+    for entry_id, ref in sorted(requested.items()):
+        entry = by_id.get(entry_id)
+        if entry is None or entry_id not in environment.entries:
+            raise VersionRequestError(f"{environment.name} has no entry {entry_id!r}")
+        if entry.updates is None or entry.install is None or entry.install.git is None:
+            raise VersionRequestError(
+                f"{entry_id!r} has no `updates` in the manifest: its commit moves by a pull request to manifest.yaml"
+            )
+        try:
+            commit = await upstream.allowed_commit(entry.install.git, ref, entry.updates)
+        except upstream.CommitRefusedError as e:
+            raise VersionRequestError(f"{entry_id}: {e}") from e
+        except upstream.UpstreamUnavailableError as e:
+            raise UpstreamCheckError(f"{entry_id}: {e}") from e
+        if commit != entry.install.commit:
+            moved[entry_id] = {"from": entry.install.commit or "", "to": commit}
+    if not moved:
+        return manifest, moved
+    return Manifest(entries=[e.at_commit(moved[e.id]["to"]) if e.id in moved else e for e in manifest.entries]), moved
 
 
 def is_composed(environment: EnvironmentSpec) -> bool:
@@ -88,10 +122,13 @@ async def create_composed(
     problems = spec_problems(environment, manifest, bundled=bundled)
     if problems:
         raise VersionRequestError("; ".join(problems))
+    manifest, moved = await _moved(environment, manifest, request.entries)
     resolved_at = request.resolved_at or datetime.datetime.now(datetime.UTC)
     spec = pixi.ComposedSpec.of(environment, manifest, composition, resolved_at)
     recorded = {
         **spec.as_json(),
+        # each entry moved off its manifest commit, `{id: {"from": ..., "to": ...}}` (docs/plan-entry-updates.md, E6)
+        **({"moved": moved} if moved else {}),
         "pixi_toml": pixi.pixi_toml(spec),
         "pixi_image": composition.pixi_image,
         "runner": pixi.runner_source(),  # what it is built and rebuilt with, whatever compose-api's runner becomes

@@ -735,3 +735,27 @@ def test_simulations_visibility_and_the_run_commands_visibility_option(
     assert invoke("biomodels", "run", "BIOMD0000000012", "--visibility", "public").exit_code == 0
     assert seen[-1].url.params["visibility"] == "public"
     assert invoke("biomodels", "run", "BIOMD0000000012", "--visibility", "hidden").exit_code == 2
+
+
+def test_environments_create_moves_flagged_entries(monkeypatch: pytest.MonkeyPatch) -> None:
+    """docs/plan-entry-updates.md: `--entry id=ref` moves a flagged entry; the service checks the commit."""
+    seen: list[httpx.Request] = []
+    version = {
+        "database_id": 9, "environment_id": 1, "environment": "mash-05956395cf", "number": 3, "state": "resolving",
+        "simulator_id": None,
+    }  # fmt: skip
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(201, json=version)
+
+    monkeypatch.setattr(
+        cli_module, "make_session", lambda s: ComposeSession(s.url, transport=httpx.MockTransport(answer))
+    )
+    r = invoke("environments", "create", "mash-05956395cf", "--entry", "viva-pde-particle=main", "--note", "#69")
+    assert r.exit_code == 0, r.output
+    assert json.loads(seen[-1].content) == {"note": "#69", "entries": {"viva-pde-particle": "main"}}
+    assert invoke("environments", "create", "mash-05956395cf", "--entry", "viva-pde-particle").exit_code != 0
+    twice = ("--entry", "a=main", "--entry", "a=" + "b" * 40)
+    assert invoke("environments", "create", "mash-05956395cf", *twice).exit_code != 0
+    assert len(seen) == 1  # neither bad form reached the service

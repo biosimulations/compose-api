@@ -1,12 +1,12 @@
 # Entry updates: a trusted repository's commit moves by API, not by pull request
 
-**Status (2026-10-29): proposed.** Asked for by Jim on 2026-10-29 while updating viva-pde-particle (its #69). One PR
+**Status (2026-10-29): the active plan; step 1 in review.** Asked for by Jim on 2026-10-29 while updating viva-pde-particle (its #69). One PR
 per step, each merged with a merge commit; deploying is a release, as usual.
 
 | Step | What | State |
 |---|---|---|
-| 0 | This document | in review |
-| 1 | The manifest flag, and a version made at a newer commit of a flagged entry (API, CLI) | — |
+| 0 | This document | merged (#480) |
+| 1 | The manifest flag, and a version made at a newer commit of a flagged entry (API, CLI) | in review |
 | 2 | Compliance gates a moved commit: refused until its cases pass, and never the default before then | — |
 | 3 | The web page: "new commits" on an environment's page, and making a version from one | — |
 | 4 | (Later, if wanted) candidates made by the service when a flagged repository moves | — |
@@ -122,8 +122,8 @@ per step, each merged with a merge commit; deploying is a release, as usual.
   - `environments default mash-05956395cf 3` succeeds only then.
 
 ## Open questions
-1. `updates: main` or only `updates: tags` for viva-pde-particle? `main` is what its prebuilt image follows today;
-   `tags` would need it to tag releases.
+1. `updates: main` or only `updates: tags` for viva-pde-particle? Step 1 flags it `main`, what its prebuilt image
+   follows today; `tags` would need it to tag releases.
 2. Write the defaults back? A scheduled PR that sets each flagged entry's manifest commit to its default version's
    would keep `git log` a readable history, at the cost of a bot PR per move.
 3. Should a run that names a version explicitly be able to use a moved entry before its compliance passes, for the
