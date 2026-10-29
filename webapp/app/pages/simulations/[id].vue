@@ -114,9 +114,9 @@ watch(tab, (t) => {
 // it is in change with it, so the comparison stays readable as a whole.
 const changingVisibility = ref(false)
 const visibilityNote = ref<string | null>(null)
-async function changeVisibility() {
+async function changeVisibility(makePrivate: boolean) {
   if (!sim.value) return
-  const visibility = sim.value.visibility === 'private' ? 'public' : 'private'
+  const visibility = makePrivate ? 'private' : 'public'
   changingVisibility.value = true
   visibilityNote.value = null
   const { data, error: err } = await api.PATCH('/simulations/{simulation_id}', {
@@ -132,6 +132,8 @@ async function changeVisibility() {
   const others = data.simulation_ids.filter(i => i !== id)
   if (others.length) visibilityNote.value = `The other runs of its comparison are ${data.visibility} too: ${others.map(i => `#${i}`).join(', ')}`
 }
+
+const { isAuthenticated } = useAuth()
 
 const fields = computed(() => {
   const s = sim.value
@@ -209,22 +211,19 @@ const fields = computed(() => {
                     <dd class="text-xs self-center"><RanIn :version="sim.environment_version" :simulator-id="sim.simulator_id" /></dd>
                   </template>
                   <template v-if="sim">
-                    <dt class="text-muted">Visibility</dt>
-                    <dd class="flex flex-wrap items-center gap-2">
-                      <UBadge
-                        :icon="sim.visibility === 'private' ? 'i-lucide-lock' : 'i-lucide-globe'"
-                        :color="sim.visibility === 'private' ? 'warning' : 'neutral'"
-                        variant="subtle"
-                        :label="sim.visibility === 'private' ? 'Private: you and administrators' : 'Public: anyone with the link'"
-                      />
-                      <UButton
-                        v-if="sim.mine"
-                        size="xs"
-                        variant="link"
-                        :label="sim.visibility === 'private' ? 'Make public' : 'Make private'"
+                    <dt class="text-muted self-center">Visibility</dt>
+                    <dd class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <USwitch
+                        :model-value="sim.visibility === 'private'"
+                        label="Private"
+                        :description="sim.visibility === 'private' ? 'You and administrators' : 'Anyone with the link'"
+                        :disabled="!sim.mine"
                         :loading="changingVisibility"
-                        @click="changeVisibility"
+                        @update:model-value="changeVisibility"
                       />
+                      <span v-if="!sim.mine" class="text-xs text-muted">
+                        {{ isAuthenticated ? 'Only the person who submitted it can change this' : 'Sign in to change your own runs' }}
+                      </span>
                       <span v-if="visibilityNote" class="w-full text-xs text-muted">{{ visibilityNote }}</span>
                     </dd>
                   </template>

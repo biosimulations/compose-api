@@ -4,7 +4,7 @@ import type { NavigationMenuItem } from '@nuxt/ui'
 // Shell after ../platform/frontend/app/app.vue: UHeader + UNavigationMenu + UMain + footer.
 const { rejected, clearRejected, expired, clearExpired, login } = useAuth()
 
-// Starting something new and the registry are menus; the four kinds of results stay one click away. Nine flat tabs
+// Starting something new, verification and the registry are menus; simulations and datasets stay one click away. Nine flat tabs
 // did not fit a laptop-width header.
 const route = useRoute()
 const under = (...prefixes: string[]) => prefixes.some(p => route.path === p || route.path.startsWith(`${p}/`))
@@ -21,9 +21,16 @@ const items = computed<NavigationMenuItem[][]>(() => [
       ]
     },
     { label: 'Simulations', icon: 'i-lucide-list', to: '/simulations', active: under('/simulations') && !under('/simulations/new') },
-    { label: 'Comparisons', icon: 'i-lucide-git-compare', to: '/comparisons' },
-    { label: 'Suites', icon: 'i-lucide-list-checks', to: '/suites' },
     { label: 'Datasets', icon: 'i-lucide-files', to: '/datasets' },
+    {
+      label: 'Verification',
+      icon: 'i-lucide-shield-check',
+      active: under('/comparisons', '/suites'),
+      children: [
+        { label: 'Comparisons', icon: 'i-lucide-git-compare', to: '/comparisons', description: 'One model run on several solvers, and whether they agree.' },
+        { label: 'Suites', icon: 'i-lucide-list-checks', to: '/suites', description: 'Collections of models rerun monthly, against an accepted baseline.' }
+      ]
+    },
     {
       label: 'Registry',
       icon: 'i-lucide-boxes',
