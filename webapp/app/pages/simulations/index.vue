@@ -10,7 +10,6 @@ const router = useRouter()
 
 const PAGE = 25
 const status = ref<typeof STATUSES[number] | undefined>(route.query.status as typeof STATUSES[number] | undefined)
-const simulator = ref<string>((route.query.simulator as string) ?? '')
 const since = ref<string>((route.query.since as string) ?? '')
 // label=key:value and tag=name, each repeatable, all required (docs/plan-sedml.md, phase 0)
 const asList = (v: unknown) => (Array.isArray(v) ? v : v ? [v] : []).map(String)
@@ -28,10 +27,17 @@ const ranIn = ref({
   environment_version: (route.query.environment_version as string) || undefined,
   simulator_id: route.query.simulator_id ? Number(route.query.simulator_id) : undefined
 })
-const ranInLabel = computed(() => ranIn.value.environment_version ?? ranIn.value.environment
-  ?? (ranIn.value.simulator_id != null ? `simulator ${ranIn.value.simulator_id}` : null))
-function clearRanIn() {
-  ranIn.value = { environment: undefined, environment_version: undefined, simulator_id: undefined }
+// typed as the "Ran in" column shows it: an environment (registry_env) or one of its versions (registry_env@5)
+const ranInText = computed({
+  get: () => ranIn.value.environment_version ?? ranIn.value.environment ?? '',
+  set: (text: string) => {
+    const v = text.trim()
+    ranIn.value = { environment: v && !v.includes('@') ? v : undefined, environment_version: v.includes('@') ? v : undefined, simulator_id: undefined }
+  }
+})
+// a simulator's page links here by its id, which has no name to type
+function clearSimulator() {
+  ranIn.value = { ...ranIn.value, simulator_id: undefined }
 }
 
 const rows = ref<SimulationSummary[]>([])
@@ -45,7 +51,6 @@ async function load() {
     params: {
       query: {
         status: status.value || undefined,
-        simulator: simulator.value || undefined,
         since: since.value ? new Date(since.value).toISOString() : undefined,
         label: labels.value.length ? labels.value : undefined,
         tag: tags.value.length ? tags.value : undefined,
@@ -67,14 +72,13 @@ async function load() {
   total.value = data.total
 }
 
-watch([status, simulator, since, labels, tags, ranIn, mine, favorite], () => {
+watch([status, since, labels, tags, ranIn, mine, favorite], () => {
   page.value = 1
 })
-watch([status, simulator, since, labels, tags, ranIn, mine, favorite, page], () => {
+watch([status, since, labels, tags, ranIn, mine, favorite, page], () => {
   router.replace({
     query: {
       status: status.value || undefined,
-      simulator: simulator.value || undefined,
       since: since.value || undefined,
       label: labels.value.length ? labels.value : undefined,
       tag: tags.value.length ? tags.value : undefined,
@@ -157,14 +161,18 @@ const columns: TableColumn<SimulationSummary>[] = [
     <UContainer class="py-6 flex flex-col gap-4">
       <div class="flex flex-wrap items-center gap-2">
         <AnySelect v-model="status" :items="STATUSES" placeholder="Any status" class="w-44" />
-        <UInput v-model.lazy="simulator" placeholder="Simulator name or hash prefix" icon="i-lucide-cpu" class="w-64" />
+        <UInput v-model.lazy="ranInText" placeholder="Ran in, e.g. registry_env@5" icon="i-lucide-package" class="w-64" title="An environment, or one of its versions as name@number" />
         <UInput v-model="since" type="date" class="w-44" title="Submitted on or after" />
         <UInputTags v-model="labels" placeholder="Label key:value" icon="i-lucide-filter" class="w-64" title="Labels, e.g. source:biomodels; all must match" />
         <UInputTags v-model="tags" placeholder="Tag" icon="i-lucide-tag" class="w-56" title="Tags; all must match" />
-        <USwitch v-if="isAuthenticated" v-model="mine" label="Mine" title="Only the runs you submitted, signed in" />
-        <USwitch v-if="isAuthenticated" v-model="favorite" label="Favorites" title="Only the runs you starred" />
-        <UButton v-if="ranInLabel" icon="i-lucide-x" :label="`Ran in ${ranInLabel}`" color="primary" variant="subtle" size="sm" title="Show runs from anywhere" @click="clearRanIn" />
-        <UButton icon="i-lucide-refresh-cw" variant="ghost" color="neutral" :loading="loading" @click="load" />
+        <UButton v-if="ranIn.simulator_id != null" icon="i-lucide-x" :label="`Simulator ${ranIn.simulator_id}`" color="primary" variant="subtle" size="sm" title="Show runs of any simulator" @click="clearSimulator" />
+        <div class="ml-auto flex items-center gap-4">
+          <template v-if="isAuthenticated">
+            <USwitch v-model="mine" label="Mine" title="Only the runs you submitted, signed in" />
+            <USwitch v-model="favorite" label="Favorites" title="Only the runs you starred" />
+          </template>
+          <UButton icon="i-lucide-refresh-cw" variant="ghost" color="neutral" :loading="loading" title="Refresh" @click="load" />
+        </div>
       </div>
       <UAlert v-if="error" color="error" variant="subtle" icon="i-lucide-circle-alert" :description="error" />
       <UTable :data="rows" :columns="columns" :meta="meta" :loading="loading" empty="No simulations match." @select="open" />
