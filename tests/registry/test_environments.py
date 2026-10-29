@@ -243,3 +243,43 @@ async def test_route_lists_the_catalog(client: httpx.AsyncClient) -> None:
     listing = (await client.get("/registry/entries")).json()
     pde = next(e for e in listing if e["id"] == "viva-pde-particle")
     assert pde["level"] == "tested" and pde["environments"] == [{"name": "viva-pde-particle", "components": 1}]
+
+
+def test_entries_may_share_a_conda_requirement_they_ask_for_alike() -> None:
+    """vcell-fenics and viva-pde-particle both need dolfinx and MPI from conda-forge (#459 gave vcell-fenics its own
+    `conda:`): the same spec is one requirement; a different one is a conflict the composition explains."""
+    manifest = Manifest(
+        entries=[
+            _entry("a", install={"pypi": "a", "version": "1"}, conda={"mpich": "*", "fenics-dolfinx": "0.10.*"}),
+            _entry("b", install={"pypi": "b", "version": "1"}, conda={"mpich": "*", "fenics-dolfinx": "0.10.*"}),
+            _entry("c", install={"pypi": "c", "version": "1"}, conda={"fenics-dolfinx": "0.9.*"}),
+        ]
+    )
+    from compose_api.registry.environments import EnvironmentSpec, spec_problems
+
+    def mash(*entries: str) -> EnvironmentSpec:
+        return EnvironmentSpec(name="env", kind="mash-up", python=["3.12"], entries=list(entries))
+
+    assert spec_problems(mash("a", "b"), manifest, bundled=False) == []
+    assert spec_problems(mash("a", "c"), manifest, bundled=False) == [
+        "env: 'a' needs conda:fenics-dolfinx '0.10.*' and 'c' needs '0.9.*'"
+    ]
+
+
+def test_the_manifests_pde_entries_compose_together() -> None:
+    """The mash-up of PDE, particle and ODE entries (mash-05956395cf) must stay composable: its next version is made
+    from the manifest as it is now (docs/plan-environment-composition.md, D7.7)."""
+    from compose_api.registry.environments import EnvironmentSpec, spec_problems
+    from compose_api.registry.manifest import load_manifest
+
+    manifest = load_manifest()
+    requires = {e.id: e.requires for e in manifest.entries}
+    entries: list[str] = []
+    pending = ["vcell-fenics", "viva-pde-particle"]
+    while pending:  # with what each requires, as a mash-up lists them
+        entry_id = pending.pop()
+        if entry_id not in entries:
+            entries.append(entry_id)
+            pending += requires[entry_id]
+    mash = EnvironmentSpec(name="mash", kind="mash-up", python=["3.12"], entries=sorted(entries))
+    assert spec_problems(mash, manifest, bundled=False) == []
