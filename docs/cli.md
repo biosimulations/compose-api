@@ -371,6 +371,7 @@ $ compose-api run [OPTIONS] DOCUMENT
 * `-t, --tag TEXT`: A tag to find the run by later (repeatable).
 * `--description TEXT`: What the run is for.
 * `--environment-version INTEGER RANGE`: The version of the environment to run in (registry_env@3 is 3); omitted: its default.  [x&gt;=1]
+* `--visibility [private|public]`: private (the default signed in: you and admins) or public (anyone); anonymous runs are public.
 * `-w, --wait`: Wait for the job to finish; exit 1 unless it completed.
 * `-d, --download PATH`: With --wait: save the results archive into this directory.
 * `--extract / --no-extract`: With --download: unpack the archive instead of saving the zip.  [default: no-extract]
@@ -756,6 +757,7 @@ $ compose-api curated copasi [OPTIONS] SBML
 * `--start FLOAT`: Start time.  [required]
 * `--duration FLOAT`: Duration.  [required]
 * `--points INTEGER`: Number of output points.  [required]
+* `--visibility [private|public]`: private (the default signed in: you and admins) or public (anyone); anonymous runs are public.
 * `-w, --wait`: Wait for the job to finish; exit 1 unless it completed.
 * `-d, --download PATH`: With --wait: save the results archive into this directory.
 * `--extract / --no-extract`: With --download: unpack the archive instead of saving the zip.  [default: no-extract]
@@ -783,6 +785,7 @@ $ compose-api curated tellurium [OPTIONS] SBML
 * `--start FLOAT`: Start time.  [required]
 * `--end FLOAT`: End time.  [required]
 * `--points INTEGER`: Number of output points.  [required]
+* `--visibility [private|public]`: private (the default signed in: you and admins) or public (anyone); anonymous runs are public.
 * `-w, --wait`: Wait for the job to finish; exit 1 unless it completed.
 * `-d, --download PATH`: With --wait: save the results archive into this directory.
 * `--extract / --no-extract`: With --download: unpack the archive instead of saving the zip.  [default: no-extract]
@@ -911,6 +914,7 @@ $ compose-api simulations [OPTIONS] COMMAND [ARGS]...
 * `list`: Simulations you can read, newest first,...
 * `show`: One simulation: its simulator, its latest...
 * `cancel`: Cancel a run (sign in first: `compose-api...
+* `visibility`: Make a run you own public or private.
 
 ### `compose-api simulations list`
 
@@ -973,6 +977,26 @@ $ compose-api simulations cancel [OPTIONS] SIMULATION_ID
 **Arguments**:
 
 * `SIMULATION_ID`: The simulation id.  [required]
+
+**Options**:
+
+* `--json`: Print JSON (the same as --output json).
+* `--help`: Show this message and exit.
+
+### `compose-api simulations visibility`
+
+Make a run you own public or private. The other runs of every comparison it is in change with it.
+
+**Usage**:
+
+```console
+$ compose-api simulations visibility [OPTIONS] SIMULATION_ID VISIBILITY:{private|public}
+```
+
+**Arguments**:
+
+* `SIMULATION_ID`: The simulation id.  [required]
+* `VISIBILITY:{private|public}`: public or private.  [required]
 
 **Options**:
 
@@ -1342,6 +1366,7 @@ $ compose-api sedml run [OPTIONS] ARCHIVE
 * `-t, --tag TEXT`: A tag for every run (repeatable).
 * `--description TEXT`: What the runs are for.
 * `--environment-version TEXT`: An environment version to run in: environment@number (registry_env@2) or environment@default (repeatable); an environment not named runs at its default.
+* `--visibility [private|public]`: private (the default signed in: you and admins) or public (anyone); anonymous runs are public.
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
@@ -1565,6 +1590,7 @@ $ compose-api biomodels run [OPTIONS] MODEL_ID
 * `-s, --solver TEXT`: A solver id (repeatable); all when omitted.
 * `-t, --tag TEXT`: A tag for every run (repeatable).
 * `--environment-version TEXT`: An environment version to run in: environment@number (registry_env@2) or environment@default (repeatable); an environment not named runs at its default.
+* `--visibility [private|public]`: private (the default signed in: you and admins) or public (anyone); anonymous runs are public.
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 
@@ -1687,6 +1713,7 @@ $ compose-api biosimulations run [OPTIONS] PROJECT_ID
 * `-s, --solver TEXT`: A solver id (repeatable); all when omitted.
 * `-t, --tag TEXT`: A tag for every run (repeatable).
 * `--environment-version TEXT`: An environment version to run in: environment@number (registry_env@2) or environment@default (repeatable); an environment not named runs at its default.
+* `--visibility [private|public]`: private (the default signed in: you and admins) or public (anyone); anonymous runs are public.
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 

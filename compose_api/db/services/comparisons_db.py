@@ -123,6 +123,11 @@ class ComparisonsDatabaseService(ABC):
     async def add_member(self, comparison_id: int, simulation_id: int, solver: str) -> None: ...
 
     @abstractmethod
+    async def fellow_members(self, simulation_id: int) -> list[int]:
+        """The simulations of every comparison the simulation belongs to, itself among them when it belongs to any;
+        none when it belongs to none."""
+
+    @abstractmethod
     async def add_reference(self, comparison_id: int, origin: str, reports: dict[str, Any]) -> None: ...
 
     @abstractmethod
@@ -370,6 +375,20 @@ class ComparisonsORMExecutor(ComparisonsDatabaseService):
     async def add_member(self, comparison_id: int, simulation_id: int, solver: str) -> None:
         async with self.session_maker() as session, session.begin():
             session.add(ORMComparisonMember(comparison_id=comparison_id, simulation_id=simulation_id, solver=solver))
+
+    @override
+    async def fellow_members(self, simulation_id: int) -> list[int]:
+        its_comparisons = select(ORMComparisonMember.comparison_id).where(
+            ORMComparisonMember.simulation_id == simulation_id
+        )
+        stmt = (
+            select(ORMComparisonMember.simulation_id)
+            .where(ORMComparisonMember.comparison_id.in_(its_comparisons))
+            .distinct()
+            .order_by(ORMComparisonMember.simulation_id)
+        )
+        async with self.session_maker() as session:
+            return list((await session.execute(stmt)).scalars())
 
     @override
     async def insert_verification(

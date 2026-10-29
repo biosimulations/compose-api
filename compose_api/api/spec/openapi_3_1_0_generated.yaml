@@ -28,6 +28,20 @@ paths:
         schema:
           type: number
           title: Num Data Points
+      - name: visibility
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/Visibility'
+          - type: 'null'
+          description: 'Who may read the run: `private` (the default when signed in:
+            you, and admins) or `public` (anyone). Anonymous runs are public; asking
+            for private needs signing in. The owner can change it later (PATCH /simulations/{id})'
+          title: Visibility
+        description: 'Who may read the run: `private` (the default when signed in:
+          you, and admins) or `public` (anyone). Anonymous runs are public; asking
+          for private needs signing in. The owner can change it later (PATCH /simulations/{id})'
       requestBody:
         required: true
         content:
@@ -72,6 +86,20 @@ paths:
         schema:
           type: number
           title: Num Data Points
+      - name: visibility
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/Visibility'
+          - type: 'null'
+          description: 'Who may read the run: `private` (the default when signed in:
+            you, and admins) or `public` (anyone). Anonymous runs are public; asking
+            for private needs signing in. The owner can change it later (PATCH /simulations/{id})'
+          title: Visibility
+        description: 'Who may read the run: `private` (the default when signed in:
+          you, and admins) or `public` (anyone). Anonymous runs are public; asking
+          for private needs signing in. The owner can change it later (PATCH /simulations/{id})'
       requestBody:
         required: true
         content:
@@ -196,6 +224,20 @@ paths:
         description: 'The version of the environment to run in (registry_env@3 is
           3, or of the prebuilt simulator named); omitted: its default. GET /registry/environments/{name}/versions
           lists them'
+      - name: visibility
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/Visibility'
+          - type: 'null'
+          description: 'Who may read the run: `private` (the default when signed in:
+            you, and admins) or `public` (anyone). Anonymous runs are public; asking
+            for private needs signing in. The owner can change it later (PATCH /simulations/{id})'
+          title: Visibility
+        description: 'Who may read the run: `private` (the default when signed in:
+          you, and admins) or `public` (anyone). Anonymous runs are public; asking
+          for private needs signing in. The owner can change it later (PATCH /simulations/{id})'
       requestBody:
         required: true
         content:
@@ -417,6 +459,68 @@ paths:
                 $ref: '#/components/schemas/SimulationDetail'
         '404':
           description: The simulation does not exist, or the caller may not read it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - Simulations
+      summary: Make a run public or private; the other runs of every comparison it
+        is in change with it
+      description: 'By its owner or a configured admin (docs/plan-favorites-and-studies.md,
+        step 1b). A comparison is readable only
+
+        when all its runs are, so a SED-ML run''s runs change together; a run with
+        no owner stays public.'
+      operationId: change-simulation-visibility
+      parameters:
+      - name: simulation_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Simulation Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisibilityChange'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisibilityChanged'
+        '401':
+          description: Changing a run's visibility needs a signed-in caller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+        '403':
+          description: The caller is neither the run's owner nor an admin, or the
+            run has no owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+        '404':
+          description: The simulation does not exist, or the caller may not read it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+        '409':
+          description: The run is compared with runs the caller may not change
           content:
             application/json:
               schema:
@@ -1998,6 +2102,20 @@ paths:
         description: 'Environment versions to run in: environment@number (registry_env@2)
           or environment@default, repeatable; an environment not named runs at its
           default'
+      - name: visibility
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/Visibility'
+          - type: 'null'
+          description: 'Who may read the run: `private` (the default when signed in:
+            you, and admins) or `public` (anyone). Anonymous runs are public; asking
+            for private needs signing in. The owner can change it later (PATCH /simulations/{id})'
+          title: Visibility
+        description: 'Who may read the run: `private` (the default when signed in:
+          you, and admins) or `public` (anyone). Anonymous runs are public; asking
+          for private needs signing in. The owner can change it later (PATCH /simulations/{id})'
       requestBody:
         required: true
         content:
@@ -2447,6 +2565,20 @@ paths:
         description: 'Environment versions to run in: environment@number (registry_env@2)
           or environment@default, repeatable; an environment not named runs at its
           default'
+      - name: visibility
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/Visibility'
+          - type: 'null'
+          description: 'Who may read the run: `private` (the default when signed in:
+            you, and admins) or `public` (anyone). Anonymous runs are public; asking
+            for private needs signing in. The owner can change it later (PATCH /simulations/{id})'
+          title: Visibility
+        description: 'Who may read the run: `private` (the default when signed in:
+          you, and admins) or `public` (anyone). Anonymous runs are public; asking
+          for private needs signing in. The owner can change it later (PATCH /simulations/{id})'
       responses:
         '200':
           description: Successful Response
@@ -2723,6 +2855,20 @@ paths:
         description: 'Environment versions to run in: environment@number (registry_env@2)
           or environment@default, repeatable; an environment not named runs at its
           default'
+      - name: visibility
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/Visibility'
+          - type: 'null'
+          description: 'Who may read the run: `private` (the default when signed in:
+            you, and admins) or `public` (anyone). Anonymous runs are public; asking
+            for private needs signing in. The owner can change it later (PATCH /simulations/{id})'
+          title: Visibility
+        description: 'Who may read the run: `private` (the default when signed in:
+          you, and admins) or `public` (anyone). Anonymous runs are public; asking
+          for private needs signing in. The owner can change it later (PATCH /simulations/{id})'
       responses:
         '200':
           description: Successful Response
@@ -6522,6 +6668,33 @@ components:
       title: Visibility
       description: Who may read a simulation and everything it produced (plan-observability
         O7).
+    VisibilityChange:
+      properties:
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+      type: object
+      required:
+      - visibility
+      title: VisibilityChange
+      description: '``PATCH /simulations/{id}``''s body: who may read the run.'
+    VisibilityChanged:
+      properties:
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+        simulation_ids:
+          items:
+            type: integer
+          type: array
+          title: Simulation Ids
+      type: object
+      required:
+      - visibility
+      - simulation_ids
+      title: VisibilityChanged
+      description: 'What a visibility change changed: the run, and the other runs
+        of every comparison it belongs to, which change
+
+        with it so a comparison is never half private.'
   securitySchemes:
     BearerAuth:
       type: http

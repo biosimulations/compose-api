@@ -717,6 +717,9 @@ async def test_submit_simulation_logs_the_caller(
     response = await http_api_client.post("/simulation/run", files=files)
     assert response.status_code == 418
     assert "Simulation submission from anonymous" in caplog.text
+    # an anonymous run has no owner, so it cannot be private (docs/plan-favorites-and-studies.md, F3)
+    refused = await http_api_client.post("/simulation/run", files=files, params={"visibility": "private"})
+    assert refused.status_code == 400 and "signed-in" in refused.json()["detail"]
 
 
 def test_describe_caller() -> None:

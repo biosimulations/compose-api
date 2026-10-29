@@ -101,7 +101,8 @@ async def test_run_makes_one_labelled_run_per_solver_and_a_comparison(
 async def test_a_signed_in_callers_runs_are_theirs(
     client: httpx.AsyncClient, submitted: dict[str, Any], database_service: DatabaseServiceSQL
 ) -> None:
-    """docs/plan-favorites-and-studies.md, F1: each run of a SED-ML submission is owned by the signed-in caller."""
+    """docs/plan-favorites-and-studies.md, F1, F3: each run of a SED-ML submission is owned by the signed-in caller, and
+    private; an anonymous one cannot ask to be private."""
     from compose_api.api.main import app
     from compose_api.authentication import AuthenticatedPrincipal, get_optional_principal
 
@@ -117,6 +118,10 @@ async def test_a_signed_in_callers_runs_are_theirs(
     sim_db = database_service.get_simulator_db()
     owners = [(await sim_db.get_simulation_row(sim_id)) for _, sim_id, _ in submitted["runs"]]
     assert len(owners) == 3 and all(r is not None and r.simulation.owner_sub == caller.subject for r in owners)
+    # private by default, every run of the comparison alike, so the comparison is the owner's to read (F3)
+    assert all(r is not None and r.simulation.visibility == "private" for r in owners)
+    anonymous_private = await client.post("/sedml/run", files=_upload(), params={"visibility": "private"})
+    assert anonymous_private.status_code == 400 and "signed-in" in anonymous_private.json()["detail"]
 
 
 @pytest.mark.asyncio

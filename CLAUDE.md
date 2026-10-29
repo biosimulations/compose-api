@@ -157,7 +157,7 @@ migration job. Every principal carries `roles`: always `DEFAULT_ROLE` ("user", t
 biosim-platform stack) plus any names in the `ROLES_CLAIM` (`https://api.biosimulations.org/roles`) claim written by
 the tenant's post-login "BioSim Roles" Action. Anonymous is `principal is None`, so no role. Admin read-all bypass on
 private simulations is gated by `Settings.admin_role` (default `""`, which disables admin bypass so tenant-wide `admin`
-does not automatically read private simulations); none exist until submissions stamp an owner. Keep the role and claim
+does not automatically read private simulations). Keep the role and claim
 names in step with auth0-pulumi.
 
 **HPC layer.** `SSHService` (asyncssh: `run_command`, `scp_upload`, `scp_download`) → `SlurmService`
@@ -248,8 +248,11 @@ is Postgres.
 (`simulation.owner_sub`, `visibility`) lives on the simulation only; runs, events and datasets inherit it, and a
 comparison is readable only when every member simulation is (`/comparisons`). A simulation the caller may not read is a
 404. The caller is `get_caller`, which returns the verified principal from
-`compose_api.authentication` (None when anonymous); tests override `get_caller` to pick one. Nothing stamps an owner
-at submit yet (plan-observability step 5), so every simulation is public. See `docs/plan-observability.md` (O7, O8).
+`compose_api.authentication` (None when anonymous); tests override `get_caller` to pick one. A signed-in submitter
+owns the run (`authorization.ownership_at_submit`), private unless they pass `visibility=public`; anonymous runs and
+the service's own (suites, compliance) have no owner and are public. The owner or an admin changes it with
+`PATCH /simulations/{id}`, a comparison's runs together. See `docs/plan-observability.md` (O7, O8) and
+`docs/plan-favorites-and-studies.md` (F1, F3).
 
 ## Companion repositories
 

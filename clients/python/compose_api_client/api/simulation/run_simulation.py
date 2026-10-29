@@ -9,6 +9,7 @@ from ...models.body_run_simulation import BodyRunSimulation
 from ...models.http_validation_error import HTTPValidationError
 from ...models.simulation_experiment import SimulationExperiment
 from ...models.submission_error import SubmissionError
+from ...models.visibility import Visibility
 from ...types import UNSET, Response, Unset
 
 
@@ -22,6 +23,7 @@ def _get_kwargs(
     description: None | str | Unset = UNSET,
     environment: None | str | Unset = UNSET,
     environment_version: int | None | Unset = UNSET,
+    visibility: None | Unset | Visibility = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
 
@@ -68,6 +70,15 @@ def _get_kwargs(
     else:
         json_environment_version = environment_version
     params["environment_version"] = json_environment_version
+
+    json_visibility: None | str | Unset
+    if isinstance(visibility, Unset):
+        json_visibility = UNSET
+    elif isinstance(visibility, Visibility):
+        json_visibility = visibility.value
+    else:
+        json_visibility = visibility
+    params["visibility"] = json_visibility
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -131,6 +142,7 @@ def sync_detailed(
     description: None | str | Unset = UNSET,
     environment: None | str | Unset = UNSET,
     environment_version: int | None | Unset = UNSET,
+    visibility: None | Unset | Visibility = UNSET,
 ) -> Response[HTTPValidationError | SimulationExperiment | SubmissionError]:
     """Run a simulation
 
@@ -162,6 +174,9 @@ def sync_detailed(
         environment_version (int | None | Unset): The version of the environment to run in
             (registry_env@3 is 3, or of the prebuilt simulator named); omitted: its default. GET
             /registry/environments/{name}/versions lists them
+        visibility (None | Unset | Visibility): Who may read the run: `private` (the default when
+            signed in: you, and admins) or `public` (anyone). Anonymous runs are public; asking for
+            private needs signing in. The owner can change it later (PATCH /simulations/{id})
         body (BodyRunSimulation):
 
     Raises:
@@ -181,6 +196,7 @@ def sync_detailed(
         description=description,
         environment=environment,
         environment_version=environment_version,
+        visibility=visibility,
     )
 
     response = client.get_httpx_client().request(
@@ -201,6 +217,7 @@ def sync(
     description: None | str | Unset = UNSET,
     environment: None | str | Unset = UNSET,
     environment_version: int | None | Unset = UNSET,
+    visibility: None | Unset | Visibility = UNSET,
 ) -> HTTPValidationError | SimulationExperiment | SubmissionError | None:
     """Run a simulation
 
@@ -232,6 +249,9 @@ def sync(
         environment_version (int | None | Unset): The version of the environment to run in
             (registry_env@3 is 3, or of the prebuilt simulator named); omitted: its default. GET
             /registry/environments/{name}/versions lists them
+        visibility (None | Unset | Visibility): Who may read the run: `private` (the default when
+            signed in: you, and admins) or `public` (anyone). Anonymous runs are public; asking for
+            private needs signing in. The owner can change it later (PATCH /simulations/{id})
         body (BodyRunSimulation):
 
     Raises:
@@ -252,6 +272,7 @@ def sync(
         description=description,
         environment=environment,
         environment_version=environment_version,
+        visibility=visibility,
     ).parsed
 
 
@@ -266,6 +287,7 @@ async def asyncio_detailed(
     description: None | str | Unset = UNSET,
     environment: None | str | Unset = UNSET,
     environment_version: int | None | Unset = UNSET,
+    visibility: None | Unset | Visibility = UNSET,
 ) -> Response[HTTPValidationError | SimulationExperiment | SubmissionError]:
     """Run a simulation
 
@@ -297,6 +319,9 @@ async def asyncio_detailed(
         environment_version (int | None | Unset): The version of the environment to run in
             (registry_env@3 is 3, or of the prebuilt simulator named); omitted: its default. GET
             /registry/environments/{name}/versions lists them
+        visibility (None | Unset | Visibility): Who may read the run: `private` (the default when
+            signed in: you, and admins) or `public` (anyone). Anonymous runs are public; asking for
+            private needs signing in. The owner can change it later (PATCH /simulations/{id})
         body (BodyRunSimulation):
 
     Raises:
@@ -316,6 +341,7 @@ async def asyncio_detailed(
         description=description,
         environment=environment,
         environment_version=environment_version,
+        visibility=visibility,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -334,6 +360,7 @@ async def asyncio(
     description: None | str | Unset = UNSET,
     environment: None | str | Unset = UNSET,
     environment_version: int | None | Unset = UNSET,
+    visibility: None | Unset | Visibility = UNSET,
 ) -> HTTPValidationError | SimulationExperiment | SubmissionError | None:
     """Run a simulation
 
@@ -365,6 +392,9 @@ async def asyncio(
         environment_version (int | None | Unset): The version of the environment to run in
             (registry_env@3 is 3, or of the prebuilt simulator named); omitted: its default. GET
             /registry/environments/{name}/versions lists them
+        visibility (None | Unset | Visibility): Who may read the run: `private` (the default when
+            signed in: you, and admins) or `public` (anyone). Anonymous runs are public; asking for
+            private needs signing in. The owner can change it later (PATCH /simulations/{id})
         body (BodyRunSimulation):
 
     Raises:
@@ -386,5 +416,6 @@ async def asyncio(
             description=description,
             environment=environment,
             environment_version=environment_version,
+            visibility=visibility,
         )
     ).parsed

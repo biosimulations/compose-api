@@ -13,7 +13,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from compose_api.api.errors import error
 from compose_api.api.routers.favorites import starred_refs
 from compose_api.authentication import get_optional_principal
-from compose_api.authorization import Caller, OptionalCaller, can_cancel, can_read, readable_clause
+from compose_api.authorization import (
+    Caller,
+    OptionalCaller,
+    can_cancel,
+    can_change_visibility,
+    can_read,
+    readable_clause,
+)
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.db.services.datasets_db import DatasetQuery
 from compose_api.db.services.environments_db import VersionLink
@@ -33,6 +40,8 @@ from compose_api.simulation.models import (
     SubmissionState,
     VersionRef,
     Visibility,
+    VisibilityChange,
+    VisibilityChanged,
 )
 from compose_api.simulation.prebuilt import prebuilt_definition, prebuilt_image_of
 
@@ -270,6 +279,54 @@ async def get_simulation(simulation_id: int, caller: OptionalCaller) -> Simulati
         DatasetQuery(simulation_id=simulation_id, available=None, limit=1)
     )
     return SimulationDetail(**summary.model_dump(), event_count=event_count, dataset_count=dataset_count)
+
+
+@config.router.patch(
+    path="/{simulation_id}",
+    response_model=VisibilityChanged,
+    operation_id="change-simulation-visibility",
+    responses={
+        401: error("Changing a run's visibility needs a signed-in caller"),
+        403: error("The caller is neither the run's owner nor an admin, or the run has no owner"),
+        404: error("The simulation does not exist, or the caller may not read it"),
+        409: error("The run is compared with runs the caller may not change"),
+    },
+    tags=["Simulations"],
+    summary="Make a run public or private; the other runs of every comparison it is in change with it",
+)
+async def change_simulation_visibility(
+    simulation_id: int, change: VisibilityChange, caller: OptionalCaller
+) -> VisibilityChanged:
+    """By its owner or a configured admin (docs/plan-favorites-and-studies.md, step 1b). A comparison is readable only
+    when all its runs are, so a SED-ML run's runs change together; a run with no owner stays public."""
+    if caller is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Changing a simulation's visibility needs a signed-in caller",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    db = get_required_database_service()
+    found = await db.get_simulator_db().get_simulations_access([simulation_id])
+    if not found or not can_read(caller, found[0]):
+        raise HTTPException(status_code=404, detail=f"Simulation with id {simulation_id} not found.")
+    if not can_change_visibility(caller, found[0]):
+        detail = (
+            "A run with no owner stays public"
+            if found[0].owner_sub is None
+            else "Only its owner may change this simulation's visibility"
+        )
+        raise HTTPException(status_code=403, detail=detail)
+    ids = await db.get_comparisons_db().fellow_members(simulation_id) or [simulation_id]
+    others = [
+        a for a in await db.get_simulator_db().get_simulations_access(ids) if not can_change_visibility(caller, a)
+    ]
+    if others:
+        listed = ", ".join(str(a.simulation_id) for a in others)
+        raise HTTPException(
+            status_code=409, detail=f"Simulation {simulation_id} is compared with runs you may not change: {listed}"
+        )
+    await db.get_simulator_db().set_visibility(ids, change.visibility)
+    return VisibilityChanged(visibility=change.visibility, simulation_ids=ids)
 
 
 @config.router.delete(

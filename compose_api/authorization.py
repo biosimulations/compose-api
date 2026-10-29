@@ -8,8 +8,10 @@ one place, so adding auth changes only who the caller is (:func:`get_caller`), n
 - **A simulation the caller may not read is reported as not found**, the same as one that does not exist, so its id
   reveals nothing.
 - **The caller is the verified bearer-token principal** (:mod:`compose_api.authentication`, #192), or None when the
-  request is anonymous. Until submissions stamp an owner (plan-observability step 5) every simulation is public, so
-  what a caller can read is unchanged.
+  request is anonymous.
+- **A signed-in submitter owns the run, and it is private unless they ask for public**
+  (docs/plan-favorites-and-studies.md, F1, F3; :func:`ownership_at_submit`). Anonymous runs, and runs the service
+  starts (suites, compliance), have no owner and are public.
 """
 
 from typing import Annotated, Protocol
@@ -22,7 +24,7 @@ from compose_api.config import get_settings
 from compose_api.db.services.comparisons_db import ComparisonRow
 from compose_api.db.tables.simulator_tables import ORMSimulation
 from compose_api.dependencies import get_required_database_service
-from compose_api.simulation.models import SimulationAccess, Visibility
+from compose_api.simulation.models import Ownership, SimulationAccess, Visibility
 
 
 class Caller(Protocol):
@@ -123,6 +125,37 @@ def can_cancel(caller: Caller, simulation: SimulationAccess) -> bool:
     """Who may cancel a run they can read: its owner or a configured admin; anyone signed in, for a run with no owner
     (anonymous, from before owners were stamped, or started by the service) (docs/plan-favorites-and-studies.md, F4)."""
     return simulation.owner_sub is None or _is_admin(caller) or caller.subject == simulation.owner_sub
+
+
+#: a submission's `visibility` parameter (docs/plan-favorites-and-studies.md, F3)
+RequestedVisibility = Annotated[
+    Visibility | None,
+    Query(
+        description="Who may read the run: `private` (the default when signed in: you, and admins) or `public`"
+        " (anyone). Anonymous runs are public; asking for private needs signing in. The owner can change it later"
+        " (PATCH /simulations/{id})"
+    ),
+]
+
+
+def ownership_at_submit(caller: Caller | None, requested: Visibility | None) -> Ownership | None:
+    """A new run's owner and visibility (docs/plan-favorites-and-studies.md, F1, F3): a signed-in submitter owns it,
+    private unless they ask for public; an anonymous run has no owner and is public, so asking for private needs
+    signing in (a run with no owner that nobody may read helps nobody)."""
+    if caller is None:
+        if requested is Visibility.PRIVATE:
+            raise HTTPException(
+                status_code=400,
+                detail="A private run needs a signed-in submitter: sign in, or submit it public",
+            )
+        return None
+    return Ownership(owner_sub=caller.subject, visibility=requested or Visibility.PRIVATE)
+
+
+def can_change_visibility(caller: Caller, simulation: SimulationAccess) -> bool:
+    """Who may make a run public or private: its owner or a configured admin. A run with no owner stays public: made
+    private, nobody but an admin could read it."""
+    return simulation.owner_sub is not None and (_is_admin(caller) or caller.subject == simulation.owner_sub)
 
 
 def readable_clause(caller: Caller | None) -> ColumnElement[bool] | None:

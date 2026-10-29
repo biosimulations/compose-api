@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 
 from compose_api.api.errors import SEDML_REFUSED, error
 from compose_api.authentication import OptionalPrincipal, get_optional_principal
+from compose_api.authorization import RequestedVisibility, ownership_at_submit
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.sedml import sources
 from compose_api.sedml.models import SedmlRunResult, Tolerances
@@ -91,9 +92,11 @@ async def get_biomodel_omex(model_id: str, principal: OptionalPrincipal) -> File
 async def run_biomodel(
     model_id: str, background_tasks: BackgroundTasks, principal: OptionalPrincipal,
     solvers: Solvers = None, task: Tasks = None, tags: Tags = None, description: str | None = None,
-    environment_version: EnvironmentVersionRefs = None,
+    environment_version: EnvironmentVersionRefs = None, visibility: RequestedVisibility = None,
 ) -> SedmlRunResult:  # fmt: skip
     from compose_api.api.routers.sedml import run_archive
+
+    ownership = ownership_at_submit(principal, visibility)
 
     try:
         path = await sources.biomodel_archive(model_id)
@@ -104,7 +107,7 @@ async def run_biomodel(
     return await run_archive(
         path, f"biomodels:{model_id}", solvers, task, tags, description, Tolerances(), background_tasks,
         references=references or None, environment_versions=environment_version,
-        owner_sub=principal.subject if principal else None,
+        ownership=ownership,
     )  # fmt: skip
 
 
@@ -166,9 +169,11 @@ async def get_project_reference(project_id: str, principal: OptionalPrincipal) -
 async def run_project(
     project_id: str, background_tasks: BackgroundTasks, principal: OptionalPrincipal,
     solvers: Solvers = None, task: Tasks = None, tags: Tags = None, description: str | None = None,
-    environment_version: EnvironmentVersionRefs = None,
+    environment_version: EnvironmentVersionRefs = None, visibility: RequestedVisibility = None,
 ) -> SedmlRunResult:  # fmt: skip
     from compose_api.api.routers.sedml import run_archive
+
+    ownership = ownership_at_submit(principal, visibility)
 
     try:
         path = await sources.project_archive(project_id)
@@ -179,5 +184,5 @@ async def run_project(
     return await run_archive(
         path, f"biosimulations:{project_id}", solvers, task, tags, description, Tolerances(), background_tasks,
         references={f"biosimulations:{info.simulator or info.run}": reference} if reference else None,
-        environment_versions=environment_version, owner_sub=principal.subject if principal else None,
+        environment_versions=environment_version, ownership=ownership,
     )  # fmt: skip

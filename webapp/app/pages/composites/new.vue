@@ -5,6 +5,7 @@ import { PblangLanguageClient } from '~/viewers/composite/languageClient'
 import { LANGUAGE, registerLanguage, toMarkers } from '~/viewers/composite/monaco'
 import { zipSync } from 'fflate'
 import { companionFiles, compositeDocuments, documentName } from '~/viewers/composite/archive'
+import type { Schemas } from '~/composables/useApi'
 import type { EnvironmentSummary, InterfaceManifest } from '~/composables/useRegistry'
 
 // Write a composite in .pblang and run it (docs/plan-authoring.md, step C). The language server checks the text as it
@@ -25,6 +26,8 @@ const environment = ref<string | undefined>(undefined)
 const manifest = shallowRef<InterfaceManifest | null>(null)
 const intervalTime = ref(1)
 const batch = ref(false)
+const visibility = ref<Schemas['Visibility']>('private')
+const { isAuthenticated } = useAuth()
 const loadError = ref<string | null>(null)
 const counts = ref({ error: 0, warning: 0, info: 0 })
 const compileFindings = ref<Diagnostic[]>([])
@@ -172,7 +175,8 @@ async function submit() {
     const outcome = await submitRun(file, {
       intervalTime: intervalTime.value,
       batch: batch.value,
-      simulator: selected.value?.simulator ?? null
+      simulator: selected.value?.simulator ?? null,
+      visibility: isAuthenticated.value ? visibility.value : undefined
     })
     if (!outcome.ok) {
       submitError.value = outcome.error
@@ -212,6 +216,7 @@ function reveal(d: Diagnostic) {
         <UFormField label="Batch">
           <USwitch v-model="batch" />
         </UFormField>
+        <VisibilityChoice v-model="visibility" />
         <span class="grow" />
         <UButton icon="i-lucide-file-down" label="Compiled .pbg" color="neutral" variant="subtle" @click="download" />
         <UButton icon="i-lucide-send" label="Run" :loading="busy" :disabled="!environment || counts.error > 0" @click="submit" />

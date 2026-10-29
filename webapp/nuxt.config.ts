@@ -38,7 +38,7 @@ export default defineNuxtConfig({
   icon: {
     provider: 'none',
     // The scan covers templates; icons named only in TypeScript (the viewer registry, a dataset's glyph) are listed here.
-    clientBundle: { scan: true, icons: ['lucide:image', 'lucide:table', 'lucide:file-text', 'lucide:box', 'lucide:chart-line', 'lucide:workflow', 'lucide:file-code', 'lucide:list-checks', 'lucide:square-pen', 'lucide:plus', 'lucide:file-input', 'lucide:chart-spline', 'lucide:file-terminal', 'lucide:folder', 'lucide:file-archive', 'lucide:braces', 'lucide:file'] }
+    clientBundle: { scan: true, icons: ['lucide:image', 'lucide:table', 'lucide:file-text', 'lucide:box', 'lucide:chart-line', 'lucide:workflow', 'lucide:file-code', 'lucide:list-checks', 'lucide:square-pen', 'lucide:plus', 'lucide:file-input', 'lucide:chart-spline', 'lucide:file-terminal', 'lucide:folder', 'lucide:file-archive', 'lucide:braces', 'lucide:file', 'lucide:lock', 'lucide:globe'] }
   },
 
   // Nuxt UI's @nuxt/fonts fetches web fonts at build time; the on-premise build uses system fonts instead.

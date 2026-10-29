@@ -92,6 +92,7 @@ useIntervalFn(() => {
 }, 10000)
 
 const UButton = resolveComponent('UButton')
+const UIcon = resolveComponent('UIcon')
 const NuxtLink = resolveComponent('NuxtLink')
 const StatusBadge = resolveComponent('StatusBadge')
 const RunLabels = resolveComponent('RunLabels')
@@ -117,25 +118,16 @@ const columns: TableColumn<SimulationSummary>[] = [
   {
     accessorKey: 'simulation_id',
     header: 'ID',
-    cell: ({ row }) => h(NuxtLink, { to: `/simulations/${row.original.simulation_id}`, class: 'font-mono text-primary' }, () => `#${row.original.simulation_id}`)
+    cell: ({ row }) => h('span', { class: 'inline-flex items-center gap-1' }, [
+      h(NuxtLink, { to: `/simulations/${row.original.simulation_id}`, class: 'font-mono text-primary' }, () => `#${row.original.simulation_id}`),
+      row.original.visibility === 'private' ? h(UIcon, { name: 'i-lucide-lock', class: 'size-3.5 text-warning', title: 'Private: you and administrators' }) : null
+    ])
   },
   { accessorKey: 'status', header: 'Status', cell: ({ row }) => h(StatusBadge, { status: row.original.status, submission: row.original.submission }) },
-  {
-    accessorKey: 'simulator',
-    header: 'Simulator',
-    cell: ({ row }) => row.original.simulator
-      ? h('span', { class: 'block max-w-72 truncate', title: row.original.simulator }, row.original.simulator)
-      : h('span', { class: 'font-mono text-xs text-muted', title: row.original.container_def_hash }, `built ${row.original.container_def_hash.slice(0, 10)}`)
-  },
   {
     id: 'ran_in',
     header: 'Ran in',
     cell: ({ row }) => h(RanIn, { version: row.original.environment_version, simulatorId: row.original.simulator_id, class: 'text-xs whitespace-nowrap' })
-  },
-  {
-    accessorKey: 'experiment_id',
-    header: 'Experiment',
-    cell: ({ row }) => h('span', { class: 'block max-w-56 truncate font-mono text-xs', title: row.original.experiment_id }, row.original.experiment_id)
   },
   {
     id: 'labels',

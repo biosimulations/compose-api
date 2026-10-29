@@ -5,6 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFi
 from jinja2 import Template
 
 from compose_api.authentication import OptionalPrincipal, describe_caller, get_optional_principal
+from compose_api.authorization import RequestedVisibility, ownership_at_submit
 from compose_api.common.gateway.models import RouterConfig, ServerMode
 from compose_api.common.gateway.utils import get_simulation_request_from_uploaded_file
 from compose_api.config import get_settings
@@ -46,6 +47,7 @@ async def run_copasi(
     duration: float,
     num_data_points: float,
     principal: OptionalPrincipal,
+    visibility: RequestedVisibility = None,
 ) -> SimulationExperiment:
     logger.info("Curated copasi run from %s", describe_caller(principal))
     with open(os.path.dirname(__file__) + "/templates/copasi.jinja") as f:
@@ -65,7 +67,7 @@ async def run_copasi(
         loaded_sbml=request.request_file_path,
         background_tasks=background_tasks,
         use_interesting=True,
-        owner_sub=principal.subject if principal else None,
+        ownership=ownership_at_submit(principal, visibility),
     )
 
 
@@ -84,6 +86,7 @@ async def run_tellurium(
     end_time: float,
     num_data_points: float,
     principal: OptionalPrincipal,
+    visibility: RequestedVisibility = None,
 ) -> SimulationExperiment:
     logger.info("Curated tellurium run from %s", describe_caller(principal))
     with open(os.path.dirname(__file__) + "/templates/tellurium.jinja") as f:
@@ -102,5 +105,5 @@ async def run_tellurium(
         simulator_name="Tellurium",
         loaded_sbml=request.request_file_path,
         background_tasks=background_tasks,
-        owner_sub=principal.subject if principal else None,
+        ownership=ownership_at_submit(principal, visibility),
     )

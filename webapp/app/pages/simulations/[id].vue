@@ -110,13 +110,35 @@ watch(tab, (t) => {
   navigateTo({ query: { ...route.query, tab: t } }, { replace: true })
 })
 
+// Its owner makes it public or private (docs/plan-favorites-and-studies.md, step 1b); the other runs of a comparison
+// it is in change with it, so the comparison stays readable as a whole.
+const changingVisibility = ref(false)
+const visibilityNote = ref<string | null>(null)
+async function changeVisibility() {
+  if (!sim.value) return
+  const visibility = sim.value.visibility === 'private' ? 'public' : 'private'
+  changingVisibility.value = true
+  visibilityNote.value = null
+  const { data, error: err } = await api.PATCH('/simulations/{simulation_id}', {
+    params: { path: { simulation_id: id } },
+    body: { visibility }
+  })
+  changingVisibility.value = false
+  if (err || !data) {
+    visibilityNote.value = errorMessage(err, 'Could not change its visibility')
+    return
+  }
+  sim.value = { ...sim.value, visibility: data.visibility }
+  const others = data.simulation_ids.filter(i => i !== id)
+  if (others.length) visibilityNote.value = `The other runs of its comparison are ${data.visibility} too: ${others.map(i => `#${i}`).join(', ')}`
+}
+
 const fields = computed(() => {
   const s = sim.value
   if (!s) return []
   // the experiment id is the page's subtitle; the simulator and its container hash are on the page "Ran in" links to;
   // the trace and correlation ids are on the Events and trace tab
   return [
-    ['Visibility', s.visibility],
     ['Submitted', formatTime(s.created_at)],
     ['Started', formatTime(s.start_time)],
     ['Ended', formatTime(s.end_time)],
@@ -184,6 +206,26 @@ const fields = computed(() => {
                   <template v-if="sim">
                     <dt class="text-muted">Ran in</dt>
                     <dd class="text-xs self-center"><RanIn :version="sim.environment_version" :simulator-id="sim.simulator_id" /></dd>
+                  </template>
+                  <template v-if="sim">
+                    <dt class="text-muted">Visibility</dt>
+                    <dd class="flex flex-wrap items-center gap-2">
+                      <UBadge
+                        :icon="sim.visibility === 'private' ? 'i-lucide-lock' : 'i-lucide-globe'"
+                        :color="sim.visibility === 'private' ? 'warning' : 'neutral'"
+                        variant="subtle"
+                        :label="sim.visibility === 'private' ? 'Private: you and administrators' : 'Public: anyone with the link'"
+                      />
+                      <UButton
+                        v-if="sim.mine"
+                        size="xs"
+                        variant="link"
+                        :label="sim.visibility === 'private' ? 'Make public' : 'Make private'"
+                        :loading="changingVisibility"
+                        @click="changeVisibility"
+                      />
+                      <span v-if="visibilityNote" class="w-full text-xs text-muted">{{ visibilityNote }}</span>
+                    </dd>
                   </template>
                   <template v-for="[k, v] in fields" :key="k">
                     <dt class="text-muted">{{ k }}</dt>

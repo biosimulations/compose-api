@@ -104,7 +104,12 @@ export interface paths {
         delete: operations["cancel-simulation"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Make a run public or private; the other runs of every comparison it is in change with it
+         * @description By its owner or a configured admin (docs/plan-favorites-and-studies.md, step 1b). A comparison is readable only
+         *     when all its runs are, so a SED-ML run's runs change together; a run with no owner stays public.
+         */
+        patch: operations["change-simulation-visibility"];
         trace?: never;
     };
     "/results/simulations/status/batch": {
@@ -3043,6 +3048,23 @@ export interface components {
          * @enum {string}
          */
         Visibility: "public" | "private";
+        /**
+         * VisibilityChange
+         * @description ``PATCH /simulations/{id}``'s body: who may read the run.
+         */
+        VisibilityChange: {
+            visibility: components["schemas"]["Visibility"];
+        };
+        /**
+         * VisibilityChanged
+         * @description What a visibility change changed: the run, and the other runs of every comparison it belongs to, which change
+         *     with it so a comparison is never half private.
+         */
+        VisibilityChanged: {
+            visibility: components["schemas"]["Visibility"];
+            /** Simulation Ids */
+            simulation_ids: number[];
+        };
     };
     responses: never;
     parameters: never;
@@ -3058,6 +3080,8 @@ export interface operations {
                 start_time: number;
                 duration: number;
                 num_data_points: number;
+                /** @description Who may read the run: `private` (the default when signed in: you, and admins) or `public` (anyone). Anonymous runs are public; asking for private needs signing in. The owner can change it later (PATCH /simulations/{id}) */
+                visibility?: components["schemas"]["Visibility"] | null;
             };
             header?: never;
             path?: never;
@@ -3095,6 +3119,8 @@ export interface operations {
                 start_time: number;
                 end_time: number;
                 num_data_points: number;
+                /** @description Who may read the run: `private` (the default when signed in: you, and admins) or `public` (anyone). Anonymous runs are public; asking for private needs signing in. The owner can change it later (PATCH /simulations/{id}) */
+                visibility?: components["schemas"]["Visibility"] | null;
             };
             header?: never;
             path?: never;
@@ -3140,6 +3166,8 @@ export interface operations {
                 environment?: string | null;
                 /** @description The version of the environment to run in (registry_env@3 is 3, or of the prebuilt simulator named); omitted: its default. GET /registry/environments/{name}/versions lists them */
                 environment_version?: number | null;
+                /** @description Who may read the run: `private` (the default when signed in: you, and admins) or `public` (anyone). Anonymous runs are public; asking for private needs signing in. The owner can change it later (PATCH /simulations/{id}) */
+                visibility?: components["schemas"]["Visibility"] | null;
             };
             header?: never;
             path?: never;
@@ -3353,6 +3381,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+        };
+    };
+    "change-simulation-visibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                simulation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisibilityChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisibilityChanged"];
+                };
+            };
+            /** @description Changing a run's visibility needs a signed-in caller */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description The caller is neither the run's owner nor an admin, or the run has no owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description The simulation does not exist, or the caller may not read it */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description The run is compared with runs the caller may not change */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4889,6 +4988,8 @@ export interface operations {
                 abs_tol_scale?: number;
                 /** @description Environment versions to run in: environment@number (registry_env@2) or environment@default, repeatable; an environment not named runs at its default */
                 environment_version?: string[] | null;
+                /** @description Who may read the run: `private` (the default when signed in: you, and admins) or `public` (anyone). Anonymous runs are public; asking for private needs signing in. The owner can change it later (PATCH /simulations/{id}) */
+                visibility?: components["schemas"]["Visibility"] | null;
             };
             header?: never;
             path?: never;
@@ -5301,6 +5402,8 @@ export interface operations {
                 description?: string | null;
                 /** @description Environment versions to run in: environment@number (registry_env@2) or environment@default, repeatable; an environment not named runs at its default */
                 environment_version?: string[] | null;
+                /** @description Who may read the run: `private` (the default when signed in: you, and admins) or `public` (anyone). Anonymous runs are public; asking for private needs signing in. The owner can change it later (PATCH /simulations/{id}) */
+                visibility?: components["schemas"]["Visibility"] | null;
             };
             header?: never;
             path: {
@@ -5561,6 +5664,8 @@ export interface operations {
                 description?: string | null;
                 /** @description Environment versions to run in: environment@number (registry_env@2) or environment@default, repeatable; an environment not named runs at its default */
                 environment_version?: string[] | null;
+                /** @description Who may read the run: `private` (the default when signed in: you, and admins) or `public` (anyone). Anonymous runs are public; asking for private needs signing in. The owner can change it later (PATCH /simulations/{id}) */
+                visibility?: components["schemas"]["Visibility"] | null;
             };
             header?: never;
             path: {

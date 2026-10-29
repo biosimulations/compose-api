@@ -1,6 +1,6 @@
 # Favorites and studies: a signed-in user's own runs, the runs they mark, and groups of runs they share
 
-**Status (2026-10-28): in progress** (1a and 1c live in 0.7.70; step 2 in review). Asked for by Jim on 2026-10-28: a per-user favorites filter on the simulations
+**Status (2026-10-28): in progress** (1a and 1c live in 0.7.70; 2 merged (#474); 1b in review). Asked for by Jim on 2026-10-28: a per-user favorites filter on the simulations
 list, and then projects, studies or investigations. One PR per step, each merged with a merge commit; deploying is a
 release, as usual.
 
@@ -8,9 +8,9 @@ release, as usual.
 |---|---|---|
 | 0 | This document | merged (#469) |
 | 1a | Owners stamped at submit; a "Mine" filter (API, CLI, web); cancelling an owned run is its owner's | merged (#470) |
-| 1b | Visibility chosen at submit and changed later (`PATCH`); private by default for a signed-in submitter (F3) | — |
+| 1b | Visibility chosen at submit and changed later (`PATCH`); private by default for a signed-in submitter (F3) | in review |
 | 1c | No `Any` in the API's types: every error body declared, the client typed end to end (inserted 2026-10-28, before step 2's new routes) | merged (#471); 0.7.70 |
-| 2 | Favorites: a private star on a simulation, a comparison or a suite run; a "Favorites" filter (API, CLI) | in review |
+| 2 | Favorites: a private star on a simulation, a comparison or a suite run; a "Favorites" filter (API, CLI) | merged (#474) |
 | 2b | The web pages: a star on each row and in each page's header; the Mine and Favorites filters | — |
 | 3 | Studies: their own plan, settling S1–S4 below | — |
 
@@ -120,10 +120,20 @@ release, as usual.
   `None`; a non-JSON body for a declared status (an ingress's HTML 502) raises in the generated functions. The CLI
   and `ext` layer already read such an answer as unreadable and classify it by status; pbest checks the status first.
 
-### 1b. Visibility (after F3)
-- `visibility` on `/simulation/run` and `/sedml/run`, defaulting per F3; `PATCH /simulations/{id}` with
-  `{visibility}`, by the owner or an admin; a SED-ML run's members change together with their comparison.
-- The web pages: the choice on the new-simulation and SED-ML pages, and a control on a run's page for its owner.
+### 1b. Visibility (F3: private by default)
+- `visibility` on every route that stamps an owner: `/simulation/run`, `/sedml/run`, the source shortcuts and the
+  curated routes. Signed in, it defaults to private; anonymous, the run is public and asking for private is a 400
+  (a run with no owner that nobody may read helps nobody). `authorization.ownership_at_submit` decides, and the
+  owner and visibility travel together as `Ownership` to the simulation row.
+- `PATCH /simulations/{id}` with `{visibility}`, by the owner or an admin (403 otherwise, and for a run with no
+  owner, which stays public). The other runs of every comparison it is in change with it; if any of them is not the
+  caller's to change, nothing changes (409).
+- CLI: `--visibility` on `run`, `curated`, `sedml run`, `biomodels run`, `biosimulations run`;
+  `simulations visibility <id> public|private`.
+- The web pages: the choice on the new-simulation, composite and SED-ML pages (signed in only); on a run's page its
+  visibility, and "Make public/private" for its owner; a lock beside private runs in the simulations list, which
+  also drops its Simulator and Experiment columns (Jim, 2026-10-28: "Ran in" says the first, the run's page the
+  second).
 
 ### 2. Favorites
 - The `favorite` table (F5), created by `create_all` (a new table needs no revision).

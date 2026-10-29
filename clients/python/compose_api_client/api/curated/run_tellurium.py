@@ -8,7 +8,8 @@ from ...client import AuthenticatedClient, Client
 from ...models.body_run_tellurium import BodyRunTellurium
 from ...models.http_validation_error import HTTPValidationError
 from ...models.simulation_experiment import SimulationExperiment
-from ...types import UNSET, Response
+from ...models.visibility import Visibility
+from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
@@ -17,6 +18,7 @@ def _get_kwargs(
     start_time: float,
     end_time: float,
     num_data_points: float,
+    visibility: None | Unset | Visibility = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
 
@@ -27,6 +29,15 @@ def _get_kwargs(
     params["end_time"] = end_time
 
     params["num_data_points"] = num_data_points
+
+    json_visibility: None | str | Unset
+    if isinstance(visibility, Unset):
+        json_visibility = UNSET
+    elif isinstance(visibility, Visibility):
+        json_visibility = visibility.value
+    else:
+        json_visibility = visibility
+    params["visibility"] = json_visibility
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -81,6 +92,7 @@ def sync_detailed(
     start_time: float,
     end_time: float,
     num_data_points: float,
+    visibility: None | Unset | Visibility = UNSET,
 ) -> Response[HTTPValidationError | SimulationExperiment]:
     """Use the tool tellurium.
 
@@ -88,6 +100,9 @@ def sync_detailed(
         start_time (float):
         end_time (float):
         num_data_points (float):
+        visibility (None | Unset | Visibility): Who may read the run: `private` (the default when
+            signed in: you, and admins) or `public` (anyone). Anonymous runs are public; asking for
+            private needs signing in. The owner can change it later (PATCH /simulations/{id})
         body (BodyRunTellurium):
 
     Raises:
@@ -103,6 +118,7 @@ def sync_detailed(
         start_time=start_time,
         end_time=end_time,
         num_data_points=num_data_points,
+        visibility=visibility,
     )
 
     response = client.get_httpx_client().request(
@@ -119,6 +135,7 @@ def sync(
     start_time: float,
     end_time: float,
     num_data_points: float,
+    visibility: None | Unset | Visibility = UNSET,
 ) -> HTTPValidationError | SimulationExperiment | None:
     """Use the tool tellurium.
 
@@ -126,6 +143,9 @@ def sync(
         start_time (float):
         end_time (float):
         num_data_points (float):
+        visibility (None | Unset | Visibility): Who may read the run: `private` (the default when
+            signed in: you, and admins) or `public` (anyone). Anonymous runs are public; asking for
+            private needs signing in. The owner can change it later (PATCH /simulations/{id})
         body (BodyRunTellurium):
 
     Raises:
@@ -142,6 +162,7 @@ def sync(
         start_time=start_time,
         end_time=end_time,
         num_data_points=num_data_points,
+        visibility=visibility,
     ).parsed
 
 
@@ -152,6 +173,7 @@ async def asyncio_detailed(
     start_time: float,
     end_time: float,
     num_data_points: float,
+    visibility: None | Unset | Visibility = UNSET,
 ) -> Response[HTTPValidationError | SimulationExperiment]:
     """Use the tool tellurium.
 
@@ -159,6 +181,9 @@ async def asyncio_detailed(
         start_time (float):
         end_time (float):
         num_data_points (float):
+        visibility (None | Unset | Visibility): Who may read the run: `private` (the default when
+            signed in: you, and admins) or `public` (anyone). Anonymous runs are public; asking for
+            private needs signing in. The owner can change it later (PATCH /simulations/{id})
         body (BodyRunTellurium):
 
     Raises:
@@ -174,6 +199,7 @@ async def asyncio_detailed(
         start_time=start_time,
         end_time=end_time,
         num_data_points=num_data_points,
+        visibility=visibility,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -188,6 +214,7 @@ async def asyncio(
     start_time: float,
     end_time: float,
     num_data_points: float,
+    visibility: None | Unset | Visibility = UNSET,
 ) -> HTTPValidationError | SimulationExperiment | None:
     """Use the tool tellurium.
 
@@ -195,6 +222,9 @@ async def asyncio(
         start_time (float):
         end_time (float):
         num_data_points (float):
+        visibility (None | Unset | Visibility): Who may read the run: `private` (the default when
+            signed in: you, and admins) or `public` (anyone). Anonymous runs are public; asking for
+            private needs signing in. The owner can change it later (PATCH /simulations/{id})
         body (BodyRunTellurium):
 
     Raises:
@@ -212,5 +242,6 @@ async def asyncio(
             start_time=start_time,
             end_time=end_time,
             num_data_points=num_data_points,
+            visibility=visibility,
         )
     ).parsed
