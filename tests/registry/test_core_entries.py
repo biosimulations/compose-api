@@ -1,6 +1,6 @@
 """The engine's own classes as a `core` entry (docs/plan-environment-composition.md, 7c-1, D7c.2): a document names
-process-bigraph's emitters fully qualified, `local:process_bigraph.emitter.RAMEmitter`, and every composed version
-provides them without listing them."""
+process-bigraph's emitters fully qualified, `local:process_bigraph.emitter.RAMEmitter`, or by the short name the engine
+registers them under, `local:RAMEmitter`, and every composed version provides them without listing them."""
 
 import pytest
 
@@ -47,9 +47,34 @@ def test_a_prebuilt_image_admits_them_when_it_bundles_the_core() -> None:
     assert "registry_env@1 is not one" in (_reason(RAM, old) or "")
 
 
-def test_the_short_name_stays_refused() -> None:
-    assert "short names are ambiguous" in (_reason("local:RAMEmitter", COMPOSED) or "")
-    assert "short names are ambiguous" in (_reason("local:ram-emitter", COMPOSED) or "")
+def test_the_engines_own_short_names_for_the_emitters_are_checked_as_their_classes() -> None:
+    assert _reason("local:RAMEmitter", COMPOSED) is None
+    assert _reason("local:JSONEmitter", COMPOSED) is None
+    assert _reason("local:RAMEmitter", environment="viva-pde-particle") is None
+    # checked as the qualified class, so where that is refused, so is the short name
+    assert "provided by composed versions" in (_reason("local:RAMEmitter", environment="registry_env") or "")
+    # the engine's other short names stay refused: they include RunProcess, RestProcess and GitRemoteProcess
+    for other in ("local:ram-emitter", "local:RunProcess", "local:RestProcess", "local:CopasiUTCStep"):
+        assert "short names are ambiguous" in (_reason(other, COMPOSED) or ""), other
+
+
+def test_the_short_names_are_the_engines_own_registrations_of_those_classes() -> None:
+    """Each short name resolves, in the engine this service pins, to the class it is checked as."""
+    from process_bigraph import allocate_core
+
+    links = allocate_core().link_registry
+    [core] = load_manifest().core_entries()
+    assert core.short_names
+    for name in core.short_names:
+        registered = links.get(name)
+        assert registered is not None, name
+        assert f"{registered.__module__}.{registered.__qualname__}" == load_manifest().qualified(name)
+
+
+def test_only_a_core_entry_lists_short_names() -> None:
+    [core] = load_manifest().core_entries()
+    with pytest.raises(ValueError, match="only a core entry"):
+        RegistryEntry.model_validate({**core.model_dump(), "kind": "component", "short_names": ["RAMEmitter"]})
 
 
 def test_the_core_never_decides_where_a_run_goes() -> None:

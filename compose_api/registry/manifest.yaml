@@ -177,6 +177,12 @@ entries:
     version: "1.9.1"
     module_roots:
       - process_bigraph.emitter
+    # the engine registers these under their class name too, so `local:RAMEmitter` (process-bigraph's own default)
+    # is checked as `local:process_bigraph.emitter.RAMEmitter`; no other short name is accepted
+    short_names:
+      - RAMEmitter
+      - JSONEmitter
+      - ConsoleEmitter
     level: tested
     # viva-pde-particle's image installs process-bigraph 1.9.1 (its read-back, 2026-10-26)
     bundles:
@@ -187,7 +193,8 @@ entries:
         qualified, `local:process_bigraph.emitter.RAMEmitter`). RAMEmitter, JSONEmitter and ConsoleEmitter are
         process-bigraph's own; compose-api's runner gathers RAMEmitter's results into the `.pber` file, and every
         compliance case (pbsim-common's two, viva-basic-processes' one) records its outputs through it, in composed
-        versions on 1.9.1. It replaces the short name `local:RAMEmitter`, which stays refused.
+        versions on 1.9.1. The short names `local:RAMEmitter`, `local:JSONEmitter` and `local:ConsoleEmitter`,
+        which the engine registers itself, are accepted as these classes since 2026-10-29 (Jim: documents use them).
 
   # --- libraries: installed for the components above, with no process classes of their own ------------------------
   # Pinned to what registry_env@1 actually ran (read back from its image, 2026-10-25), not to the old library list,

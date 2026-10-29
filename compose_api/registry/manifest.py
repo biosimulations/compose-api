@@ -113,6 +113,10 @@ class RegistryEntry(BaseModel):
     # the library entries a component needs installed beside it (an engine its package does not declare), which join
     # the entries a document is inferred to need (docs/plan-environment-composition.md, D7.2)
     requires: list[str] = Field(default_factory=list)
+    # a core entry's classes the engine also registers under their bare class name (process-bigraph's
+    # `local:RAMEmitter`): an address naming one is checked as `<its module root>.<Name>`, and the document is left as
+    # written, since the engine resolves both forms to the same class
+    short_names: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
     reviewer: str | None = None
 
@@ -124,6 +128,8 @@ class RegistryEntry(BaseModel):
             raise ValueError(f"registry entry {self.id!r} is a {self.kind}, so it needs `module_roots`")
         if self.kind == "core" and (self.install is not None or self.conda):
             raise ValueError(f"registry entry {self.id!r} is core: the composition installs it, so it has no install")
+        if self.short_names and (self.kind != "core" or len(self.module_roots) != 1):
+            raise ValueError(f"registry entry {self.id!r}: only a core entry with one module root has `short_names`")
         return self
 
 
@@ -157,6 +163,14 @@ class Manifest(BaseModel):
     def core_entries(self) -> list[RegistryEntry]:
         """The entries every composed environment provides through its core."""
         return [entry for entry in self.entries if entry.kind == "core"]
+
+    def qualified(self, target: str) -> str:
+        """A bare class name a core entry lists in `short_names` as `<module root>.<Name>`; others as they are."""
+        if "." not in target:
+            for entry in self.core_entries():
+                if target in entry.short_names:
+                    return f"{entry.module_roots[0]}.{target}"
+        return target
 
     def entry_for_module(self, module: str) -> RegistryEntry | None:
         """The entry whose longest module root contains `module`, so a nested root wins over its parent."""

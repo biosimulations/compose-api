@@ -202,7 +202,7 @@ def check_address(
     if unsafe is not None or target is None:
         reason = unsafe or "address data must be a string naming a registered class"
         return AddressViolation(document=document, address=str(address), reason=reason, always_rejected=True)
-    refused = _registry_reason(target, manifest, standing, environment)
+    refused = _registry_reason(manifest.qualified(target), manifest, standing, environment)
     if refused is not None:
         return AddressViolation(document=document, address=str(address), reason=refused)
     return None
