@@ -64,6 +64,17 @@ def composition_problems(environments: EnvironmentsFile, manifest: Manifest) -> 
     return [p for spec in environments.environments if spec.entries for p in spec_problems(spec, manifest)]
 
 
+def _conda_conflicts(name: str, entry_id: str, wanted: dict[str, str], seen: dict[str, tuple[str, str]]) -> list[str]:
+    """The conda-forge packages ``entry_id`` asks for with another spec than an earlier entry did; ``seen`` records
+    each package's first entry and spec."""
+    conflicts = []
+    for package, spec in wanted.items():
+        first, asked = seen.setdefault(package, (entry_id, spec))
+        if asked != spec:
+            conflicts.append(f"{name}: {first!r} needs conda:{package} {asked!r} and {entry_id!r} needs {spec!r}")
+    return conflicts
+
+
 def spec_problems(spec: EnvironmentSpec, manifest: Manifest, *, bundled: bool = True) -> list[str]:
     """What keeps one environment's `entries` from being composed (`composition_problems`); without ``bundled``, a
     mash-up's: its entries are not bundled in the environment it is a version of."""
@@ -74,6 +85,7 @@ def spec_problems(spec: EnvironmentSpec, manifest: Manifest, *, bundled: bool = 
     if len(set(spec.entries)) != len(spec.entries):
         problems.append(f"{spec.name}: an entry is listed twice")
     installs: dict[str, str] = {}
+    conda: dict[str, tuple[str, str]] = {}  # a conda-forge package, the entry that first asked for it and its spec
     for entry_id in spec.entries:
         entry = by_id.get(entry_id)
         if entry is None:
@@ -83,11 +95,13 @@ def spec_problems(spec: EnvironmentSpec, manifest: Manifest, *, bundled: bool = 
         elif entry.install is None and not entry.conda:
             problems.append(f"{spec.name}: entry {entry_id!r} does not say how it installs (`install` or `conda`)")
         else:
-            names = [entry.install.name] if entry.install is not None else []
-            for name in [*names, *(f"conda:{c}" for c in entry.conda)]:
-                other = installs.setdefault(name, entry_id)
+            # a distribution comes from one entry; a conda-forge package several entries need (an engine they share,
+            # dolfinx or MPI) is one requirement when they ask for the same spec, and a conflict when they do not
+            if entry.install is not None:
+                other = installs.setdefault(entry.install.name, entry_id)
                 if other != entry_id:
-                    problems.append(f"{spec.name}: {other!r} and {entry_id!r} both install {name}")
+                    problems.append(f"{spec.name}: {other!r} and {entry_id!r} both install {entry.install.name}")
+            problems += _conda_conflicts(spec.name, entry_id, entry.conda, conda)
     problems.extend(_unlisted_requirements(spec, by_id))
     in_bundle = {e.id for e in manifest.entries if spec.name in e.bundles}
     if bundled and in_bundle != set(spec.entries):
