@@ -320,6 +320,12 @@ class NewEnvironmentVersion(BaseModel):
     resolved_at: datetime.datetime | None = None
     image: str | None = None
     note: str | None = None
+    entries: dict[str, str] = Field(
+        default_factory=dict,
+        description="A composed environment's flagged entries (`updates` in the manifest) moved to another commit, by"
+        " entry id: a full commit on the repository's default branch, or the branch's name for its head (`updates:"
+        " main`); a release tag or its commit (`updates: tags`). Checked with GitHub; docs/plan-entry-updates.md",
+    )
 
 
 class ComplianceCase(BaseModel):

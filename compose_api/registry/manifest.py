@@ -115,6 +115,10 @@ class RegistryEntry(BaseModel):
     requires: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
     reviewer: str | None = None
+    # whose commit an environment administrator may move by making a version, without a pull request
+    # (docs/plan-entry-updates.md, E2): any commit on the repository's default branch (`main`), or only one a release
+    # tag points at (`tags`). Only a git install can move; its compliance cases are what certify the new commit
+    updates: Literal["main", "tags"] | None = None
 
     @model_validator(mode="after")
     def _pinned(self) -> "RegistryEntry":
@@ -124,7 +128,15 @@ class RegistryEntry(BaseModel):
             raise ValueError(f"registry entry {self.id!r} is a {self.kind}, so it needs `module_roots`")
         if self.kind == "core" and (self.install is not None or self.conda):
             raise ValueError(f"registry entry {self.id!r} is core: the composition installs it, so it has no install")
+        if self.updates is not None and (self.install is None or self.install.git is None):
+            raise ValueError(f"registry entry {self.id!r} has `updates`, which only a `git` install can follow")
         return self
+
+    def at_commit(self, commit: str) -> "RegistryEntry":
+        """This entry moved to ``commit`` (docs/plan-entry-updates.md): its pin and its install's, nothing else."""
+        if self.install is None or self.install.git is None:
+            raise ValueError(f"registry entry {self.id!r} is not a git install, so it has no commit to move")
+        return self.model_copy(update={"commit": commit, "install": self.install.model_copy(update={"commit": commit})})
 
 
 class Manifest(BaseModel):

@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import datetime
 from collections.abc import Mapping
-from typing import Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 
 from ..types import UNSET, Unset
+
+if TYPE_CHECKING:
+    from ..models.new_environment_version_entries import NewEnvironmentVersionEntries
+
 
 T = TypeVar("T", bound="NewEnvironmentVersion")
 
@@ -22,11 +26,16 @@ class NewEnvironmentVersion:
             resolved_at (datetime.datetime | None | Unset):
             image (None | str | Unset):
             note (None | str | Unset):
+            entries (NewEnvironmentVersionEntries | Unset): A composed environment's flagged entries (`updates` in the
+                manifest) moved to another commit, by entry id: a full commit on the repository's default branch, or the
+                branch's name for its head (`updates: main`); a release tag or its commit (`updates: tags`). Checked with
+                GitHub; docs/plan-entry-updates.md
     """
 
     resolved_at: datetime.datetime | None | Unset = UNSET
     image: None | str | Unset = UNSET
     note: None | str | Unset = UNSET
+    entries: NewEnvironmentVersionEntries | Unset = UNSET
 
     def to_dict(self) -> dict[str, Any]:
         resolved_at: None | str | Unset
@@ -49,6 +58,10 @@ class NewEnvironmentVersion:
         else:
             note = self.note
 
+        entries: dict[str, Any] | Unset = UNSET
+        if not isinstance(self.entries, Unset):
+            entries = self.entries.to_dict()
+
         field_dict: dict[str, Any] = {}
 
         field_dict.update({})
@@ -58,11 +71,15 @@ class NewEnvironmentVersion:
             field_dict["image"] = image
         if note is not UNSET:
             field_dict["note"] = note
+        if entries is not UNSET:
+            field_dict["entries"] = entries
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        from ..models.new_environment_version_entries import NewEnvironmentVersionEntries  # noqa: PLC0415
+
         d = dict(src_dict)
 
         def _parse_resolved_at(data: object) -> datetime.datetime | None | Unset:
@@ -100,10 +117,18 @@ class NewEnvironmentVersion:
 
         note = _parse_note(d.pop("note", UNSET))
 
+        _entries = d.pop("entries", UNSET)
+        entries: NewEnvironmentVersionEntries | Unset
+        if isinstance(_entries, Unset):
+            entries = UNSET
+        else:
+            entries = NewEnvironmentVersionEntries.from_dict(_entries)
+
         new_environment_version = cls(
             resolved_at=resolved_at,
             image=image,
             note=note,
+            entries=entries,
         )
 
         return new_environment_version

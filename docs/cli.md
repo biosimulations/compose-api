@@ -1241,6 +1241,7 @@ $ compose-api environments create [OPTIONS] NAME
 * `--resolved-at [%Y-%m-%d|%Y-%m-%dT%H:%M:%S|%Y-%m-%d %H:%M:%S]`: A shared environment: resolve as of this time (UTC); default now.
 * `--image TEXT`: A prebuilt environment: its image, by digest.
 * `--note TEXT`: Why this version exists.
+* `--entry TEXT`: Move a flagged entry to another commit, id=&lt;commit&gt;, or id=main for its default branch's head (repeatable; docs/plan-entry-updates.md).
 * `--json`: Print JSON (the same as --output json).
 * `--help`: Show this message and exit.
 

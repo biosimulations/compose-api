@@ -178,7 +178,10 @@ Non-`local` protocols and the arbitrary-import `local:!` form are refused even u
 for a prebuilt simulator (`?simulator=`), whose classes are not looked up (`validate_submission(..., registry=False)`). The
 container would otherwise run whatever it is sent, so this is the only check. Adding a simulator to what the service
 runs means a manifest entry that says how it installs, listed in its environment's `entries` (`environments.yaml`;
-`docs/plan-environment-composition.md`). `registry/catalog.yaml` is
+`docs/plan-environment-composition.md`). An entry flagged `updates: main|tags` may have its commit moved without a PR:
+an environment administrator makes a version with `entries: {id: commit}` (`compose-api environments create <env>
+--entry id=<sha|main>`), checked with GitHub by `registry/upstream.py`, recorded as the spec's `moved`
+(`docs/plan-entry-updates.md`); the manifest's commit is the default for new versions. `registry/catalog.yaml` is
 generated (`uv run python -m compose_api.registry.catalog`, read-only against GitHub) and lists every vivarium-collective
 catalog wrapper at `listed`; never hand-edit it — raising an entry means adding it to `manifest.yaml`, which wins.
 

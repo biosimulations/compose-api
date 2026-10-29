@@ -2186,6 +2186,13 @@ export interface components {
             image?: string | null;
             /** Note */
             note?: string | null;
+            /**
+             * Entries
+             * @description A composed environment's flagged entries (`updates` in the manifest) moved to another commit, by entry id: a full commit on the repository's default branch, or the branch's name for its head (`updates: main`); a release tag or its commit (`updates: tags`). Checked with GitHub; docs/plan-entry-updates.md
+             */
+            entries?: {
+                [key: string]: string;
+            };
         };
         /**
          * NoTaskAccepted
@@ -4362,6 +4369,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnprocessableError"];
+                };
+            };
+            /** @description A moved entry's commit could not be checked with GitHub; try again */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
                 };
             };
         };
