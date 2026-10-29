@@ -77,15 +77,15 @@ entries:
   - id: viva-pde-particle
     package: viva-pde-particle
     source: https://github.com/vivarium-collective/viva-pde-particle
-    # viva-pde-particle#67's merge (2026-10-27): each trial function its own Ensemble class, so no document's config
-    # names what is imported. What a composed environment installs, and the commit of the prebuilt image
-    # (viva-pde-particle-compose:sha-21dfe46) registered as viva-pde-particle@2
-    commit: 21dfe468455b3a8746b184469651494f4b06b4a4
+    # viva-pde-particle#69's merge (2026-10-29): SpatialExport's output replaces, not accumulates (the generic check
+    # step-outputs-replace refused it before). What a composed environment installs, and the commit of the prebuilt
+    # image (viva-pde-particle-compose:sha-7043882) registered as viva-pde-particle@3; #67's merge, 21dfe46, was @2
+    commit: 70438826a348cfb3feddbc928e2c9038129ff69e
     # composed too (docs/plan-environment-composition.md 7c, D7c.1-D7c.3): its engines from conda-forge, as its own
     # pixi.toml's `compose` environment has them, less the Smoldyn toolchain; Smoldyn is the smoldyn-vcell wheel
     install:
       git: https://github.com/vivarium-collective/viva-pde-particle
-      commit: 21dfe468455b3a8746b184469651494f4b06b4a4
+      commit: 70438826a348cfb3feddbc928e2c9038129ff69e
       extras: [reference]
     conda:
       fenics-dolfinx: "0.10.*"
