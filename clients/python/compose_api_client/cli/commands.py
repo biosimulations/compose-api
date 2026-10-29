@@ -891,13 +891,39 @@ def environments_create(
     ] = None,
     image: Annotated[str | None, typer.Option(help="A prebuilt environment: its image, by digest.")] = None,
     note: Annotated[str | None, typer.Option(help="Why this version exists.")] = None,
+    entry: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--entry",
+            help="Move a flagged entry to another commit, id=<commit>, or id=main for its default branch's head"
+            " (repeatable; docs/plan-entry-updates.md).",
+        ),
+    ] = None,
 ) -> None:
     """Make a new version (or answer the existing one with the same definition). Its image builds in the background
     (`environments versions` shows it ready); it does not become the default. Needs the environment administrator
     role."""
     settings = _settings(ctx)
     with make_session(settings) as s:
-        emit(settings.output, s.create_environment_version(name, resolved_at=resolved_at, image=image, note=note))
+        emit(
+            settings.output,
+            s.create_environment_version(
+                name, resolved_at=resolved_at, image=image, note=note, entries=_entry_moves(entry or [])
+            ),
+        )
+
+
+def _entry_moves(given: list[str]) -> dict[str, str]:
+    """`--entry id=ref`, each once."""
+    moves: dict[str, str] = {}
+    for item in given:
+        entry_id, eq, ref = item.partition("=")
+        if not eq or not entry_id.strip() or not ref.strip():
+            raise UsageError(f"--entry {item!r}: give id=<commit>, or id=main")
+        if entry_id.strip() in moves:
+            raise UsageError(f"--entry names {entry_id.strip()!r} twice")
+        moves[entry_id.strip()] = ref.strip()
+    return moves
 
 
 @environments_app.command("default")

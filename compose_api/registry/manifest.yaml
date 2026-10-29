@@ -81,6 +81,10 @@ entries:
     # names what is imported. What a composed environment installs, and the commit of the prebuilt image
     # (viva-pde-particle-compose:sha-21dfe46) registered as viva-pde-particle@2
     commit: 21dfe468455b3a8746b184469651494f4b06b4a4
+    # the default for new versions: an environment administrator may make a version at any later commit on its default
+    # branch without a pull request here, gated by its compliance cases (docs/plan-entry-updates.md); the commit a
+    # version runs is on the version
+    updates: main
     # composed too (docs/plan-environment-composition.md 7c, D7c.1-D7c.3): its engines from conda-forge, as its own
     # pixi.toml's `compose` environment has them, less the Smoldyn toolchain; Smoldyn is the smoldyn-vcell wheel
     install:

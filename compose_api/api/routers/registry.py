@@ -437,6 +437,7 @@ async def run_environment_version_compliance(
         **_NO_ENVIRONMENT,
         **_ADMIN,
         422: error("The request cannot make a version of this environment", UnprocessableError),
+        502: error("A moved entry's commit could not be checked with GitHub; try again"),
     },
 )
 async def create_environment_version(
@@ -466,6 +467,8 @@ async def create_environment_version(
         version, created = await environment_service.create(database_service, spec, request, caller.subject)
     except VersionRequestError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+    except environment_service.UpstreamCheckError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
     if not created:
         response.status_code = 200
     if (created or version.state in (VersionState.BUILDING, VersionState.FAILED)) and version.simulator_id is not None:
