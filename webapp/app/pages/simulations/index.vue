@@ -20,6 +20,8 @@ const page = ref(Number(route.query.page ?? 1))
 // only the runs the signed-in caller submitted (docs/plan-favorites-and-studies.md, step 1a); offered when signed in
 const { isAuthenticated } = useAuth()
 const mine = ref(route.query.mine === 'true')
+// only the runs the signed-in caller starred (step 2b)
+const favorite = ref(route.query.favorite === 'true')
 // where the runs ran: set by the links on environment, version and simulator pages (plan-webapp-admin 5c)
 const ranIn = ref({
   environment: (route.query.environment as string) || undefined,
@@ -48,6 +50,7 @@ async function load() {
         label: labels.value.length ? labels.value : undefined,
         tag: tags.value.length ? tags.value : undefined,
         mine: mine.value && isAuthenticated.value ? true : undefined,
+        favorite: favorite.value && isAuthenticated.value ? true : undefined,
         ...ranIn.value,
         limit: PAGE,
         offset: (page.value - 1) * PAGE
@@ -64,10 +67,10 @@ async function load() {
   total.value = data.total
 }
 
-watch([status, simulator, since, labels, tags, ranIn, mine], () => {
+watch([status, simulator, since, labels, tags, ranIn, mine, favorite], () => {
   page.value = 1
 })
-watch([status, simulator, since, labels, tags, ranIn, mine, page], () => {
+watch([status, simulator, since, labels, tags, ranIn, mine, favorite, page], () => {
   router.replace({
     query: {
       status: status.value || undefined,
@@ -76,6 +79,7 @@ watch([status, simulator, since, labels, tags, ranIn, mine, page], () => {
       label: labels.value.length ? labels.value : undefined,
       tag: tags.value.length ? tags.value : undefined,
       mine: mine.value ? 'true' : undefined,
+      favorite: favorite.value ? 'true' : undefined,
       ...ranIn.value,
       page: page.value > 1 ? page.value : undefined
     }
@@ -93,6 +97,7 @@ useIntervalFn(() => {
 
 const UIcon = resolveComponent('UIcon')
 const NuxtLink = resolveComponent('NuxtLink')
+const FavoriteStar = resolveComponent('FavoriteStar')
 const StatusBadge = resolveComponent('StatusBadge')
 const RunLabels = resolveComponent('RunLabels')
 const RanIn = resolveComponent('RanIn')
@@ -117,6 +122,12 @@ const columns: TableColumn<SimulationSummary>[] = [
     accessorKey: 'simulation_id',
     header: 'ID',
     cell: ({ row }) => h('span', { class: 'inline-flex items-center gap-1' }, [
+      h(FavoriteStar, {
+        kind: 'simulation',
+        refId: row.original.simulation_id,
+        modelValue: row.original.favorite,
+        'onUpdate:modelValue': (v: boolean) => { row.original.favorite = v }
+      }),
       h(NuxtLink, { to: `/simulations/${row.original.simulation_id}`, class: 'font-mono text-primary' }, () => `#${row.original.simulation_id}`),
       row.original.visibility === 'private' ? h(UIcon, { name: 'i-lucide-lock', class: 'size-3.5 text-warning', title: 'Private: you and administrators' }) : null
     ])
@@ -151,6 +162,7 @@ const columns: TableColumn<SimulationSummary>[] = [
         <UInputTags v-model="labels" placeholder="Label key:value" icon="i-lucide-filter" class="w-64" title="Labels, e.g. source:biomodels; all must match" />
         <UInputTags v-model="tags" placeholder="Tag" icon="i-lucide-tag" class="w-56" title="Tags; all must match" />
         <USwitch v-if="isAuthenticated" v-model="mine" label="Mine" title="Only the runs you submitted, signed in" />
+        <USwitch v-if="isAuthenticated" v-model="favorite" label="Favorites" title="Only the runs you starred" />
         <UButton v-if="ranInLabel" icon="i-lucide-x" :label="`Ran in ${ranInLabel}`" color="primary" variant="subtle" size="sm" title="Show runs from anywhere" @click="clearRanIn" />
         <UButton icon="i-lucide-refresh-cw" variant="ghost" color="neutral" :loading="loading" @click="load" />
       </div>

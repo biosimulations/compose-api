@@ -68,6 +68,18 @@ const chosen = ref<Record<string, string>>({})
 const confirming = ref(false)
 const runError = ref<string | null>(null)
 const selectedInfo = computed(() => runs.value.find(r => r.number === selected.value) ?? null)
+// the signed-in caller's stars on this suite's runs (docs/plan-favorites-and-studies.md, step 2b)
+const starredRuns = ref(new Set<string>())
+watch(isAuthenticated, async (signedIn) => {
+  starredRuns.value = signedIn ? await favoriteRefs('suite_run') : new Set()
+}, { immediate: true })
+const selectedRef = computed(() => (selectedInfo.value ? `${name.value}@${selectedInfo.value.number}` : ''))
+function starRun(starred: boolean) {
+  const next = new Set(starredRuns.value)
+  if (starred) next.add(selectedRef.value)
+  else next.delete(selectedRef.value)
+  starredRuns.value = next
+}
 
 async function openRun() {
   runError.value = null
@@ -201,6 +213,7 @@ const fmt = (s: number | string | null | undefined) => (typeof s === 'number' ? 
         <USelect v-if="runs.length" v-model="selected" :items="runs.map(r => ({ label: `run ${r.number}${r.number === suite?.baseline ? ' (baseline)' : ''} · ${formatTime(r.created_at)}${runVersions(r.environment_versions).length ? ' · ' + runVersions(r.environment_versions).map(versionLabel).join(', ') : ''}`, value: r.number }))" class="w-96" />
       </div>
       <div v-if="selectedInfo" class="flex flex-wrap items-center gap-2 text-sm">
+        <FavoriteStar :model-value="starredRuns.has(selectedRef)" kind="suite_run" :ref-id="selectedRef" @update:model-value="starRun" />
         <span class="text-muted">Run {{ selectedInfo.number }} ran in</span>
         <RanIn v-for="v in runVersions(selectedInfo.environment_versions)" :key="v.environment" :version="v" :simulator-id="0" class="text-xs" />
         <span v-if="!runVersions(selectedInfo.environment_versions).length" class="text-muted">each environment's image at the time (started before versions were recorded)</span>

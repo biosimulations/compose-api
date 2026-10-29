@@ -9,10 +9,16 @@ const page = ref(1)
 const PAGE = 25
 const loading = ref(false)
 const error = ref<string | null>(null)
+// only those the signed-in caller starred (docs/plan-favorites-and-studies.md, step 2b)
+const route = useRoute()
+const { isAuthenticated } = useAuth()
+const favorite = ref(route.query.favorite === 'true')
 
 async function load() {
   loading.value = true
-  const { data, error: err } = await useApi().GET('/comparisons', { params: { query: { limit: PAGE, offset: (page.value - 1) * PAGE } } })
+  const { data, error: err } = await useApi().GET('/comparisons', {
+    params: { query: { favorite: favorite.value && isAuthenticated.value ? true : undefined, limit: PAGE, offset: (page.value - 1) * PAGE } }
+  })
   loading.value = false
   if (err || !data) {
     error.value = errorMessage(err, 'Could not load comparisons')
@@ -24,9 +30,15 @@ async function load() {
 }
 onMounted(load)
 watch(page, load)
+watch(favorite, () => {
+  navigateTo({ query: { ...route.query, favorite: favorite.value ? 'true' : undefined } }, { replace: true })
+  if (page.value === 1) load()
+  else page.value = 1
+})
 
 const UBadge = resolveComponent('UBadge')
 const NuxtLink = resolveComponent('NuxtLink')
+const FavoriteStar = resolveComponent('FavoriteStar')
 type Badge = { color: 'success' | 'error' | 'warning' | 'neutral', text: string }
 type Result = { close_to_references?: boolean | null, references?: string[], reports?: Record<string, { worst?: { score?: number | string | null } }> }
 const resultOf = (c: Comparison) => (c.result ?? null) as Result | null
@@ -56,7 +68,19 @@ const worst = (c: Comparison): number | null => {
 const badge = (b: Badge | null) => b ? h(UBadge, { color: b.color, variant: 'subtle' }, () => b.text) : h('span', { class: 'text-muted' }, '—')
 
 const columns: TableColumn<Comparison>[] = [
-  { accessorKey: 'comparison_id', header: 'ID', cell: ({ row }) => h(NuxtLink, { to: `/comparisons/${row.original.comparison_id}`, class: 'font-mono text-primary' }, () => `#${row.original.comparison_id}`) },
+  {
+    accessorKey: 'comparison_id',
+    header: 'ID',
+    cell: ({ row }) => h('span', { class: 'inline-flex items-center gap-1' }, [
+      h(FavoriteStar, {
+        kind: 'comparison',
+        refId: row.original.comparison_id,
+        modelValue: row.original.favorite,
+        'onUpdate:modelValue': (v: boolean) => { row.original.favorite = v }
+      }),
+      h(NuxtLink, { to: `/comparisons/${row.original.comparison_id}`, class: 'font-mono text-primary' }, () => `#${row.original.comparison_id}`)
+    ])
+  },
   { id: 'agreement', header: 'Solvers agree', cell: ({ row }) => badge(agreement(row.original)) },
   { id: 'original', header: 'Original results', cell: ({ row }) => badge(original(row.original)) },
   {
@@ -89,6 +113,9 @@ const columns: TableColumn<Comparison>[] = [
       </template>
     </PageHeader>
     <UContainer class="py-6 flex flex-col gap-4">
+      <div v-if="isAuthenticated" class="flex justify-end">
+        <USwitch v-model="favorite" label="Favorites" title="Only the comparisons you starred" />
+      </div>
       <UAlert v-if="error" color="error" variant="subtle" :description="error" />
       <UTable :data="rows" :columns="columns" :loading="loading" empty="No comparisons yet." />
       <div class="flex justify-end">
