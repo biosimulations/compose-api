@@ -136,7 +136,7 @@ async function changeVisibility() {
 const fields = computed(() => {
   const s = sim.value
   if (!s) return []
-  // the experiment id is the page's subtitle; the simulator and its container hash are on the page "Ran in" links to;
+  // the experiment id is the page's subtitle; the simulator and its container hash are on the page its Environment links to;
   // the trace and correlation ids are on the Events and trace tab
   return [
     ['Submitted', formatTime(s.created_at)],
@@ -175,7 +175,7 @@ const fields = computed(() => {
 
         <UTabs v-model="tab" :items="tabs" variant="link" class="w-full" :unmount-on-hide="false">
           <template #overview>
-            <!-- the run itself: what it ran in and when; its environment's build is on the page "Ran in" links to, its
+            <!-- the run itself: what it ran in and when; its environment's build is on the page its Environment links to, its
                  input on the Input tab -->
             <div class="flex flex-col gap-4 pt-4 max-w-3xl">
               <UAlert
@@ -200,12 +200,12 @@ const fields = computed(() => {
                     <dt class="text-muted">Description</dt>
                     <dd class="self-center">{{ sim.description }}</dd>
                   </template>
-                  <template v-if="sim && (Object.keys(sim.labels ?? {}).length || sim.tags?.length)">
+                  <template v-if="sim && (Object.keys(labelsBesideEnvironment(sim.labels, sim.environment_version)).length || sim.tags?.length)">
                     <dt class="text-muted">Labels and tags</dt>
-                    <dd><RunLabels :labels="sim.labels" :tags="sim.tags" /></dd>
+                    <dd><RunLabels :labels="labelsBesideEnvironment(sim.labels, sim.environment_version)" :tags="sim.tags" /></dd>
                   </template>
                   <template v-if="sim">
-                    <dt class="text-muted">Ran in</dt>
+                    <dt class="text-muted">Environment</dt>
                     <dd class="text-xs self-center"><RanIn :version="sim.environment_version" :simulator-id="sim.simulator_id" /></dd>
                   </template>
                   <template v-if="sim">

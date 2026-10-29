@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// A select whose first option clears it ("Any status", "Shared container"): USelect has no `clearable` prop, so a
+// A select whose first option clears it ("Any status", "Automatic"): USelect has no `clearable` prop, so a
 // value once chosen could not be removed. The model is undefined while that first option is chosen.
 type Item = string | { label: string, value: string }
 const props = defineProps<{ items: readonly Item[], placeholder: string }>()

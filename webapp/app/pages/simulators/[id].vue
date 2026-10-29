@@ -25,7 +25,7 @@ onMounted(async () => {
 function saveDefinition() {
   if (!simulator.value) return
   const url = URL.createObjectURL(new Blob([simulator.value.definition], { type: 'text/plain' }))
-  const a = Object.assign(document.createElement('a'), { href: url, download: `simulator-${id}.def` })
+  const a = Object.assign(document.createElement('a'), { href: url, download: `environment-${id}.def` })
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -33,7 +33,7 @@ function saveDefinition() {
 
 <template>
   <div>
-    <PageHeader :title="`Simulator ${id}`" description="A container definition, identified by its hash, and the runs that used it.">
+    <PageHeader :title="simulator && !simulator.versions?.length ? `Legacy environment ${id}` : `Definition ${id}`" description="A container definition, identified by its hash, and the runs that used it.">
       <template #actions>
         <UButton to="/environments" icon="i-lucide-arrow-left" label="Environments" color="neutral" variant="ghost" />
         <UButton v-if="simulator" icon="i-lucide-download" label="Definition" color="neutral" variant="subtle" @click="saveDefinition" />
@@ -48,7 +48,7 @@ function saveDefinition() {
         variant="subtle"
         icon="i-lucide-search-x"
         title="Not found"
-        description="No such simulator, or it is no environment's version and no run you can read used it."
+        description="No such environment, or it is no environment's version and no run you can read used it."
       />
       <template v-if="simulator">
         <UAlert

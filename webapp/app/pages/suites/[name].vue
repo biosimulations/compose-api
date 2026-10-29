@@ -214,7 +214,7 @@ const fmt = (s: number | string | null | undefined) => (typeof s === 'number' ? 
       </div>
       <div v-if="selectedInfo" class="flex flex-wrap items-center gap-2 text-sm">
         <FavoriteStar :model-value="starredRuns.has(selectedRef)" kind="suite_run" :ref-id="selectedRef" @update:model-value="starRun" />
-        <span class="text-muted">Run {{ selectedInfo.number }} ran in</span>
+        <span class="text-muted">Run {{ selectedInfo.number }} environments</span>
         <RanIn v-for="v in runVersions(selectedInfo.environment_versions)" :key="v.environment" :version="v" :simulator-id="0" class="text-xs" />
         <span v-if="!runVersions(selectedInfo.environment_versions).length" class="text-muted">each environment's image at the time (started before versions were recorded)</span>
       </div>

@@ -27,7 +27,7 @@ const ranIn = ref({
   environment_version: (route.query.environment_version as string) || undefined,
   simulator_id: route.query.simulator_id ? Number(route.query.simulator_id) : undefined
 })
-// typed as the "Ran in" column shows it: an environment (registry_env) or one of its versions (registry_env@5)
+// typed as the Environment column shows it: an environment (registry_env) or one of its versions (registry_env@5)
 const ranInText = computed({
   get: () => ranIn.value.environment_version ?? ranIn.value.environment ?? '',
   set: (text: string) => {
@@ -35,7 +35,7 @@ const ranInText = computed({
     ranIn.value = { environment: v && !v.includes('@') ? v : undefined, environment_version: v.includes('@') ? v : undefined, simulator_id: undefined }
   }
 })
-// a simulator's page links here by its id, which has no name to type
+// a legacy environment's page (/simulators/{id}) links here by its id, which has no name to type
 function clearSimulator() {
   ranIn.value = { ...ranIn.value, simulator_id: undefined }
 }
@@ -139,13 +139,13 @@ const columns: TableColumn<SimulationSummary>[] = [
   { accessorKey: 'status', header: 'Status', cell: ({ row }) => h(StatusBadge, { status: row.original.status, submission: row.original.submission }) },
   {
     id: 'ran_in',
-    header: 'Ran in',
+    header: 'Environment',
     cell: ({ row }) => h(RanIn, { version: row.original.environment_version, simulatorId: row.original.simulator_id, class: 'text-xs whitespace-nowrap' })
   },
   {
     id: 'labels',
     header: 'Labels and tags',
-    cell: ({ row }) => h(RunLabels, { labels: row.original.labels, tags: row.original.tags, size: 'sm', class: 'max-w-96' })
+    cell: ({ row }) => h(RunLabels, { labels: labelsBesideEnvironment(row.original.labels, row.original.environment_version), tags: row.original.tags, size: 'sm', class: 'max-w-96' })
   },
   { accessorKey: 'created_at', header: 'Submitted', cell: ({ row }) => formatTime(row.original.created_at) },
 ]
@@ -161,11 +161,11 @@ const columns: TableColumn<SimulationSummary>[] = [
     <UContainer class="py-6 flex flex-col gap-4">
       <div class="flex flex-wrap items-center gap-2">
         <AnySelect v-model="status" :items="STATUSES" placeholder="Any status" class="w-44" />
-        <UInput v-model.lazy="ranInText" placeholder="Ran in, e.g. registry_env@5" icon="i-lucide-package" class="w-64" title="An environment, or one of its versions as name@number" />
+        <UInput v-model.lazy="ranInText" placeholder="Environment, e.g. registry_env@5" icon="i-lucide-package" class="w-64" title="An environment, or one of its versions as name@number" />
         <UInput v-model="since" type="date" class="w-44" title="Submitted on or after" />
         <UInputTags v-model="labels" placeholder="Label key:value" icon="i-lucide-filter" class="w-64" title="Labels, e.g. source:biomodels; all must match" />
         <UInputTags v-model="tags" placeholder="Tag" icon="i-lucide-tag" class="w-56" title="Tags; all must match" />
-        <UButton v-if="ranIn.simulator_id != null" icon="i-lucide-x" :label="`Simulator ${ranIn.simulator_id}`" color="primary" variant="subtle" size="sm" title="Show runs of any simulator" @click="clearSimulator" />
+        <UButton v-if="ranIn.simulator_id != null" icon="i-lucide-x" :label="`Legacy environment ${ranIn.simulator_id}`" color="primary" variant="subtle" size="sm" title="Show runs in any environment" @click="clearSimulator" />
         <div class="ml-auto flex items-center gap-4">
           <template v-if="isAuthenticated">
             <USwitch v-model="mine" label="Mine" title="Only the runs you submitted, signed in" />
