@@ -35,7 +35,8 @@ Several documents answer different questions. Start with the one that matches yo
 | the web UI's sign-in switched on, capabilities from `/auth/me`, environment version pages and admin actions, one suite run at a time | [plan-webapp-admin.md](plan-webapp-admin.md) | done (0.7.61); a signed-in check in production left | 2026-10-27 |
 | runs recorded as `requested` and dispatched by a worker that survives restarts; caps, priorities, resumable suite runs | [plan-durable-submission.md](plan-durable-submission.md) | plan, implemented (0.7.31) | 2026-10-22 |
 | checking SED-ML comparisons against BioSimulators: legacy runs as references, and biosim's `/verify` API as an oracle | [plan-verify-oracle.md](plan-verify-oracle.md) | done: V0–V5 (0.7.66) | 2026-10-28 |
-| a signed-in user's own runs (owners stamped at submit), favorites, and studies that group and share runs | [plan-favorites-and-studies.md](plan-favorites-and-studies.md) | active: step 1a in review | 2026-10-28 |
+| a signed-in user's own runs (owners stamped at submit), favorites, and studies that group and share runs | [plan-favorites-and-studies.md](plan-favorites-and-studies.md) | 0–2b live (0.7.72); 3 (studies) next | 2026-10-29 |
+| a trusted repository's commit moved by an administrator through the API, gated by compliance, instead of by a manifest PR and release | [plan-entry-updates.md](plan-entry-updates.md) | proposed | 2026-10-29 |
 | the web UI at `/ui`: pages, viewers, composite authoring, how it is built | [webapp.md](webapp.md) | user documentation | 2026-10-13 |
 | the `compose-api` command line, with its generated reference | [cli.md](cli.md) | user documentation | 2026-10-13 |
 
