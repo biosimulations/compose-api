@@ -132,8 +132,8 @@ release, as usual.
   `simulations visibility <id> public|private`.
 - The web pages: the choice on the new-simulation, composite and SED-ML pages (signed in only); on a run's page its
   visibility, and "Make public/private" for its owner; a lock beside private runs in the simulations list, which
-  also drops its Simulator and Experiment columns (Jim, 2026-10-28: "Ran in" says the first, the run's page the
-  second).
+  also drops its Simulator, Experiment and SLURM job columns and its view and download buttons: a row opens its
+  run, whose page has the rest (Jim, 2026-10-28).
 
 ### 2. Favorites
 - The `favorite` table (F5), created by `create_all` (a new table needs no revision).
