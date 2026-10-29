@@ -70,17 +70,17 @@ onMounted(async () => {
       </div>
       <details v-if="earlier.length" class="text-sm">
         <summary class="cursor-pointer font-semibold">
-          Earlier simulators (before versions)
+          Legacy environments (before versions)
           <span class="font-normal text-muted">· {{ earlier.length }}, used by {{ earlier.reduce((n, s) => n + (s.run_count ?? 0), 0) }} runs</span>
         </summary>
         <p class="text-muted my-2">
-          Container definitions runs used before environments had versions. They belong to no environment; each page shows
-          the definition its runs ran in.
+          Environments runs used before compose-api recorded how each was built. They are no environment's versions; each
+          page shows the definition its runs ran in.
         </p>
         <table>
           <thead>
             <tr class="text-left text-muted">
-              <th class="pr-4 py-1">Simulator</th><th class="pr-4">Definition hash</th><th class="pr-4">Runs</th><th>Used</th>
+              <th class="pr-4 py-1">Environment</th><th class="pr-4">Definition hash</th><th class="pr-4">Runs</th><th>Used</th>
             </tr>
           </thead>
           <tbody>

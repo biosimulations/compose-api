@@ -7,5 +7,5 @@ const link = computed(() => ranInLink(props.version, props.simulatorId))
 </script>
 
 <template>
-  <NuxtLink :to="link.to" class="font-mono" :class="version ? 'text-primary' : 'text-muted hover:text-primary'">{{ link.label }}</NuxtLink>
+  <NuxtLink :to="link.to" :title="version ? 'Environment' : 'Legacy environment (before environments had versions)'" class="font-mono" :class="version ? 'text-primary' : 'text-muted hover:text-primary'">{{ link.label }}</NuxtLink>
 </template>

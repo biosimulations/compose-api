@@ -175,7 +175,7 @@ async function submit() {
     const outcome = await submitRun(file, {
       intervalTime: intervalTime.value,
       batch: batch.value,
-      simulator: selected.value?.simulator ?? null,
+      environment: selected.value?.name ?? null,
       visibility: isAuthenticated.value ? visibility.value : undefined
     })
     if (!outcome.ok) {

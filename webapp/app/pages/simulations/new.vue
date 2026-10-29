@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { StepperItem } from '@nuxt/ui'
 import type { Schemas } from '~/composables/useApi'
+import type { EnvironmentSummary } from '~/composables/useRegistry'
 
 // Submit a run. A three-step UStepper after ../platform/frontend/app/pages/simulations/run.vue:
 // what to run, how to run it, review and submit.
 const api = useApi()
-const prebuilt = computed(() => useWebappConfig().value?.prebuilt_simulators ?? [])
 
 type Mode = 'archive' | 'copasi' | 'tellurium'
 const mode = ref<Mode>('archive')
@@ -14,7 +14,17 @@ const file = ref<File | null>(null)
 // /simulation/run
 const intervalTime = ref(1)
 const batch = ref(false)
-const simulator = ref<string | undefined>(undefined)
+// none: the service picks the smallest environment that provides every class the document names, or makes a mash-up
+const environment = ref<string | undefined>(undefined)
+const environments = ref<EnvironmentSummary[]>([])
+const environmentsError = ref<string | null>(null)
+listEnvironments().then((list) => { environments.value = list }, (e: Error) => { environmentsError.value = e.message })
+const KINDS: Record<EnvironmentSummary['kind'], string> = { 'shared': 'shared', 'prebuilt': 'prebuilt image', 'mash-up': 'mash-up' }
+const environmentItems = computed(() => environments.value.map(e => ({
+  label: `${e.name} (${KINDS[e.kind]}): ${e.components} component${e.components === 1 ? '' : 's'}`,
+  value: e.name
+})))
+const chosenEnvironment = computed(() => environments.value.find(e => e.name === environment.value) ?? null)
 const tags = ref<string[]>([])
 const description = ref('')
 const visibility = ref<Schemas['Visibility']>('private')
@@ -39,7 +49,7 @@ const steps: StepperItem[] = [
 ]
 
 const modes = [
-  { label: 'Composite / COMBINE archive', value: 'archive', description: '.pbg document or .omex archive, run as given' },
+  { label: 'Process-bigraph composite', value: 'archive', description: 'A process-bigraph document (.pbg), or a COMBINE archive (.omex) holding one' },
   { label: 'SBML with COPASI', value: 'copasi', description: 'A curated time course from an SBML model' },
   { label: 'SBML with Tellurium', value: 'tellurium', description: 'A curated time course from an SBML model' }
 ]
@@ -70,7 +80,7 @@ async function submit() {
     const outcome = await submitRun(file.value, {
       intervalTime: intervalTime.value,
       batch: batch.value,
-      simulator: simulator.value,
+      environment: environment.value,
       tags: tags.value,
       description: description.value,
       visibility: chosenVisibility.value
@@ -120,6 +130,11 @@ async function submit() {
 
       <section v-if="step === 0" class="flex flex-col gap-6">
         <URadioGroup v-model="mode" :items="modes" variant="card" />
+        <!-- SED-ML is translated to process-bigraph per solver by /sedml/run, which this form does not call -->
+        <p class="text-sm text-muted">
+          SED-ML (a .sedml file, or an .omex archive holding one): run it on one or several solvers and compare their
+          results on <ULink to="/sedml" class="text-primary">SED-ML on several solvers</ULink>.
+        </p>
         <UFileUpload
           v-model="file"
           :accept="accept"
@@ -135,8 +150,8 @@ async function submit() {
 
       <section v-else-if="step === 1" class="flex flex-col gap-6">
         <template v-if="mode === 'archive'">
-          <UFormField label="Simulator" :help="prebuilt.length ? 'A prebuilt image this deployment lists, or the shared container' : 'This deployment lists no prebuilt images; runs use the shared container'">
-            <AnySelect v-model="simulator" :items="prebuilt" placeholder="Shared container" class="w-72" :disabled="!prebuilt.length" />
+          <UFormField label="Environment" help="Automatic picks an environment that provides every process the document uses, and makes a new one combining several when none does" :error="environmentsError ?? undefined">
+            <AnySelect v-model="environment" :items="environmentItems" placeholder="Automatic" class="w-96" />
           </UFormField>
           <UFormField label="Interval time" help="End time point, between 0 and 1000">
             <UInputNumber v-model="intervalTime" :min="0" :max="1000" :step="0.1" class="w-48" />
@@ -149,7 +164,7 @@ async function submit() {
             <UTextarea v-model="description" :rows="2" :maxlength="2000" class="w-full max-w-xl" />
           </UFormField>
           <UAlert
-            v-if="simulator"
+            v-if="chosenEnvironment?.kind === 'prebuilt'"
             variant="subtle"
             color="info"
             icon="i-lucide-info"
@@ -176,7 +191,7 @@ async function submit() {
             <dt class="text-muted">Run as</dt><dd>{{ modes.find(m => m.value === mode)?.label }}</dd>
             <dt class="text-muted">Visibility</dt><dd>{{ chosenVisibility ?? 'public (signed out)' }}</dd>
             <template v-if="mode === 'archive'">
-              <dt class="text-muted">Simulator</dt><dd>{{ simulator || 'Shared container' }}</dd>
+              <dt class="text-muted">Environment</dt><dd>{{ environment ?? 'Automatic' }}</dd>
               <dt class="text-muted">Interval time</dt><dd>{{ intervalTime }}</dd>
               <dt class="text-muted">Batch</dt><dd>{{ batch ? 'yes' : 'no' }}</dd>
               <template v-if="tags.length">

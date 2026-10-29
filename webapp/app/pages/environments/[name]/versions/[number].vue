@@ -117,7 +117,7 @@ const caseColor = (state: string) =>
             <span class="text-muted">Lock</span><code class="text-xs break-all">sha256 {{ version.lock_sha256 }}</code>
           </template>
           <template v-if="version.simulator_id != null">
-            <span class="text-muted">Simulator</span>
+            <span class="text-muted">Definition</span>
             <NuxtLink :to="`/simulators/${version.simulator_id}`" class="text-xs text-primary">{{ version.simulator_id }}</NuxtLink>
           </template>
         </div>

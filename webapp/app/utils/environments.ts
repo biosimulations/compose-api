@@ -71,11 +71,24 @@ export function versionLabel(ref: VersionRef): string {
   return `${ref.environment}@${ref.number}`
 }
 
-/** The page of the version a run ran in, or of its simulator when it ran before versions. */
+/**
+ * The page of the version a run ran in, or, when it ran before versions, of its legacy environment: a container
+ * definition with no recorded pedigree (the API calls it a simulator).
+ */
 export function ranInLink(version: VersionRef | null | undefined, simulatorId: number): { to: string, label: string } {
   return version
     ? { to: `/environments/${encodeURIComponent(version.environment)}/versions/${version.number}`, label: versionLabel(version) }
-    : { to: `/simulators/${simulatorId}`, label: `simulator ${simulatorId}` }
+    : { to: `/simulators/${simulatorId}`, label: `legacy environment ${simulatorId}` }
+}
+
+/**
+ * A run's labels without the environment it ran in, for where its Environment is shown beside them. A run from before
+ * versions shows its simulator there, so its `environment` label is kept.
+ */
+export function labelsBesideEnvironment(labels: Record<string, string> | undefined, version: VersionRef | null | undefined): Record<string, string> {
+  if (!version) return labels ?? {}
+  const { environment: _e, environment_version: _v, ...rest } = labels ?? {}
+  return rest
 }
 
 export type RunsFilter = { environment: string } | { environment_version: VersionRef } | { simulator_id: number }

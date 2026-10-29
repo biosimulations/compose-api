@@ -5,8 +5,8 @@ export interface RunOptions {
   intervalTime: number
   /** a batch job (smaller partition, 1 CPU) */
   batch?: boolean
-  /** a prebuilt simulator by name; none runs in the shared image */
-  simulator?: string | null
+  /** the environment to run in, by name; none: chosen from the classes the document names, or a mash-up made for it */
+  environment?: string | null
   /** stored with the run, to find it by later */
   tags?: string[]
   /** what the run is for */
@@ -28,7 +28,7 @@ export async function submitRun(file: File, options: RunOptions): Promise<RunOut
       query: {
         interval_time: options.intervalTime,
         batch_submission: options.batch ?? false,
-        simulator: options.simulator || undefined,
+        environment: options.environment || undefined,
         tags: options.tags?.length ? options.tags : undefined,
         description: options.description?.trim() || undefined,
         visibility: options.visibility

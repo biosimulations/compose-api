@@ -51,7 +51,7 @@ describe('where runs ran', () => {
 
   it('links a run to its version, or to its simulator when it ran before versions', () => {
     expect(ranInLink(v5, 290)).toEqual({ to: '/environments/registry_env/versions/5', label: 'registry_env@5' })
-    expect(ranInLink(null, 132)).toEqual({ to: '/simulators/132', label: 'simulator 132' })
+    expect(ranInLink(null, 132)).toEqual({ to: '/simulators/132', label: 'legacy environment 132' })
     expect(ranInLink({ environment: 'a b', number: 1 }, 1).to).toBe('/environments/a%20b/versions/1')
   })
 

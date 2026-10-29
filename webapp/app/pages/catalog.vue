@@ -65,7 +65,7 @@ const columns: TableColumn<Entry>[] = [
   },
   {
     id: 'environments',
-    header: 'Runs in',
+    header: 'Environments',
     cell: ({ row }) => row.original.environments?.length
       ? h('div', { class: 'flex flex-wrap gap-1' }, row.original.environments.map(env =>
           h(ULink, { to: `/environments/${encodeURIComponent(env.name)}` }, () =>
