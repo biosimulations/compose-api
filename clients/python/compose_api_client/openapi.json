@@ -497,6 +497,18 @@
             "description": "Only those the caller submitted, signed in; needs a signed-in caller"
           },
           {
+            "name": "favorite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Only those the caller starred (`PUT /favorites/simulation/{id}`); needs a signed-in caller",
+              "default": false,
+              "title": "Favorite"
+            },
+            "description": "Only those the caller starred (`PUT /favorites/simulation/{id}`); needs a signed-in caller"
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -532,7 +544,7 @@
             }
           },
           "401": {
-            "description": "`mine` without a signed-in caller",
+            "description": "`mine` or `favorite` without a signed-in caller",
             "content": {
               "application/json": {
                 "schema": {
@@ -3108,6 +3120,18 @@
             "description": "Only this source, e.g. upload:x.omex or biomodels:BIOMD\u2026"
           },
           {
+            "name": "favorite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Only those the caller starred (`PUT /favorites/comparison/{id}`); needs a signed-in caller",
+              "default": false,
+              "title": "Favorite"
+            },
+            "description": "Only those the caller starred (`PUT /favorites/comparison/{id}`); needs a signed-in caller"
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -3138,6 +3162,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ComparisonPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`favorite` without a signed-in caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
                 }
               }
             }
@@ -4928,6 +4962,219 @@
         ]
       }
     },
+    "/favorites/{kind}/{ref}": {
+      "put": {
+        "tags": [
+          "Favorites"
+        ],
+        "summary": "Star a simulation, a comparison or a suite run (`<suite>@<number>`); starring it again changes nothing",
+        "operationId": "add-favorite",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FavoriteKind"
+            }
+          },
+          {
+            "name": "ref",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ref"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Favorite"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The reference cannot name anything of its kind",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Favorites need a signed-in caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "It does not exist, or the caller may not read it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Favorites"
+        ],
+        "summary": "Unstar it; unstarring what is not starred changes nothing",
+        "operationId": "remove-favorite",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FavoriteKind"
+            }
+          },
+          {
+            "name": "ref",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ref"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FavoriteRemoval"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The reference cannot name anything of its kind",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Favorites need a signed-in caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/favorites": {
+      "get": {
+        "tags": [
+          "Favorites"
+        ],
+        "summary": "The caller's stars, newest first; a star on something the caller can no longer read is not listed",
+        "operationId": "list-favorites",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/FavoriteKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only stars of this kind",
+              "title": "Kind"
+            },
+            "description": "Only stars of this kind"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Favorite"
+                  },
+                  "title": "Response List-Favorites"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Favorites need a signed-in caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -5432,6 +5679,12 @@
             ],
             "title": "Close",
             "description": "every compared data set close, every member completed"
+          },
+          "favorite": {
+            "type": "boolean",
+            "title": "Favorite",
+            "description": "The signed-in caller starred it (`PUT /favorites/comparison/{id}`)",
+            "default": false
           }
         },
         "type": "object",
@@ -6743,6 +6996,69 @@
         ],
         "title": "ErrorDetail",
         "description": "An error, as ``HTTPException(status_code, detail=\"...\")`` writes it."
+      },
+      "Favorite": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/FavoriteKind"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref",
+            "description": "A simulation's or a comparison's id; a suite run as `<suite>@<number>`"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "ref"
+        ],
+        "title": "Favorite",
+        "description": "One of the caller's stars."
+      },
+      "FavoriteKind": {
+        "type": "string",
+        "enum": [
+          "simulation",
+          "comparison",
+          "suite_run"
+        ],
+        "title": "FavoriteKind"
+      },
+      "FavoriteRemoval": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/FavoriteKind"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "removed": {
+            "type": "boolean",
+            "title": "Removed",
+            "description": "It was starred, and is not now"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "ref",
+          "removed"
+        ],
+        "title": "FavoriteRemoval",
+        "description": "What unstarring did."
       },
       "HTTPValidationError": {
         "properties": {
@@ -8213,6 +8529,12 @@
             "description": "The caller submitted it, signed in; its owner is never named (docs/plan-favorites-and-studies.md)",
             "default": false
           },
+          "favorite": {
+            "type": "boolean",
+            "title": "Favorite",
+            "description": "The signed-in caller starred it (`PUT /favorites/simulation/{id}`)",
+            "default": false
+          },
           "status": {
             "type": "string",
             "title": "Status"
@@ -8460,6 +8782,12 @@
             "type": "boolean",
             "title": "Mine",
             "description": "The caller submitted it, signed in; its owner is never named (docs/plan-favorites-and-studies.md)",
+            "default": false
+          },
+          "favorite": {
+            "type": "boolean",
+            "title": "Favorite",
+            "description": "The signed-in caller starred it (`PUT /favorites/simulation/{id}`)",
             "default": false
           },
           "status": {

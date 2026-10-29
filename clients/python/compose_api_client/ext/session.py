@@ -29,6 +29,7 @@ from compose_api_client.api.biosim_api import check_health_health_get, get_versi
 from compose_api_client.api.compute import get_processes_list, get_simulator_list, get_steps_list
 from compose_api_client.api.curated import run_copasi, run_tellurium
 from compose_api_client.api.datasets import get_dataset, get_dataset_content, get_dataset_file, list_datasets
+from compose_api_client.api.favorites import add_favorite, list_favorites, remove_favorite
 from compose_api_client.api.registry import (
     build_environment,
     build_simulator,
@@ -154,6 +155,9 @@ from compose_api_client.models import (
     EnvironmentVersion,
     EnvironmentVersionDetail,
     EnvironmentVersions,
+    Favorite,
+    FavoriteKind,
+    FavoriteRemoval,
     HpcRun,
     ImageStatus,
     InterfaceManifest,
@@ -884,11 +888,12 @@ class ComposeSession:
         environment: str | None = None,
         environment_version: str | None = None,
         mine: bool = False,
+        favorite: bool = False,
     ) -> SimulationPage:
         """Simulations the caller may read, newest first, each with its latest SLURM job. ``status`` is a job state
         or ``"submitting"``; ``simulator`` a prebuilt simulator's name or a container-definition hash prefix;
         ``environment`` any version of it, ``environment_version`` one (``registry_env@5``); ``mine``, only those the
-        signed-in caller submitted."""
+        signed-in caller submitted; ``favorite``, only those they starred."""
         op = Operation("GET", "/simulations", replayable=True)
         r, _ = self._send(
             op,
@@ -897,6 +902,7 @@ class ComposeSession:
                 **_simulation_filters(status, simulator, since, labels, tags, limit, offset),
                 **_where_ran(simulator_id, environment, environment_version),
                 mine=mine or UNSET,
+                favorite=favorite or UNSET,
             ),
         )
         return _parsed(r, SimulationPage, op=op)
@@ -1054,15 +1060,44 @@ class ComposeSession:
         )
         return _parsed(r, SuiteRunInfo, op=op)
 
-    def comparisons(self, *, source: str | None = None, limit: int = 25, offset: int = 0) -> ComparisonPage:
+    def comparisons(
+        self, *, source: str | None = None, favorite: bool = False, limit: int = 25, offset: int = 0
+    ) -> ComparisonPage:
+        """Comparisons, newest first; ``favorite``, only those the signed-in caller starred."""
         op = Operation("GET", "/comparisons", replayable=True)
         r, _ = self._send(
             op,
             lambda c: list_comparisons.sync_detailed(
-                client=c, source=source if source is not None else UNSET, limit=limit, offset=offset
+                client=c,
+                source=source if source is not None else UNSET,
+                favorite=favorite or UNSET,
+                limit=limit,
+                offset=offset,
             ),
         )
         return _parsed(r, ComparisonPage, op=op)
+
+    # -- favorites (needs a signed-in session) ---------------------------------------------------------------------
+
+    def add_favorite(self, kind: str, ref: str) -> Favorite:
+        """Star a simulation or a comparison (by id) or a suite run (``smoke@22``); starring it again changes
+        nothing."""
+        op = Operation("PUT", f"/favorites/{kind}/{ref}", replayable=True)
+        r, _ = self._send(op, lambda c: add_favorite.sync_detailed(FavoriteKind(kind), ref, client=c))
+        return _parsed(r, Favorite, op=op)
+
+    def remove_favorite(self, kind: str, ref: str) -> FavoriteRemoval:
+        """Unstar it; unstarring what is not starred changes nothing."""
+        op = Operation("DELETE", f"/favorites/{kind}/{ref}", replayable=True)
+        r, _ = self._send(op, lambda c: remove_favorite.sync_detailed(FavoriteKind(kind), ref, client=c))
+        return _parsed(r, FavoriteRemoval, op=op)
+
+    def favorites(self, kind: str | None = None) -> list[Favorite]:
+        """The caller's stars, newest first; of one kind (``simulation``, ``comparison``, ``suite_run``), or all."""
+        op = Operation("GET", "/favorites", replayable=True)
+        which = FavoriteKind(kind) if kind is not None else UNSET
+        r, _ = self._send(op, lambda c: list_favorites.sync_detailed(client=c, kind=which))
+        return _parsed_list(r, Favorite, op=op)
 
     def comparison_series(self, comparison_id: int, report: str) -> ComparisonSeries:
         """One report's columns from each run and each reference."""
@@ -1816,6 +1851,7 @@ class AsyncComposeSession:
         environment: str | None = None,
         environment_version: str | None = None,
         mine: bool = False,
+        favorite: bool = False,
     ) -> SimulationPage:
         op = Operation("GET", "/simulations", replayable=True)
         r, _ = await self._send(
@@ -1825,6 +1861,7 @@ class AsyncComposeSession:
                 **_simulation_filters(status, simulator, since, labels, tags, limit, offset),
                 **_where_ran(simulator_id, environment, environment_version),
                 mine=mine or UNSET,
+                favorite=favorite or UNSET,
             ),
         )
         return _parsed(r, SimulationPage, op=op)
@@ -1988,15 +2025,47 @@ class AsyncComposeSession:
         )
         return _parsed(r, SuiteRunInfo, op=op)
 
-    async def comparisons(self, *, source: str | None = None, limit: int = 25, offset: int = 0) -> ComparisonPage:
+    async def comparisons(
+        self, *, source: str | None = None, favorite: bool = False, limit: int = 25, offset: int = 0
+    ) -> ComparisonPage:
+        """Comparisons, newest first; ``favorite``, only those the signed-in caller starred."""
         op = Operation("GET", "/comparisons", replayable=True)
         r, _ = await self._send(
             op,
             lambda c: list_comparisons.asyncio_detailed(
-                client=c, source=source if source is not None else UNSET, limit=limit, offset=offset
+                client=c,
+                source=source if source is not None else UNSET,
+                favorite=favorite or UNSET,
+                limit=limit,
+                offset=offset,
             ),
         )
         return _parsed(r, ComparisonPage, op=op)
+
+    # -- favorites (needs a signed-in session) ---------------------------------------------------------------------
+
+    async def add_favorite(self, kind: str, ref: str) -> Favorite:
+        """Star a simulation or a comparison (by id) or a suite run (``smoke@22``); starring it again changes
+        nothing."""
+        op = Operation("PUT", f"/favorites/{kind}/{ref}", replayable=True)
+        r, _ = await self._send(op, lambda c: add_favorite.asyncio_detailed(FavoriteKind(kind), ref, client=c))
+        return _parsed(r, Favorite, op=op)
+
+    async def remove_favorite(self, kind: str, ref: str) -> FavoriteRemoval:
+        """Unstar it; unstarring what is not starred changes nothing."""
+        op = Operation("DELETE", f"/favorites/{kind}/{ref}", replayable=True)
+        r, _ = await self._send(op, lambda c: remove_favorite.asyncio_detailed(FavoriteKind(kind), ref, client=c))
+        return _parsed(r, FavoriteRemoval, op=op)
+
+    async def favorites(self, kind: str | None = None) -> list[Favorite]:
+        """The caller's stars, newest first; of one kind (``simulation``, ``comparison``, ``suite_run``), or all."""
+        op = Operation("GET", "/favorites", replayable=True)
+        which = FavoriteKind(kind) if kind is not None else UNSET
+        r, _ = await self._send(
+            op,
+            lambda c: list_favorites.asyncio_detailed(client=c, kind=which),
+        )
+        return _parsed_list(r, Favorite, op=op)
 
     async def comparison_series(self, comparison_id: int, report: str) -> ComparisonSeries:
         """One report's columns from each run and each reference."""

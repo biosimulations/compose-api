@@ -5,12 +5,13 @@ is what ``POST /simulation/run`` returned as ``simulation_database_id``, and wha
 """
 
 import datetime
-from collections.abc import Mapping
+from collections.abc import Mapping, Set
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from compose_api.api.errors import error
+from compose_api.api.routers.favorites import starred_refs
 from compose_api.authentication import get_optional_principal
 from compose_api.authorization import Caller, OptionalCaller, can_cancel, can_read, readable_clause
 from compose_api.common.gateway.models import RouterConfig
@@ -19,6 +20,7 @@ from compose_api.db.services.environments_db import VersionLink
 from compose_api.db.services.simulators_db import SUBMITTING, SimulationQuery, SimulationRow
 from compose_api.dependencies import get_database_service, get_required_database_service, get_simulation_service
 from compose_api.environments.versions import prebuilt_images, prebuilt_names
+from compose_api.favorites import FavoriteKind
 from compose_api.simulation import handlers
 from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.labels import LABEL_KEYS, LabelError, parse_label_filters
@@ -73,7 +75,11 @@ def _simulator_label(container_def: str, names: Mapping[str, str]) -> str | None
 
 
 def _summary(
-    row: SimulationRow, names: Mapping[str, str], versions: Mapping[int, VersionRef], caller: Caller | None
+    row: SimulationRow,
+    names: Mapping[str, str],
+    versions: Mapping[int, VersionRef],
+    caller: Caller | None,
+    favorites: Set[str] = frozenset(),
 ) -> SimulationSummary:
     run = row.run
     owner = row.simulation.owner_sub
@@ -87,6 +93,7 @@ def _summary(
         container_def_hash=row.simulator.container_def_hash,
         visibility=Visibility(row.simulation.visibility),
         mine=caller is not None and owner is not None and owner == caller.subject,
+        favorite=str(row.simulation.id) in favorites,
         status=run.status.to_job_status().value if run is not None else SUBMITTING,
         slurm_job_id=run.slurmjobid if run is not None else None,
         start_time=str(run.start_time) if run is not None and run.start_time else None,
@@ -157,7 +164,7 @@ def _container_hash(simulator: str, images: Mapping[str, str]) -> str:
     path="",
     response_model=SimulationPage,
     operation_id="list-simulations",
-    responses={401: error("`mine` without a signed-in caller")},
+    responses={401: error("`mine` or `favorite` without a signed-in caller")},
     tags=["Simulations"],
     summary="List simulations, newest first, each with its latest SLURM job",
 )
@@ -191,6 +198,10 @@ async def list_simulations(
     mine: Annotated[
         bool, Query(description="Only those the caller submitted, signed in; needs a signed-in caller")
     ] = False,
+    favorite: Annotated[
+        bool,
+        Query(description="Only those the caller starred (`PUT /favorites/simulation/{id}`); needs a signed-in caller"),
+    ] = False,
     limit: Annotated[int, Query(ge=1, le=1000)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> SimulationPage:
@@ -198,10 +209,10 @@ async def list_simulations(
         labels = parse_label_filters(label)
     except LabelError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    if mine and caller is None:
+    if (mine or favorite) and caller is None:
         raise HTTPException(
             status_code=401,
-            detail="Listing your simulations needs a signed-in caller",
+            detail="Listing your own or your favorite simulations needs a signed-in caller",
             headers={"WWW-Authenticate": "Bearer"},
         )
     links = await _version_links()
@@ -216,6 +227,7 @@ async def list_simulations(
         labels=labels,
         tags=[t.strip() for t in tag or [] if t.strip()],
         owner_sub=caller.subject if mine and caller is not None else None,
+        favorite_of=caller.subject if favorite and caller is not None else None,
         limit=limit,
         offset=offset,
     )
@@ -225,8 +237,9 @@ async def list_simulations(
     following = offset + len(rows)
     names = await prebuilt_names(get_database_service())
     versions = {link.version_id: link.ref for link in links}
+    favorites = await starred_refs(caller, FavoriteKind.SIMULATION)
     return SimulationPage(
-        simulations=[_summary(r, names, versions, caller) for r in rows],
+        simulations=[_summary(r, names, versions, caller, favorites) for r in rows],
         total=total,
         next_offset=following if following < total else None,
     )
@@ -245,7 +258,13 @@ async def get_simulation(simulation_id: int, caller: OptionalCaller) -> Simulati
     row = await db.get_simulator_db().get_simulation_row(simulation_id)
     if row is None or not can_read(caller, row.simulation.to_simulation_access()):
         raise HTTPException(status_code=404, detail=f"Simulation with id {simulation_id} not found.")
-    summary = _summary(row, await prebuilt_names(db), await _version_refs(), caller)
+    summary = _summary(
+        row,
+        await prebuilt_names(db),
+        await _version_refs(),
+        caller,
+        await starred_refs(caller, FavoriteKind.SIMULATION),
+    )
     event_count = await db.get_events_db().count_events(summary.trace_id) if summary.trace_id else 0
     _, dataset_count = await db.get_datasets_db().page(
         DatasetQuery(simulation_id=simulation_id, available=None, limit=1)

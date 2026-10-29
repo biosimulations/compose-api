@@ -6,6 +6,7 @@ import httpx
 from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.comparison_page import ComparisonPage
+from ...models.error_detail import ErrorDetail
 from ...models.http_validation_error import HTTPValidationError
 from ...types import UNSET, Response, Unset
 
@@ -13,6 +14,7 @@ from ...types import UNSET, Response, Unset
 def _get_kwargs(
     *,
     source: None | str | Unset = UNSET,
+    favorite: bool | Unset = False,
     limit: int | Unset = 25,
     offset: int | Unset = 0,
 ) -> dict[str, Any]:
@@ -25,6 +27,8 @@ def _get_kwargs(
     else:
         json_source = source
     params["source"] = json_source
+
+    params["favorite"] = favorite
 
     params["limit"] = limit
 
@@ -43,11 +47,16 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> ComparisonPage | HTTPValidationError | None:
+) -> ComparisonPage | ErrorDetail | HTTPValidationError | None:
     if response.status_code == 200:
         response_200 = ComparisonPage.from_dict(response.json())
 
         return response_200
+
+    if response.status_code == 401:
+        response_401 = ErrorDetail.from_dict(response.json())
+
+        return response_401
 
     if response.status_code == 422:
         response_422 = HTTPValidationError.from_dict(response.json())
@@ -62,7 +71,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[ComparisonPage | HTTPValidationError]:
+) -> Response[ComparisonPage | ErrorDetail | HTTPValidationError]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -75,13 +84,16 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     source: None | str | Unset = UNSET,
+    favorite: bool | Unset = False,
     limit: int | Unset = 25,
     offset: int | Unset = 0,
-) -> Response[ComparisonPage | HTTPValidationError]:
+) -> Response[ComparisonPage | ErrorDetail | HTTPValidationError]:
     """List comparisons, newest first
 
     Args:
         source (None | str | Unset): Only this source, e.g. upload:x.omex or biomodels:BIOMD…
+        favorite (bool | Unset): Only those the caller starred (`PUT /favorites/comparison/{id}`);
+            needs a signed-in caller Default: False.
         limit (int | Unset):  Default: 25.
         offset (int | Unset):  Default: 0.
 
@@ -90,11 +102,12 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[ComparisonPage | HTTPValidationError]
+        Response[ComparisonPage | ErrorDetail | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
         source=source,
+        favorite=favorite,
         limit=limit,
         offset=offset,
     )
@@ -110,13 +123,16 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     source: None | str | Unset = UNSET,
+    favorite: bool | Unset = False,
     limit: int | Unset = 25,
     offset: int | Unset = 0,
-) -> ComparisonPage | HTTPValidationError | None:
+) -> ComparisonPage | ErrorDetail | HTTPValidationError | None:
     """List comparisons, newest first
 
     Args:
         source (None | str | Unset): Only this source, e.g. upload:x.omex or biomodels:BIOMD…
+        favorite (bool | Unset): Only those the caller starred (`PUT /favorites/comparison/{id}`);
+            needs a signed-in caller Default: False.
         limit (int | Unset):  Default: 25.
         offset (int | Unset):  Default: 0.
 
@@ -125,12 +141,13 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        ComparisonPage | HTTPValidationError
+        ComparisonPage | ErrorDetail | HTTPValidationError
     """
 
     return sync_detailed(
         client=client,
         source=source,
+        favorite=favorite,
         limit=limit,
         offset=offset,
     ).parsed
@@ -140,13 +157,16 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     source: None | str | Unset = UNSET,
+    favorite: bool | Unset = False,
     limit: int | Unset = 25,
     offset: int | Unset = 0,
-) -> Response[ComparisonPage | HTTPValidationError]:
+) -> Response[ComparisonPage | ErrorDetail | HTTPValidationError]:
     """List comparisons, newest first
 
     Args:
         source (None | str | Unset): Only this source, e.g. upload:x.omex or biomodels:BIOMD…
+        favorite (bool | Unset): Only those the caller starred (`PUT /favorites/comparison/{id}`);
+            needs a signed-in caller Default: False.
         limit (int | Unset):  Default: 25.
         offset (int | Unset):  Default: 0.
 
@@ -155,11 +175,12 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[ComparisonPage | HTTPValidationError]
+        Response[ComparisonPage | ErrorDetail | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
         source=source,
+        favorite=favorite,
         limit=limit,
         offset=offset,
     )
@@ -173,13 +194,16 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     source: None | str | Unset = UNSET,
+    favorite: bool | Unset = False,
     limit: int | Unset = 25,
     offset: int | Unset = 0,
-) -> ComparisonPage | HTTPValidationError | None:
+) -> ComparisonPage | ErrorDetail | HTTPValidationError | None:
     """List comparisons, newest first
 
     Args:
         source (None | str | Unset): Only this source, e.g. upload:x.omex or biomodels:BIOMD…
+        favorite (bool | Unset): Only those the caller starred (`PUT /favorites/comparison/{id}`);
+            needs a signed-in caller Default: False.
         limit (int | Unset):  Default: 25.
         offset (int | Unset):  Default: 0.
 
@@ -188,13 +212,14 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        ComparisonPage | HTTPValidationError
+        ComparisonPage | ErrorDetail | HTTPValidationError
     """
 
     return (
         await asyncio_detailed(
             client=client,
             source=source,
+            favorite=favorite,
             limit=limit,
             offset=offset,
         )

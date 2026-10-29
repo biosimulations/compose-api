@@ -6,49 +6,63 @@ from typing import Annotated
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
 
 from compose_api.api.errors import error
+from compose_api.api.routers.favorites import starred_refs
 from compose_api.authentication import get_optional_principal
-from compose_api.authorization import OptionalCaller, readable_clause, readable_simulation_ids
+from compose_api.authorization import OptionalCaller, readable_clause, readable_comparison
 from compose_api.common.gateway.models import RouterConfig
-from compose_api.db.services.comparisons_db import ComparisonRow
 from compose_api.dependencies import get_required_database_service
+from compose_api.favorites import FavoriteKind
 from compose_api.sedml import service, verifications
 from compose_api.sedml.models import Comparison, ComparisonPage, ComparisonSeries, Verification, VerifyRequest
 
 config = RouterConfig(router=APIRouter(), prefix="/comparisons", dependencies=[Depends(get_optional_principal)])
 
 
-async def _readable_comparison(comparison_id: int, caller: OptionalCaller) -> ComparisonRow | None:
-    """The comparison, if it exists and the caller may read every run in it; a comparison shows its members'
-    results, so one the caller may not read is reported as not found (compose_api.authorization)."""
-    row = await get_required_database_service().get_comparisons_db().get(comparison_id)
-    if row is None:
-        return None
-    ids = [m.simulation_id for m in row.members]
-    return row if len(await readable_simulation_ids(caller, ids)) == len(ids) else None
+def _flagged(view: Comparison, starred: set[str]) -> Comparison:
+    """The comparison, saying whether the caller starred it."""
+    return view.model_copy(update={"favorite": str(view.comparison_id) in starred})
 
 
 @config.router.get(
     path="",
     response_model=ComparisonPage,
     operation_id="list-comparisons",
+    responses={401: error("`favorite` without a signed-in caller")},
     tags=["SED-ML"],
     summary="List comparisons, newest first",
 )
 async def list_comparisons(
     caller: OptionalCaller,
     source: Annotated[str | None, Query(description="Only this source, e.g. upload:x.omex or biomodels:BIOMD…")] = None,
+    favorite: Annotated[
+        bool,
+        Query(description="Only those the caller starred (`PUT /favorites/comparison/{id}`); needs a signed-in caller"),
+    ] = False,
     limit: Annotated[int, Query(ge=1, le=200)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ComparisonPage:
+    if favorite and caller is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Listing your favorite comparisons needs a signed-in caller",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     rows, total = (
         await get_required_database_service()
         .get_comparisons_db()
-        .page(limit, offset, source, readable=readable_clause(caller))
+        .page(
+            limit,
+            offset,
+            source,
+            readable=readable_clause(caller),
+            favorite_of=caller.subject if favorite and caller is not None else None,
+        )
     )
     following = offset + len(rows)
     statuses = await service.member_statuses(rows)
+    starred = await starred_refs(caller, FavoriteKind.COMPARISON)
     return ComparisonPage(
-        comparisons=[await service.comparison_view(r, statuses) for r in rows],
+        comparisons=[_flagged(await service.comparison_view(r, statuses), starred) for r in rows],
         total=total,
         next_offset=following if following < total else None,
     )
@@ -63,10 +77,10 @@ async def list_comparisons(
     responses={404: error("No such comparison")},
 )
 async def get_comparison(comparison_id: int, caller: OptionalCaller) -> Comparison:
-    row = await _readable_comparison(comparison_id, caller)
+    row = await readable_comparison(caller, comparison_id)
     if row is None:
         raise HTTPException(status_code=404, detail=f"Comparison {comparison_id} not found.")
-    return await service.comparison_view(row)
+    return _flagged(await service.comparison_view(row), await starred_refs(caller, FavoriteKind.COMPARISON))
 
 
 @config.router.get(
@@ -78,7 +92,7 @@ async def get_comparison(comparison_id: int, caller: OptionalCaller) -> Comparis
     responses={404: error("No such comparison or report")},
 )
 async def get_comparison_series(comparison_id: int, report: str, caller: OptionalCaller) -> ComparisonSeries:
-    row = await _readable_comparison(comparison_id, caller)
+    row = await readable_comparison(caller, comparison_id)
     reports_info = (row.comparison.settings.get("reports") or {}) if row is not None else {}
     if row is None or report not in reports_info:
         raise HTTPException(status_code=404, detail=f"Comparison {comparison_id} has no report {report!r}.")
@@ -119,7 +133,7 @@ async def verify_comparison(
     response: Response,
     request: Annotated[VerifyRequest | None, Body()] = None,
 ) -> Verification:
-    row = await _readable_comparison(comparison_id, caller)
+    row = await readable_comparison(caller, comparison_id)
     if row is None:
         raise HTTPException(status_code=404, detail=f"Comparison {comparison_id} not found.")
     verification, created = await verifications.queue(row, request.simulators if request else None)
@@ -136,7 +150,7 @@ async def verify_comparison(
     responses={404: error("No such comparison")},
 )
 async def list_comparison_verifications(comparison_id: int, caller: OptionalCaller) -> list[Verification]:
-    row = await _readable_comparison(comparison_id, caller)
+    row = await readable_comparison(caller, comparison_id)
     if row is None:
         raise HTTPException(status_code=404, detail=f"Comparison {comparison_id} not found.")
     found = await get_required_database_service().get_comparisons_db().verifications(comparison_id)

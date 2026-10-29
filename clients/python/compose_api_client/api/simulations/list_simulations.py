@@ -24,6 +24,7 @@ def _get_kwargs(
     label: list[str] | None | Unset = UNSET,
     tag: list[str] | None | Unset = UNSET,
     mine: bool | Unset = False,
+    favorite: bool | Unset = False,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
 ) -> dict[str, Any]:
@@ -98,6 +99,8 @@ def _get_kwargs(
 
     params["mine"] = mine
 
+    params["favorite"] = favorite
+
     params["limit"] = limit
 
     params["offset"] = offset
@@ -160,6 +163,7 @@ def sync_detailed(
     label: list[str] | None | Unset = UNSET,
     tag: list[str] | None | Unset = UNSET,
     mine: bool | Unset = False,
+    favorite: bool | Unset = False,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
 ) -> Response[ErrorDetail | HTTPValidationError | SimulationPage]:
@@ -181,6 +185,8 @@ def sync_detailed(
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         mine (bool | Unset): Only those the caller submitted, signed in; needs a signed-in caller
             Default: False.
+        favorite (bool | Unset): Only those the caller starred (`PUT /favorites/simulation/{id}`);
+            needs a signed-in caller Default: False.
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
 
@@ -202,6 +208,7 @@ def sync_detailed(
         label=label,
         tag=tag,
         mine=mine,
+        favorite=favorite,
         limit=limit,
         offset=offset,
     )
@@ -225,6 +232,7 @@ def sync(
     label: list[str] | None | Unset = UNSET,
     tag: list[str] | None | Unset = UNSET,
     mine: bool | Unset = False,
+    favorite: bool | Unset = False,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
 ) -> ErrorDetail | HTTPValidationError | SimulationPage | None:
@@ -246,6 +254,8 @@ def sync(
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         mine (bool | Unset): Only those the caller submitted, signed in; needs a signed-in caller
             Default: False.
+        favorite (bool | Unset): Only those the caller starred (`PUT /favorites/simulation/{id}`);
+            needs a signed-in caller Default: False.
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
 
@@ -268,6 +278,7 @@ def sync(
         label=label,
         tag=tag,
         mine=mine,
+        favorite=favorite,
         limit=limit,
         offset=offset,
     ).parsed
@@ -285,6 +296,7 @@ async def asyncio_detailed(
     label: list[str] | None | Unset = UNSET,
     tag: list[str] | None | Unset = UNSET,
     mine: bool | Unset = False,
+    favorite: bool | Unset = False,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
 ) -> Response[ErrorDetail | HTTPValidationError | SimulationPage]:
@@ -306,6 +318,8 @@ async def asyncio_detailed(
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         mine (bool | Unset): Only those the caller submitted, signed in; needs a signed-in caller
             Default: False.
+        favorite (bool | Unset): Only those the caller starred (`PUT /favorites/simulation/{id}`);
+            needs a signed-in caller Default: False.
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
 
@@ -327,6 +341,7 @@ async def asyncio_detailed(
         label=label,
         tag=tag,
         mine=mine,
+        favorite=favorite,
         limit=limit,
         offset=offset,
     )
@@ -348,6 +363,7 @@ async def asyncio(
     label: list[str] | None | Unset = UNSET,
     tag: list[str] | None | Unset = UNSET,
     mine: bool | Unset = False,
+    favorite: bool | Unset = False,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
 ) -> ErrorDetail | HTTPValidationError | SimulationPage | None:
@@ -369,6 +385,8 @@ async def asyncio(
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         mine (bool | Unset): Only those the caller submitted, signed in; needs a signed-in caller
             Default: False.
+        favorite (bool | Unset): Only those the caller starred (`PUT /favorites/simulation/{id}`);
+            needs a signed-in caller Default: False.
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
 
@@ -392,6 +410,7 @@ async def asyncio(
             label=label,
             tag=tag,
             mine=mine,
+            favorite=favorite,
             limit=limit,
             offset=offset,
         )

@@ -35,6 +35,7 @@ class Comparison:
             created_at (None | str | Unset):
             result (ComparisonResultType0 | None | Unset):
             close (bool | None | Unset): every compared data set close, every member completed
+            favorite (bool | Unset): The signed-in caller starred it (`PUT /favorites/comparison/{id}`) Default: False.
     """
 
     comparison_id: int
@@ -48,6 +49,7 @@ class Comparison:
     created_at: None | str | Unset = UNSET
     result: ComparisonResultType0 | None | Unset = UNSET
     close: bool | None | Unset = UNSET
+    favorite: bool | Unset = False
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -92,6 +94,8 @@ class Comparison:
         else:
             close = self.close
 
+        favorite = self.favorite
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
@@ -110,6 +114,8 @@ class Comparison:
             field_dict["result"] = result
         if close is not UNSET:
             field_dict["close"] = close
+        if favorite is not UNSET:
+            field_dict["favorite"] = favorite
 
         return field_dict
 
@@ -176,6 +182,8 @@ class Comparison:
 
         close = _parse_close(d.pop("close", UNSET))
 
+        favorite = d.pop("favorite", UNSET)
+
         comparison = cls(
             comparison_id=comparison_id,
             name=name,
@@ -188,6 +196,7 @@ class Comparison:
             created_at=created_at,
             result=result,
             close=close,
+            favorite=favorite,
         )
 
         comparison.additional_properties = d

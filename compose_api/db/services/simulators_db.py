@@ -25,6 +25,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
+from compose_api.db.services.favorites_db import starred
 from compose_api.db.tables.environment_tables import ORMEnvironmentVersion
 from compose_api.db.tables.hpc_tables import JobStatusDB, JobTypeDB, ORMHpcRun, ORMSubmission
 from compose_api.db.tables.simulator_tables import (
@@ -34,6 +35,7 @@ from compose_api.db.tables.simulator_tables import (
     ORMSimulator,
     ORMSimulatorToPackage,
 )
+from compose_api.favorites import FavoriteKind
 from compose_api.simulation.containerization import ContainerizationFileRepr
 from compose_api.simulation.hpc_utils import get_singularity_hash, get_slurm_sim_experiment_dir
 from compose_api.simulation.models import (
@@ -692,6 +694,7 @@ class SimulationQuery:
     labels: dict[str, str] = field(default_factory=dict)  # every one must match
     tags: list[str] = field(default_factory=list)  # every one must be present
     owner_sub: str | None = None  # submitted by this subject, signed in
+    favorite_of: str | None = None  # starred by this subject (docs/plan-favorites-and-studies.md, step 2)
     limit: int = 50
     offset: int = 0
 
@@ -772,6 +775,8 @@ def _simulation_conditions(query: SimulationQuery) -> list[ColumnElement[bool]]:
         conditions.append(ORMSimulation.tags.contains(query.tags))
     if query.owner_sub is not None:
         conditions.append(ORMSimulation.owner_sub == query.owner_sub)
+    if query.favorite_of is not None:
+        conditions.append(starred(ORMSimulation.id, query.favorite_of, FavoriteKind.SIMULATION))
     return conditions
 
 

@@ -532,6 +532,9 @@ class SimulationSummary(BaseModel):
         default=False,
         description="The caller submitted it, signed in; its owner is never named (docs/plan-favorites-and-studies.md)",
     )
+    favorite: bool = Field(
+        default=False, description="The signed-in caller starred it (`PUT /favorites/simulation/{id}`)"
+    )
     status: str  # a JobStatus, or "submitting" while no SLURM job exists yet
     slurm_job_id: int | None = None
     start_time: str | None = None
