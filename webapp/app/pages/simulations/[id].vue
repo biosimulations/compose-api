@@ -152,6 +152,7 @@ const fields = computed(() => {
   <div>
     <PageHeader :title="`Simulation #${id}`" :description="sim?.experiment_id">
       <template #actions>
+        <FavoriteStar v-if="sim" v-model="sim.favorite" kind="simulation" :ref-id="id" size="md" />
         <StatusBadge v-if="sim" :status="sim.status" :submission="sim.submission" class="text-sm" />
         <UButton
           icon="i-lucide-file-archive"

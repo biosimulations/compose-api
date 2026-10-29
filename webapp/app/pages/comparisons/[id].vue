@@ -123,6 +123,14 @@ watch(() => comparison.value?.status, async (status) => {
   <div>
     <PageHeader :title="comparison ? comparison.name : `Comparison #${id}`" :description="comparison ? `${comparison.source} · ${comparison.sedml} · task ${comparison.task}` : undefined">
       <template #actions>
+        <FavoriteStar
+          v-if="comparison"
+          :model-value="comparison.favorite"
+          kind="comparison"
+          :ref-id="id"
+          size="md"
+          @update:model-value="(v: boolean) => { if (comparison) comparison = { ...comparison, favorite: v } }"
+        />
         <UButton to="/comparisons" icon="i-lucide-arrow-left" label="Comparisons" color="neutral" variant="ghost" />
       </template>
     </PageHeader>

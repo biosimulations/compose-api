@@ -1,6 +1,6 @@
 # Favorites and studies: a signed-in user's own runs, the runs they mark, and groups of runs they share
 
-**Status (2026-10-28): in progress** (1a and 1c live in 0.7.70; 2 merged (#474); 1b in review). Asked for by Jim on 2026-10-28: a per-user favorites filter on the simulations
+**Status (2026-10-28): in progress** (1a, 1c live in 0.7.70; 1b, 2 in 0.7.71; 2b in review). Asked for by Jim on 2026-10-28: a per-user favorites filter on the simulations
 list, and then projects, studies or investigations. One PR per step, each merged with a merge commit; deploying is a
 release, as usual.
 
@@ -8,10 +8,10 @@ release, as usual.
 |---|---|---|
 | 0 | This document | merged (#469) |
 | 1a | Owners stamped at submit; a "Mine" filter (API, CLI, web); cancelling an owned run is its owner's | merged (#470) |
-| 1b | Visibility chosen at submit and changed later (`PATCH`); private by default for a signed-in submitter (F3) | in review |
+| 1b | Visibility chosen at submit and changed later (`PATCH`); private by default for a signed-in submitter (F3) | merged (#475); 0.7.71 |
 | 1c | No `Any` in the API's types: every error body declared, the client typed end to end (inserted 2026-10-28, before step 2's new routes) | merged (#471); 0.7.70 |
-| 2 | Favorites: a private star on a simulation, a comparison or a suite run; a "Favorites" filter (API, CLI) | merged (#474) |
-| 2b | The web pages: a star on each row and in each page's header; the Mine and Favorites filters | — |
+| 2 | Favorites: a private star on a simulation, a comparison or a suite run; a "Favorites" filter (API, CLI) | merged (#474); 0.7.71 |
+| 2b | The web pages: a star on each row and in each page's header; the Mine and Favorites filters | in review |
 | 3 | Studies: their own plan, settling S1–S4 below | — |
 
 ## Context
@@ -148,6 +148,10 @@ release, as usual.
 ### 2b. The web pages
 - A star on each row of the simulations and comparisons lists and in each page's header, and on a suite run's page.
 - "Mine" and "Favorites" filters, shown when signed in.
+- One `FavoriteStar` component, hidden signed out, changed at once and put back if the API refuses; a filled star is
+  an inline SVG (the bundled icon set has no filled star). The lists read each row's `favorite` flag; a suite run's
+  page asks `GET /favorites?kind=suite_run` (suite runs carry no flag). Comparisons have no "Mine": they have no owner
+  of their own.
 
 ### 3. Studies
 A plan of its own, `docs/plan-studies.md`, settling S1–S4, written once favorites are live and the shape of what
