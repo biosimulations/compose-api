@@ -428,6 +428,10 @@
        The entry installs it by URL and sha256, not by a `build` step in our build Job.
      - **D7c.2 Documents name process-bigraph's emitters fully qualified:** `local:process_bigraph.emitter.RAMEmitter`,
        not `local:ram-emitter`. No short names are registered.
+       *Revised 2026-10-29 (Jim):* the short names the engine itself registers for these three classes
+       (`local:RAMEmitter`, process-bigraph's own default, `local:JSONEmitter`, `local:ConsoleEmitter`) are accepted
+       too, checked as the qualified class (the entry's `short_names`); the document is not rewritten. Every other short
+       name stays refused, since the engine's include `RunProcess`, `RestProcess` and `GitRemoteProcess`.
      - **D7c.3 The prebuilt image stays.** viva-pde-particle@1 still runs documents that use only its classes (the
        resolver prefers a declared environment that covers them). The composed entry is what lets its classes join a
        mash-up with other entries.
