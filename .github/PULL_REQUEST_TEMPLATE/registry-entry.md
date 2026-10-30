@@ -65,4 +65,7 @@ Check result (paste it in a fence):
 - [ ] No Step output port type adds or appends (`float`, `integer`, `array`, `list`, `set` and the like, also inside `map[...]`);
   use `overwrite[...]`. Processes are exempt; a named type is judged at read-back. In a clone:
   `git grep -n -A12 'def outputs' $C -- ':(glob)**/<module root>/**'`
+- [ ] The entry's environment locks ("Check that it locks" in the guide). A first lock that fails is recorded as a failed version, and
+  later runs of that entry set get a 409 until an administrator makes a new one. Paste the end of the lock output and the output of the
+  last command there (git sources pinned to no commit; empty is what is wanted):
 - [ ] CI is green. Locally: `uv run python -m pytest tests/registry tests/environments/test_compliance.py -q` (needs Docker)

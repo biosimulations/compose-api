@@ -55,6 +55,42 @@ A component often needs library entries beside it (`kind: library`: an engine, o
 `conda`, no `module_roots`). They install code like any other entry and are reviewed the same way. Their level gates nothing:
 what runs is a component's classes (`environments/lifecycle.py`, `composable`).
 
+## Check that it locks
+
+A signed-in first run of an entry makes a mash-up of exactly that entry and what it `requires`: `pixi_toml()` writes a pixi workspace,
+an unprivileged Job locks it with `pixi exec --spec git -- pixi lock` in the image `environments.yaml` names, and a lock that does not
+resolve is recorded as a failed version. Later runs of that entry set then get a 409 until an administrator makes a new version
+(`environments/service.py`, `environments/lifecycle.py`), so an entry that cannot lock must not reach a release at `tested`, and no check
+above locks one. To run the same step before asking, in a clone of compose-api whose `manifest.yaml` has the entry (an entry that is only
+in `catalog.yaml` has no `install`, so there is nothing to lock):
+
+```bash
+ENTRY=viva-ketchup      # the entry's id
+W=$(mktemp -d)
+uv run python - "$ENTRY" > "$W/pixi.toml" <<'PY'
+import datetime
+import sys
+
+from compose_api.environments.pixi import DEFAULT_PYTHON_VERSION, ComposedSpec, pixi_toml
+from compose_api.registry.environments import load_environments
+from compose_api.registry.manifest import load_manifest
+
+composition = load_environments().composition
+entry = next(e for e in load_manifest().entries if e.id == sys.argv[1])
+now = datetime.datetime.now(datetime.UTC).replace(microsecond=0)
+spec = ComposedSpec("lock-check", (entry,), tuple(sorted(composition.core.items())), composition.platform, DEFAULT_PYTHON_VERSION, now)
+print(pixi_toml(spec), end="")
+PY
+IMAGE=$(uv run python -c 'from compose_api.registry.environments import load_environments; print(load_environments().composition.pixi_image)')
+docker run --rm --platform linux/amd64 --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$W":/work -w /work "$IMAGE" pixi exec --spec git -- pixi lock
+grep '^- pypi: git+' "$W/pixi.lock" | grep -v '?rev='     # git sources pinned to no commit; empty is what is wanted
+```
+
+`--platform linux/amd64` is the Job's platform (on Apple silicon the arm64 image fails whenever a source build is needed); `HOME=/tmp` keeps
+pixi's cache inside the container (on macOS a cache on the mounted folder fails with "failed to link ... Invalid argument"). What a lock
+does not show: the privileged build, the run, this entry together with others, or a later day (`exclude-newer` is now, and a git branch
+tip moves).
+
 ## What CI checks
 
 These run on every pull request, so a change that breaks one is red before a reviewer reads it:
@@ -68,6 +104,7 @@ These run on every pull request, so a change that breaks one is red before a rev
 - Compliance cases are checked only for the entries a test names, today `pbsim-common`, `viva-basic-processes` and
   `viva-pde-particle` (`tests/environments/test_compliance.py`). No test walks every entry's cases, so a new entry's case is
   checked only by a test its pull request adds or by the reviewer, with the command in the template.
+- Whether an entry's environment locks is checked by none of these (see "Check that it locks").
 
 Locally: `uv run python -m pytest tests/registry tests/environments/test_compliance.py -q` (the database-backed tests need
 Docker), and `make check` for the lint and type checks (`CLAUDE.md`).
@@ -95,7 +132,9 @@ Docker), and `make check` for the lint and type checks (`CLAUDE.md`).
   those resolve when the version is locked, no newer than the lock's `exclude-newer` date (`environments/pixi.py`). The
   composition also fixes Python and the core's `process-bigraph` and `bigraph-schema` versions (`environments.yaml`), so a
   package whose bounds exclude them cannot be locked with the others. viva-pde-particle keeps `vivarium-workbench` behind a `workbench` extra for this
-  reason (its `pyproject.toml`).
+  reason (its `pyproject.toml`). A git package's own `[tool.uv.sources]` are followed as well: a source that sends a dependency to a
+  branch pins nothing, and the lock takes that branch's tip, and the tip's own sources, the day it runs ("Check that it locks"
+  lists them).
 - **Config-driven imports.** The address check is the only gate (`registry/validation.py`) and sees only `address` values. A class
   that imports or runs what its config names escapes it: `EnsembleRunner` imported a `module:function` from its config, and
   viva-pde-particle#67 replaced it (composition plan, 7c-4). The `types` items are imported by the runner before every run
