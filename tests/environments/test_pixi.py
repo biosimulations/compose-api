@@ -7,6 +7,7 @@ import datetime
 import hashlib
 import os
 import subprocess
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +16,7 @@ import pytest
 from compose_api.environments import pixi
 from compose_api.environments.pixi import ComposedSpec, PixiLock, composed_definition, pixi_toml
 from compose_api.registry.environments import Composition, load_environments
-from compose_api.registry.manifest import Manifest, RegistryEntry, load_manifest
+from compose_api.registry.manifest import CurationLevel, Install, Manifest, RegistryEntry, load_manifest
 from compose_api.simulation import build_k8s
 from compose_api.simulation.build_k8s import BuildSite, LockFailedError, lock_job, lock_script, read_inspection_log
 
@@ -49,6 +50,31 @@ def test_registry_env_becomes_a_pixi_workspace_pinned_to_releases_and_commits() 
     assert '"pyvcell" = { "version" = "==0.5.2", "extras" = ["native", "ode"] }' in toml
     assert '"tellurium" = "==2.2.13.1"' in toml and '"libvcell" = "==0.0.24"' in toml
     assert toml.index("[dependencies]") < toml.index("[pypi-dependencies]")
+
+
+def test_development_tooling_comes_from_the_index_whatever_a_git_package_says() -> None:
+    # a workspace's `[tool.uv.sources]` sent viva-superpowers to the tip of its branch (0.24.0, bigraph-schema>=1.8.2)
+    # while the core pins 1.8.1, so its first lock failed; pixi 0.68.1 has no switch to ignore sources, so these
+    # names are overridden
+    parsed = tomllib.loads(pixi_toml(_registry_env()))
+    assert parsed["pypi-options"]["dependency-overrides"] == dict.fromkeys(pixi.INDEX_ONLY, ">=0")
+    assert not set(pixi.INDEX_ONLY) & set(parsed["pypi-dependencies"])
+
+
+def test_a_tool_an_entry_installs_itself_is_not_overridden() -> None:
+    spec = _registry_env()
+    tool = RegistryEntry(
+        id="viva-superpowers",
+        kind="library",
+        package="viva-superpowers",
+        source="https://example.org",
+        version="0.24.0",
+        level=CurationLevel.INSTALLABLE,
+        install=Install(pypi="viva-superpowers", version="0.24.0"),
+    )
+    parsed = tomllib.loads(pixi_toml(ComposedSpec(**{**spec.__dict__, "entries": (*spec.entries, tool)})))
+    assert parsed["pypi-dependencies"]["viva-superpowers"] == "==0.24.0"
+    assert set(parsed["pypi-options"]["dependency-overrides"]) == set(pixi.INDEX_ONLY) - {"viva-superpowers"}
 
 
 def test_a_spec_records_its_entries_and_the_runner_types_they_declare() -> None:
