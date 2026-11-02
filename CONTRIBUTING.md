@@ -124,3 +124,4 @@ Before you submit a pull request, check that it meets these guidelines:
 
 2. If the pull request adds functionality, the docs should be updated.
    Put your new functionality into a function with a docstring, and add the feature to the list in `README.md`.
+3. A pull request that adds or changes an entry in `compose_api/registry/manifest.yaml` uses the registry-entry template (add `?template=registry-entry.md` to the compare URL) and follows [docs/registry-onboarding.md](docs/registry-onboarding.md).
