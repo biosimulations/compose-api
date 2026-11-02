@@ -1,0 +1,26 @@
+description: >-
+  viva-tumor-tcell's DiffusionField and Observables on a 200 by 200 um chamber (10 by 10 bins, depth 15 um) holding three
+  tumor cells (two PDL1n, one PDL1p) and two T cells (one PD1n, one PD1p), built with the package's own cell and field
+  builders (viva_tumor_tcell.composites.microenvironment) and no behaviour or physics processes, so nothing is random. One T
+  cell has 1e8 IFNg molecules in its exchange; DiffusionField deposits them into its bin on the first step, then diffuses
+  and decays IFNg (4.5 h e-fold) for five steps of 60 s. Counts and fractions are exact by construction. The deposit is
+  1e8 / (6000e-15 L * N_A) * 17000 g/mol * 1e6 = 470486.069 ng/mL, and the grid total at 300 s equals that times
+  exp(-ln 2 * 300 / (4.5 * 3600)) = 464485.4765088531 (checked in the run, agreeing to 1e-16; not asserted here because the
+  case format checks single values). The per-bin values asserted below are the package's own output (viva-tumor-tcell
+  d0c257be with viva-munk 94d9585f, one locked environment, process-bigraph 1.9.1, bigraph-schema 1.8.1, run through
+  compose-api's runner on 2026-11-02, linux/amd64; two runs gave identical results). The case shows that the package's types
+  and both classes import, build and step on the runner's core. The random cell-behaviour processes are not used.
+document: document.pbg
+interval: 300
+expect:
+  - {kind: rows, emitter: emitter, min: 6}
+  - {kind: scalar, emitter: emitter, field: observables.tumor_total, expected: 3}
+  - {kind: scalar, emitter: emitter, field: observables.tumor_PDL1p, expected: 1}
+  - {kind: scalar, emitter: emitter, field: observables.tcell_total, expected: 2}
+  - {kind: scalar, emitter: emitter, field: observables.pdl1p_fraction, expected: 0.3333333333333333, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: observables.pd1p_fraction, expected: 0.5, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: observables.ifng_max, row: 1, expected: 215042.07864968394, rel: 1.0e-6}
+  - {kind: scalar, emitter: emitter, field: observables.ifng_max, expected: 39884.491250315, rel: 1.0e-6}
+  - {kind: scalar, emitter: emitter, field: fields.IFNg.6.6, expected: 39884.491250315, rel: 1.0e-6}
+  - {kind: scalar, emitter: emitter, field: fields.IFNg.5.6, expected: 28955.592509080067, rel: 1.0e-6}
+  - {kind: scalar, emitter: emitter, field: fields.IFNg.0.0, expected: 33.59769768825278, rel: 1.0e-6}
