@@ -90,7 +90,10 @@ def test_pbsim_commons_cases_are_complete() -> None:
     ("entry", "case"),
     [
         ("viva-copasi", "phase-cycle-copasi-report"),
+        ("viva-tellurium", "phase-cycle-copasi-report"),
         ("viva-cobra", "textbook-fba-optimum"),
+        ("viva-nfsim", "flagella-seeded"),
+        ("viva-smoldyn", "seeded-decay-2d"),
         ("viva-fenics", "poisson-quadratic-mms"),
     ],
 )

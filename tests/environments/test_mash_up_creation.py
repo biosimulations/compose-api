@@ -113,8 +113,10 @@ def test_a_mash_up_is_named_by_its_entries_and_only_composable_ones_qualify() ->
     name = lifecycle.mash_up_name(NEEDED)
     assert name == lifecycle.mash_up_name(set(NEEDED)) and len(name) == len("mash-") + 10
     assert lifecycle.composable(NEEDED, manifest) == []
-    (listed,) = lifecycle.composable({"viva-tellurium"}, manifest)  # a catalog wrapper: no install, `listed`
-    assert "does not say how it installs" in listed
+    (catalog_only,) = lifecycle.composable({"viva-amici"}, manifest)  # a catalog wrapper: no install, `listed`
+    assert "does not say how it installs" in catalog_only
+    (listed,) = lifecycle.composable({"viva-tellurium"}, manifest)  # a manifest entry that installs, still `listed`
+    assert "a mash-up needs `tested`" in listed
     # viva-pde-particle is composable since composition 7c-4: its classes may join a mash-up
     assert lifecycle.composable(manifest.with_requirements({"viva-pde-particle"}), manifest) == []
 

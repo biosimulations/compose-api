@@ -19,15 +19,15 @@
         "interval": ["interval"]
       },
       "outputs": {
-        "substrates": ["substrate_delta"],
-        "biomass": ["biomass_delta"]
+        "substrates": ["substrates"],
+        "biomass": ["biomass"]
       }
     },
     "emitter": {
       "_type": "step",
       "address": "local:RAMEmitter",
-      "config": {"emit": {"biomass_delta": "float", "substrate_delta": "map[float]"}},
-      "inputs": {"biomass_delta": ["biomass_delta"], "substrate_delta": ["substrate_delta"]}
+      "config": {"emit": {"biomass": "float", "substrates": "map[float]"}},
+      "inputs": {"biomass": ["biomass"], "substrates": ["substrates"]}
     }
   }
 }

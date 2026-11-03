@@ -170,24 +170,57 @@ entries:
   # viva-biomodels: HELD, not added. Reasons: a workspace (bypass-selection), no Process classes (only Steps),
   # branch-only sibling sources, viva-superpowers and viva-simbio undeclared, and BIOMD0000000027 not shipped (it needs
   # a live BioModels fetch). See the pull request body.
-  # TODO viva-tellurium: add its entry once the upstream fix is merged. Its SHA comes from the main thread; not guessed.
   - id: viva-copasi
     package: viva-copasi
-    # v0.2.0 on main (the merge commit, confirmed with gh). pbg_copasi, the deprecation shim, is not a module root.
-    source: https://github.com/vivarium-collective/viva-copasi/tree/039953331f77cc53acd5a33b4f7e89d5b43a20a5
-    commit: 039953331f77cc53acd5a33b4f7e89d5b43a20a5
+    # v0.2.1 on main (confirmed with gh). pbg_copasi, the deprecation shim, is not a module root.
+    source: https://github.com/vivarium-collective/viva-copasi/tree/ed3fafa0bda17d9b40ccc2a7c760e0db94c748a5
+    commit: ed3fafa0bda17d9b40ccc2a7c760e0db94c748a5
     install:
       git: https://github.com/vivarium-collective/viva-copasi
-      commit: 039953331f77cc53acd5a33b4f7e89d5b43a20a5
+      commit: ed3fafa0bda17d9b40ccc2a7c760e0db94c748a5
     module_roots:
       - viva_copasi
+    # numeric_result and the other types its steps' ports use; the runner registers no package's build_core
+    types:
+      - viva_copasi.types:standard_types
+    # one python-copasi pin beside pbsim-common's in a mash-up
+    requires:
+      - python-copasi
     level: listed
     evidence:
       - >-
         Listed on 2026-11-03. Its compliance case (registry/compliance/viva-copasi/phase-cycle-copasi-report) runs
         CopasiUTCStep on the phase-cycle model and checks it against COPASI's own report, pbsim-common's reference.csv.
-        A direct run of the step at this commit stayed within that case's tolerance. The compose-api runner and a
-        composed environment have not run the case, so this is not yet a tested level.
+        The case passed through compose-api's runner (COMPOSE_RUNNER_TYPES from `types` above; process-bigraph 1.9.1,
+        bigraph-schema 1.8.1, Python 3.12, macOS) at this commit. Without `types` it fails to load, since the runner
+        registers no package's build_core. A composed environment has not run it, so this is not yet a tested level.
+      - >-
+        The pin moved from v0.2.0 (0399533) to v0.2.1 (ed3fafa), which adds `any` to viva_copasi.types:standard_types:
+        CopasiSteadyStateStep and ParameterEstimationStep emit `any`, which bigraph-schema 1.8.1 does not register,
+        so its steady-state composite failed on the runner's core before it.
+
+  - id: viva-tellurium
+    package: viva-tellurium
+    # v0.2.0 on main (confirmed with gh). pbg_tellurium, the deprecation shim, is not a module root. Its types module
+    # registers nothing, so no `types`.
+    source: https://github.com/vivarium-collective/viva-tellurium/tree/e056d3481daf0e6e0556c952d1088326d15d2309
+    commit: e056d3481daf0e6e0556c952d1088326d15d2309
+    install:
+      git: https://github.com/vivarium-collective/viva-tellurium
+      commit: e056d3481daf0e6e0556c952d1088326d15d2309
+    module_roots:
+      - viva_tellurium
+    # one tellurium pin beside pbsim-common's in a mash-up
+    requires:
+      - tellurium
+    level: listed
+    evidence:
+      - >-
+        Listed on 2026-11-03. Its compliance case (registry/compliance/viva-tellurium/phase-cycle-copasi-report) runs
+        TelluriumUTCStep on the phase-cycle model at output_times 0, 2, ..., 10 and checks every species against
+        COPASI's own report (pbsim-common's reference.csv) within rel and abs 1e-3. It passed through compose-api's
+        runner (process-bigraph 1.9.1, bigraph-schema 1.8.1, tellurium 2.2.13.1, Python 3.12, macOS) at this commit.
+        A composed environment has not run it, so this is not yet a tested level.
 
   # --- FBA ---
   - id: viva-cobra
@@ -204,19 +237,68 @@ entries:
     evidence:
       - >-
         Listed on 2026-11-03. Its compliance case (registry/compliance/viva-cobra/textbook-fba-optimum) runs FBAStep on
-        COBRApy's textbook model and checks the growth rate against COBRApy's own optimum, 0.8739215069684295. A direct
-        run of the step at this commit gave that value. The compose-api runner and a composed environment have not run
-        the case, so this is not yet a tested level.
+        COBRApy's textbook model and checks the growth against COBRApy's own optimum, 0.8739215069684295 (biomass 1.0
+        to 1.8739215069684295, glucose 100 to 90). It passed through compose-api's runner (process-bigraph 1.9.1,
+        bigraph-schema 1.8.1, cobra 0.32.1, Python 3.12, macOS) at this commit, with no `types`: its domain types
+        (mass, concentration, count, bounds) live in a private table, viva_cobra.core._TYPE_DEFS, and the result does
+        not depend on them. A composed environment has not run it, so this is not yet a tested level.
 
   # --- Boolean (gap) ---
   # No Boolean wrapper exists yet, so there is no entry. A Boolean library is still undecided (MaBoSS is tentative;
   # the user is consulting a collaborator). Recorded as a gap in the pull request body; not a placeholder entry.
 
   # --- Rule-based ---
-  # TODO viva-nfsim: add its entry once its upstream fixes are merged. Its SHA comes from the other agents; not guessed.
+  - id: viva-nfsim
+    package: viva-nfsim
+    # v0.2.0 on main (tag and release, confirmed with gh). pbg_nfsim is its only package; the dist name is viva-nfsim.
+    # Its types hook registers nothing, so no `types`.
+    source: https://github.com/vivarium-collective/viva-nfsim/tree/76ff7fc0f59dea815e8b1c211c03550612357cae
+    commit: 76ff7fc0f59dea815e8b1c211c03550612357cae
+    install:
+      git: https://github.com/vivarium-collective/viva-nfsim
+      commit: 76ff7fc0f59dea815e8b1c211c03550612357cae
+    # NFsim runs through bionetgen 0.8.7's bundled BNG2.pl, which needs a full Perl with the core FindBin module; the
+    # pixi base image is not known to have one
+    conda:
+      perl: "*"
+    module_roots:
+      - pbg_nfsim
+    level: listed
+    evidence:
+      - >-
+        Listed on 2026-11-03. Its compliance case (registry/compliance/viva-nfsim/flagella-seeded) runs NFSimProcess on
+        the package's flagella model, seed 7, from the model's own seed counts to t = 50. The row count, end time and
+        initial flgE are hand-computed; the other values are seeded package output (reproducible run to run, and
+        consistent with the model's flhDC stoichiometry). It passed through compose-api's runner (process-bigraph
+        1.9.1, bigraph-schema 1.8.1, bionetgen 0.8.7, Python 3.12, macOS with the system Perl) at this commit. Not yet
+        verified: FindBin under conda-forge perl, and the numbers from Linux's bundled NFsim build. A composed
+        environment has not run it, so this is not yet a tested level. The seed restarts NFsim's RNG every interval.
 
   # --- Spatial/particle ---
-  # TODO viva-smoldyn: add its entry once its upstream fixes are merged. Its SHA comes from the other agents; not guessed.
+  - id: viva-smoldyn
+    package: viva-smoldyn
+    # v0.2.0 on main (confirmed with gh). Its types hook registers nothing, so no `types`.
+    source: https://github.com/vivarium-collective/viva-smoldyn/tree/54c56a1e3b80ea1afb4e9570e9a1534031db8aca
+    commit: 54c56a1e3b80ea1afb4e9570e9a1534031db8aca
+    install:
+      git: https://github.com/vivarium-collective/viva-smoldyn
+      commit: 54c56a1e3b80ea1afb4e9570e9a1534031db8aca
+    module_roots:
+      - viva_smoldyn
+    # it declares plain `smoldyn`, but PyPI's 2.76 wheel does not import on Linux CPython 3.12; the fork wheel does
+    requires:
+      - smoldyn-vcell
+    level: listed
+    evidence:
+      - >-
+        Listed on 2026-11-03. Its compliance case (registry/compliance/viva-smoldyn/seeded-decay-2d) runs SmoldynProcess
+        in 2D, seed 7, 200 A converting to B. The row count and times are hand-computed; the counts are package output,
+        reported identical on Linux (the fork wheel, CPython 3.12) and macOS (PyPI, CPython 3.14). It passed through
+        compose-api's runner (process-bigraph 1.9.1, bigraph-schema 1.8.1) on macOS with PyPI smoldyn 2.76 under
+        CPython 3.14, because PyPI's macOS CPython 3.12 wheel does not import either. Not yet verified: that a lock
+        picks the smoldyn-vcell URL wheel for its unconstrained `smoldyn` requirement. A composed environment has not
+        run it, so this is not yet a tested level.
+
   - id: viva-fenics
     package: viva-fenics
     # onboarded as it is at a5023cc (chore: sync generated workflows, #15). It is the FEniCSx package standalone, not
@@ -245,7 +327,9 @@ entries:
       - >-
         Listed on 2026-11-03. Its compliance case (registry/compliance/viva-fenics/poisson-quadratic-mms) runs
         PoissonSolverStep on a quadratic manufactured solution, which P2 represents exactly, so the expected L2 error is
-        round-off. It needs the dolfinx stack, which has not been installed or run here.
+        round-off. It needs the dolfinx stack, so it has not run through compose-api's runner or anywhere else here.
+        Its one custom type (viva_fenics.types.FENICS_TYPES, fem_field) is on no process's ports at this commit, so
+        the entry has no `types`.
 
   # --- core: classes of the engine every composed environment installs (environments.yaml `composition.core`) -------
   # Provided by every composed version and mash-up without being listed or installed, and by the prebuilt images its
