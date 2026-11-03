@@ -1,0 +1,17 @@
+name: walker-gait
+description: >-
+  One-leg legged CPG (Beer and Gallagher 1992, viva-bbe-systems walker composite): a CTRNN brain driving a walker
+  body from the committed evolved seed, deterministic (no RNG; fixed seed in the repo). Run for 2.0 time units at
+  dt 0.1, emitting body_x, body_vx, leg_angle, foot_down and global_time at each step (20 rows). Expected values are
+  package output: taken from the locked environment's run of this document on viva-bbe-systems commit 87b18a9, run
+  twice with byte-identical results. No hand-computed or reference-tool values in this case. Source label for every
+  expectation: package output.
+document: document.pbg
+interval: 2.0
+expect:
+  # all expectations: source = package output
+  - {kind: rows, emitter: emitter, min: 20}
+  - {kind: scalar, emitter: emitter, field: body_x, row: 10, expected: 8.738448496683938}
+  - {kind: scalar, emitter: emitter, field: body_x, expected: 10.195927378039498}
+  - {kind: scalar, emitter: emitter, field: body_vx, expected: 1.0241884627627547}
+  - {kind: scalar, emitter: emitter, field: leg_angle, expected: -0.23439563566381189}

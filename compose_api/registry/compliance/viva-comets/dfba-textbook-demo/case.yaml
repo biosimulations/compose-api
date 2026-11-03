@@ -1,0 +1,18 @@
+description: >-
+  DynamicFBAProcess (pbg_comets) runs one well-mixed E. coli population on cobra's `textbook` model for 2 hours, in
+  the composite of pbg_comets' dfba-textbook-demo: an Euler step of 0.2 h per FBA solve, Michaelis-Menten uptake,
+  initial biomass 0.001 gDW, initial glucose 10 mmol. RAMEmitter (in the document) records the state at each hour.
+  The process is deterministic (no random seed is used), and two runs in the locked environment gave identical parsed
+  results. Expected-value sources: `time` at the end is hand-computed (the run is 2 hours by construction); the row count
+  is hand-computed (the initial row plus one row per hour); every other value is package output (pbg_comets'
+  DynamicFBAProcess on the `textbook` model in the locked environment, process-bigraph 1.9.1, bigraph-schema 1.8.1,
+  run through compose-api's runner, linux/amd64). They pin the run's numbers, not an independent biological result.
+document: document.pbg
+interval: 2
+expect:
+  - {kind: rows, emitter: emitter, min: 3}
+  - {kind: scalar, emitter: emitter, field: time, row: -1, expected: 2.0, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: total_biomass, row: 1, expected: 0.0017483011978144728, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: total_biomass, row: -1, expected: 0.003056555286996912, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: media.glc__D, row: 1, expected: 9.986604527968368, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: growth_rates.Ecoli, row: 1, expected: 0.5586443886421615, rel: 1.0e-9}

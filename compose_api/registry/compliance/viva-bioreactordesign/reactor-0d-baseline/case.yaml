@@ -1,0 +1,18 @@
+description: >-
+  Standalone 0D bubble-column bioreactor (viva-bioreactordesign composites/reactor.composite.yaml, the
+  BiRDReactorProcess baseline) run for 3 time units at interval 1 with a RAM emitter. Shows the emitter
+  recording dissolved O2/CO2, biomass and gas rates at t = 0, 1, 2, 3, with biomass rising from the emitted
+  0.0 at t = 0 to about 0.805 at t = 3. Changed from the shipped composite in one place only: the emitter
+  address "local:ram-emitter" is replaced by the full class path "local:process_bigraph.emitter.RAMEmitter",
+  because the compose-api runner resolves no link named ram-emitter (realize_link raises "no link found at
+  address"). The reactor address local:BiRDReactorProcess is unchanged and resolves in the locked
+  environment. Expected values: row count and times are hand-computed (4 rows, time = 0..3 at interval 1);
+  the biomass value is package output (BiRDReactorProcess as run in the locked environment, 2026-11-03),
+  not an independent reference. The run is deterministic: two runs produced byte-identical results.
+document: document.pbg
+interval: 3
+expect:
+  - {kind: rows, emitter: emitter, min: 4}
+  - {kind: scalar, emitter: emitter, field: time, row: 1, expected: 1.0}
+  - {kind: scalar, emitter: emitter, field: time, row: -1, expected: 3.0}
+  - {kind: scalar, emitter: emitter, field: biomass, row: -1, expected: 0.804860227035188, rel: 1e-9}

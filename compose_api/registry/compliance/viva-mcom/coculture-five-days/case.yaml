@@ -1,0 +1,20 @@
+description: >-
+  Trimmed viva-mcom batch co-culture (one phytoplankton, one heterotroph, DOC/DON pools, inorganic nitrogen),
+  run for 5 days from the workspace's mcom_coculture composite (t_end cut from 200 to 5; the process address is
+  written as its qualified name, viva_mcom.processes.MComReproductionProcess, because the runner does not call
+  viva_mcom.core.build_core; everything else as shipped). Seeds are fixed in the package config (system_seed 42,
+  dynamics_seed 100). Expected values and their sources: P_total, H_total and DIN at time 0 are the initial
+  conditions the composite sets (P_init 0.01, H_init 0.003, N_init 8.8): hand-computed (read from the composite
+  inputs, not from a run). The values at day 5 (last row) are package output from viva-mcom 0.1.0 (the clean-room
+  NumPy engine) on process-bigraph 1.9.1: package output, not independently computed. 51 emitted rows (one per 0.1
+  day, including time 0).
+document: document.pbg
+interval: 5
+expect:
+  - {kind: rows, emitter: emitter, min: 51}
+  - {kind: scalar, emitter: emitter, field: P_total, row: 0, expected: 0.01}
+  - {kind: scalar, emitter: emitter, field: H_total, row: 0, expected: 0.003}
+  - {kind: scalar, emitter: emitter, field: DIN, row: 0, expected: 8.8}
+  - {kind: scalar, emitter: emitter, field: P_total, row: -1, expected: 0.016758718151229462}
+  - {kind: scalar, emitter: emitter, field: H_total, row: -1, expected: 0.05732409191466484}
+  - {kind: scalar, emitter: emitter, field: DIN, row: -1, expected: 8.758580352455512}

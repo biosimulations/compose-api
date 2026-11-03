@@ -1,0 +1,10 @@
+description: "The shipped Brusselator composite (viva_simbio.composites.crn.brusselator, defaults k1=1, k2=3, k3=1, k4=1, X0=Y0=1; document.pbg is its output with interval=0.25 and emitter a RAMEmitter) runs through SimbioProcess (simbio 1.2.0, deterministic ODE integration, no random seed needed) for 2.0 time units, eight 0.25 ticks. The RAMEmitter records X and Y at each tick. Expected-value sources: the row count (9), the end time (2.0) and the initial X (1.0) are hand-computed from the document (the species initial values and the tick count); X at t=0.25, and X and Y at t=2.0, are package output, from the viva-simbio commit dd4e879 in the locked environment (process-bigraph 1.9.1, bigraph-schema 1.8.1), run through compose-api's runner twice with identical results. They pin this run's numbers; they are not an independent check of the chemistry."
+document: document.pbg
+interval: 2
+expect:
+  - {kind: rows, emitter: emitter, min: 9}
+  - {kind: scalar, emitter: emitter, field: time, row: -1, expected: 2.0, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: concentrations.X, row: 0, expected: 1.0, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: concentrations.X, row: 1, expected: 0.6426960385754283, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: concentrations.X, row: -1, expected: 0.3168350852689599, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: concentrations.Y, row: -1, expected: 2.836878330871985, rel: 1.0e-9}

@@ -1,0 +1,138 @@
+{
+  "state": {
+    "mcom": {
+      "_type": "process",
+      "address": "local:viva_mcom.processes.MComReproductionProcess",
+      "config": {
+        "config_json": "{\"run\": {\"runid\": \"coculture\", \"system_seed\": 42, \"dynamics_seed\": 100, \"t_end\": 5.0, \"dt\": 0.005, \"dt_out\": 0.1}, \"variant\": {\"use_PI_curve\": true, \"use_exudation\": false, \"surplus_remineralization\": true, \"competing_pairs\": false}, \"dims\": {\"P\": 1, \"H\": 1, \"DOC\": 2, \"DON\": 2, \"M\": 1}, \"network\": {\"explicit\": true, \"exPDOC\": [[1, 2]], \"exPDON\": [[1, 2]], \"exHDOC\": [[1, 2]], \"exHDON\": [[1, 2]], \"upDOCH\": [[1]], \"upDONH\": [[1]], \"prodHM\": [[]], \"effsMP\": [[]]}, \"init\": {\"t_init\": 0.0, \"N_init\": 8.8, \"P_init\": 0.01, \"DOC_init\": 1.0, \"DON_init\": 0.2, \"H_init\": 0.003, \"M_init\": 0.0}, \"environment\": {\"irradiance\": \"constant(5.0)\", \"D\": 0.0, \"d_M\": 0.1, \"SourceNrnd\": 0.0, \"nutrient\": \"constant(0)\"}, \"dynamics\": {\"explicit\": [\"R_HDON\", \"R_HDOC\", \"R_PDON\", \"R_PDOC\"], \"h_M\": 1e-05, \"V_NP\": 1.7, \"XP_C\": 12.0, \"K_NP\": 2.0, \"d_P\": 0.28, \"d_P2\": 0.0, \"lambda\": 0.0, \"rCN_P\": 5.2, \"rChlC\": 1.0, \"q_ex\": 0.15, \"rCN_ex\": 3.0, \"I_max\": 5.0, \"I_alpha\": 0.08, \"I_beta\": 0.003, \"V_NH\": 4.0, \"K_NH\": 0.1, \"XH_C\": 12.0, \"d_H\": 0.2, \"d_H2\": 0.001, \"rCN_H\": 4.0, \"Y_DOC\": 0.87, \"Y_DON\": 0.95, \"K_DOCH\": 0.1, \"K_DONH\": 0.1, \"V_DOCH\": 12.2, \"V_DONH\": 5.2, \"R_HDOC\": [[0.99, 0.01]], \"R_HDON\": [[0.93, 0.07]], \"R_PDOC\": [[1.0, 0.0]], \"R_PDON\": [[1.0, 0.0]], \"P_HM\": 1e-05, \"A_MP\": 1.0}}",
+        "dt": 0.005
+      },
+      "interval": 0.1,
+      "inputs": {
+        "irradiance": [
+          "stores",
+          "irradiance"
+        ],
+        "nutrient_supply": [
+          "stores",
+          "nutrient_supply"
+        ],
+        "temperature": [
+          "stores",
+          "temperature"
+        ]
+      },
+      "outputs": {
+        "phytoplankton": [
+          "stores",
+          "phytoplankton"
+        ],
+        "heterotrophs": [
+          "stores",
+          "heterotrophs"
+        ],
+        "DOC": [
+          "stores",
+          "DOC"
+        ],
+        "DON": [
+          "stores",
+          "DON"
+        ],
+        "metabolites": [
+          "stores",
+          "metabolites"
+        ],
+        "DIN": [
+          "stores",
+          "DIN"
+        ],
+        "carbon_fixed": [
+          "stores",
+          "carbon_fixed"
+        ],
+        "carbon_lost": [
+          "stores",
+          "carbon_lost"
+        ],
+        "P_total": [
+          "stores",
+          "P_total"
+        ],
+        "H_total": [
+          "stores",
+          "H_total"
+        ]
+      }
+    },
+    "stores": {
+      "irradiance": null,
+      "nutrient_supply": null,
+      "temperature": null
+    },
+    "emitter": {
+      "_type": "step",
+      "address": "local:RAMEmitter",
+      "config": {
+        "emit": {
+          "phytoplankton": "map[string,float]",
+          "heterotrophs": "map[string,float]",
+          "DOC": "map[string,float]",
+          "DON": "map[string,float]",
+          "metabolites": "map[string,float]",
+          "DIN": "float",
+          "carbon_fixed": "float",
+          "carbon_lost": "float",
+          "P_total": "float",
+          "H_total": "float",
+          "global_time": "float"
+        }
+      },
+      "inputs": {
+        "phytoplankton": [
+          "stores",
+          "phytoplankton"
+        ],
+        "heterotrophs": [
+          "stores",
+          "heterotrophs"
+        ],
+        "DOC": [
+          "stores",
+          "DOC"
+        ],
+        "DON": [
+          "stores",
+          "DON"
+        ],
+        "metabolites": [
+          "stores",
+          "metabolites"
+        ],
+        "DIN": [
+          "stores",
+          "DIN"
+        ],
+        "carbon_fixed": [
+          "stores",
+          "carbon_fixed"
+        ],
+        "carbon_lost": [
+          "stores",
+          "carbon_lost"
+        ],
+        "P_total": [
+          "stores",
+          "P_total"
+        ],
+        "H_total": [
+          "stores",
+          "H_total"
+        ],
+        "global_time": [
+          "global_time"
+        ]
+      }
+    }
+  }
+}

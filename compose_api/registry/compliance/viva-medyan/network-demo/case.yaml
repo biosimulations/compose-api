@@ -1,0 +1,14 @@
+description: >-
+  network-demo from viva-medyan at f8c0815: five seeded actin filaments (rng_seed 42, box 1.0, length 0.25) grow by
+  treadmilling in MedyanProcess over three 1.0 s updates, and RAMEmitter records the network metrics. Sources of the
+  expected values: the emitter row count is hand-computed (one row before the first update, one per 1.0 s update over
+  a 3.0 s run, so 4 rows); the filament count, total length and total energy are package output (MedyanProcess at
+  rng_seed 42, observed in two identical runs through compose-api's runner on process-bigraph 1.9.1, 2026-11-03).
+document: document.pbg
+interval: 3
+expect:
+  - {kind: rows, emitter: emitter, min: 4}
+  - {kind: scalar, emitter: emitter, field: n_filaments, row: 3, expected: 5}
+  - {kind: scalar, emitter: emitter, field: total_length, row: 1, expected: 1.9573999999994982}
+  - {kind: scalar, emitter: emitter, field: total_length, row: 3, expected: 3.3019999999996017}
+  - {kind: scalar, emitter: emitter, field: total_energy, row: 3, expected: 8.881784205001325e-17, abs: 1.0e-12}

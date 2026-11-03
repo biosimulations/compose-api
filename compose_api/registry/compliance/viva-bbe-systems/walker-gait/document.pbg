@@ -1,0 +1,162 @@
+{
+  "state": {
+    "body": {
+      "_type": "process",
+      "address": "local:WalkerBodyProcess",
+      "config": {
+        "dt": 0.1,
+        "size": 5
+      },
+      "inputs": {
+        "motor_output": [
+          "motor_output"
+        ]
+      },
+      "interval": 0.1,
+      "outputs": {
+        "body_vx": [
+          "body_vx"
+        ],
+        "body_x": [
+          "body_x"
+        ],
+        "foot_down": [
+          "foot_down"
+        ],
+        "leg_angle": [
+          "leg_angle"
+        ],
+        "sensory_input": [
+          "sensory_input"
+        ]
+      }
+    },
+    "body_vx": 0.0,
+    "body_x": 0.0,
+    "brain": {
+      "_type": "process",
+      "address": "local:CTRNNProcess",
+      "config": {
+        "dt": 0.1,
+        "genome": [
+          0.5,
+          1.1340278427302666,
+          0.757756263525662,
+          0.5,
+          0.5,
+          -7.931159567898025,
+          8.336903363285398,
+          6.168358479362655,
+          9.664326810557002,
+          -13.97010019827147,
+          10.257481179428462,
+          1.34978375872145,
+          3.856150180372283,
+          9.568831285065354,
+          -10.058028487149569,
+          9.984626171867287,
+          11.839189052592246,
+          4.68870856590117,
+          9.561214298887831,
+          -8.111037551514844,
+          -15.462343000903113,
+          7.364462267159586,
+          -2.2430986725218722,
+          -6.932668026540891,
+          -4.894200789830673,
+          -9.415019019031124,
+          -7.3667343312801865,
+          9.00411702072611,
+          4.054962467020072,
+          -5.599963862609245,
+          16.0,
+          -3.9197138028068204,
+          -2.307511755010581,
+          13.534624381832687,
+          9.68345753275109
+        ],
+        "motor_indices": [
+          2,
+          3,
+          4
+        ],
+        "size": 5
+      },
+      "inputs": {
+        "sensory_input": [
+          "sensory_input"
+        ]
+      },
+      "interval": 0.1,
+      "outputs": {
+        "motor_output": [
+          "motor_output"
+        ],
+        "neuron_outputs": [
+          "neuron_outputs"
+        ],
+        "neuron_states": [
+          "neuron_states"
+        ]
+      }
+    },
+    "emitter": {
+      "_type": "step",
+      "address": "local:RAMEmitter",
+      "config": {
+        "emit": {
+          "body_vx": "float",
+          "body_x": "float",
+          "foot_down": "float",
+          "global_time": "float",
+          "leg_angle": "float"
+        }
+      },
+      "inputs": {
+        "body_vx": [
+          "body_vx"
+        ],
+        "body_x": [
+          "body_x"
+        ],
+        "foot_down": [
+          "foot_down"
+        ],
+        "global_time": [
+          "global_time"
+        ],
+        "leg_angle": [
+          "leg_angle"
+        ]
+      }
+    },
+    "foot_down": 0.0,
+    "leg_angle": 0.0,
+    "motor_output": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "neuron_outputs": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "neuron_states": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "sensory_input": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  }
+}
