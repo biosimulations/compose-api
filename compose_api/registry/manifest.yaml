@@ -172,12 +172,12 @@ entries:
   # a live BioModels fetch). See the pull request body.
   - id: viva-copasi
     package: viva-copasi
-    # v0.2.1 on main (confirmed with gh). pbg_copasi, the deprecation shim, is not a module root.
-    source: https://github.com/vivarium-collective/viva-copasi/tree/ed3fafa0bda17d9b40ccc2a7c760e0db94c748a5
-    commit: ed3fafa0bda17d9b40ccc2a7c760e0db94c748a5
+    # v0.2.2 on main (confirmed with gh). pbg_copasi, the deprecation shim, is not a module root.
+    source: https://github.com/vivarium-collective/viva-copasi/tree/937ff132f2e8c755248a38a7440067f8d1871001
+    commit: 937ff132f2e8c755248a38a7440067f8d1871001
     install:
       git: https://github.com/vivarium-collective/viva-copasi
-      commit: ed3fafa0bda17d9b40ccc2a7c760e0db94c748a5
+      commit: 937ff132f2e8c755248a38a7440067f8d1871001
     module_roots:
       - viva_copasi
     # numeric_result and the other types its steps' ports use; the runner registers no package's build_core
@@ -198,16 +198,20 @@ entries:
         The pin moved from v0.2.0 (0399533) to v0.2.1 (ed3fafa), which adds `any` to viva_copasi.types:standard_types:
         CopasiSteadyStateStep and ParameterEstimationStep emit `any`, which bigraph-schema 1.8.1 does not register,
         so its steady-state composite failed on the runner's core before it.
+      - >-
+        The pin moved from v0.2.1 (ed3fafa) to v0.2.2 (937ff13), review follow-ups: a valid boundary-species test
+        fixture, `species_units: amount` refused at construction rather than at run, and the types module's docstring
+        naming `viva_copasi.types:standard_types`. The case passed through the runner again at v0.2.2.
 
   - id: viva-tellurium
     package: viva-tellurium
-    # v0.2.0 on main (confirmed with gh). pbg_tellurium, the deprecation shim, is not a module root. Its types module
+    # v0.2.1 on main (confirmed with gh). pbg_tellurium, the deprecation shim, is not a module root. Its types module
     # registers nothing, so no `types`.
-    source: https://github.com/vivarium-collective/viva-tellurium/tree/e056d3481daf0e6e0556c952d1088326d15d2309
-    commit: e056d3481daf0e6e0556c952d1088326d15d2309
+    source: https://github.com/vivarium-collective/viva-tellurium/tree/967d5dd721627561bff3472b662b97dffa212a7f
+    commit: 967d5dd721627561bff3472b662b97dffa212a7f
     install:
       git: https://github.com/vivarium-collective/viva-tellurium
-      commit: e056d3481daf0e6e0556c952d1088326d15d2309
+      commit: 967d5dd721627561bff3472b662b97dffa212a7f
     module_roots:
       - viva_tellurium
     # one tellurium pin beside pbsim-common's in a mash-up
@@ -221,16 +225,20 @@ entries:
         COPASI's own report (pbsim-common's reference.csv) within rel and abs 1e-3. It passed through compose-api's
         runner (process-bigraph 1.9.1, bigraph-schema 1.8.1, tellurium 2.2.13.1, Python 3.12, macOS) at this commit.
         A composed environment has not run it, so this is not yet a tested level.
+      - >-
+        The pin moved from v0.2.0 (e056d34) to v0.2.1 (967d5dd): the workspace image installs the `dashboard` extra
+        (with a uv default group `workbench`), the `cli` extra is restored, and the visualization error is clearer.
+        Its runtime path is unchanged; the case passed through the runner again at v0.2.1.
 
   # --- FBA ---
   - id: viva-cobra
     package: viva-cobra
-    # main HEAD after the v0.1.1 merge (confirmed with gh)
-    source: https://github.com/vivarium-collective/viva-cobra/tree/dc893ed5b22b79bd0536f25ea640cb84365188f0
-    commit: dc893ed5b22b79bd0536f25ea640cb84365188f0
+    # v0.1.2 on main (confirmed with gh)
+    source: https://github.com/vivarium-collective/viva-cobra/tree/098d600432417163baa3be2855045b3686c5023a
+    commit: 098d600432417163baa3be2855045b3686c5023a
     install:
       git: https://github.com/vivarium-collective/viva-cobra
-      commit: dc893ed5b22b79bd0536f25ea640cb84365188f0
+      commit: 098d600432417163baa3be2855045b3686c5023a
     module_roots:
       - viva_cobra
     level: listed
@@ -242,10 +250,32 @@ entries:
         bigraph-schema 1.8.1, cobra 0.32.1, Python 3.12, macOS) at this commit, with no `types`: its domain types
         (mass, concentration, count, bounds) live in a private table, viva_cobra.core._TYPE_DEFS, and the result does
         not depend on them. A composed environment has not run it, so this is not yet a tested level.
+      - >-
+        The pin moved from v0.1.1 (dc893ed) to v0.1.2 (098d600): a starved batch (no uptake possible) now returns zero
+        deltas instead of raising, and requires-python is >=3.11. The case passed through the runner again at v0.1.2.
 
-  # --- Boolean (gap) ---
-  # No Boolean wrapper exists yet, so there is no entry. A Boolean library is still undecided (MaBoSS is tentative;
-  # the user is consulting a collaborator). Recorded as a gap in the pull request body; not a placeholder entry.
+  # --- Boolean ---
+  - id: viva-maboss
+    package: viva-maboss
+    # v0.1.1 on main (tag, confirmed with gh). Its ports are map[float] and integer, so no `types`. Runtime
+    # dependencies: process-bigraph>=1.9.1, bigraph-schema>=1.8.1, cmaboss==1.0.0b34, numpy, typer, rich.
+    source: https://github.com/vivarium-collective/viva-maboss/tree/3fdccd7bb605109f3284e6ff9be2616b50b19ca7
+    commit: 3fdccd7bb605109f3284e6ff9be2616b50b19ca7
+    install:
+      git: https://github.com/vivarium-collective/viva-maboss
+      commit: 3fdccd7bb605109f3284e6ff9be2616b50b19ca7
+    module_roots:
+      - viva_maboss
+    level: listed
+    evidence:
+      - >-
+        Listed on 2026-11-03 as the Boolean layer's simulator. MaBoSS was chosen over BoolNet, which is R-only with no
+        Python port on PyPI, so it would need an R runtime in every environment; the repository README ("Why MaBoSS,
+        not BoolNet") gives the reasons. Its compliance case (registry/compliance/viva-maboss/switching-analytic-oracle)
+        checks MaBoSSProcess against an analytic oracle, the window average of an absorbing switch's on-probability.
+        It passed through compose-api's runner (process-bigraph 1.9.1, bigraph-schema 1.8.1, cmaboss 1.0.0b34, Python
+        3.12, macOS) from a non-editable install at this commit. A composed environment has not run it, so this is not
+        yet a tested level.
 
   # --- Rule-based ---
   - id: viva-nfsim
