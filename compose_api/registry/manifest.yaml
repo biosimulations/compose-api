@@ -166,128 +166,86 @@ entries:
         values computed by hand; it passed locally on 2026-10-26. MathExpressionStep's outputs are overwrite[float],
         so the generic step-outputs-replace check passes. In a composed version, the case run there decides its level.
 
-  - id: viva-mcom
-    package: viva-mcom
-    source: https://github.com/vivarium-collective/viva-mcom/tree/a6667eec1a3025b8976f629982e9f79cd1db126b
-    commit: a6667eec1a3025b8976f629982e9f79cd1db126b
+  # --- ODE/SBML ---
+  # viva-biomodels: HELD, not added. Reasons: a workspace (bypass-selection), no Process classes (only Steps),
+  # branch-only sibling sources, viva-superpowers and viva-simbio undeclared, and BIOMD0000000027 not shipped (it needs
+  # a live BioModels fetch). See the pull request body.
+  # TODO viva-tellurium: add its entry once the upstream fix is merged. Its SHA comes from the main thread; not guessed.
+  - id: viva-copasi
+    package: viva-copasi
+    # v0.2.0 on main (the merge commit, confirmed with gh). pbg_copasi, the deprecation shim, is not a module root.
+    source: https://github.com/vivarium-collective/viva-copasi/tree/039953331f77cc53acd5a33b4f7e89d5b43a20a5
+    commit: 039953331f77cc53acd5a33b4f7e89d5b43a20a5
     install:
-      git: https://github.com/vivarium-collective/viva-mcom
-      commit: a6667eec1a3025b8976f629982e9f79cd1db126b
+      git: https://github.com/vivarium-collective/viva-copasi
+      commit: 039953331f77cc53acd5a33b4f7e89d5b43a20a5
     module_roots:
-      - viva_mcom
-    level: tested
+      - viva_copasi
+    level: listed
     evidence:
       - >-
-        Added at tested. Its compliance case (registry/compliance/viva-mcom/coculture-five-days) runs a trimmed batch
-        co-culture of MComReproductionProcess for 5 days through compose-api's runner. The initial values are
-        hand-computed from the composite's inputs; the day-5 values are package output, so the case pins reproducibility,
-        not an independent result. Evaluated with the compose-api compliance code against both recorded runs: passed.
+        Listed on 2026-11-03. Its compliance case (registry/compliance/viva-copasi/phase-cycle-copasi-report) runs
+        CopasiUTCStep on the phase-cycle model and checks it against COPASI's own report, pbsim-common's reference.csv.
+        A direct run of the step at this commit stayed within that case's tolerance. The compose-api runner and a
+        composed environment have not run the case, so this is not yet a tested level.
 
-  - id: viva-bbe-systems
-    package: viva-bbe-systems
-    source: https://github.com/vivarium-collective/viva-bbe-systems/tree/87b18a9ddb4d04bcbcf1225af66106336b9a57a9
-    commit: 87b18a9ddb4d04bcbcf1225af66106336b9a57a9
+  # --- FBA ---
+  - id: viva-cobra
+    package: viva-cobra
+    # main HEAD after the v0.1.1 merge (confirmed with gh)
+    source: https://github.com/vivarium-collective/viva-cobra/tree/dc893ed5b22b79bd0536f25ea640cb84365188f0
+    commit: dc893ed5b22b79bd0536f25ea640cb84365188f0
     install:
-      git: https://github.com/vivarium-collective/viva-bbe-systems
-      commit: 87b18a9ddb4d04bcbcf1225af66106336b9a57a9
+      git: https://github.com/vivarium-collective/viva-cobra
+      commit: dc893ed5b22b79bd0536f25ea640cb84365188f0
     module_roots:
-      - viva_bbe_systems
-    level: tested
+      - viva_cobra
+    level: listed
     evidence:
       - >-
-        Added at tested. Its compliance case (registry/compliance/viva-bbe-systems/walker-gait) runs the one-leg CTRNN
-        walker for 2.0 time units. The row count is hand-computed (2.0 / 0.1); the other values are package output from
-        two identical runs in the locked environment, so the case pins reproducibility, not an independent result.
-        Evaluated with the compose-api compliance code against both recorded runs: passed.
+        Listed on 2026-11-03. Its compliance case (registry/compliance/viva-cobra/textbook-fba-optimum) runs FBAStep on
+        COBRApy's textbook model and checks the growth rate against COBRApy's own optimum, 0.8739215069684295. A direct
+        run of the step at this commit gave that value. The compose-api runner and a composed environment have not run
+        the case, so this is not yet a tested level.
 
-  - id: viva-comets
-    package: viva-comets
-    source: https://github.com/vivarium-collective/viva-comets/tree/050474a43fc057820d9cab3938643efa042bb2a4
-    commit: 050474a43fc057820d9cab3938643efa042bb2a4
-    install:
-      git: https://github.com/vivarium-collective/viva-comets
-      commit: 050474a43fc057820d9cab3938643efa042bb2a4
-    module_roots:
-      - pbg_comets
-    level: tested
-    evidence:
-      - >-
-        Added at tested. Its compliance case (registry/compliance/viva-comets/dfba-textbook-demo) runs DynamicFBAProcess
-        on the textbook model for 2 hours through compose-api's runner. The end time and row count are hand-computed;
-        the remaining values are package output from two identical runs, so the case pins reproducibility, not an
-        independent biological result. Evaluated with the compose-api compliance code against both recorded runs: passed.
+  # --- Boolean (gap) ---
+  # No Boolean wrapper exists yet, so there is no entry. A Boolean library is still undecided (MaBoSS is tentative;
+  # the user is consulting a collaborator). Recorded as a gap in the pull request body; not a placeholder entry.
 
-  - id: viva-medyan
-    package: viva-medyan
-    source: https://github.com/vivarium-collective/viva-medyan/tree/f8c0815b637fbcf7623b394791a031d4a179f849
-    commit: f8c0815b637fbcf7623b394791a031d4a179f849
-    install:
-      git: https://github.com/vivarium-collective/viva-medyan
-      commit: f8c0815b637fbcf7623b394791a031d4a179f849
-    module_roots:
-      - pbg_medyan
-    level: tested
-    evidence:
-      - >-
-        Added at tested. Its compliance case (registry/compliance/viva-medyan/network-demo) runs MedyanProcess with
-        rng_seed 42 for 3.0 time units. The row count is hand-computed; the filament count is the configured input (5),
-        and the lengths and energy are package output from two identical runs, so the case pins reproducibility, not an
-        independent result. Evaluated with the compose-api compliance code against both recorded runs: passed.
+  # --- Rule-based ---
+  # TODO viva-nfsim: add its entry once its upstream fixes are merged. Its SHA comes from the other agents; not guessed.
 
-  - id: viva-yalla
-    package: viva-yalla
-    source: https://github.com/vivarium-collective/viva-yalla/tree/915e92b62c0293ea59f5d6bd3dec3f1e11cd1af6
-    commit: 915e92b62c0293ea59f5d6bd3dec3f1e11cd1af6
+  # --- Spatial/particle ---
+  # TODO viva-smoldyn: add its entry once its upstream fixes are merged. Its SHA comes from the other agents; not guessed.
+  - id: viva-fenics
+    package: viva-fenics
+    # onboarded as it is at a5023cc (chore: sync generated workflows, #15). It is the FEniCSx package standalone, not
+    # the PDE component of viva-pde-particle, which is unchanged. Known gaps, not fixed here: composites import
+    # viva_superpowers, which its pyproject does not declare, and viva_fenics/__init__.py swallows that ImportError, so
+    # build_core and the composites go missing without a message; scipy is imported (viz, peristalsis) and declared
+    # nowhere.
+    source: https://github.com/vivarium-collective/viva-fenics/tree/a5023cca8466b9a39cf50fe6ce2112fb576c7d09
+    commit: a5023cca8466b9a39cf50fe6ce2112fb576c7d09
     install:
-      git: https://github.com/vivarium-collective/viva-yalla
-      commit: 915e92b62c0293ea59f5d6bd3dec3f1e11cd1af6
+      git: https://github.com/vivarium-collective/viva-fenics
+      commit: a5023cca8466b9a39cf50fe6ce2112fb576c7d09
+    # dolfinx is conda-only. fenics-dolfinx 0.10.* is the pin viva-pde-particle uses; viva-fenics's pixi.toml says "*".
+    # The rest is from that pixi.toml's conda dependencies; pip dependencies come from its pyproject.
+    conda:
+      fenics-dolfinx: "0.10.*"
+      mpich: "*"
+      gmsh: "*"
+      python-gmsh: "*"
+      matplotlib: "*"
+      python-dateutil: ">=2.8,<3"
     module_roots:
-      - pbg_yalla
-    level: tested
+      - viva_fenics
+    level: listed
     evidence:
       - >-
-        Added at tested. Its compliance case (registry/compliance/viva-yalla/springs-demo-counts-and-summary) runs the
-        20-cell springs demo to t = 2.0 through compose-api's runner. The cell count, time and row count are
-        hand-computed; the gyration radius and mean neighbor distance are package output, so the case pins
-        reproducibility, not an independent result. Evaluated with the compose-api compliance code against the recorded
-        run: passed.
-
-  - id: viva-simbio
-    package: viva-simbio
-    source: https://github.com/vivarium-collective/viva-simbio/tree/dd4e879603f4589461e667031770db31fcbb00e5
-    commit: dd4e879603f4589461e667031770db31fcbb00e5
-    install:
-      git: https://github.com/vivarium-collective/viva-simbio
-      commit: dd4e879603f4589461e667031770db31fcbb00e5
-    module_roots:
-      - viva_simbio
-    level: tested
-    evidence:
-      - >-
-        Added at tested. Its compliance case (registry/compliance/viva-simbio/brusselator-short) runs the Brusselator
-        through SimbioProcess for 2.0 time units. The row count, end time and initial X are hand-computed; the other
-        values are package output from two identical runs, so the case pins reproducibility, not the chemistry.
-        Evaluated with the compose-api compliance code against both recorded runs: passed.
-
-  - id: viva-bioreactordesign
-    package: viva-bioreactordesign
-    source: https://github.com/vivarium-collective/viva-bioreactordesign/tree/37b307881e1841ac6518506ddd17b023a72f4473
-    commit: 37b307881e1841ac6518506ddd17b023a72f4473
-    install:
-      git: https://github.com/vivarium-collective/viva-bioreactordesign
-      commit: 37b307881e1841ac6518506ddd17b023a72f4473
-    module_roots:
-      - pbg_bioreactordesign
-      - viva_bioreactordesign
-    level: tested
-    evidence:
-      - >-
-        Added at tested. Its compliance case (registry/compliance/viva-bioreactordesign/reactor-0d-baseline) runs the 0D
-        bubble-column baseline for 3 time units. Its emitter address is the full class path, not the shipped link name
-        (`local:ram-emitter`), because the runner resolves no link by that name; the document is otherwise the shipped
-        composite. The times and row count are hand-computed; the biomass value is package output from two identical
-        runs, so the case pins reproducibility, not an independent reference. Evaluated with the compose-api compliance
-        code against both recorded runs: passed.
+        Listed on 2026-11-03. Its compliance case (registry/compliance/viva-fenics/poisson-quadratic-mms) runs
+        PoissonSolverStep on a quadratic manufactured solution, which P2 represents exactly, so the expected L2 error is
+        round-off. It needs the dolfinx stack, which has not been installed or run here.
 
   # --- core: classes of the engine every composed environment installs (environments.yaml `composition.core`) -------
   # Provided by every composed version and mash-up without being listed or installed, and by the prebuilt images its

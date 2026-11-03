@@ -1,0 +1,10 @@
+description: >-
+  viva-fenics's PoissonSolverStep solves -div(grad u) = -6 on the unit square with the quadratic manufactured solution
+  u = 1 + x^2 + 2y^2 (P2, 16 x 16 mesh). That u lies in the P2 space, so the discrete solution equals it up to
+  round-off and the L2 error is ~0. The expected value is that analytic result, not a value copied from a run. Needs
+  the FEniCSx (dolfinx) stack, so it runs only in a pixi environment.
+document: document.pbg
+interval: 1
+expect:
+  - {kind: rows, emitter: emitter, min: 1}
+  - {kind: scalar, emitter: emitter, field: l2_error, expected: 0.0, abs: 1.0e-10}

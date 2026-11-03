@@ -89,13 +89,9 @@ def test_pbsim_commons_cases_are_complete() -> None:
 @pytest.mark.parametrize(
     ("entry", "case"),
     [
-        ("viva-mcom", "coculture-five-days"),
-        ("viva-bbe-systems", "walker-gait"),
-        ("viva-comets", "dfba-textbook-demo"),
-        ("viva-medyan", "network-demo"),
-        ("viva-yalla", "springs-demo-counts-and-summary"),
-        ("viva-simbio", "brusselator-short"),
-        ("viva-bioreactordesign", "reactor-0d-baseline"),
+        ("viva-copasi", "phase-cycle-copasi-report"),
+        ("viva-cobra", "textbook-fba-optimum"),
+        ("viva-fenics", "poisson-quadratic-mms"),
     ],
 )
 def test_onboarded_cases_load_and_their_files_exist(entry: str, case: str) -> None:
