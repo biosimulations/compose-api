@@ -211,13 +211,13 @@ entries:
 
   - id: viva-tellurium
     package: viva-tellurium
-    # v0.2.1 on main (confirmed with gh). pbg_tellurium, the deprecation shim, is not a module root. Its types module
-    # registers nothing, so no `types`.
-    source: https://github.com/vivarium-collective/viva-tellurium/tree/967d5dd721627561bff3472b662b97dffa212a7f
-    commit: 967d5dd721627561bff3472b662b97dffa212a7f
+    # v0.2.3 on main (viva-tellurium#37, confirmed with gh). pbg_tellurium, the deprecation shim, is not a module root.
+    # Its types module registers nothing, so no `types`.
+    source: https://github.com/vivarium-collective/viva-tellurium/tree/846f87c57058a6bfa383619c9ae7587f0d81453c
+    commit: 846f87c57058a6bfa383619c9ae7587f0d81453c
     install:
       git: https://github.com/vivarium-collective/viva-tellurium
-      commit: 967d5dd721627561bff3472b662b97dffa212a7f
+      commit: 846f87c57058a6bfa383619c9ae7587f0d81453c
     module_roots:
       - viva_tellurium
     # one tellurium pin beside pbsim-common's in a mash-up
@@ -241,6 +241,24 @@ entries:
         pinned pixi image for linux-64; `pixi install --frozen` installed it; and its compliance case passed through
         compose-api's runner in that environment, both for this group alone and in one set holding all seven
         framework entries.
+      - >-
+        The pin moved from v0.2.1 (967d5dd) to v0.2.3 (846f87c) on 2026-11-04. v0.2.2 takes vivarium-workbench from git
+        for the `dashboard` extra only (a `[tool.uv.sources]` line), so the runtime dependencies are unchanged. v0.2.3
+        (viva-tellurium#37) adds TelluriumProcess's `parameters_in` input: `{parameter_id: value}` set before each
+        interval, the whole map validated first, and a no-op when empty or unwired. A second case
+        (registry/compliance/viva-tellurium/stimulus-through-port) runs TelluriumProcess on BIOMD0000000786 with its
+        TNF_stimulation event removed and TNF_R set through that port. It checks all 15 floating species at six times
+        against COPASI's sim1 of the original model (viva-biomodels' corpus), within rel 1e-3 or abs 1e-7. With TNF_R = 0
+        on the port, or at v0.2.1, which has no such port, 90 of its 91 expectations fail. Both cases passed through
+        compose-api's runner (process-bigraph 1.9.1, bigraph-schema 1.8.1, tellurium 2.2.13.1, Python 3.12, macOS) at
+        846f87c.
+      - >-
+        Raised to tested again on 2026-11-04, for 846f87c, on composed-environment evidence (a new pin starts again at
+        listed). Its entry set (with its `requires`) locked through compose-api's own path (Manifest.with_requirements,
+        ComposedSpec.of, pixi_toml, build_k8s.lock_script) in the pinned pixi image for linux-64; `pixi install --frozen`
+        installed it; and both compliance cases passed through compose-api's runner in that environment. That held for
+        this group alone, for it with viva-maboss, viva-basic-processes and viva-pde-particle (the set
+        viva-multiscale-nfkb's composite runs in), and for one set holding all seven framework entries.
 
   # --- FBA ---
   - id: viva-cobra
