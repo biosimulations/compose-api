@@ -367,17 +367,16 @@ entries:
 
   - id: viva-fenics
     package: viva-fenics
-    # onboarded as it is at a5023cc (chore: sync generated workflows, #15). It is the FEniCSx package standalone, not
-    # the PDE component of viva-pde-particle, which is unchanged. Known gaps, not fixed here: composites import
-    # viva_superpowers, which its pyproject does not declare, and viva_fenics/__init__.py swallows that ImportError, so
-    # build_core and the composites go missing without a message; scipy is imported (viz, peristalsis) and declared
-    # nowhere.
-    source: https://github.com/vivarium-collective/viva-fenics/tree/a5023cca8466b9a39cf50fe6ce2112fb576c7d09
-    commit: a5023cca8466b9a39cf50fe6ce2112fb576c7d09
+    # v0.1.1 (#16): the standalone FEniCSx package, not the PDE component of viva-pde-particle, which is unchanged.
+    # 0.1.1 fixed what a5023cc had: composites imported viva_superpowers, undeclared, and __init__.py swallowed the
+    # ImportError so classes vanished; scipy was undeclared. viva-superpowers is now only a `dashboard` extra.
+    source: https://github.com/vivarium-collective/viva-fenics/tree/a1105fcae77019f6a2430c612df44c8a285792a6
+    commit: a1105fcae77019f6a2430c612df44c8a285792a6
     install:
       git: https://github.com/vivarium-collective/viva-fenics
-      commit: a5023cca8466b9a39cf50fe6ce2112fb576c7d09
-    # dolfinx is conda-only. fenics-dolfinx 0.10.* is the pin viva-pde-particle uses; viva-fenics's pixi.toml says "*".
+      commit: a1105fcae77019f6a2430c612df44c8a285792a6
+    # dolfinx is conda-only. 0.10.* is the pin viva-pde-particle and vcell-fenics use, inside viva-fenics's own tested
+    # range (>=0.10,<0.12, its suite passed on 0.10.0 and 0.11.0), so a set with both never splits on dolfinx.
     # The rest is from that pixi.toml's conda dependencies; pip dependencies come from its pyproject.
     conda:
       fenics-dolfinx: "0.10.*"
@@ -388,7 +387,7 @@ entries:
       python-dateutil: ">=2.8,<3"
     module_roots:
       - viva_fenics
-    level: listed
+    level: tested
     evidence:
       - >-
         Listed on 2026-11-03. Its compliance case (registry/compliance/viva-fenics/poisson-quadratic-mms) runs
@@ -396,6 +395,12 @@ entries:
         round-off. It needs the dolfinx stack, so it has not run through compose-api's runner or anywhere else here.
         Its one custom type (viva_fenics.types.FENICS_TYPES, fem_field) is on no process's ports at this commit, so
         the entry has no `types`.
+      - >-
+        Re-pinned to a1105fc (v0.1.1) and raised to tested on 2026-11-03. Its entry set locked through compose-api's own
+        path in the pinned pixi image for linux-64 (fenics-dolfinx 0.10.0, scipy 1.18.1), installed with `pixi install
+        --frozen`, and poisson-quadratic-mms passed through compose-api's runner, alone and in one set with all seven
+        framework entries (all seven cases passed). Importing viva_fenics there loads no viva_superpowers or
+        vivarium_workbench.
 
   # --- core: classes of the engine every composed environment installs (environments.yaml `composition.core`) -------
   # Provided by every composed version and mash-up without being listed or installed, and by the prebuilt images its
