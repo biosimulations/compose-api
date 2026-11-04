@@ -191,6 +191,22 @@ async def test_the_mash_up_made_for_a_run_is_built_after_the_response(
 
 
 @pytest.mark.asyncio
+async def test_a_core_short_name_does_not_stop_a_mash_up_being_inferred(
+    database_service: DatabaseServiceSQL, locks: Locks, builds: list[str], tmp_path: Path
+) -> None:
+    """`local:RAMEmitter`, the engine's default emitter and a short name the core entry accepts, counts as that core
+    class: it used to be "unregistered", so a run that used it fell back to registry_env and was refused there."""
+    from compose_api.api.routers import simulation as simulation_router
+
+    path = tmp_path / "doc.pbg"
+    path.write_bytes(_document(tmp_path, COPASI, DOSE, "local:RAMEmitter")[1])
+    tasks = BackgroundTasks()
+    inferred = await simulation_router._inferred(path, SimulationFileType.PBG, USER, tasks)
+    assert (inferred.mash_up, inferred.version) == (lifecycle.mash_up_name(NEEDED), 1)
+    await tasks()
+
+
+@pytest.mark.asyncio
 async def test_nothing_is_made_for_an_anonymous_caller_or_a_run_validation_refuses(
     http_api_client: httpx.AsyncClient, signed_in: FastAPI, locks: Locks, builds: list[str], tmp_path: Path
 ) -> None:
