@@ -1,0 +1,349 @@
+{
+ "state": {
+  "cells": {
+   "_type": "map[tumor_tcell_agent]",
+   "tumor_0": {
+    "id": "tumor_0",
+    "type": "circle",
+    "cell_type": "tumor",
+    "cell_state": "PDL1n",
+    "death": "",
+    "mass": 8.0,
+    "radius": 7.5,
+    "location": [
+     50.0,
+     50.0
+    ],
+    "speed": 0.0,
+    "present_MHCI": 1000.0,
+    "present_PDL1": 0.0,
+    "internal_IFNg": 0.0,
+    "receive_cytotoxic": 0.0,
+    "exchange": {
+     "IFNg": 0.0,
+     "tumor_debris": 0.0
+    },
+    "local": {
+     "IFNg": 0.0,
+     "tumor_debris": 0.0
+    }
+   },
+   "tumor_1": {
+    "id": "tumor_1",
+    "type": "circle",
+    "cell_type": "tumor",
+    "cell_state": "PDL1n",
+    "death": "",
+    "mass": 8.0,
+    "radius": 7.5,
+    "location": [
+     70.0,
+     50.0
+    ],
+    "speed": 0.0,
+    "present_MHCI": 1000.0,
+    "present_PDL1": 0.0,
+    "internal_IFNg": 0.0,
+    "receive_cytotoxic": 0.0,
+    "exchange": {
+     "IFNg": 0.0,
+     "tumor_debris": 0.0
+    },
+    "local": {
+     "IFNg": 0.0,
+     "tumor_debris": 0.0
+    }
+   },
+   "tumor_2": {
+    "id": "tumor_2",
+    "type": "circle",
+    "cell_type": "tumor",
+    "cell_state": "PDL1p",
+    "death": "",
+    "mass": 8.0,
+    "radius": 7.5,
+    "location": [
+     50.0,
+     70.0
+    ],
+    "speed": 0.0,
+    "present_MHCI": 50000.0,
+    "present_PDL1": 50000.0,
+    "internal_IFNg": 0.0,
+    "receive_cytotoxic": 0.0,
+    "exchange": {
+     "IFNg": 0.0,
+     "tumor_debris": 0.0
+    },
+    "local": {
+     "IFNg": 0.0,
+     "tumor_debris": 0.0
+    }
+   },
+   "tcell_0": {
+    "id": "tcell_0",
+    "type": "circle",
+    "cell_type": "t-cell",
+    "cell_state": "PD1n",
+    "death": "",
+    "mass": 2.0,
+    "radius": 3.75,
+    "location": [
+     130.0,
+     130.0
+    ],
+    "speed": 0.16666666666666666,
+    "present_TCR": 50000.0,
+    "present_PD1": 0.0,
+    "total_cytotoxic_packets": 0.0,
+    "transfer_cytotoxic": 0.0,
+    "exchange": {
+     "IFNg": 100000000.0,
+     "tumor_debris": 0.0
+    },
+    "local": {
+     "IFNg": 0.0,
+     "tumor_debris": 0.0
+    }
+   },
+   "tcell_1": {
+    "id": "tcell_1",
+    "type": "circle",
+    "cell_type": "t-cell",
+    "cell_state": "PD1p",
+    "death": "",
+    "mass": 2.0,
+    "radius": 3.75,
+    "location": [
+     150.0,
+     110.0
+    ],
+    "speed": 0.08333333333333333,
+    "present_TCR": 50000.0,
+    "present_PD1": 50000.0,
+    "total_cytotoxic_packets": 0.0,
+    "transfer_cytotoxic": 0.0,
+    "exchange": {
+     "IFNg": 0.0,
+     "tumor_debris": 0.0
+    },
+    "local": {
+     "IFNg": 0.0,
+     "tumor_debris": 0.0
+    }
+   }
+  },
+  "fields": {
+   "IFNg": [
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ]
+   ]
+  },
+  "observables": {
+   "tumor_total": 0.0,
+   "tumor_PDL1n": 0.0,
+   "tumor_PDL1p": 0.0,
+   "tcell_total": 0.0,
+   "tcell_PD1n": 0.0,
+   "tcell_PD1p": 0.0,
+   "dendritic_total": 0.0,
+   "dendritic_inactive": 0.0,
+   "dendritic_active": 0.0,
+   "pdl1p_fraction": 0.0,
+   "pd1p_fraction": 0.0,
+   "ifng_max": 0.0
+  },
+  "field": {
+   "_type": "process",
+   "address": "local:viva_tumor_tcell.processes.field.DiffusionField",
+   "config": {
+    "bounds_x": 200.0,
+    "bounds_y": 200.0,
+    "n_bins_x": 10,
+    "n_bins_y": 10,
+    "depth": 15.0,
+    "molecules": [
+     "IFNg"
+    ]
+   },
+   "interval": 60.0,
+   "inputs": {
+    "cells": [
+     "cells"
+    ],
+    "fields": [
+     "fields"
+    ]
+   },
+   "outputs": {
+    "cells": [
+     "cells"
+    ],
+    "fields": [
+     "fields"
+    ]
+   }
+  },
+  "observe": {
+   "_type": "step",
+   "address": "local:viva_tumor_tcell.processes.observables.Observables",
+   "config": {},
+   "inputs": {
+    "cells": [
+     "cells"
+    ],
+    "fields": [
+     "fields"
+    ]
+   },
+   "outputs": {
+    "observables": [
+     "observables"
+    ]
+   }
+  },
+  "emitter": {
+   "_type": "step",
+   "address": "local:process_bigraph.emitter.RAMEmitter",
+   "config": {
+    "emit": {
+     "observables": {
+      "_type": "map",
+      "_value": "set_float"
+     },
+     "fields": "node",
+     "global_time": "float"
+    }
+   },
+   "inputs": {
+    "observables": [
+     "observables"
+    ],
+    "fields": [
+     "fields"
+    ],
+    "global_time": [
+     "global_time"
+    ]
+   }
+  }
+ }
+}

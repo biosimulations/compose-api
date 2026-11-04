@@ -1,0 +1,20 @@
+description: >-
+  viva-munk's FieldDecay and DiffusionAdvection on a 4 by 4 grid (bounds 4 by 4, closed walls), two species, ten steps
+  of 10 s. `dye` starts uniform at 2 and only FieldDecay acts on it (k = 0.01 per s), so it stays uniform and equals
+  2 * exp(-k * t): 2 * exp(-0.1) after one step and 2 * exp(-1) = 0.7357588823428847 at 100 s, computed by hand; the run
+  agrees to 1e-15. `ahl` starts as 8 in one bin and only DiffusionAdvection acts on it (D = 0.05); its per-bin values are
+  the package's own output (viva-munk 94d9585f, locked environment of viva-munk, process-bigraph 1.9.1, bigraph-schema
+  1.8.1, run through compose-api's runner on 2026-11-02, linux/amd64; two runs gave identical results), and their sum
+  stays 8 (checked in the run, not asserted here). The case shows that both classes import, build on the runner's core and
+  step. It does not use the multibody processes: the `pymunk_agent` type is registered by viva_munk.core_import, which the
+  runner does not call.
+document: document.pbg
+interval: 100
+expect:
+  - {kind: rows, emitter: emitter, min: 11}
+  - {kind: scalar, emitter: emitter, field: global_time, expected: 100.0}
+  - {kind: scalar, emitter: emitter, field: fields.dye.0.0, row: 1, expected: 1.8096748360719193, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: fields.dye.0.0, expected: 0.7357588823428847, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: fields.dye.3.3, expected: 0.7357588823428847, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: fields.ahl.1.2, expected: 0.5157535479369152, rel: 1.0e-6}
+  - {kind: scalar, emitter: emitter, field: fields.ahl.0.0, expected: 0.49925469435378605, rel: 1.0e-6}
