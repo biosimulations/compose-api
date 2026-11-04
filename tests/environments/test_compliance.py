@@ -91,6 +91,7 @@ def test_pbsim_commons_cases_are_complete() -> None:
     [
         ("viva-copasi", "phase-cycle-copasi-report"),
         ("viva-tellurium", "phase-cycle-copasi-report"),
+        ("viva-tellurium", "stimulus-through-port"),
         ("viva-cobra", "textbook-fba-optimum"),
         ("viva-maboss", "switching-analytic-oracle"),
         ("viva-nfsim", "flagella-seeded"),
