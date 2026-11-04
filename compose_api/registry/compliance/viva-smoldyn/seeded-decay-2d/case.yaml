@@ -1,0 +1,19 @@
+description: >-
+  viva-smoldyn's SmoldynProcess in 2D (50 x 50, reflecting), seed 7, dt 0.01: 200 A convert to B at rate 0.1, emitted
+  every 5 to t = 15. Hand-computed: 4 rows (t = 0, 5, 10, 15) and the times. The counts (A 119/70/46, B 81/130/154)
+  are package output, not an independent oracle. The upstream onboarding reported them identical on Linux (the
+  smoldyn-vcell fork wheel, CPython 3.12) and macOS (PyPI smoldyn 2.76, CPython 3.14); this case through compose-api's
+  runner gave them on macOS (PyPI 2.76, CPython 3.14). The 3D configuration gives other numbers, so the dimensions must
+  stay 2.
+document: document.pbg
+interval: 15
+expect:
+  - {kind: rows, emitter: emitter, min: 4}
+  - {kind: scalar, emitter: emitter, field: global_time, expected: 15.0}
+  - {kind: scalar, emitter: emitter, field: smoldyn_time, row: 1, expected: 5.0}
+  - {kind: scalar, emitter: emitter, field: molecule_counts.A, row: 1, expected: 119}
+  - {kind: scalar, emitter: emitter, field: molecule_counts.B, row: 1, expected: 81}
+  - {kind: scalar, emitter: emitter, field: molecule_counts.A, row: 2, expected: 70}
+  - {kind: scalar, emitter: emitter, field: molecule_counts.B, row: 2, expected: 130}
+  - {kind: scalar, emitter: emitter, field: molecule_counts.A, row: 3, expected: 46}
+  - {kind: scalar, emitter: emitter, field: molecule_counts.B, row: 3, expected: 154}

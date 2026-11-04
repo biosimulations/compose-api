@@ -1,0 +1,14 @@
+description: >-
+  viva-maboss's MaBoSSProcess on one node, A, that switches on at rate k = 0.5 and never off (logic 1, rate_down 0),
+  from A = 0, over one interval of 2.0 split into 20 windows (20000 samples, seed 3). The process reports MaBoSS's
+  average of P(A on) over the last window, [1.9, 2.0]. For this absorbing switch P(t) = 1 - exp(-k t), so the expected
+  value is 1 - (exp(-0.5 x 1.9) - exp(-0.5 x 2.0)) / (0.5 x 0.1) = 0.6227683543388224: an analytic oracle, not
+  package output. The tolerance is 1e-3: over seeds 1 to 8 at 20000 samples the estimate stayed within 6e-5 of the
+  oracle, and the instantaneous value at t = 2.0 (0.6321) is 9e-3 away, so the case separates the window average
+  from the instant.
+document: document.pbg
+interval: 2.0
+expect:
+  - {kind: rows, emitter: emitter, min: 2}
+  - {kind: scalar, emitter: emitter, field: node_probabilities.A, expected: 0.6227683543388224, abs: 0.001}
+  - {kind: scalar, emitter: emitter, field: steps, expected: 1}

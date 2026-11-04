@@ -20,7 +20,7 @@ from compose_api.authentication import DEFAULT_ROLE, AuthenticatedPrincipal, get
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.environments import lifecycle
 from compose_api.registry.environments import EnvironmentSpec, load_environments
-from compose_api.registry.manifest import load_manifest
+from compose_api.registry.manifest import CurationLevel, load_manifest
 from compose_api.registry.resolver import covering_environment, needed_entries
 from compose_api.simulation.models import SimulationFileType, SimulatorVersion, VersionState
 
@@ -113,8 +113,23 @@ def test_a_mash_up_is_named_by_its_entries_and_only_composable_ones_qualify() ->
     name = lifecycle.mash_up_name(NEEDED)
     assert name == lifecycle.mash_up_name(set(NEEDED)) and len(name) == len("mash-") + 10
     assert lifecycle.composable(NEEDED, manifest) == []
-    (listed,) = lifecycle.composable({"viva-tellurium"}, manifest)  # a catalog wrapper: no install, `listed`
-    assert "does not say how it installs" in listed
+    (catalog_only,) = lifecycle.composable({"viva-amici"}, manifest)  # a catalog wrapper: no install, `listed`
+    assert "does not say how it installs" in catalog_only
+    # an entry that installs but is only `listed` is refused: checked on a copy of the manifest, so the rule is tested
+    # whichever entries happen to be `listed` today
+    downgraded = manifest.model_copy(
+        update={
+            "entries": [
+                e.model_copy(update={"level": CurationLevel.LISTED}) if e.id == "viva-tellurium" else e
+                for e in manifest.entries
+            ]
+        }
+    )
+    (listed,) = lifecycle.composable({"viva-tellurium"}, downgraded)
+    assert "a mash-up needs `tested`" in listed
+    # the framework groups onboarded at `tested` compose, with their `requires`
+    groups = {"viva-copasi", "viva-tellurium", "viva-cobra", "viva-maboss", "viva-nfsim", "viva-smoldyn"}
+    assert lifecycle.composable(manifest.with_requirements(groups), manifest) == []
     # viva-pde-particle is composable since composition 7c-4: its classes may join a mash-up
     assert lifecycle.composable(manifest.with_requirements({"viva-pde-particle"}), manifest) == []
 

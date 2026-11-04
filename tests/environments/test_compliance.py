@@ -86,6 +86,25 @@ def test_pbsim_commons_cases_are_complete() -> None:
     assert load_cases("no-such-entry") == []
 
 
+@pytest.mark.parametrize(
+    ("entry", "case"),
+    [
+        ("viva-copasi", "phase-cycle-copasi-report"),
+        ("viva-tellurium", "phase-cycle-copasi-report"),
+        ("viva-cobra", "textbook-fba-optimum"),
+        ("viva-maboss", "switching-analytic-oracle"),
+        ("viva-nfsim", "flagella-seeded"),
+        ("viva-smoldyn", "seeded-decay-2d"),
+        ("viva-fenics", "poisson-quadratic-mms"),
+    ],
+)
+def test_onboarded_cases_load_and_their_files_exist(entry: str, case: str) -> None:
+    """Each onboarded entry's case is found by name, and its document is present and self-contained."""
+    (found,) = [c for c in load_cases(entry) if c.name == case]
+    assert found.entry == entry
+    assert compliance.case_problems(found) == []
+
+
 def _result(scale: float = 1.0) -> dict[str, object]:
     return {
         "emitter": [

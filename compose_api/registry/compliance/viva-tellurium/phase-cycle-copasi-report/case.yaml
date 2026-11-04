@@ -1,0 +1,53 @@
+description: >-
+  viva-tellurium's TelluriumUTCStep runs the phase-cycle SBML model at output_times 0, 2, ..., 10, and every species
+  matches COPASI's own report at those times within a solver-to-solver tolerance (rel and abs 1e-3, as pbsim-common's
+  tellurium-phase-cycle case). The step emits time_series and species_trajectories lists, not a numeric_result, so the
+  reference is checked value by value; the expected values are pbsim-common's copasi-phase-cycle reference.csv
+  (COPASI's output) copied as numbers, not this package's output.
+document: document.pbg
+files: [phase_cycle.sbml]
+interval: 1
+expect:
+  - {kind: rows, emitter: emitter, min: 1}
+  - {kind: scalar, emitter: emitter, field: time_series.0, expected: 0.0}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.PX.0, expected: 0.0, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.PY.0, expected: 0.0, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.PZ.0, expected: 0.0, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.X.0, expected: 0.0, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.Y.0, expected: 20.0, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.Z.0, expected: 0.0, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: time_series.1, expected: 2.0}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.PX.1, expected: 218.53879712732282, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.PY.1, expected: 358.02710490999544, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.PZ.1, expected: 84.58883016781743, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.X.1, expected: 21.23353653413151, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.Y.1, expected: 23.608927618233935, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.Z.1, expected: 5.8662657077649225, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: time_series.2, expected: 4.0}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.PX.2, expected: 428.9385587725391, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.PY.2, expected: 536.6640156391134, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.PZ.2, expected: 131.03481828628776, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.X.2, expected: 15.55981507119138, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.Y.2, expected: 12.482102162347543, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.Z.2, expected: 3.295815634371266, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: time_series.3, expected: 6.0}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.PX.3, expected: 542.4662272568647, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.PY.3, expected: 585.3979183389013, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.PZ.3, expected: 146.53170268432163, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.X.3, expected: 11.033658969751396, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.Y.3, expected: 6.564282624070119, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.Z.3, expected: 1.9026578825017204, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: time_series.4, expected: 8.0}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.PX.4, expected: 596.5703798565515, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.PY.4, expected: 572.3351828972171, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.PZ.4, expected: 146.99303231887401, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.X.4, expected: 8.51888469740369, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.Y.4, expected: 3.533314265749158, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.Z.4, expected: 1.1983546823818862, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: time_series.5, expected: 10.0}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.PX.5, expected: 621.043882732722, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.PY.5, expected: 532.6742689497394, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.PZ.5, expected: 141.0044186605746, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.X.5, expected: 7.402872229941832, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.Y.5, expected: 1.9940826700967484, rel: 1.0e-3, abs: 1.0e-3}
+  - {kind: scalar, emitter: emitter, field: species_trajectories.Z.5, expected: 0.8690041334494722, rel: 1.0e-3, abs: 1.0e-3}
