@@ -186,7 +186,7 @@ entries:
     # one python-copasi pin beside pbsim-common's in a mash-up
     requires:
       - python-copasi
-    level: listed
+    level: tested
     evidence:
       - >-
         Listed on 2026-11-03. Its compliance case (registry/compliance/viva-copasi/phase-cycle-copasi-report) runs
@@ -202,6 +202,12 @@ entries:
         The pin moved from v0.2.1 (ed3fafa) to v0.2.2 (937ff13), review follow-ups: a valid boundary-species test
         fixture, `species_units: amount` refused at construction rather than at run, and the types module's docstring
         naming `viva_copasi.types:standard_types`. The case passed through the runner again at v0.2.2.
+      - >-
+        Raised to tested on 2026-11-03 on composed-environment evidence. Its entry set (with its `requires`) locked through
+        compose-api's own path (Manifest.with_requirements, ComposedSpec.of, pixi_toml, build_k8s.lock_script) in the
+        pinned pixi image for linux-64; `pixi install --frozen` installed it; and its compliance case passed through
+        compose-api's runner in that environment, both for this group alone and in one set holding all seven
+        framework entries.
 
   - id: viva-tellurium
     package: viva-tellurium
@@ -217,7 +223,7 @@ entries:
     # one tellurium pin beside pbsim-common's in a mash-up
     requires:
       - tellurium
-    level: listed
+    level: tested
     evidence:
       - >-
         Listed on 2026-11-03. Its compliance case (registry/compliance/viva-tellurium/phase-cycle-copasi-report) runs
@@ -229,6 +235,12 @@ entries:
         The pin moved from v0.2.0 (e056d34) to v0.2.1 (967d5dd): the workspace image installs the `dashboard` extra
         (with a uv default group `workbench`), the `cli` extra is restored, and the visualization error is clearer.
         Its runtime path is unchanged; the case passed through the runner again at v0.2.1.
+      - >-
+        Raised to tested on 2026-11-03 on composed-environment evidence. Its entry set (with its `requires`) locked through
+        compose-api's own path (Manifest.with_requirements, ComposedSpec.of, pixi_toml, build_k8s.lock_script) in the
+        pinned pixi image for linux-64; `pixi install --frozen` installed it; and its compliance case passed through
+        compose-api's runner in that environment, both for this group alone and in one set holding all seven
+        framework entries.
 
   # --- FBA ---
   - id: viva-cobra
@@ -241,7 +253,7 @@ entries:
       commit: 098d600432417163baa3be2855045b3686c5023a
     module_roots:
       - viva_cobra
-    level: listed
+    level: tested
     evidence:
       - >-
         Listed on 2026-11-03. Its compliance case (registry/compliance/viva-cobra/textbook-fba-optimum) runs FBAStep on
@@ -253,6 +265,12 @@ entries:
       - >-
         The pin moved from v0.1.1 (dc893ed) to v0.1.2 (098d600): a starved batch (no uptake possible) now returns zero
         deltas instead of raising, and requires-python is >=3.11. The case passed through the runner again at v0.1.2.
+      - >-
+        Raised to tested on 2026-11-03 on composed-environment evidence. Its entry set (with its `requires`) locked through
+        compose-api's own path (Manifest.with_requirements, ComposedSpec.of, pixi_toml, build_k8s.lock_script) in the
+        pinned pixi image for linux-64; `pixi install --frozen` installed it; and its compliance case passed through
+        compose-api's runner in that environment, both for this group alone and in one set holding all seven
+        framework entries.
 
   # --- Boolean ---
   - id: viva-maboss
@@ -266,7 +284,7 @@ entries:
       commit: 3fdccd7bb605109f3284e6ff9be2616b50b19ca7
     module_roots:
       - viva_maboss
-    level: listed
+    level: tested
     evidence:
       - >-
         Listed on 2026-11-03 as the Boolean layer's simulator. MaBoSS was chosen over BoolNet, which is R-only with no
@@ -276,6 +294,12 @@ entries:
         It passed through compose-api's runner (process-bigraph 1.9.1, bigraph-schema 1.8.1, cmaboss 1.0.0b34, Python
         3.12, macOS) from a non-editable install at this commit. A composed environment has not run it, so this is not
         yet a tested level.
+      - >-
+        Raised to tested on 2026-11-03 on composed-environment evidence. Its entry set (with its `requires`) locked through
+        compose-api's own path (Manifest.with_requirements, ComposedSpec.of, pixi_toml, build_k8s.lock_script) in the
+        pinned pixi image for linux-64; `pixi install --frozen` installed it; and its compliance case passed through
+        compose-api's runner in that environment, both for this group alone and in one set holding all seven
+        framework entries.
 
   # --- Rule-based ---
   - id: viva-nfsim
@@ -293,7 +317,7 @@ entries:
       perl: "*"
     module_roots:
       - pbg_nfsim
-    level: listed
+    level: tested
     evidence:
       - >-
         Listed on 2026-11-03. Its compliance case (registry/compliance/viva-nfsim/flagella-seeded) runs NFSimProcess on
@@ -303,6 +327,12 @@ entries:
         1.9.1, bigraph-schema 1.8.1, bionetgen 0.8.7, Python 3.12, macOS with the system Perl) at this commit. Not yet
         verified: FindBin under conda-forge perl, and the numbers from Linux's bundled NFsim build. A composed
         environment has not run it, so this is not yet a tested level. The seed restarts NFsim's RNG every interval.
+      - >-
+        Raised to tested on 2026-11-03 on composed-environment evidence. Its entry set (with its `requires`) locked through
+        compose-api's own path (Manifest.with_requirements, ComposedSpec.of, pixi_toml, build_k8s.lock_script) in the
+        pinned pixi image for linux-64; `pixi install --frozen` installed it; and its compliance case passed through
+        compose-api's runner in that environment, both for this group alone and in one set holding all seven
+        framework entries.
 
   # --- Spatial/particle ---
   - id: viva-smoldyn
@@ -318,7 +348,7 @@ entries:
     # it declares plain `smoldyn`, but PyPI's 2.76 wheel does not import on Linux CPython 3.12; the fork wheel does
     requires:
       - smoldyn-vcell
-    level: listed
+    level: tested
     evidence:
       - >-
         Listed on 2026-11-03. Its compliance case (registry/compliance/viva-smoldyn/seeded-decay-2d) runs SmoldynProcess
@@ -328,6 +358,12 @@ entries:
         CPython 3.14, because PyPI's macOS CPython 3.12 wheel does not import either. Not yet verified: that a lock
         picks the smoldyn-vcell URL wheel for its unconstrained `smoldyn` requirement. A composed environment has not
         run it, so this is not yet a tested level.
+      - >-
+        Raised to tested on 2026-11-03 on composed-environment evidence. Its entry set (with its `requires`) locked through
+        compose-api's own path (Manifest.with_requirements, ComposedSpec.of, pixi_toml, build_k8s.lock_script) in the
+        pinned pixi image for linux-64; `pixi install --frozen` installed it; and its compliance case passed through
+        compose-api's runner in that environment, both for this group alone and in one set holding all seven
+        framework entries. Alone, it needed the smoldyn-vcell entry's libstdcxx floor (GLIBCXX_3.4.32).
 
   - id: viva-fenics
     package: viva-fenics
@@ -405,6 +441,11 @@ entries:
     install:
       url: https://github.com/virtualcell/Smoldyn/releases/download/vcell-pyhybrid-e86d552/smoldyn-2.76.dev0%2Bvcell.e86d552-cp312-cp312-linux_x86_64.whl
       sha256: bb033bccff9481a075603d4a79fefe249b152fac5544a716adf16761adc29d14
+    # its extension needs GLIBCXX_3.4.32 (GCC 13.2), newer than the pixi image's system libstdc++; conda-forge's
+    # `libstdcxx` has it from 13.3.0 (13.1 and 13.2 were published only as libstdcxx-ng). Without it, a set whose
+    # other entries bring no libstdcxx (viva-smoldyn alone) fails `import smoldyn`.
+    conda:
+      libstdcxx: ">=13.3"
     level: installable
     evidence:
       - >-
