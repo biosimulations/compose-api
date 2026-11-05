@@ -88,6 +88,9 @@ class Case(BaseModel):
     model_file: str  # the archive member chosen: the highest level and version
     model: str
     results: dict[str, Series]  # the expected values by column, `time` first
+    #: other models in the case's directory, by file name: a `comp` model's external model definitions name them as
+    #: their `source`, relative to the model (01475's `external-l3v2.xml`)
+    external_files: dict[str, str] = Field(default_factory=dict)
 
     @property
     def source(self) -> str:
@@ -172,6 +175,11 @@ def read_case(archive: Path, release: str, number: str) -> Case:
             model_file=models[0].rsplit("/", 1)[-1],
             model=z.read(models[0]).decode("utf-8"),
             results=parse_results(text("results.csv")),
+            external_files={
+                n.rsplit("/", 1)[-1]: z.read(n).decode("utf-8")
+                for n in z.namelist()
+                if n.startswith(f"semantic/{number}/") and not n.startswith(prefix) and not n.endswith("/")
+            },
         )
 
 
@@ -374,6 +382,8 @@ def write_archive(case: Case, path: Path) -> Path:
         z.writestr("manifest.xml", _MANIFEST.format(model=MODEL_FILE, sedml=SEDML_FILE))
         z.writestr(MODEL_FILE, case.model)
         z.writestr(SEDML_FILE, sedml)
+        for name, text in sorted(case.external_files.items()):  # beside the model, where its references resolve
+            z.writestr(name, text)
     path.write_bytes(buffer.getvalue())
     return path
 

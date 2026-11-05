@@ -145,6 +145,9 @@ def _release() -> bytes:
                 "sbml-l3v2.xml": _model(3, 2),
             },
         )
+        # its submodel's definition, in a file of its own that the model names as an external model definition's
+        # source (01475's external-l3v2.xml)
+        z.writestr("semantic/00003/external-l3v2.xml", _model(3, 2))
         # 00004: a flux balance case, which is not a time course
         _case(
             z,
@@ -351,3 +354,18 @@ def test_the_sample_suite_is_judged_by_its_expected_results() -> None:
     assert found.judged_by == "reference" and found.solvers == ["copasi", "tellurium", "vcell"]
     assert all(s.startswith(f"{sts.KIND}:3.5.0/") for s in found.sources)
     assert len(found.sources) == len(set(found.sources)) == 146
+
+
+@pytest.mark.asyncio
+async def test_a_comp_case_s_external_models_ride_along_beside_its_model(release: list[str], tmp_path: Path) -> None:
+    """A `comp` model's external model definitions name other files of the case by a path relative to the model, so
+    the archive carries them beside it (run 1 of the sample: 01471, 01475-01477 failed to load without them)."""
+    case = await sts.case(f"{RELEASE}/00003")
+    assert set(case.external_files) == {"external-l3v2.xml"}
+    plain = await sts.case(f"{RELEASE}/00001")
+    assert plain.external_files == {}
+    # 00003 reports a flattened id, which the SED-ML cannot address (S12): write it with 00001's variables
+    path = sts.write_archive(case.model_copy(update={"settings": plain.settings}), tmp_path / "c.omex")
+    with zipfile.ZipFile(path) as z:
+        assert set(z.namelist()) == {"manifest.xml", "model.xml", "simulation.sedml", "external-l3v2.xml"}
+        assert z.read("external-l3v2.xml").decode() == case.external_files["external-l3v2.xml"]

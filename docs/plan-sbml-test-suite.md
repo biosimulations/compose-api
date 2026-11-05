@@ -1,6 +1,6 @@
 # A suite from the SBML Test Suite: every ODE solver against the community's expected results
 
-**Status (2026-11-05): plan merged (#515); step 2 merged (#516); step 3 merged (#517); step 4a merged (#518); step 4b (the cluster run, its baseline and known problems) next, on 0.7.81; S8–S11 decided by Jim. Not yet the active plan** ([README](README.md): entry-updates is).
+**Status (2026-11-05): plan merged (#515); step 2 merged (#516); step 3 merged (#517); step 4a merged (#518), live in 0.7.81; run 1 done, its baseline held back for the platform fixes (step 4c); S8–S11 decided by Jim. Not yet the active plan** ([README](README.md): entry-updates is).
 One PR per step, each merged with a merge commit.
 
 The suites we have (`examples/*/suite.yaml`; [plan-sedml](plan-sedml.md), phase 6) take models from BioModels and
@@ -63,6 +63,27 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
     that read. One case per tag needs only 14 cases, too few to say much. Covering every tag *and every pair of tags
     found together* (1261 pairs) needs 146, of which 21 cannot be written yet (finding 10); that is the sample. Only
     `comp:SubmodelOutput` is reached through unwritable cases alone.
+
+### Found in run 1 of the sample (2026-11-05, 0.7.81, registry_env@5)
+
+13. **Run 1 passed few cases, and most failures are ours, not the solvers'.** Of 125 cases run, COPASI passed 26,
+    Tellurium 31 and VCell 5; 4 passed on all three. VCell's run failed in 96, Tellurium's in 50, COPASI's in 5. The
+    causes, platform first:
+    - **The archive left out external models.** Ten `comp` cases (four in the sample: 01471, 01475–01477) define a
+      submodel in another file of the case (`external-l3v2.xml`), named relative to the model. Without it no solver
+      could load them.
+    - **Only species are reported.** Every solver in `solvers.yaml` says `provides: [species]`, so the translator
+      leaves out a parameter or compartment that varies in time (X404), and the solver lacks the column: COPASI's
+      "missing" in 68 cases.
+    - **Species are reported as concentrations, always.** SED-ML reads a species with `hasOnlySubstanceUnits` as an
+      amount; the solver steps return its concentration. 01307, 01455 and 01747: all three solvers agree, all wrong.
+    - **VCell's SBML import refuses many features** (its run failures by cause): algebraic rules 21, `delay` 13, the
+      `rateOf` csymbol 13, 0-D compartments 10, non-numeric or non-integer stoichiometry 10, no ODEs at all (rules
+      and events only) 9, elements with no math 8, and 12 single causes. None is the solver: every case is
+      non-spatial (no 3.5.0 model uses the `spatial` package), so `pyvcell.simulate_ode` is the right path; the
+      import (vcell-core's `SBMLImporter`, through libvcell) fails before it.
+    - **The solvers' own limits:** Tellurium cannot load the algebraic-rule models; COPASI is off in all 12
+      `FastReaction` cases and in some `StoichiometryMath` ones, and crashed twice (01284, 01288).
 
 ## Decisions (proposed)
 
@@ -131,10 +152,18 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
    problem excuses a row only when every solver without one passes. The suite page reads pass and fail, per solver.
    `scripts/sbml_sample_suite.py` writes the sample (finding 12): every tag and every pair of tags found together,
    chosen greedily, writable cases first, then the lowest number.
-   **4b (after a release):** run it on the cluster, accept the baseline in a PR, record the failures as known
-   problems.
-5. **The full suite.** All 1790 TimeCourse cases, after step 4 says it is affordable.
-6. **The tag view** (S7).
+   **4b (done, 0.7.81):** run 1 (finding 13). Its baseline is not accepted: most of its failures are the platform's.
+   **4c, the platform fixes, in this order** (Jim, 2026-11-05), each followed by a run:
+   1. the archive carries a case's external models (compose-api);
+   2. the solver steps report what SED-ML means: a species as an amount when it has only substance units, and every
+      parameter and compartment that varies in time; `solvers.yaml` then says `provides: [species, parameter,
+      compartment]` (pbsim_common, then a registry_env version);
+   3. VCell's SBML import, cause by cause from finding 13, most cases per effort first, each with a failing case as
+      its test (vcell-core, then libvcell, pyvcell, pbsim_common and a registry_env version);
+   4. then the baseline, and known problems for what remains that S13–S16 do not explain.
+5. **Features and incompatibilities** (S13–S16), after step 4c.
+6. **The full suite.** All 1790 TimeCourse cases, after step 4 says it is affordable.
+7. **The tag view** (S7), which becomes the feature × solver matrix of S16.
 
 ## Decided (Jim, 2026-11-05)
 
@@ -151,6 +180,27 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
   flattening first would test the flattener instead. A solver that can't read `comp` fails those cases, and that
   failure becomes a known problem (S6). This answers finding 1's 125 `comp` cases: they run as they are.
 - **Deferred:** whether to offer the generated SED-ML to the SBML Team.
+
+## Proposed after run 1 (Jim, 2026-11-05: "keep this order", after the platform fixes)
+
+What a model needs and what a solver can do, said once and checked, so a solver that cannot do something fails with
+a clear message rather than an import error, and the suite reads "unsupported" rather than "failed".
+
+- **S13. The vocabulary is the SBML Test Suite's tags** (64 in 3.5.0, `comp:*` included). Its own Test Runner records
+  a tool's unsupported tags the same way, so our results stay comparable with its results database.
+- **S14. A model's features are detected, not only read.** A libsbml detector lists a model's tags from the model,
+  so the same check applies to BioModels and biosimulations.org sources. The 1789 cases test it: its tags for each
+  must match the case's declared ones.
+- **S15. Incompatibilities are registry data.** Each is (solver, feature, status, reason, evidence), status
+  `unsupported` (the solver refuses it) or `wrong` (it runs and gives wrong answers, the more dangerous kind), kept
+  beside `solvers.yaml`, changed by pull request, and tied to environment versions, since a new libvcell can end one.
+  A solver step that meets a feature it cannot handle raises one standard error naming the tag (for example
+  `VCellUTCStep` mapping "Algebraic rules are not handled" to `AlgebraicRule`), recorded as an event.
+- **S16. The suite reads them.** A solver whose model needs a declared `unsupported` feature is not run, and its row
+  says why ("unsupported: AlgebraicRule"); no known problem is needed. A failure that names a tag no entry declares
+  is a missing entry. Declared entries are checked as known problems are: one whose cases now pass is stale
+  (resolved), and a failure on a feature a solver claims is a regression. Known problems stay for what no feature
+  explains.
 
 ## Later (not in this plan)
 
