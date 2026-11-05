@@ -1,6 +1,6 @@
 # A suite from the SBML Test Suite: every ODE solver against the community's expected results
 
-**Status (2026-11-05): plan merged (#515); step 2 merged (#516); step 3 merged (#517); step 4a (the reference decides, the sample suite) in review; S8–S11 decided by Jim. Not yet the active plan** ([README](README.md): entry-updates is).
+**Status (2026-11-05): plan merged (#515); step 2 merged (#516); step 3 merged (#517); step 4a merged (#518); step 4b (the cluster run, its baseline and known problems) next, on 0.7.81; S8–S11 decided by Jim. Not yet the active plan** ([README](README.md): entry-updates is).
 One PR per step, each merged with a merge commit.
 
 The suites we have (`examples/*/suite.yaml`; [plan-sedml](plan-sedml.md), phase 6) take models from BioModels and
