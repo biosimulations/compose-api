@@ -1,6 +1,6 @@
 # A suite from the SBML Test Suite: every ODE solver against the community's expected results
 
-**Status (2026-11-05): plan merged (#515); step 2 (the source) in review; S8–S11 decided by Jim. Not yet the active plan** ([README](README.md): entry-updates is).
+**Status (2026-11-05): plan merged (#515); step 2 merged (#516); step 3 (tolerances per source) in review; S8–S11 decided by Jim. Not yet the active plan** ([README](README.md): entry-updates is).
 One PR per step, each merged with a merge commit.
 
 The suites we have (`examples/*/suite.yaml`; [plan-sedml](plan-sedml.md), phase 6) take models from BioModels and
@@ -101,9 +101,21 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
    its origin (S3, S10), as `sedml/sbml_test_suite.py`. It also adds the `sbml_test_case` label. Tested on hand-written
    cases in the suite's layout: amounts and concentrations, a compartment sized by a rule, a flattened `comp` id, and
    an FBA case. Findings 9–11 come from running it over the real release.
-3. **Tolerances per source** (S4), applied in the comparison and shown on the comparison page.
-4. **The sample suite** (S5, S9): the picking script, then `examples/sbml-test-suite-sample/suite.yaml` on COPASI,
-   Tellurium and VCell (S8), run on the cluster, baseline accepted, failures recorded as known problems (S6).
+3. **Tolerances per source** (S4), applied in the comparison and shown on the comparison page. A case's tolerances
+   are `Tolerances(rel_tol=relative, abs_tol_min=absolute, abs_tol_scale=0)`. The platform's score puts the reference
+   as `b`, so with no scaled term it is exactly the suite's criterion (a boundary test pins this). The suite run passes
+   them to `service.submit` in place of the suite's, and the comparison's settings record `tolerances_from` (the
+   source). The comparison page states `rtol` and `atol` in full, and where they came from. Only a source kind can set
+   its own tolerances; a per-source override in `suite.yaml` waits until another suite needs one. Drift against a
+   baseline already uses each comparison's own tolerances.
+4. **The sample suite** (S5, S9), with the reference deciding (S3):
+   - **The reference decides.** Today a suite row's verdict ("agree"/"differ", `suite_runs.py`) is whether the
+     solvers agree with each other, and closeness to the reference is only shown, so three solvers that agree on a
+     wrong answer read "agree". A suite setting makes the reference the arbiter: each solver on a row passes or fails
+     against it, and the row's verdict and the suite's counts follow from those. Suites without the setting are
+     unchanged (plan-sedml D7).
+   - The picking script, then `examples/sbml-test-suite-sample/suite.yaml` on COPASI, Tellurium and VCell (S8), run
+     on the cluster, baseline accepted, failures recorded as known problems (S6).
 5. **The full suite.** All 1790 TimeCourse cases, after step 4 says it is affordable.
 6. **The tag view** (S7).
 
