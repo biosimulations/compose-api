@@ -328,3 +328,26 @@ async def test_a_suite_run_compares_with_the_expected_results(
     # the case's tolerances, not the suite's, and the page can say where they came from (S4)
     assert comparison["settings"]["tolerances"] == {"rel_tol": 1e-4, "abs_tol_min": 1e-7, "abs_tol_scale": 0.0}
     assert comparison["settings"]["tolerances_from"] == f"sbml-test-suite:{RELEASE}/00001"
+
+
+def test_the_sample_covers_every_tag_and_pair_with_writable_cases_first() -> None:
+    """S9: every tag and every pair found together is in a picked case; a writable case wins a tie; same input, same
+    list."""
+    found = {
+        "00001": frozenset({"A", "B"}),
+        "00002": frozenset({"B", "C"}),
+        "00003": frozenset({"A", "B", "C"}),
+        "00004": frozenset({"A", "B", "C"}),
+        "00005": frozenset({"D"}),
+    }
+    writable = {"00003": False, "00004": True}
+    picked = sts.pick_sample(found, writable)
+    assert picked == ["00004", "00005"]
+    assert sts.pick_sample(found, {}) == ["00003", "00005"]  # all equal: the lowest number
+
+
+def test_the_sample_suite_is_judged_by_its_expected_results() -> None:
+    found = suites.load_suites()["sbml-test-suite-sample"]
+    assert found.judged_by == "reference" and found.solvers == ["copasi", "tellurium", "vcell"]
+    assert all(s.startswith(f"{sts.KIND}:3.5.0/") for s in found.sources)
+    assert len(found.sources) == len(set(found.sources)) == 146

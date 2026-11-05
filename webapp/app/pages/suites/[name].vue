@@ -20,6 +20,8 @@ const starting = ref(false)
 const problems = ref<Schemas['KnownProblem'][]>([])
 const tab = ref(route.query.tab === 'problems' ? 'problems' : 'run')
 const hideExcused = ref(false)
+// judged by its reference (plan-sbml-test-suite S3): a row passes or fails, solver by solver, rather than agrees
+const byReference = computed(() => suite.value?.judged_by === 'reference')
 const rows = computed(() => (view.value?.rows ?? []).filter(r => !hideExcused.value || !r.excused))
 const openProblems = computed(() => problems.value.filter(p => p.cleared_run == null))
 const tabs = computed(() => [
@@ -252,8 +254,9 @@ const fmt = (s: number | string | null | undefined) => (typeof s === 'number' ? 
       <p v-if="!runs.length" class="text-muted text-sm">This suite has not run yet.</p>
       <template v-if="view">
         <div class="flex flex-wrap gap-2 text-sm">
-          <UBadge color="success" variant="subtle">{{ view.summary.agree }} agree</UBadge>
-          <UBadge v-if="view.summary.differ" color="error" variant="subtle">{{ view.summary.differ }} differ</UBadge>
+          <UBadge color="success" variant="subtle">{{ view.summary.agree }} {{ byReference ? 'pass' : 'agree' }}</UBadge>
+          <UBadge v-if="view.summary.differ" color="error" variant="subtle">{{ view.summary.differ }} {{ byReference ? 'fail' : 'differ' }}</UBadge>
+          <UBadge v-for="[solver, n] in passCounts(view.summary)" :key="solver" color="neutral" variant="outline">{{ solver }} passes {{ n }}</UBadge>
           <UBadge v-if="view.summary.drifted" color="warning" variant="subtle">{{ view.summary.drifted }} drifted from the baseline</UBadge>
           <UBadge v-if="view.summary.expected" color="neutral" variant="outline">{{ view.summary.expected }} expected</UBadge>
           <UBadge v-if="view.summary.excused" color="neutral" variant="subtle">{{ view.summary.excused }} excused by known problems</UBadge>
@@ -291,6 +294,9 @@ const fmt = (s: number | string | null | undefined) => (typeof s === 'number' ? 
                       <UTooltip v-if="r.comparison_id" :text="rowVerdict(r).hint" :disabled="!rowVerdict(r).hint">
                         <UBadge :color="rowVerdict(r).color" variant="subtle" size="sm">{{ rowVerdict(r).text }}</UBadge>
                       </UTooltip>
+                      <div v-if="r.passes" class="flex flex-wrap gap-1 pt-1">
+                        <UBadge v-for="p in solverPasses(r)" :key="p.solver" :color="p.pass ? 'success' : 'error'" variant="outline" size="sm">{{ p.solver }} {{ p.pass ? 'pass' : 'fail' }}</UBadge>
+                      </div>
                     </td>
                     <td class="pr-4"><UBadge v-if="r.close_to_references !== null && r.close_to_references !== undefined" :color="r.close_to_references ? 'success' : 'error'" variant="outline" size="sm">{{ r.close_to_references ? 'match' : 'differ' }}</UBadge></td>
                     <td class="pr-4">

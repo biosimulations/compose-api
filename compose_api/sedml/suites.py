@@ -22,6 +22,11 @@ class Suite(BaseModel):
     sources: list[str] = Field(min_length=1)
     solvers: list[str] | None = None
     tolerances: Tolerances = Field(default_factory=Tolerances)
+    judged_by: Literal["agreement", "reference"] = Field(
+        default="agreement",
+        description="what decides a row: the solvers' agreement with each other, references only shown (plan-sedml D7);"
+        " or the reference, each solver passing when it is close to it on every label it has (plan-sbml-test-suite S3)",
+    )
     baseline: int | None = Field(default=None, description="the accepted suite run that later runs are compared with")
     verify: Literal["none", "failing", "all"] = Field(
         default="none",
