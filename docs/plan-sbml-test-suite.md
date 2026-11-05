@@ -1,6 +1,6 @@
 # A suite from the SBML Test Suite: every ODE solver against the community's expected results
 
-**Status (2026-11-05): draft, for discussion. Not yet the active plan** ([README](README.md): entry-updates is).
+**Status (2026-11-05): draft; S8–S11 decided by Jim. Not yet the active plan** ([README](README.md): entry-updates is).
 One PR per step, each merged with a merge commit.
 
 The suites we have (`examples/*/suite.yaml`; [plan-sedml](plan-sedml.md), phase 6) take models from BioModels and
@@ -58,8 +58,8 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
   (finding 4). Agreement between solvers is still shown, but it doesn't decide.
 - **S4. Tolerances per source.** A source can carry its own `Tolerances`, which win over the suite's. That is the
   smallest change that holds S3, and it may help other suites too.
-- **S5. The suite starts small.** A first suite, `sbml-test-suite-core-sample`, has about 100 core TimeCourse cases
-  chosen to cover every core tag at least once. The full suite (1790 TimeCourse cases, `comp` included) follows once
+- **S5. The suite starts small.** A first suite, `sbml-test-suite-sample`, has about 100 TimeCourse cases, picked by
+  a script (S9) to cover every tag at least once, `comp` tags included (S11). The full suite (all 1790) follows once
   the sample's run time and the cluster's batch queue are known. FBA cases wait for a solver that does FBA in
   `solvers.yaml`.
 - **S6. Failures go to known problems** ([plan-known-problems](plan-known-problems.md)), one per solver and case, with
@@ -69,23 +69,33 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
 
 ## Steps
 
-1. **This plan.** Agree S1–S7 and the open questions.
-2. **The source.** `sbml-test-suite:` sources: fetch, hash check, cache, OMEX writer (S1, S2), and the reference
-   (S3). Tested on a handful of cases with known tricky settings (concentration output, `0D-Compartment`,
-   `CSymbolDelay`).
+1. **This plan.** Agree S1–S11.
+2. **The source.** `sbml-test-suite:` sources: fetch, hash check, cache, OMEX writer (S1, S2), and the reference with
+   its origin (S3, S10). Tested on a handful of cases with known tricky settings (concentration output,
+   `0D-Compartment`, `CSymbolDelay`, an unflattened `comp:Submodel`).
 3. **Tolerances per source** (S4), applied in the comparison and shown on the comparison page.
-4. **The sample suite** (S5): `examples/sbml-test-suite-core-sample/suite.yaml`, run on the cluster, baseline
-   accepted, failures recorded as known problems (S6).
+4. **The sample suite** (S5, S9): the picking script, then `examples/sbml-test-suite-sample/suite.yaml` on COPASI,
+   Tellurium and VCell (S8), run on the cluster, baseline accepted, failures recorded as known problems (S6).
 5. **The full suite.** All 1790 TimeCourse cases, after step 4 says it is affordable.
 6. **The tag view** (S7).
 
-## Open questions
+## Decided (Jim, 2026-11-05)
 
-- Which solvers? COPASI and Tellurium as in the other suites, plus VCell (`VCellUTCStep`, plan-vcell-ode), whose
-  failures here would be useful upstream.
-- Should the sample be chosen by a script (tag coverage, reproducible) or by hand?
-- Do we report the cases with `generatedBy: Numeric` differently? Their expected values are themselves from a
-  solver.
-- `comp` cases need flattening before most solvers read them. Does process-bigraph-lang or libsbml do it, and where?
-- Should the generated SED-ML be offered upstream (the 3.4.0 variant suggests the SBML Team once wanted it)? Only with
-  Jim's go, as with any outside contribution.
+- **S8. Three solvers:** COPASI, Tellurium and VCell (`VCellUTCStep`, [plan-vcell-ode](plan-vcell-ode.md)). VCell's
+  failures here are worth reporting upstream.
+- **S9. A script picks the sample.** It reads the cached release and chooses a reproducible set of cases that covers
+  every tag, preferring the fewest cases. It writes the suite's `sources` with each case's tags as a comment. Its
+  output is committed, and re-running it at the same release gives the same list.
+- **S10. Every case's expected results are the reference, however they were made.** A case with
+  `generatedBy: Numeric` still uses the suite's `-results.csv`. Its source is annotated with that origin (on the
+  reference and on the suite row), so a reader knows the answer came from a solver, not from an analytic solution.
+- **S11. `comp` models go to the solver unflattened.** These cases test whether a solver reads `comp` correctly, so
+  flattening first would test the flattener instead. A solver that can't read `comp` fails those cases, and that
+  failure becomes a known problem (S6). This answers finding 1's 125 `comp` cases: they run as they are.
+- **Deferred:** whether to offer the generated SED-ML to the SBML Team.
+
+## Later (not in this plan)
+
+- **A flattening service.** An endpoint that flattens a `comp` model into core SBML, for solvers that can't read
+  `comp`. These 125 cases would test it: flatten, run on a solver that passes the core cases, and compare with the same
+  expected results. That would be a suite of its own, separate from S11.
