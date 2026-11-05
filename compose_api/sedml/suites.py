@@ -34,8 +34,10 @@ class Suite(BaseModel):
     def _sources(cls, sources: list[str]) -> list[str]:
         for s in sources:
             kind, _, ident = s.partition(":")
-            if kind not in ("biomodels", "biosimulations") or not ident:
-                raise ValueError(f"{s!r}: a source is biomodels:<id> or biosimulations:<project>")
+            if kind not in ("biomodels", "biosimulations", "sbml-test-suite") or not ident:
+                raise ValueError(
+                    f"{s!r}: a source is biomodels:<id>, biosimulations:<project> or sbml-test-suite:<release>/<case>"
+                )
         return sources
 
 

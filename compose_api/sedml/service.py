@@ -96,6 +96,8 @@ async def submit(
         if source_kind == "biomodels"
         else {"project": source_id}
         if source_kind == "biosimulations"
+        else {"sbml_test_case": source_id}
+        if source_kind == "sbml-test-suite"
         else {}
     )
     created: list[int] = []

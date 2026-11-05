@@ -1,6 +1,6 @@
 # A suite from the SBML Test Suite: every ODE solver against the community's expected results
 
-**Status (2026-11-05): draft; S8–S11 decided by Jim. Not yet the active plan** ([README](README.md): entry-updates is).
+**Status (2026-11-05): plan merged (#515); step 2 (the source) in review; S8–S11 decided by Jim. Not yet the active plan** ([README](README.md): entry-updates is).
 One PR per step, each merged with a merge commit.
 
 The suites we have (`examples/*/suite.yaml`; [plan-sedml](plan-sedml.md), phase 6) take models from BioModels and
@@ -41,11 +41,29 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
 8. **Licence.** The repository is "NOASSERTION" on GitHub; `LICENSE.txt` says most of it is jointly copyrighted by the
    SBML Team's institutions. We should fetch the release at run time, as we do BioModels, and not commit the cases.
 
+### Found in step 2 (2026-11-05)
+
+9. **process-bigraph-lang translates only linear data generators** (`x`, `2*x`, `x+y`; finding code X400). An
+   amount made from a concentration is therefore `size * x` with the compartment's size as a number, which needs a
+   size fixed in the model: constant, set, and not changed by a rule or an initial assignment.
+10. **Of the 1790 time courses, 1621 (91%) can be written today.** The other 169 fail at the source, with the reason
+    recorded on the suite row, so none is dropped (S6):
+    - 89 ask for an amount or a concentration of a species whose compartment's size varies or isn't set (finding 9;
+      for example 00027, 00051). They need a product of two variables in a data generator, which is a
+      process-bigraph-lang change.
+    - 79 `comp` cases report a submodel's element by its flattened id (`submod1__subparam2`, for example 01126). The
+      model as written (S11) has no element with that id, and SED-ML has no standard way to address one inside a
+      submodel instance. They stay recorded failures (S12).
+11. **A sample of 50 writable cases (random, seed 7) translates for all three solvers** with the report the reference
+    expects (`simulation.sedml/report`, labelled `time` and the variables). Translating a case takes about a second.
+
 ## Decisions (proposed)
 
-- **S1. A new source kind, `sbml-test-suite:<case>`** (for example `sbml-test-suite:00001`), resolved against one
-  pinned release: `sbml_test_suite: {release: 3.5.0, sha256: …}` in the suite's yaml. The archive is fetched once,
-  checked against the hash, and cached like a BioModels archive (`sources._cache`).
+- **S1. A new source kind, `sbml-test-suite:<release>/<case>`** (for example `sbml-test-suite:3.5.0/00001`). The
+  release is part of the source, so a comparison's `source` says exactly which case it ran. Each release a source may
+  name is pinned by its archive's sha256 in `RELEASES` (`sedml/sbml_test_suite.py`), so a new release is a code
+  change. (The draft put the pin in the suite's yaml; step 2 moved it into the source and the code.) The archive is
+  fetched once, checked against the hash, and cached like a BioModels archive (`sources._cache`).
 - **S2. The source writes its own OMEX:**
   - the model at its highest level (`l3v2`, else the highest it has);
   - a SED-ML document with one uniform time course (`start`, `duration`, `steps`) and one report of the settings'
@@ -54,7 +72,7 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
   The writer is a pure function with tests per case shape. It lives in compose-api, not in process-bigraph-lang,
   since it is about this suite's files.
 - **S3. The expected results are a reference that is an arbiter.** `-results.csv` becomes the reference
-  `sbml-test-suite:3.5.0`. A solver passes a case when it is close to that reference within the case's own tolerances
+  `sbml-test-suite:<release>:<analytic|numeric>` (S10). A solver passes a case when it is close to that reference within the case's own tolerances
   (finding 4). Agreement between solvers is still shown, but it doesn't decide.
 - **S4. Tolerances per source.** A source can carry its own `Tolerances`, which win over the suite's. That is the
   smallest change that holds S3, and it may help other suites too.
@@ -67,12 +85,22 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
 - **S7. A tag view.** The suite run page groups rows by tag and shows each solver's pass rate per tag. This is the
   last step, and it uses the tags that S1's cache already holds.
 
+## Decided in step 2 (Jim, 2026-11-05)
+
+- **S12. A `comp` case that reports a submodel's element by its flattened id is a recorded failure** until SED-ML or
+  process-bigraph-lang has a convention for addressing an element inside a submodel instance. These are the 79 cases
+  of finding 10, for example 01126. The source fails with the reason (`… is not an element of the model as written
+  (unflattened)`) on the suite row, and the case stays in the suite (S6), so it shows up once a convention lands. The
+  model is still never flattened (S11). Testing these cases through a flattener belongs to the flattening service
+  in "Later".
+
 ## Steps
 
-1. **This plan.** Agree S1–S11.
+1. **This plan.** Agree S1–S11 (S12 was added in step 2).
 2. **The source.** `sbml-test-suite:` sources: fetch, hash check, cache, OMEX writer (S1, S2), and the reference with
-   its origin (S3, S10). Tested on a handful of cases with known tricky settings (concentration output,
-   `0D-Compartment`, `CSymbolDelay`, an unflattened `comp:Submodel`).
+   its origin (S3, S10), as `sedml/sbml_test_suite.py`. It also adds the `sbml_test_case` label. Tested on hand-written
+   cases in the suite's layout: amounts and concentrations, a compartment sized by a rule, a flattened `comp` id, and
+   an FBA case. Findings 9–11 come from running it over the real release.
 3. **Tolerances per source** (S4), applied in the comparison and shown on the comparison page.
 4. **The sample suite** (S5, S9): the picking script, then `examples/sbml-test-suite-sample/suite.yaml` on COPASI,
    Tellurium and VCell (S8), run on the cluster, baseline accepted, failures recorded as known problems (S6).
