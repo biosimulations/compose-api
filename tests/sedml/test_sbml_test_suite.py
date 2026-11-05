@@ -15,6 +15,7 @@ from compose_api.config import override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.sedml import sbml_test_suite as sts
 from compose_api.sedml import sources, suites
+from compose_api.sedml.compare import score
 from compose_api.sedml.service import chosen_solvers
 from compose_api.sedml.suites import Suite
 from compose_api.sedml.translator import translate
@@ -253,6 +254,20 @@ async def test_cases_the_sedml_cannot_express_say_why(release: list[str]) -> Non
         await sts.case(f"{RELEASE}/00004")
 
 
+@pytest.mark.asyncio
+async def test_a_case_is_judged_by_its_own_tolerances(release: list[str]) -> None:
+    """The platform's score with the case's tolerances is the suite's own criterion, `|a - e| <= absolute + relative *
+    |e|` with `e` the expected value (S4): just inside it is close, just outside it is not."""
+    case = await sts.case(f"{RELEASE}/00001")
+    tolerances = case.tolerances
+    assert (tolerances.rel_tol, tolerances.abs_tol_min, tolerances.abs_tol_scale) == (1e-4, 1e-7, 0.0)
+    expected = [0.0, 1.2, 1000.0]
+    allowed = [1e-7 + 1e-4 * abs(e) for e in expected]
+    inside = [e + 0.99 * a for e, a in zip(expected, allowed, strict=True)]
+    outside = [e + 1.01 * a for e, a in zip(expected, allowed, strict=True)]
+    assert score(inside, expected, tolerances) < 1 <= score(outside, expected, tolerances)
+
+
 def test_a_suite_takes_sbml_test_suite_sources() -> None:
     Suite(name="s", description="d", sources=["sbml-test-suite:3.5.0/00001"])
     with pytest.raises(ValueError, match="sbml-test-suite:<release>/<case>"):
@@ -310,3 +325,6 @@ async def test_a_suite_run_compares_with_the_expected_results(
     assert comparison["source"] == f"sbml-test-suite:{RELEASE}/00001"
     found = await database_service.get_comparisons_db().get(row["comparison_id"])
     assert found is not None and [r.origin for r in found.references] == [f"sbml-test-suite:{RELEASE}:analytic"]
+    # the case's tolerances, not the suite's, and the page can say where they came from (S4)
+    assert comparison["settings"]["tolerances"] == {"rel_tol": 1e-4, "abs_tol_min": 1e-7, "abs_tol_scale": 0.0}
+    assert comparison["settings"]["tolerances_from"] == f"sbml-test-suite:{RELEASE}/00001"

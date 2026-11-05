@@ -162,12 +162,15 @@ async def _submit_source(
     jobs = BackgroundTasks()
     solvers = service.chosen_solvers(suite.solvers)
     kind, _, ident = source.partition(":")
+    tolerances, tolerances_from = suite.tolerances, None
     try:
         references = None
         if kind == sbml_test_suite.KIND:
-            # the case's archive, written from its files, and its expected results (docs/plan-sbml-test-suite.md, S2-S3)
+            # the case's archive, written from its files, and its expected results (plan-sbml-test-suite S2-S3),
+            # judged by the case's own tolerances, not the suite's (S4)
             case, path = await sbml_test_suite.case_archive(ident)
             references = sbml_test_suite.reference(case)
+            tolerances, tolerances_from = case.tolerances, source
         elif kind == "biomodels":
             path = await sources.biomodel_archive(ident)
             # its original BioSimulators runs on biosimulations.org (docs/plan-verify-oracle.md, V1)
@@ -179,8 +182,8 @@ async def _submit_source(
             references = {f"biosimulations:{info.simulator or info.run}": reference} if reference else None
         translation = await service.translate_upload(path, solvers)
         ids = await service.submit(
-            translation, path, source, solvers, None, [suite.name], None, suite.tolerances, jobs,
-            references=references, collection=suite.name, suite_run=number,
+            translation, path, source, solvers, None, [suite.name], None, tolerances, jobs,
+            references=references, collection=suite.name, suite_run=number, tolerances_from=tolerances_from,
             queue=suite_queue(suite.name), priority=SUITE_PRIORITY, batch=True,
             environment_versions=environment_versions or None,
         )  # fmt: skip

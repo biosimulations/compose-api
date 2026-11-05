@@ -20,6 +20,7 @@ from xml.sax.saxutils import quoteattr
 
 from pydantic import BaseModel, Field
 
+from compose_api.sedml.models import Tolerances
 from compose_api.sedml.sources import (
     Series,
     SourceNotFoundError,
@@ -89,6 +90,13 @@ class Case(BaseModel):
     @property
     def source(self) -> str:
         return f"{KIND}:{self.release}/{self.case}"
+
+    @property
+    def tolerances(self) -> Tolerances:
+        """The case's own pass criterion, `|actual - expected| <= absolute + relative * |expected|` (finding 4), as the
+        platform's score: with no scaled term its `atol` is `absolute`, and it scores a solver against the reference
+        with the reference as `b` (docs/plan-sbml-test-suite.md, S4)."""
+        return Tolerances(rel_tol=self.settings.relative, abs_tol_min=self.settings.absolute, abs_tol_scale=0.0)
 
     @property
     def origin(self) -> str:
