@@ -1458,6 +1458,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UnprocessableError'
+        '502':
+          description: A moved entry's commit could not be checked with GitHub; try
+            again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
   /registry/environments/{name}/versions/{number}:
     get:
       tags:
@@ -5147,6 +5154,15 @@ components:
           - type: string
           - type: 'null'
           title: Note
+        entries:
+          additionalProperties:
+            type: string
+          type: object
+          title: Entries
+          description: 'A composed environment''s flagged entries (`updates` in the
+            manifest) moved to another commit, by entry id: a full commit on the repository''s
+            default branch, or the branch''s name for its head (`updates: main`);
+            a release tag or its commit (`updates: tags`). Checked with GitHub; docs/plan-entry-updates.md'
       additionalProperties: false
       type: object
       title: NewEnvironmentVersion
