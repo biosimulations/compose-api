@@ -1,6 +1,6 @@
 # A suite from the SBML Test Suite: every ODE solver against the community's expected results
 
-**Status (2026-11-05): plan merged (#515); step 2 merged (#516); step 3 (tolerances per source) in review; S8–S11 decided by Jim. Not yet the active plan** ([README](README.md): entry-updates is).
+**Status (2026-11-05): plan merged (#515); step 2 merged (#516); step 3 merged (#517); step 4a (the reference decides, the sample suite) in review; S8–S11 decided by Jim. Not yet the active plan** ([README](README.md): entry-updates is).
 One PR per step, each merged with a merge commit.
 
 The suites we have (`examples/*/suite.yaml`; [plan-sedml](plan-sedml.md), phase 6) take models from BioModels and
@@ -56,6 +56,13 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
       submodel instance. They stay recorded failures (S12).
 11. **A sample of 50 writable cases (random, seed 7) translates for all three solvers** with the report the reference
     expects (`simulation.sedml/report`, labelled `time` and the variables). Translating a case takes about a second.
+
+### Found in step 4 (2026-11-05)
+
+12. **The tags are fewer than finding 6 counted:** 64 distinct component and test tags over the 1789 time courses
+    that read. One case per tag needs only 14 cases, too few to say much. Covering every tag *and every pair of tags
+    found together* (1261 pairs) needs 146, of which 21 cannot be written yet (finding 10); that is the sample. Only
+    `comp:SubmodelOutput` is reached through unwritable cases alone.
 
 ## Decisions (proposed)
 
@@ -116,6 +123,16 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
      unchanged (plan-sedml D7).
    - The picking script, then `examples/sbml-test-suite-sample/suite.yaml` on COPASI, Tellurium and VCell (S8), run
      on the cluster, baseline accepted, failures recorded as known problems (S6).
+
+   **4a (built):** `suite.yaml` takes `judged_by: agreement | reference` (default `agreement`). Under `reference`
+   each solver on a finished row passes when it completed and is close to the reference on every label the reference
+   has (`suite_runs.passes`); a label it lacks fails it, which the comparison now records as an unscored
+   `solver|origin` pair. The row passes when every solver does, the summary counts `passes_<solver>`, and a known
+   problem excuses a row only when every solver without one passes. The suite page reads pass and fail, per solver.
+   `scripts/sbml_sample_suite.py` writes the sample (finding 12): every tag and every pair of tags found together,
+   chosen greedily, writable cases first, then the lowest number.
+   **4b (after a release):** run it on the cluster, accept the baseline in a PR, record the failures as known
+   problems.
 5. **The full suite.** All 1790 TimeCourse cases, after step 4 says it is affordable.
 6. **The tag view** (S7).
 
@@ -124,8 +141,9 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
 - **S8. Three solvers:** COPASI, Tellurium and VCell (`VCellUTCStep`, [plan-vcell-ode](plan-vcell-ode.md)). VCell's
   failures here are worth reporting upstream.
 - **S9. A script picks the sample.** It reads the cached release and chooses a reproducible set of cases that covers
-  every tag, preferring the fewest cases. It writes the suite's `sources` with each case's tags as a comment. Its
-  output is committed, and re-running it at the same release gives the same list.
+  every tag, preferring the fewest cases (step 4: every tag and every pair of tags found together; finding 12). It
+  writes the suite's `sources` with each case's tags as a comment. Its output is committed, and re-running it at the
+  same release gives the same list.
 - **S10. Every case's expected results are the reference, however they were made.** A case with
   `generatedBy: Numeric` still uses the suite's `-results.csv`. Its source is annotated with that origin (on the
   reference and on the suite row), so a reader knows the answer came from a solver, not from an analytic solution.

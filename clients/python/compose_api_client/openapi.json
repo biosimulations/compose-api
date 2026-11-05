@@ -9503,6 +9503,16 @@
           "tolerances": {
             "$ref": "#/components/schemas/Tolerances"
           },
+          "judged_by": {
+            "type": "string",
+            "enum": [
+              "agreement",
+              "reference"
+            ],
+            "title": "Judged By",
+            "description": "what decides a row: the solvers' agreement with each other, references only shown (plan-sedml D7); or the reference, each solver passing when it is close to it on every label it has (plan-sbml-test-suite S3)",
+            "default": "agreement"
+          },
           "baseline": {
             "anyOf": [
               {
@@ -9626,6 +9636,21 @@
               }
             ],
             "title": "Close To References"
+          },
+          "passes": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "boolean"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passes",
+            "description": "where the reference decides (the suite's judged_by), each solver against it: completed and close on every label the reference has; `close` is then every solver passing"
           },
           "worst_label": {
             "anyOf": [

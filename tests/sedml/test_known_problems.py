@@ -16,8 +16,9 @@ from compose_api.authorization import get_caller
 from compose_api.config import override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.sedml import service, suite_runs, suites
-from compose_api.sedml.models import Comparison, ComparisonMember, KnownProblem
-from compose_api.sedml.suite_runs import judge
+from compose_api.sedml.compare import compare
+from compose_api.sedml.models import Comparison, ComparisonMember, KnownProblem, Tolerances
+from compose_api.sedml.suite_runs import judge, judge_by_reference, passes
 from compose_api.sedml.suites import Suite
 
 ROLE = "curator"
@@ -95,6 +96,35 @@ def test_a_known_problem_that_no_longer_occurs_is_resolved() -> None:
     with_reference = _result({"copasi|tellurium": True, "copasi|vcell": True, "tellurium|vcell": True})
     with_reference["reports"]["r"]["labels"]["x"]["vcell|archive"] = {"close": False, "reference": True}
     assert judge(True, done, with_reference, {"vcell"}) == (False, ["vcell"])
+
+
+REF = "sbml-test-suite:9.9.9:analytic"
+
+
+def test_where_the_reference_decides_each_solver_passes_or_fails_against_it() -> None:
+    """plan-sbml-test-suite S3: the solvers' agreement says nothing; a label the reference has and a solver lacks fails
+    that solver, and so does a failed run."""
+    reports = {
+        "copasi": {"r": {"x": [1.0, 2.0], "y": [3.0, 4.0]}},
+        "tellurium": {"r": {"x": [1.0, 2.5], "y": [3.0, 4.0]}},
+        "vcell": {"r": {"x": [1.0, 2.0]}},
+    }
+    references = {REF: {"r": {"x": [1.0, 2.0], "y": [3.0, 4.0]}}}
+    result = compare(reports, {"r": ["x", "y"]}, Tolerances(), references=references)
+    assert result["reports"]["r"]["labels"]["y"][f"vcell|{REF}"] == {
+        "score": None, "close": None, "missing": ["vcell"], "reference": True,
+    }  # fmt: skip
+    done = {"copasi": "completed", "tellurium": "completed", "vcell": "completed"}
+    assert passes(done, result) == {"copasi": True, "tellurium": False, "vcell": False}
+    assert passes({**done, "copasi": "failed"}, result)["copasi"] is False
+    # no reference label scored for a solver: nothing shows it right
+    assert passes({"copasi": "completed"}, _result({"copasi|tellurium": True})) == {"copasi": False}
+
+
+def test_where_the_reference_decides_a_known_problem_excuses_only_its_solver() -> None:
+    assert judge_by_reference({"copasi": True, "vcell": False}, {"vcell"}) == (True, [])
+    assert judge_by_reference({"copasi": False, "vcell": False}, {"vcell"}) == (False, [])
+    assert judge_by_reference({"copasi": True, "vcell": True}, {"vcell"}) == (False, ["vcell"])
 
 
 def _problem(problem_id: int, solver: str | None, cleared_run: int | None = None) -> KnownProblem:
@@ -230,3 +260,54 @@ async def test_a_suite_run_is_judged_against_its_known_problems(
     assert by_source["biomodels:D4"]["known_problems"] == {} and by_source["biomodels:D4"]["excused"] is False
     summary = found["summary"]
     assert (summary["agree"], summary["differ"], summary["excused"], summary["resolved"]) == (1, 2, 1, 1)
+
+
+@pytest.mark.asyncio
+async def test_where_the_reference_decides_solvers_that_agree_on_a_wrong_answer_fail(
+    app: FastAPI, database_service: DatabaseServiceSQL, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """plan-sbml-test-suite S3, through a suite run's view: E5's solvers agree with each other and all miss the
+    reference; F6 fails only through VCell, which has a known problem; G7 passes on every solver."""
+    judged = SUITE.model_copy(
+        update={"name": "kp-reference", "judged_by": "reference", "sources": ["sbml:E5", "sbml:F6", "sbml:G7"]}
+    )
+    monkeypatch.setattr(suites, "load_suites", lambda: {SUITE.name: SUITE, VIEWED.name: VIEWED, judged.name: judged})
+    db = database_service.get_comparisons_db()
+    _, number = await db.new_suite_run(judged.name, judged.sources, None)
+    agree: dict[str, bool | None] = {"copasi|tellurium": True, "copasi|vcell": True, "tellurium|vcell": True}
+    to_reference = {
+        "sbml:E5": {"copasi": False, "tellurium": False, "vcell": False},
+        "sbml:F6": {"copasi": True, "tellurium": True, "vcell": False},
+        "sbml:G7": {"copasi": True, "tellurium": True, "vcell": True},
+    }
+    solvers = ("copasi", "tellurium", "vcell")
+    ids = {}
+    for source in to_reference:
+        ids[await db.insert("n", source, "s.sedml", "t", {}, collection=judged.name, suite_run=number)] = source
+
+    async def view(row: Any, statuses: Any = None) -> Comparison:
+        source = ids[row.comparison.id]
+        result = _result(agree)
+        for solver, ok in to_reference[source].items():
+            result["reports"]["r"]["labels"]["x"][f"{solver}|{REF}"] = {"close": ok, "reference": True}
+        return Comparison(
+            comparison_id=row.comparison.id, name="n", source=source, sedml="s.sedml", task="t", status="complete",
+            settings={}, members=[ComparisonMember(solver=s, simulation_id=0, status="completed") for s in solvers],
+            result=result, close=True,
+        )  # fmt: skip
+
+    monkeypatch.setattr(service, "comparison_view", view)
+    from compose_api.sedml.models import KnownProblemMark
+
+    mark = KnownProblemMark(source="sbml:F6", solver="vcell", category="EventWithDelay", reason="wrong after t=5")
+    await db.add_known_problem(judged.name, mark, "auth0|curator")
+
+    async with _as(app, None) as anonymous:
+        found = (await anonymous.get(f"/suites/{judged.name}/runs/{number}")).json()
+    by_source = {r["source"]: r for r in found["rows"]}
+    assert by_source["sbml:E5"]["close"] is False and by_source["sbml:E5"]["excused"] is False
+    assert by_source["sbml:F6"]["passes"] == to_reference["sbml:F6"] and by_source["sbml:F6"]["excused"] is True
+    assert by_source["sbml:G7"]["close"] is True
+    summary = found["summary"]
+    assert (summary["agree"], summary["differ"], summary["excused"]) == (1, 1, 1)
+    assert (summary["passes_copasi"], summary["passes_tellurium"], summary["passes_vcell"]) == (2, 2, 1)

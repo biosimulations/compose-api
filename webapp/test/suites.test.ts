@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Schemas } from '../app/composables/useApi'
-import { appliesTo, canCurate, clearConfirmation, editConfirmation, jobCount, knownCategories, markable, markConfirmation, problemToClear, validMark, rowProblems, rowVerdict, runVersions, suiteEnvironments, versionChoices, versionParameters } from '../app/utils/suites'
+import { appliesTo, canCurate, clearConfirmation, editConfirmation, jobCount, knownCategories, markable, markConfirmation, passCounts, problemToClear, validMark, rowProblems, rowVerdict, runVersions, solverPasses, suiteEnvironments, versionChoices, versionParameters } from '../app/utils/suites'
 
 // Rows as run 4 of biomodels-curated-300 shows them once its VCell import failures are known problems (2026-10-26).
 const row = (fields: Partial<Schemas['SuiteRunRow']>): Schemas['SuiteRunRow'] =>
@@ -15,6 +15,15 @@ describe('a suite run row against its known problems', () => {
     expect(rowVerdict(row({ close: false })).text).toBe('differ')
     expect(rowVerdict(row({ close: true, status: 'complete' })).text).toBe('agree')
     expect(rowVerdict(row({ status: 'running' })).text).toBe('running')
+  })
+
+  it('reads pass or fail, solver by solver, where the reference decides (plan-sbml-test-suite S3)', () => {
+    const judged = row({ status: 'complete', close: false, passes: { vcell: false, copasi: true } })
+    expect(rowVerdict(judged).text).toBe('fail')
+    expect(rowVerdict({ ...judged, close: true, passes: { copasi: true } }).text).toBe('pass')
+    expect(rowVerdict({ ...judged, excused: true }).hint).toContain('expected results')
+    expect(solverPasses(judged)).toEqual([{ solver: 'copasi', pass: true }, { solver: 'vcell', pass: false }])
+    expect(passCounts({ agree: 3, passes_copasi: 2, passes_vcell: 1 })).toEqual([['copasi', 2], ['vcell', 1]])
   })
 
   it('lists each solver\'s problem with the category that applies to the run, and whether it is resolved', () => {

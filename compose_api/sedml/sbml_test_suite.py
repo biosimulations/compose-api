@@ -12,9 +12,11 @@ they were made (S3, S10).
 
 import hashlib
 import io
+import itertools
 import re
 import tempfile
 import zipfile
+from collections.abc import Mapping
 from pathlib import Path
 from xml.sax.saxutils import quoteattr
 
@@ -386,3 +388,38 @@ async def case_archive(ident: str) -> tuple[Case, Path]:
 def reference(case: Case) -> dict[str, dict[str, dict[str, Series]]]:
     """The expected results as `{origin: {"<sedml>/<report>": {label: series}}}`, the shape `service.submit` takes."""
     return {case.origin: {f"{SEDML_FILE}/{REPORT_ID}": case.results}}
+
+
+# The sample suite (S5, S9): which cases it runs.
+
+
+def case_numbers(archive: Path) -> list[str]:
+    """Every case in a release's semantic archive, in order."""
+    with zipfile.ZipFile(archive) as z:
+        return sorted({m[1] for n in z.namelist() if (m := re.match(r"semantic/(\d{5})/", n))})
+
+
+def tags(case: Case) -> frozenset[str]:
+    """What a case exercises: its component and test tags."""
+    return frozenset(case.info.component_tags) | frozenset(case.info.test_tags)
+
+
+def pick_sample(tags_by_case: Mapping[str, frozenset[str]], writable: Mapping[str, bool]) -> list[str]:
+    """The cases of the sample suite (S9), in order: every tag, and every pair of tags that some case has together,
+    is in at least one of them. Chosen greedily, each time the case that covers the most not yet covered, a writable
+    one before one whose SED-ML cannot be written (finding 10), then the lowest number; so the same release gives the
+    same list. One case per tag alone is too few to say much (14 cases for 64 tags in 3.5.0); pairs catch features
+    that only fail together, such as an event with a delay in a model with an algebraic rule."""
+
+    def covers(found: frozenset[str]) -> set[tuple[str, ...]]:
+        ordered = sorted(found)
+        return {(t,) for t in ordered} | set(itertools.combinations(ordered, 2))
+
+    covering = {c: covers(t) for c, t in tags_by_case.items()}
+    left = set().union(*covering.values())
+    chosen: list[str] = []
+    while left:
+        best = max(covering, key=lambda c: (len(covering[c] & left), writable.get(c, False), -int(c)))
+        chosen.append(best)
+        left -= covering.pop(best)
+    return sorted(chosen)

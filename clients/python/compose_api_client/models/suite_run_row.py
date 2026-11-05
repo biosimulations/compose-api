@@ -11,6 +11,7 @@ from ..types import UNSET, Unset
 if TYPE_CHECKING:
     from ..models.suite_run_row_drift_type_0 import SuiteRunRowDriftType0
     from ..models.suite_run_row_known_problems import SuiteRunRowKnownProblems
+    from ..models.suite_run_row_passes_type_0 import SuiteRunRowPassesType0
 
 
 T = TypeVar("T", bound="SuiteRunRow")
@@ -26,6 +27,8 @@ class SuiteRunRow:
         comparison_id (int | None | Unset):
         close (bool | None | Unset):
         close_to_references (bool | None | Unset):
+        passes (None | SuiteRunRowPassesType0 | Unset): where the reference decides (the suite's judged_by), each solver
+            against it: completed and close on every label the reference has; `close` is then every solver passing
         worst_label (None | str | Unset):
         worst_score (float | None | str | Unset):
         drift (None | SuiteRunRowDriftType0 | Unset):
@@ -46,6 +49,7 @@ class SuiteRunRow:
     comparison_id: int | None | Unset = UNSET
     close: bool | None | Unset = UNSET
     close_to_references: bool | None | Unset = UNSET
+    passes: None | SuiteRunRowPassesType0 | Unset = UNSET
     worst_label: None | str | Unset = UNSET
     worst_score: float | None | str | Unset = UNSET
     drift: None | SuiteRunRowDriftType0 | Unset = UNSET
@@ -61,6 +65,7 @@ class SuiteRunRow:
 
     def to_dict(self) -> dict[str, Any]:
         from ..models.suite_run_row_drift_type_0 import SuiteRunRowDriftType0  # noqa: PLC0415
+        from ..models.suite_run_row_passes_type_0 import SuiteRunRowPassesType0  # noqa: PLC0415
 
         source = self.source
 
@@ -89,6 +94,14 @@ class SuiteRunRow:
             close_to_references = UNSET
         else:
             close_to_references = self.close_to_references
+
+        passes: dict[str, Any] | None | Unset
+        if isinstance(self.passes, Unset):
+            passes = UNSET
+        elif isinstance(self.passes, SuiteRunRowPassesType0):
+            passes = self.passes.to_dict()
+        else:
+            passes = self.passes
 
         worst_label: None | str | Unset
         if isinstance(self.worst_label, Unset):
@@ -162,6 +175,8 @@ class SuiteRunRow:
             field_dict["close"] = close
         if close_to_references is not UNSET:
             field_dict["close_to_references"] = close_to_references
+        if passes is not UNSET:
+            field_dict["passes"] = passes
         if worst_label is not UNSET:
             field_dict["worst_label"] = worst_label
         if worst_score is not UNSET:
@@ -191,6 +206,7 @@ class SuiteRunRow:
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.suite_run_row_drift_type_0 import SuiteRunRowDriftType0  # noqa: PLC0415
         from ..models.suite_run_row_known_problems import SuiteRunRowKnownProblems  # noqa: PLC0415
+        from ..models.suite_run_row_passes_type_0 import SuiteRunRowPassesType0  # noqa: PLC0415
 
         d = dict(src_dict)
         source = d.pop("source")
@@ -232,6 +248,23 @@ class SuiteRunRow:
             return cast(bool | None | Unset, data)
 
         close_to_references = _parse_close_to_references(d.pop("close_to_references", UNSET))
+
+        def _parse_passes(data: object) -> None | SuiteRunRowPassesType0 | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, dict):
+                    raise TypeError()
+                passes_type_0 = SuiteRunRowPassesType0.from_dict(data)
+
+                return passes_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(None | SuiteRunRowPassesType0 | Unset, data)
+
+        passes = _parse_passes(d.pop("passes", UNSET))
 
         def _parse_worst_label(data: object) -> None | str | Unset:
             if data is None:
@@ -324,6 +357,7 @@ class SuiteRunRow:
             comparison_id=comparison_id,
             close=close,
             close_to_references=close_to_references,
+            passes=passes,
             worst_label=worst_label,
             worst_score=worst_score,
             drift=drift,
