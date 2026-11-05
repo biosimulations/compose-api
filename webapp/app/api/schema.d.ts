@@ -3223,7 +3223,7 @@ export interface operations {
                 environment_version?: string | null;
                 /** @description Only simulations created at or after this time */
                 since?: string | null;
-                /** @description Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, environment_version, solver, model, project, sedml_task, comparison, collection, suite_run, compliance */
+                /** @description Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, environment_version, solver, model, project, sbml_test_case, sedml_task, comparison, collection, suite_run, compliance */
                 label?: string[] | null;
                 /** @description Only simulations with this tag; repeatable, all must match */
                 tag?: string[] | null;

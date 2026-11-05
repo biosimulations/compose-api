@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from compose_api.db.services.comparisons_db import ClaimedSuiteRun, ComparisonRow
 from compose_api.dependencies import get_required_database_service
-from compose_api.sedml import service, sources, suites
+from compose_api.sedml import sbml_test_suite, service, sources, suites
 from compose_api.sedml.compare import compare
 from compose_api.sedml.models import KnownProblem, SuiteVerifyResult
 from compose_api.sedml.suites import Suite
@@ -164,7 +164,11 @@ async def _submit_source(
     kind, _, ident = source.partition(":")
     try:
         references = None
-        if kind == "biomodels":
+        if kind == sbml_test_suite.KIND:
+            # the case's archive, written from its files, and its expected results (docs/plan-sbml-test-suite.md, S2-S3)
+            case, path = await sbml_test_suite.case_archive(ident)
+            references = sbml_test_suite.reference(case)
+        elif kind == "biomodels":
             path = await sources.biomodel_archive(ident)
             # its original BioSimulators runs on biosimulations.org (docs/plan-verify-oracle.md, V1)
             references = await sources.biomodel_references(ident) or None
