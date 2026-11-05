@@ -37,6 +37,7 @@ Several documents answer different questions. Start with the one that matches yo
 | checking SED-ML comparisons against BioSimulators: legacy runs as references, and biosim's `/verify` API as an oracle | [plan-verify-oracle.md](plan-verify-oracle.md) | done: V0–V5 (0.7.66) | 2026-10-28 |
 | a signed-in user's own runs (owners stamped at submit), favorites, and studies that group and share runs | [plan-favorites-and-studies.md](plan-favorites-and-studies.md) | 0–2b live (0.7.72); 3 (studies) next | 2026-10-29 |
 | a trusted repository's commit moved by an administrator through the API, gated by compliance, instead of by a manifest PR and release | [plan-entry-updates.md](plan-entry-updates.md) | proposed | 2026-10-29 |
+| a suite from the SBML Test Suite: its 1790 time-course cases run on every solver, judged by their own expected results and tolerances, read by feature tag | [plan-sbml-test-suite.md](plan-sbml-test-suite.md) | draft | 2026-11-05 |
 | the web UI at `/ui`: pages, viewers, composite authoring, how it is built | [webapp.md](webapp.md) | user documentation | 2026-10-13 |
 | the `compose-api` command line, with its generated reference | [cli.md](cli.md) | user documentation | 2026-10-13 |
 
@@ -72,6 +73,7 @@ raised, not fixed on the spot.
 | viva-pde-particle's next commit | | viva-pde-particle#69 makes `SpatialExport`'s output replace (composition 7c-5). Taking it means a manifest bump of its `commit`, a new prebuilt image registered as viva-pde-particle@3, and `environments create mash-05956395cf` for @3 |
 | Test isolation | | `tests/environments/test_contents.py::test_the_reread_job_scripts_leave_what_they_read_beside_the_image` fails when run after `tests/registry tests/api tests/environments` (a settings layer left active: `simulation_store_base_path`); passes alone and in CI's order |
 | Test isolation, staging | | two `tests/simulation/test_staging.py` permission tests fail in the full local order and pass alone (found 2026-10-26) |
+| [plan-sbml-test-suite](plan-sbml-test-suite.md) | drafted 2026-11-05 | a suite from the SBML Test Suite 3.5.0 (1790 TimeCourse cases) with its expected results as the arbiter; waits for entry-updates or Jim's choice |
 | Open PRs | | #345 (vivarium-workbench plan), dependency bumps |
 
 **Direction** documents say what we intend. **Analysis** documents measure something and lay out options; they are
