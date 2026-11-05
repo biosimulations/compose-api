@@ -108,8 +108,14 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
    source). The comparison page states `rtol` and `atol` in full, and where they came from. Only a source kind can set
    its own tolerances; a per-source override in `suite.yaml` waits until another suite needs one. Drift against a
    baseline already uses each comparison's own tolerances.
-4. **The sample suite** (S5, S9): the picking script, then `examples/sbml-test-suite-sample/suite.yaml` on COPASI,
-   Tellurium and VCell (S8), run on the cluster, baseline accepted, failures recorded as known problems (S6).
+4. **The sample suite** (S5, S9), with the reference deciding (S3):
+   - **The reference decides.** Today a suite row's verdict ("agree"/"differ", `suite_runs.py`) is whether the
+     solvers agree with each other, and closeness to the reference is only shown, so three solvers that agree on a
+     wrong answer read "agree". A suite setting makes the reference the arbiter: each solver on a row passes or fails
+     against it, and the row's verdict and the suite's counts follow from those. Suites without the setting are
+     unchanged (plan-sedml D7).
+   - The picking script, then `examples/sbml-test-suite-sample/suite.yaml` on COPASI, Tellurium and VCell (S8), run
+     on the cluster, baseline accepted, failures recorded as known problems (S6).
 5. **The full suite.** All 1790 TimeCourse cases, after step 4 says it is affordable.
 6. **The tag view** (S7).
 
