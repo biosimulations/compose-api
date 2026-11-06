@@ -63,7 +63,7 @@ dev = [
     # The runner composed images run (environments/runner.py) is tested on the engine they install; the service
     # itself never imports process-bigraph.
     "process-bigraph==1.9.1",
-    "bigraph-schema==1.8.1",
+    "bigraph-schema==1.8.3",
 ]
 docs = [
     "mkdocs>=1.4.2,<2",
