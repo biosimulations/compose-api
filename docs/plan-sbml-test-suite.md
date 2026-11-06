@@ -1,6 +1,6 @@
 # A suite from the SBML Test Suite: every ODE solver against the community's expected results
 
-**Status (2026-11-06): plan merged (#515); step 2 merged (#516); step 3 merged (#517); step 4a merged (#518), live in 0.7.81; run 1 done, its baseline held back for the platform fixes (step 4c); 4c.1 and 4c.2 live (0.7.82–0.7.85, runs 3 and 4); 4c.3 merged in vcell#2206 and libvcell 0.0.25, pinned here; S8–S11 decided by Jim. Not yet the active plan** ([README](README.md): entry-updates is).
+**Status (2026-11-06): plan merged (#515); step 2 merged (#516); step 3 merged (#517); step 4a merged (#518), live in 0.7.81; run 1 done, its baseline held back for the platform fixes (step 4c); 4c.1 and 4c.2 live (0.7.82–0.7.85, runs 3 and 4); 4c.3 merged in vcell#2206 and libvcell 0.0.25, live (0.7.86, run 5); pbsim_common#25 (finding 15) pinned here; S8–S11 decided by Jim. Not yet the active plan** ([README](README.md): entry-updates is).
 One PR per step, each merged with a merge commit.
 
 The suites we have (`examples/*/suite.yaml`; [plan-sedml](plan-sedml.md), phase 6) take models from BioModels and
@@ -102,6 +102,21 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
       stoichiometry, events at t0 and event ordering, and its `acot` convention (00957/00958: VCell's
       `pi/2 - atan(x)` against SBML's `atan(1/x)`).
 
+### Found in run 5 (2026-11-06)
+
+15. **pyvcell solved a different model.** Run 5 (0.7.86, registry_env@8, libvcell 0.0.25): VCell 8 → 18, all three
+    solvers agree on 17 (run 4: 7), no case lost. 24 cases still passed in vcell-core's harness but not here, because of
+    how `VCellUTCStep` goes through pyvcell:
+    - pyvcell's model has no assignment rules, rate rules or events (its VCML reader skips them), and it writes a fast
+      reaction as excluded, so VCell solved what pyvcell wrote back, not the SBML: 21 of 50 sampled cases lost a rule
+      or an event;
+    - VCell's solver writes only state variables, so a species or parameter a rule defines had no column.
+
+    pbsim_common#25 (998340c) restores what pyvcell drops from VCell's own import and evaluates VCell's math for the
+    rest, by SBML id. Run locally on the sample, the step goes from 11 to 37 passes with none lost; 4 cases that ran
+    without their fast reactions or rules now fail as they do in vcell-core's harness (01399, 01563, 01565, 01569).
+    pyvcell itself should keep these elements; until it does, pbsim-common works around it.
+
 ## Decisions (proposed)
 
 - **S1. A new source kind, `sbml-test-suite:<release>/<case>`** (for example `sbml-test-suite:3.5.0/00001`). The
@@ -178,7 +193,8 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
       bump that follows it; reaches runs through a release and a new registry_env version;
    3. VCell's SBML import, cause by cause from finding 13, most cases per effort first, each with a failing case as
       its test (vcell-core, then libvcell, pyvcell, pbsim_common and a registry_env version). Done in vcell#2206 and
-      libvcell 0.0.25 (finding 14), pinned in the registry; reaches runs through a release and a registry_env version;
+      libvcell 0.0.25 (finding 14), pinned in the registry; reaches runs through a release and a registry_env version.
+      Run 5 found the rest in pbsim-common's VCell step (finding 15, pbsim_common#25), pinned here for run 6;
    4. then the baseline, and known problems for what remains that S13–S16 do not explain.
 5. **Features and incompatibilities** (S13–S16), after step 4c.
 6. **The full suite.** All 1790 TimeCourse cases, after step 4 says it is affordable.
