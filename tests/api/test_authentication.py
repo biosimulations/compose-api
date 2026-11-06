@@ -369,7 +369,7 @@ async def test_skew_beyond_leeway_is_rejected(
     # the time is read when the test runs, not when it is collected: a run that reaches this test more than a minute
     # after collection would otherwise issue a token no longer beyond the leeway
     with pytest.raises(AuthenticationError):
-        await auth0_verifier.verify(fake_auth0.token(**{claim: int(time.time()) + offset}))
+        await auth0_verifier.verify(fake_auth0.token("key-1", None, **{claim: int(time.time()) + offset}))
 
 
 @pytest.mark.asyncio
