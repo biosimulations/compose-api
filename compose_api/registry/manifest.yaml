@@ -545,6 +545,11 @@ entries:
     install:
       pypi: tellurium
       version: "2.2.13.1"
+    # tellurium imports six (tellurium.visualization.sbmldiagram, on `import tellurium`) without declaring it; it came
+    # in through python-dateutil < 4, and registry_env@6 (resolved 2026-11-06, dateutil 4.0.0) lost it, so
+    # pbsim_common.simulators failed to import and every solver failed (its pbsim-common compliance cases too)
+    conda:
+      six: "*"
     level: installable
     bundles:
       - registry_env
