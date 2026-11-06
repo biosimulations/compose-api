@@ -81,7 +81,9 @@ def compare(
                 to_references = (to_references is not False) and close
             entry[label] = pairs
         scored = [(p["score"], label) for label, ps in entry.items() for p in ps.values() if p["score"] is not None]
-        worst = max(scored, default=(None, None), key=lambda t: t[0] if t[0] is not None else -1.0)
+        # a score is a float, or "inf" (JSON has no infinity); compared as numbers, or an "inf" beside a finite score
+        # raises and the comparison never computes (sbml-test-suite-sample run 3)
+        worst = max(scored, default=(None, None), key=lambda t: math.inf if t[0] == "inf" else float(t[0] or 0.0))
         out["reports"][report_id] = {"labels": entry, "worst": {"label": worst[1], "score": worst[0]}}
     out["close"] = all_close
     out["close_to_references"] = to_references
