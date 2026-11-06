@@ -57,6 +57,12 @@ A component often needs library entries beside it (`kind: library`: an engine, o
 `conda`, no `module_roots`). They install code like any other entry and are reviewed the same way. Their level gates nothing:
 what runs is a component's classes (`environments/lifecycle.py`, `composable`).
 
+An entry that provides the same simulator as an existing one (often the same class names) says so with `alternative_to:
+<standard entry id>`. The standard entry is what the service's own runs use (SED-ML solvers, suites); the alternative keeps its
+own level and runs where admitted, and the catalog shows it as an alternative. `viva-copasi` and `viva-tellurium` are
+alternatives to `pbsim-common` until the two families are reconciled. The standard entry must be a component that is not
+itself an alternative (`tests/registry/test_manifest.py`).
+
 ## Check that it locks
 
 A signed-in first run of an entry makes a mash-up of exactly that entry and what it `requires`: `pixi_toml()` writes a pixi workspace,

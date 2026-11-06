@@ -119,6 +119,10 @@ class RegistryEntry(BaseModel):
     short_names: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
     reviewer: str | None = None
+    # the entry whose classes are the standard ones for what this entry's also provide (the same simulator, often the
+    # same class names): this one is an alternative, offered and trusted on its own level but not what the service's
+    # own runs use. viva-copasi and viva-tellurium are alternatives to pbsim-common until the two are reconciled.
+    alternative_to: str | None = None
 
     @model_validator(mode="after")
     def _pinned(self) -> "RegistryEntry":
@@ -145,6 +149,19 @@ class Manifest(BaseModel):
         unknown = sorted({r for e in self.entries for r in e.requires if r not in ids})
         if unknown:
             raise ValueError(f"`requires` names entries the manifest does not have: {unknown}")
+        by_id = {entry.id: entry for entry in self.entries}
+        for entry in self.entries:
+            if entry.alternative_to is None:
+                continue
+            standard = by_id.get(entry.alternative_to)
+            if standard is None or standard.id == entry.id:
+                raise ValueError(f"{entry.id!r} is an alternative to {entry.alternative_to!r}, not another entry")
+            if entry.kind != "component" or standard.kind != "component":
+                raise ValueError(f"{entry.id!r}: an alternative and its standard entry are both components")
+            if standard.alternative_to is not None:
+                raise ValueError(
+                    f"{entry.id!r} is an alternative to {standard.id!r}, itself an alternative: name the standard one"
+                )
         return self
 
     def with_requirements(self, entry_ids: set[str]) -> set[str]:

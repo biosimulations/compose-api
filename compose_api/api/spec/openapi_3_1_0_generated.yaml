@@ -3761,6 +3761,11 @@ components:
           - type: string
           - type: 'null'
           title: Reviewer
+        alternative_to:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Alternative To
         environments:
           items:
             $ref: '#/components/schemas/EntryEnvironment'

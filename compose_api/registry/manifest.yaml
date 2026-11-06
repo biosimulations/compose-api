@@ -179,6 +179,10 @@ entries:
   # a live BioModels fetch). See the pull request body.
   - id: viva-copasi
     package: viva-copasi
+    # an alternative to pbsim-common, whose CopasiUTCStep and siblings (the same class names) are the standard set
+    # the service runs; pbsim-common's UTC steps take this one's output_times, selections, tolerances and model_in.
+    # Until the two are reconciled.
+    alternative_to: pbsim-common
     # v0.2.2 on main (confirmed with gh). pbg_copasi, the deprecation shim, is not a module root.
     source: https://github.com/vivarium-collective/viva-copasi/tree/937ff132f2e8c755248a38a7440067f8d1871001
     commit: 937ff132f2e8c755248a38a7440067f8d1871001
@@ -218,6 +222,10 @@ entries:
 
   - id: viva-tellurium
     package: viva-tellurium
+    # an alternative to pbsim-common, whose TelluriumUTCStep and siblings (the same class names) are the standard set
+    # the service runs; pbsim-common's UTC steps take this one's output_times, selections, tolerances and model_in.
+    # Until the two are reconciled.
+    alternative_to: pbsim-common
     # v0.2.3 on main (viva-tellurium#37, confirmed with gh). pbg_tellurium, the deprecation shim, is not a module root.
     # Its types module registers nothing, so no `types`.
     source: https://github.com/vivarium-collective/viva-tellurium/tree/846f87c57058a6bfa383619c9ae7587f0d81453c
