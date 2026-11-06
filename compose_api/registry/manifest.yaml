@@ -597,13 +597,16 @@ entries:
   - id: libvcell
     kind: library
     package: libvcell
-    source: https://pypi.org/project/libvcell/0.0.24/
-    # pyvcell's own dependency, pinned for its fix: 0.0.24 registers the jsbml Annotation classes native-image
-    # reflection needs (libvcell#31), which six biomodels failed to import without; registry_env@1 has 0.0.23
-    version: "0.0.24"
+    source: https://pypi.org/project/libvcell/0.0.25/
+    # pyvcell's own dependency, pinned for its fixes: 0.0.24 registers the jsbml Annotation classes native-image
+    # reflection needs (libvcell#31), which six biomodels failed to import without; 0.0.25 (libvcell#33, vcell#2206)
+    # imports SBML L3V2 features the SBML Test Suite uses (math-less elements, rateOf, 0-D compartments, L3V2 MathML,
+    # no-ODE models) and refuses comp models and conversion factors instead of importing them wrong. registry_env@1
+    # has 0.0.23
+    version: "0.0.25"
     install:
       pypi: libvcell
-      version: "0.0.24"
+      version: "0.0.25"
     level: listed
     bundles:
       - registry_env

@@ -228,7 +228,7 @@ async def test_a_composed_version_resolves_in_the_background_then_builds(
         # answered before the lock: resolving, with no simulator yet, runtime contract 2
         assert (version["state"], version["simulator_id"], version["runtime_contract"]) == ("resolving", None, 2)
         assert version["spec"]["pixi_image"].startswith("ghcr.io/prefix-dev/pixi@sha256:")
-        assert '"libvcell" = "==0.0.24"' in version["spec"]["pixi_toml"]
+        assert '"libvcell" = "==0.0.25"' in version["spec"]["pixi_toml"]
         assert {e["id"] for e in version["spec"]["entries"]} >= {"pbsim-common", "readdy"}
         detail = (await admin.get(f"/registry/environments/registry_env/versions/{version['number']}")).json()
     # the background task has run: locked, defined, built

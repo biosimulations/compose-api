@@ -48,7 +48,7 @@ def test_registry_env_becomes_a_pixi_workspace_pinned_to_releases_and_commits() 
         in toml
     )
     assert '"pyvcell" = { "version" = "==0.5.2", "extras" = ["native", "ode"] }' in toml
-    assert '"tellurium" = "==2.2.13.1"' in toml and '"libvcell" = "==0.0.24"' in toml
+    assert '"tellurium" = "==2.2.13.1"' in toml and '"libvcell" = "==0.0.25"' in toml
     assert toml.index("[dependencies]") < toml.index("[pypi-dependencies]")
 
 

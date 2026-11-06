@@ -1,6 +1,6 @@
 # A suite from the SBML Test Suite: every ODE solver against the community's expected results
 
-**Status (2026-11-05): plan merged (#515); step 2 merged (#516); step 3 merged (#517); step 4a merged (#518), live in 0.7.81; run 1 done, its baseline held back for the platform fixes (step 4c); S8–S11 decided by Jim. Not yet the active plan** ([README](README.md): entry-updates is).
+**Status (2026-11-06): plan merged (#515); step 2 merged (#516); step 3 merged (#517); step 4a merged (#518), live in 0.7.81; run 1 done, its baseline held back for the platform fixes (step 4c); 4c.1 and 4c.2 live (0.7.82–0.7.85, runs 3 and 4); 4c.3 merged in vcell#2206 and libvcell 0.0.25, pinned here; S8–S11 decided by Jim. Not yet the active plan** ([README](README.md): entry-updates is).
 One PR per step, each merged with a merge commit.
 
 The suites we have (`examples/*/suite.yaml`; [plan-sedml](plan-sedml.md), phase 6) take models from BioModels and
@@ -85,6 +85,23 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
     - **The solvers' own limits:** Tellurium cannot load the algebraic-rule models; COPASI is off in all 12
       `FastReaction` cases and in some `StoichiometryMath` ones, and crashed twice (01284, 01288).
 
+### Found in runs 3 and 4 and step 4c.3 (2026-11-06)
+
+14. **The output fixes doubled two solvers' passes; VCell's import was the rest.** Run 3 (registry_env@7, after 4c.1
+    and 4c.2): COPASI 55, Tellurium 72, VCell 8 of 125. Run 4 (0.7.85, process-bigraph-lang 0.3.2 carrying `comp`
+    external model files, which `instance_archive` had dropped): COPASI 57, Tellurium 75; 01475–01477 pass on both.
+    01588 (`RandomEventExecution`) passes or fails at random by design: a known problem, not a regression.
+    - **Tellurium's 50 run failures are clear refusals** of features it does not support: algebraic rules 21, fast
+      reactions 11, `delay` 15, plus the three external-model cases run 4 fixed. They are S15 entries as they stand.
+    - **VCell's import (4c.3, vcell#2206, libvcell 0.0.25)** now takes elements with no math, `rateOf`, 0-D
+      compartments, L3V2 MathML (`quotient`, `rem`, `implies`, n-ary `xor`/`max`/`min`, nullary operators) and models
+      with no ODEs; it refuses `comp` (jsbml has no plugin for it, so submodels were silently dropped) and conversion
+      factors (ignored) instead of importing them wrong. In vcell-core's harness the sample goes from 8 to 41 passes,
+      with no case lost; vcell's regression gate passed. pyvcell needed no release (it requires `libvcell>=0.0.23`).
+    - **VCell's remaining limits** are real ones, for S15: algebraic rules, `delay`, non-numeric and non-integer
+      stoichiometry, events at t0 and event ordering, and its `acot` convention (00957/00958: VCell's
+      `pi/2 - atan(x)` against SBML's `atan(1/x)`).
+
 ## Decisions (proposed)
 
 - **S1. A new source kind, `sbml-test-suite:<release>/<case>`** (for example `sbml-test-suite:3.5.0/00001`). The
@@ -160,7 +177,8 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
       (process-bigraph-lang counts a compartment as a parameter). Done in pbsim_common#23 (cca48d3) and the pin
       bump that follows it; reaches runs through a release and a new registry_env version;
    3. VCell's SBML import, cause by cause from finding 13, most cases per effort first, each with a failing case as
-      its test (vcell-core, then libvcell, pyvcell, pbsim_common and a registry_env version);
+      its test (vcell-core, then libvcell, pyvcell, pbsim_common and a registry_env version). Done in vcell#2206 and
+      libvcell 0.0.25 (finding 14), pinned in the registry; reaches runs through a release and a registry_env version;
    4. then the baseline, and known problems for what remains that S13–S16 do not explain.
 5. **Features and incompatibilities** (S13–S16), after step 4c.
 6. **The full suite.** All 1790 TimeCourse cases, after step 4 says it is affordable.
