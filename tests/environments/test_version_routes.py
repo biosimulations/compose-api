@@ -502,7 +502,9 @@ async def test_admission_follows_what_the_version_certifies(
         path.write_text(json.dumps({"state": state}))
         validate_submission(path, SimulationFileType.PBG, AddressPolicy.ENFORCE, standing=standing)
 
-    submit("local:pbsim_common.simulators.copasi_process.CopasiUTCStep")  # pending: the manifest's level stands
+    with pytest.raises(SubmissionRejectedError) as pending:  # its cases still running: not yet
+        submit("local:pbsim_common.simulators.copasi_process.CopasiUTCStep")
+    assert "compliance cases are still running" in pending.value.violations[0].reason
     with pytest.raises(SubmissionRejectedError) as refused:
         submit(f"local:{mse}")
     assert f"refused in registry_env@{number}: sums" in refused.value.violations[0].reason

@@ -67,7 +67,10 @@ async def get_suite_run(name: str, number: int, principal: OptionalPrincipal) ->
     responses={
         400: error("A version not named, malformed, or that runs cannot use"),
         404: error("No such suite"),
-        409: error("A run of the suite is still submitting or running"),
+        409: error(
+            "A run of the suite is still submitting or running, or the versions named cannot run its solvers (a class"
+            " that does not import there, or compliance cases failed or still running)"
+        ),
     },
 )  # fmt: skip
 async def run_suite(
@@ -91,6 +94,11 @@ async def run_suite(
         )
     except (VersionUnavailableError, ValueError) as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    refused = await suite_runs.refusals(s, versions)
+    if refused:
+        raise HTTPException(
+            status_code=409, detail=f"The versions named cannot run {name!r}'s solvers: " + "; ".join(refused)
+        )
     running = await suite_runs.in_flight(s)
     if running is not None:  # one at a time (docs/plan-webapp-admin.md, A4)
         raise HTTPException(

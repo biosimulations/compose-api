@@ -5878,7 +5878,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorDetail"];
                 };
             };
-            /** @description A run of the suite is still submitting or running */
+            /** @description A run of the suite is still submitting or running, or the versions named cannot run its solvers (a class that does not import there, or compliance cases failed or still running) */
             409: {
                 headers: {
                     [name: string]: unknown;

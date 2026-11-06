@@ -359,18 +359,17 @@ async def test_small_clock_skew_is_tolerated(fake_auth0: FakeAuth0, auth0_verifi
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "claim_overrides",
-    [
-        {"iat": int(time.time()) + JWT_LEEWAY_SECONDS + 60},
-        {"exp": int(time.time()) - JWT_LEEWAY_SECONDS - 60},
-    ],
+    ("claim", "offset"),
+    [("iat", JWT_LEEWAY_SECONDS + 60), ("exp", -JWT_LEEWAY_SECONDS - 60)],
     ids=["issued-in-the-future", "expired"],
 )
 async def test_skew_beyond_leeway_is_rejected(
-    fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier, claim_overrides: dict[str, Any]
+    fake_auth0: FakeAuth0, auth0_verifier: Auth0Verifier, claim: str, offset: int
 ) -> None:
+    # the time is read when the test runs, not when it is collected: a run that reaches this test more than a minute
+    # after collection would otherwise issue a token no longer beyond the leeway
     with pytest.raises(AuthenticationError):
-        await auth0_verifier.verify(fake_auth0.token(**claim_overrides))
+        await auth0_verifier.verify(fake_auth0.token(**{claim: int(time.time()) + offset}))
 
 
 @pytest.mark.asyncio

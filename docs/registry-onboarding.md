@@ -37,8 +37,10 @@ Opened any other way, paste the template's text into the description.
   built at once, and a set of packages that conflict is a 409 with pixi's explanation (`environments/lifecycle.py`). If the first
   lock or build of a set fails, later runs of that set get a 409 until an administrator makes a new version.
 - The cases decide the entry's level in that version: `tested` when they pass, `failed` when one does not, `untested` without
-  cases. An entry with no cases, with cases still running, or whose cases cannot run (a missing file is a logged warning) keeps
-  the manifest's level for admission (composition plan, 5b, 5c; `environments/compliance_runs.py`).
+  cases. An entry whose cases are still running is refused there until they finish; one with no cases, or whose cases cannot
+  run (a missing file is a logged warning), keeps the manifest's level for admission (composition plan, 5b, 5c;
+  `environments/compliance_runs.py`). A module of the entry that does not import in the version's image refuses every class
+  under it there (`module-imports`).
 - Moving the pin is another manifest pull request and release; a pin that moves never starts a build by itself (D7.7).
 - A package that publishes its own image is registered by an administrator as a version of a named environment (D8.3), which
   needs its own line in `environments.yaml`.

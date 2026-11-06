@@ -218,8 +218,30 @@ def test_an_entry_runs_as_its_cases_went_in_the_version(tmp_path: Path) -> None:
     failed = Standing(label="registry_env@3", levels={"pbsim-common": "failed"})
     (reason,) = _violations(tmp_path, failed, COPASI)
     assert reason == "registry entry `pbsim-common` failed its compliance cases in registry_env@3"
-    for level in ("tested", "pending", "untested"):  # passed, still running, or none yet: the manifest's level stands
+    # its cases still running: refused until they pass (registry_env@6 ran a suite while the cases that failed it ran)
+    (reason,) = _violations(tmp_path, Standing(label="registry_env@3", levels={"pbsim-common": "pending"}), COPASI)
+    assert reason == (
+        "registry entry `pbsim-common`'s compliance cases are still running in registry_env@3; it runs there once they"
+        " pass"
+    )
+    for level in ("tested", "untested"):  # passed, or no cases: the manifest's level stands
         assert _violations(tmp_path, Standing(label="registry_env@3", levels={"pbsim-common": level}), COPASI) == []
+
+
+def test_a_module_refused_in_the_version_refuses_every_class_under_it(tmp_path: Path) -> None:
+    """A module that failed to import in the image (registry_env@6: pbsim_common.simulators, without six)."""
+    standing = Standing(
+        label="registry_env@6",
+        levels={"pbsim-common": "tested"},
+        refused={
+            "pbsim_common.simulators": "it does not import in the image: ModuleNotFoundError: No module named 'six'"
+        },
+    )
+    (reason,) = _violations(tmp_path, standing, COPASI, MSE)  # MSEComparison is in another module, and runs
+    assert reason.startswith("`pbsim_common.simulators` is refused in registry_env@6: it does not import")
+    # a module only named like it is not under it
+    lookalike = Standing(label="registry_env@6", levels={"pbsim-common": "tested"}, refused={"pbsim_common.sim": "x"})
+    assert _violations(tmp_path, lookalike, COPASI) == []
 
 
 def test_tested_in_the_version_admits_an_entry_the_manifest_lists_lower(tmp_path: Path) -> None:
