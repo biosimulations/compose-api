@@ -19,14 +19,15 @@ entries:
     package: pbsim-common
     # composed versions install this commit (pbsim_common#21: result, comparison and statistic ports overwrite;
     # #22: Tellurium and COPASI report every species, boundary and unchanging ones included; #23: every UTC step
-    # reports what SED-ML reads, a substance-only species as its amount and each non-constant parameter and compartment);
+    # reports what SED-ML reads, a substance-only species as its amount and each non-constant parameter and compartment;
+    # #24: the COPASI and Tellurium UTC steps take viva's output_times, selections, tolerances and model_in);
     # registry_env@1, built through pbest 0.6.5, still runs 26fa156 (pbsim_common#18's adapter fixes and #20's
     # VCellUTCStep). Back to a PyPI release once 0.1.3 is published.
-    source: https://github.com/biosimulations/pbsim_common/tree/cca48d3b53723f365998972bafaf762eaf5d8db1
+    source: https://github.com/biosimulations/pbsim_common/tree/8c96e90b5460c02e211ba3994a66be2b8aecdc51
     version: "0.1.3.dev1"
     install:
       git: https://github.com/biosimulations/pbsim_common
-      commit: cca48d3b53723f365998972bafaf762eaf5d8db1
+      commit: 8c96e90b5460c02e211ba3994a66be2b8aecdc51
     module_roots:
       - pbsim_common
     # numeric_result and the other types its steps' ports use (pbest's core registered them)
@@ -179,6 +180,10 @@ entries:
   # a live BioModels fetch). See the pull request body.
   - id: viva-copasi
     package: viva-copasi
+    # an alternative to pbsim-common, whose CopasiUTCStep and siblings (the same class names) are the standard set
+    # the service runs; pbsim-common's UTC steps take this one's output_times, selections, tolerances and model_in.
+    # Until the two are reconciled.
+    alternative_to: pbsim-common
     # v0.2.2 on main (confirmed with gh). pbg_copasi, the deprecation shim, is not a module root.
     source: https://github.com/vivarium-collective/viva-copasi/tree/937ff132f2e8c755248a38a7440067f8d1871001
     commit: 937ff132f2e8c755248a38a7440067f8d1871001
@@ -218,6 +223,10 @@ entries:
 
   - id: viva-tellurium
     package: viva-tellurium
+    # an alternative to pbsim-common, whose TelluriumUTCStep and siblings (the same class names) are the standard set
+    # the service runs; pbsim-common's UTC steps take this one's output_times, selections, tolerances and model_in.
+    # Until the two are reconciled.
+    alternative_to: pbsim-common
     # v0.2.3 on main (viva-tellurium#37, confirmed with gh). pbg_tellurium, the deprecation shim, is not a module root.
     # Its types module registers nothing, so no `types`.
     source: https://github.com/vivarium-collective/viva-tellurium/tree/846f87c57058a6bfa383619c9ae7587f0d81453c

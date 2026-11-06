@@ -1349,6 +1349,8 @@ export interface components {
             evidence?: string[];
             /** Reviewer */
             reviewer?: string | null;
+            /** Alternative To */
+            alternative_to?: string | null;
             /** Environments */
             environments?: components["schemas"]["EntryEnvironment"][];
         };
