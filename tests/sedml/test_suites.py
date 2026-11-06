@@ -145,3 +145,35 @@ async def test_a_stalled_run_does_not_hold_the_suite(monkeypatch: pytest.MonkeyP
 
 async def _returning(value: Any) -> Any:
     return value
+
+
+@pytest.mark.asyncio
+async def test_a_suite_does_not_start_in_versions_that_cannot_run_its_solvers(
+    client: httpx.AsyncClient, database_service: DatabaseServiceSQL, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Run 2 of sbml-test-suite-sample started on registry_env@6 while its compliance cases ran, and every source
+    failed: pbsim_common.simulators did not import there. The run is refused before it starts, saying why."""
+    from compose_api.environments import admission
+    from compose_api.registry.validation import Standing
+
+    test_suite = Suite(name="gated-suite", description="x", sources=["biomodels:BIOMD0000000012"], solvers=["copasi"])
+    monkeypatch.setattr(suites, "load_suites", lambda: {"gated-suite": test_suite})
+    six = "it does not import in the image: ModuleNotFoundError: No module named 'six'"
+    standings = {
+        "broken": Standing(
+            label="registry_env@6", levels={"pbsim-common": "failed"}, refused={"pbsim_common.simulators": six}
+        ),
+        "pending": Standing(label="registry_env@7", levels={"pbsim-common": "pending"}),
+    }  # fmt: skip
+    for kind, reason in (("broken", "`pbsim_common.simulators` is refused in registry_env@6"),
+                         ("pending", "compliance cases are still running in registry_env@7")):  # fmt: skip
+
+        async def standing_for(db: object, environment: str, number: int | None, kind: str = kind) -> Standing:
+            return standings[kind]
+
+        monkeypatch.setattr(admission, "standing_for", standing_for)
+        refused = await client.post("/suites/gated-suite/run", params={"environment_version": "default"})
+        assert refused.status_code == 409, refused.text
+        assert refused.json()["detail"].startswith("The versions named cannot run 'gated-suite''s solvers: copasi: ")
+        assert reason in refused.json()["detail"]
+    assert (await client.get("/suites/gated-suite/runs")).json() == []  # nothing was started

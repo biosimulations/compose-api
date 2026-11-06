@@ -284,7 +284,14 @@
      2. a composed version runs only its own entries;
      3. an entry that **failed** its cases there is refused;
      4. one that **passed** them (`tested`) is admitted, whatever the manifest asserts;
-     5. one with cases `pending`, or no cases yet, keeps the manifest's level, as today.
+     5. one with cases `pending` is refused until they finish (2026-11-06; it kept the manifest's level before, and a
+        suite ran on registry_env@6 while the cases that failed it ran);
+     6. one with no cases yet keeps the manifest's level.
+   - **Read-back findings (2026-11-06):** besides `step-outputs-replace`, a module under the version's roots that does
+     not import in the image fails `module-imports` (every class under it is refused), and a `solvers.yaml` solver of
+     that environment whose class the image lacks fails `solver-provided` (`environments/compliance.py`,
+     `import_findings`). A suite run is refused up front (409) when a version it names cannot run its solvers
+     (`sedml/suite_runs.py`, `refusals`).
    - **What changes in production now:** nothing. registry_env's default is @1, which is not composed and has no
      findings or case runs. The standing starts to decide when a composed version is the default (step 6), or is
      named.

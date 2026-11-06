@@ -98,6 +98,26 @@ def suite_environments(suite: Suite) -> set[str]:
     return {s.environment for s in service.chosen_solvers(suite.solvers)}
 
 
+async def refusals(suite: Suite, environment_versions: dict[str, int]) -> list[str]:
+    """Why the versions named cannot run the suite's solvers, one reason each; none when they can. The check every
+    one of its runs would meet (registry/validation.py, against each version's standing), made once before the run:
+    a version whose solvers do not import, failed their compliance cases, or are still being checked there would
+    otherwise fail every source (run 2 of sbml-test-suite-sample, on registry_env@6)."""
+    from compose_api.environments.admission import standing_for
+    from compose_api.registry.manifest import load_manifest
+    from compose_api.registry.validation import check_address
+
+    db = get_required_database_service()
+    manifest = load_manifest()
+    reasons = []
+    for solver in service.chosen_solvers(suite.solvers):
+        standing = await standing_for(db, solver.environment, environment_versions.get(solver.environment))
+        violation = check_address(solver.address, suite.name, manifest, standing, environment=solver.environment)
+        if violation is not None:
+            reasons.append(f"{solver.id}: {violation.reason}")
+    return reasons
+
+
 async def start(suite: Suite, environment_versions: dict[str, int] | None = None) -> int:
     """A new run of the suite, recorded with its sources and the environment versions its runs use (resolved by the
     caller with `environments.versions.resolve_versions`, which the route requires; none: the defaults). The

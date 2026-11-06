@@ -125,6 +125,34 @@ def port_findings(interfaces: dict[str, Any], named: dict[str, Any], module_root
     return findings
 
 
+def import_findings(interfaces: dict[str, Any], module_roots: list[str], environment: str) -> list[Finding]:
+    """What the read-back could not load: a module under ``module_roots`` that failed to import fails
+    ``module-imports`` (every class under it is refused), and a solver of ``environment`` (registry/solvers.yaml)
+    whose class the image does not provide fails ``solver-provided``. registry_env@6 lost ``six``, so
+    ``pbsim_common.simulators`` did not import and every solver failed; both checks would have refused it at once."""
+    from compose_api.registry.solvers import load_solvers
+
+    findings: list[Finding] = []
+    seen: set[str] = set()
+    for failure in interfaces.get("errors") or []:
+        module = str(failure.get("module", "")) if isinstance(failure, dict) else ""
+        if module in seen or not any(module == root or module.startswith(root + ".") for root in module_roots):
+            continue
+        seen.add(module)
+        detail = f"it does not import in the image: {failure.get('error', 'unknown error')}"
+        findings.append(Finding(component=module, check="module-imports", severity="fail", detail=detail))
+    provided = {f"{c.get('module')}.{c.get('name')}" for c in interfaces.get("components", []) if isinstance(c, dict)}
+    for solver in load_solvers().solvers:
+        target = solver.address.removeprefix("local:")
+        if solver.environment != environment or target in provided:
+            continue
+        if any(target.startswith(module + ".") for module in seen):
+            continue  # its module's failure says why
+        detail = f"the solver {solver.id!r} (registry/solvers.yaml) runs this class, which the image does not provide"
+        findings.append(Finding(component=target, check="solver-provided", severity="fail", detail=detail))
+    return findings
+
+
 # --- cases -----------------------------------------------------------------------------------------------------------
 
 

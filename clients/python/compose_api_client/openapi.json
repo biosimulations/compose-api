@@ -4660,7 +4660,7 @@
             }
           },
           "409": {
-            "description": "A run of the suite is still submitting or running",
+            "description": "A run of the suite is still submitting or running, or the versions named cannot run its solvers (a class that does not import there, or compliance cases failed or still running)",
             "content": {
               "application/json": {
                 "schema": {
