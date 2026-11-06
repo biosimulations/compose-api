@@ -156,8 +156,9 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
    **4c, the platform fixes, in this order** (Jim, 2026-11-05), each followed by a run:
    1. the archive carries a case's external models (compose-api);
    2. the solver steps report what SED-ML means: a species as an amount when it has only substance units, and every
-      parameter and compartment that varies in time; `solvers.yaml` then says `provides: [species, parameter,
-      compartment]` (pbsim_common, then a registry_env version);
+      parameter and compartment that varies in time; `solvers.yaml` then says `provides: [species, parameter]`
+      (process-bigraph-lang counts a compartment as a parameter). Done in pbsim_common#23 (cca48d3) and the pin
+      bump that follows it; reaches runs through a release and a new registry_env version;
    3. VCell's SBML import, cause by cause from finding 13, most cases per effort first, each with a failing case as
       its test (vcell-core, then libvcell, pyvcell, pbsim_common and a registry_env version);
    4. then the baseline, and known problems for what remains that S13–S16 do not explain.

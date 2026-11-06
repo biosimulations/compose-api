@@ -18,14 +18,15 @@ entries:
   - id: pbsim-common
     package: pbsim-common
     # composed versions install this commit (pbsim_common#21: result, comparison and statistic ports overwrite;
-    # #22: Tellurium and COPASI report every species, boundary and unchanging ones included);
+    # #22: Tellurium and COPASI report every species, boundary and unchanging ones included; #23: every UTC step
+    # reports what SED-ML reads, a substance-only species as its amount and each non-constant parameter and compartment);
     # registry_env@1, built through pbest 0.6.5, still runs 26fa156 (pbsim_common#18's adapter fixes and #20's
     # VCellUTCStep). Back to a PyPI release once 0.1.3 is published.
-    source: https://github.com/biosimulations/pbsim_common/tree/c6c18044912f8bf93b949567904f3b61dc8b1873
+    source: https://github.com/biosimulations/pbsim_common/tree/cca48d3b53723f365998972bafaf762eaf5d8db1
     version: "0.1.3.dev1"
     install:
       git: https://github.com/biosimulations/pbsim_common
-      commit: c6c18044912f8bf93b949567904f3b61dc8b1873
+      commit: cca48d3b53723f365998972bafaf762eaf5d8db1
     module_roots:
       - pbsim_common
     # numeric_result and the other types its steps' ports use (pbest's core registered them)
@@ -54,6 +55,12 @@ entries:
       - >-
         2026-10-26: the pin moves to c6c1804 (pbsim_common#22: every species reported, found by biomodels-curated-300
         run 4, where seven models differed only by a species one adapter left out). Certified the same way.
+      - >-
+        2026-11-05: the pin moves to cca48d3 (pbsim_common#23: what SED-ML reads, found by sbml-test-suite-sample
+        run 1, where 01307, 01455 and 01747 had every solver agree on a concentration where SED-ML reads an amount,
+        and a non-constant parameter had no column; docs/plan-sbml-test-suite.md, step 4c.2). Certified the same way;
+        the phase-cycle compliance cases still hold (its compartment's size is 1, and they compare only the
+        reference's columns).
 
   - id: pb-multiscale-actin
     package: pb-multiscale-actin
