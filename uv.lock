@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.13.2, <4.0"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -210,7 +210,7 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 dependencies = [
-    { name = "idna", marker = "python_full_version < '3.15'" },
+    { name = "idna" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/61/cc/a381afa6efea9f496eff839d4a6a1aed3bfafc7b3ab4b0d1b243a12573dd/anyio-4.14.2.tar.gz", hash = "sha256:cfa139f3ed1a23ee8f88a145ddb5ac7605b8bbfd8592baacd7ce3d8bb4313c7f", size = 260176, upload-time = "2026-07-12T20:29:07.082Z" }
 wheels = [
@@ -225,7 +225,7 @@ resolution-markers = [
     "python_full_version >= '3.15'",
 ]
 dependencies = [
-    { name = "idna", marker = "python_full_version >= '3.15'" },
+    { name = "idna" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a9/d2/f4d173e22df740bc37b1db102b386ba719b66e95b0f0d751f556b387e6d2/anyio-4.15.1.tar.gz", hash = "sha256:9f28306018cbd6d329e64a36d58256edff76dd996fe423bc957326e578b82a94", size = 276966, upload-time = "2026-09-05T10:42:39.44Z" }
 wheels = [
@@ -406,7 +406,7 @@ wheels = [
 
 [[package]]
 name = "bigraph-schema"
-version = "1.8.1"
+version = "1.8.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
@@ -415,9 +415,9 @@ dependencies = [
     { name = "pint" },
     { name = "plum-dispatch" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1e/af/b98986bab188aa4a1280591bd180febbc718fa834866d9d2f76df7b269b7/bigraph_schema-1.8.1.tar.gz", hash = "sha256:8bad19838454b6468ac4db10cf06b085da192aac9ddb3de65181655347c4061b", size = 185919, upload-time = "2026-10-12T16:01:10.701Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ff/4a/2a4ab83a3990fd7aafaca5a38dc542190784ae6629d63bd3f60af172afc2/bigraph_schema-1.8.3.tar.gz", hash = "sha256:2ad25dc69f6f3c61e2f028b7a706703af33dff1709f2c53f9f0441e6c0df0a65", size = 188936, upload-time = "2026-10-25T18:42:50.956Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/44/ca/69528f16860eafee020efa0ff0a5017c60d9c13189da2f02548197336f35/bigraph_schema-1.8.1-py3-none-any.whl", hash = "sha256:826b75e5df8ab60079a0f3adc529abb51ab955daf0f0ddc9be02c2444d60b3df", size = 185499, upload-time = "2026-10-12T16:01:09.133Z" },
+    { url = "https://files.pythonhosted.org/packages/c0/44/c167c5f2e868f13b252398bd8c122bb0bd93b8482a84c4233eeac4884cc1/bigraph_schema-1.8.3-py3-none-any.whl", hash = "sha256:02becc19454260c09a853ffcb1cc32561a3f851ece966c4c7216f1d38e17829d", size = 186489, upload-time = "2026-10-25T18:42:49.439Z" },
 ]
 
 [[package]]
@@ -647,6 +647,7 @@ wheels = [
 name = "compose-api"
 version = "0.7.87"
 source = { editable = "." }
+default-groups = ["dev", "docs"]
 dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },
@@ -739,7 +740,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "bigraph-schema", specifier = "==1.8.1" },
+    { name = "bigraph-schema", specifier = "==1.8.3" },
     { name = "compose-api-client", extras = ["auth", "cli"], editable = "clients/python" },
     { name = "deptry", specifier = ">=0.25.1,<0.26" },
     { name = "mypy", specifier = ">=2.3.1,<3" },
