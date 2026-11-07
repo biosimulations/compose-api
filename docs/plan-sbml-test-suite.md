@@ -1,6 +1,6 @@
 # A suite from the SBML Test Suite: every ODE solver against the community's expected results
 
-**Status (2026-11-06): plan merged (#515); step 2 merged (#516); step 3 merged (#517); step 4a merged (#518), live in 0.7.81; run 1 done, its baseline held back for the platform fixes (step 4c); 4c.1 and 4c.2 live (0.7.82–0.7.85, runs 3 and 4); 4c.3 merged in vcell#2206 and libvcell 0.0.25, live (0.7.86, run 5); pbsim_common#25 (finding 15) pinned here; S8–S11 decided by Jim. Not yet the active plan** ([README](README.md): entry-updates is).
+**Status (2026-11-06): plan merged (#515); step 2 merged (#516); step 3 merged (#517); step 4a merged (#518), live in 0.7.81; run 1 done, its baseline held back for the platform fixes (step 4c); 4c.1 and 4c.2 live (0.7.82–0.7.85, runs 3 and 4); 4c.3 merged in vcell#2206 and libvcell 0.0.25, live (0.7.86, run 5); pbsim_common#25 (finding 15) live (run 6); #26 (finding 16) pinned here; S8–S11 decided by Jim. Not yet the active plan** ([README](README.md): entry-updates is).
 One PR per step, each merged with a merge commit.
 
 The suites we have (`examples/*/suite.yaml`; [plan-sedml](plan-sedml.md), phase 6) take models from BioModels and
@@ -117,6 +117,17 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
     without their fast reactions or rules now fail as they do in vcell-core's harness (01399, 01563, 01565, 01569).
     pyvcell itself should keep these elements; until it does, pbsim-common works around it.
 
+### Found in run 6 (2026-11-06)
+
+16. **Run 6** (0.7.87, registry_env@9): VCell 18 → 39 (22 gained), all three agree on 30 (run 5: 17); COPASI and
+    Tellurium unchanged. VCell lost 01271: #25 crashed on a model with nothing that varies (01271, 01272, 01289), fixed
+    in pbsim_common#26, which also gives `VCellUTCStep` the solver tolerances COPASI and Tellurium take. Checked
+    against vcell-core's own harness (`SBMLTestSuiteTest`, cases 1–1199 only, at tolerances 1e-12 / 1e-9): every
+    VCell failure below 1200 is in its fault list, and 9 of its `COMPARTMENT_0D` entries now pass here. Of the 27
+    cases only VCell fails, 14 are VCell's import refusing the model (non-integer or non-numeric stoichiometry, and
+    other import errors) and 10 give wrong values, all event edge cases (delays, triggers on rule values): VCell's,
+    not the step's.
+
 ## Decisions (proposed)
 
 - **S1. A new source kind, `sbml-test-suite:<release>/<case>`** (for example `sbml-test-suite:3.5.0/00001`). The
@@ -194,7 +205,7 @@ solver path (SBML → SED-ML → process-bigraph-lang → COPASI / Tellurium / V
    3. VCell's SBML import, cause by cause from finding 13, most cases per effort first, each with a failing case as
       its test (vcell-core, then libvcell, pyvcell, pbsim_common and a registry_env version). Done in vcell#2206 and
       libvcell 0.0.25 (finding 14), pinned in the registry; reaches runs through a release and a registry_env version.
-      Run 5 found the rest in pbsim-common's VCell step (finding 15, pbsim_common#25), pinned here for run 6;
+      Run 5 found the rest in pbsim-common's VCell step (finding 15, pbsim_common#25), run 6 (finding 16), and pbsim_common#26 pinned for run 7;
    4. then the baseline, and known problems for what remains that S13–S16 do not explain.
 5. **Features and incompatibilities** (S13–S16), after step 4c.
 6. **The full suite.** All 1790 TimeCourse cases, after step 4 says it is affordable.
