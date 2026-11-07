@@ -22,14 +22,15 @@ entries:
     # reports what SED-ML reads, a substance-only species as its amount and each non-constant parameter and compartment;
     # #24: the COPASI and Tellurium UTC steps take viva's output_times, selections, tolerances and model_in; #25:
     # VCellUTCStep solves the rules, events and fast reactions pyvcell's model drops, and reports rule-defined values;
-    # #26: VCellUTCStep reports time alone for a model with nothing that varies, and takes solver tolerances);
+    # #26: VCellUTCStep reports time alone for a model with nothing that varies, and takes solver tolerances; #27: and
+    # solves at tight tolerances unless set, since VCell does not scale variables as COPASI and Tellurium do);
     # registry_env@1, built through pbest 0.6.5, still runs 26fa156 (pbsim_common#18's adapter fixes and #20's
     # VCellUTCStep). Back to a PyPI release once 0.1.3 is published.
-    source: https://github.com/biosimulations/pbsim_common/tree/c5f4aae328868019e7af4398b671cbd5a310da5e
+    source: https://github.com/biosimulations/pbsim_common/tree/d2ef7ece90b2520adfe9a5bd2a7a228833530116
     version: "0.1.3.dev1"
     install:
       git: https://github.com/biosimulations/pbsim_common
-      commit: c5f4aae328868019e7af4398b671cbd5a310da5e
+      commit: d2ef7ece90b2520adfe9a5bd2a7a228833530116
     module_roots:
       - pbsim_common
     # numeric_result and the other types its steps' ports use (pbest's core registered them)
