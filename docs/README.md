@@ -3,7 +3,7 @@
 **Internal planning, not user documentation.** Everything listed here is planning, analysis and grant material for
 the team. This repository is public, so these files are readable by anyone browsing it on GitHub; they are written
 with that in mind. They are kept off the published documentation site by `exclude_docs` in `mkdocs.yml`, because
-they are not user documentation. The site carries `index.md`, `authentication.md`, `webapp.md`, `cli.md`, and the
+they are not user documentation. The site carries `index.md`, `authentication.md`, `webapp.md`, `cli.md`, `registry-onboarding.md`, and the
 generated module reference. If you add a planning document here, add it to that list.
 
 ## Where to start
@@ -40,6 +40,7 @@ Several documents answer different questions. Start with the one that matches yo
 | a suite from the SBML Test Suite: its 1790 time-course cases run on every solver, judged by their own expected results and tolerances, read by feature tag | [plan-sbml-test-suite.md](plan-sbml-test-suite.md) | draft | 2026-11-05 |
 | the web UI at `/ui`: pages, viewers, composite authoring, how it is built | [webapp.md](webapp.md) | user documentation | 2026-10-13 |
 | the `compose-api` command line, with its generated reference | [cli.md](cli.md) | user documentation | 2026-10-13 |
+| adding a simulator (a `viva-*` workspace or any process-bigraph package) to the registry: the checklist, what CI checks, what each level needs | [registry-onboarding.md](registry-onboarding.md) | user documentation | 2026-11-02 |
 
 ## Active plan, and what is parked (2026-10-28)
 
