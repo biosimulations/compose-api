@@ -37,8 +37,10 @@ Opened any other way, paste the template's text into the description.
   built at once, and a set of packages that conflict is a 409 with pixi's explanation (`environments/lifecycle.py`). If the first
   lock or build of a set fails, later runs of that set get a 409 until an administrator makes a new version.
 - The cases decide the entry's level in that version: `tested` when they pass, `failed` when one does not, `untested` without
-  cases. An entry with no cases, with cases still running, or whose cases cannot run (a missing file is a logged warning) keeps
-  the manifest's level for admission (composition plan, 5b, 5c; `environments/compliance_runs.py`).
+  cases. An entry whose cases are still running is refused there until they finish; one with no cases, or whose cases cannot
+  run (a missing file is a logged warning), keeps the manifest's level for admission (composition plan, 5b, 5c;
+  `environments/compliance_runs.py`). A module of the entry that does not import in the version's image refuses every class
+  under it there (`module-imports`).
 - Moving the pin is another manifest pull request and release; a pin that moves never starts a build by itself (D7.7).
 - A package that publishes its own image is registered by an administrator as a version of a named environment (D8.3), which
   needs its own line in `environments.yaml`.
@@ -54,6 +56,12 @@ PyPI release), `smoldyn-vcell` (a wheel by URL and `sha256`).
 A component often needs library entries beside it (`kind: library`: an engine, or a pin on a floating dependency; `install` or
 `conda`, no `module_roots`). They install code like any other entry and are reviewed the same way. Their level gates nothing:
 what runs is a component's classes (`environments/lifecycle.py`, `composable`).
+
+An entry that provides the same simulator as an existing one (often the same class names) says so with `alternative_to:
+<standard entry id>`. The standard entry is what the service's own runs use (SED-ML solvers, suites); the alternative keeps its
+own level and runs where admitted, and the catalog shows it as an alternative. `viva-copasi` and `viva-tellurium` are
+alternatives to `pbsim-common` until the two families are reconciled. The standard entry must be a component that is not
+itself an alternative (`tests/registry/test_manifest.py`).
 
 ## Check that it locks
 

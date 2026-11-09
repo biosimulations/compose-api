@@ -18,14 +18,19 @@ entries:
   - id: pbsim-common
     package: pbsim-common
     # composed versions install this commit (pbsim_common#21: result, comparison and statistic ports overwrite;
-    # #22: Tellurium and COPASI report every species, boundary and unchanging ones included);
+    # #22: Tellurium and COPASI report every species, boundary and unchanging ones included; #23: every UTC step
+    # reports what SED-ML reads, a substance-only species as its amount and each non-constant parameter and compartment;
+    # #24: the COPASI and Tellurium UTC steps take viva's output_times, selections, tolerances and model_in; #25:
+    # VCellUTCStep solves the rules, events and fast reactions pyvcell's model drops, and reports rule-defined values;
+    # #26: VCellUTCStep reports time alone for a model with nothing that varies, and takes solver tolerances; #27: and
+    # solves at tight tolerances unless set, since VCell does not scale variables as COPASI and Tellurium do);
     # registry_env@1, built through pbest 0.6.5, still runs 26fa156 (pbsim_common#18's adapter fixes and #20's
     # VCellUTCStep). Back to a PyPI release once 0.1.3 is published.
-    source: https://github.com/biosimulations/pbsim_common/tree/c6c18044912f8bf93b949567904f3b61dc8b1873
+    source: https://github.com/biosimulations/pbsim_common/tree/d2ef7ece90b2520adfe9a5bd2a7a228833530116
     version: "0.1.3.dev1"
     install:
       git: https://github.com/biosimulations/pbsim_common
-      commit: c6c18044912f8bf93b949567904f3b61dc8b1873
+      commit: d2ef7ece90b2520adfe9a5bd2a7a228833530116
     module_roots:
       - pbsim_common
     # numeric_result and the other types its steps' ports use (pbest's core registered them)
@@ -54,6 +59,12 @@ entries:
       - >-
         2026-10-26: the pin moves to c6c1804 (pbsim_common#22: every species reported, found by biomodels-curated-300
         run 4, where seven models differed only by a species one adapter left out). Certified the same way.
+      - >-
+        2026-11-05: the pin moves to cca48d3 (pbsim_common#23: what SED-ML reads, found by sbml-test-suite-sample
+        run 1, where 01307, 01455 and 01747 had every solver agree on a concentration where SED-ML reads an amount,
+        and a non-constant parameter had no column; docs/plan-sbml-test-suite.md, step 4c.2). Certified the same way;
+        the phase-cycle compliance cases still hold (its compartment's size is 1, and they compare only the
+        reference's columns).
 
   - id: pb-multiscale-actin
     package: pb-multiscale-actin
@@ -166,6 +177,268 @@ entries:
         values computed by hand; it passed locally on 2026-10-26. MathExpressionStep's outputs are overwrite[float],
         so the generic step-outputs-replace check passes. In a composed version, the case run there decides its level.
 
+  # --- ODE/SBML ---
+  # viva-biomodels: HELD, not added. Reasons: a workspace (bypass-selection), no Process classes (only Steps),
+  # branch-only sibling sources, viva-superpowers and viva-simbio undeclared, and BIOMD0000000027 not shipped (it needs
+  # a live BioModels fetch). See the pull request body.
+  - id: viva-copasi
+    package: viva-copasi
+    # an alternative to pbsim-common, whose CopasiUTCStep and siblings (the same class names) are the standard set
+    # the service runs; pbsim-common's UTC steps take this one's output_times, selections, tolerances and model_in.
+    # Until the two are reconciled.
+    alternative_to: pbsim-common
+    # v0.2.2 on main (confirmed with gh). pbg_copasi, the deprecation shim, is not a module root.
+    source: https://github.com/vivarium-collective/viva-copasi/tree/937ff132f2e8c755248a38a7440067f8d1871001
+    commit: 937ff132f2e8c755248a38a7440067f8d1871001
+    install:
+      git: https://github.com/vivarium-collective/viva-copasi
+      commit: 937ff132f2e8c755248a38a7440067f8d1871001
+    module_roots:
+      - viva_copasi
+    # numeric_result and the other types its steps' ports use; the runner registers no package's build_core
+    types:
+      - viva_copasi.types:standard_types
+    # one python-copasi pin beside pbsim-common's in a mash-up
+    requires:
+      - python-copasi
+    level: tested
+    evidence:
+      - >-
+        Listed on 2026-11-03. Its compliance case (registry/compliance/viva-copasi/phase-cycle-copasi-report) runs
+        CopasiUTCStep on the phase-cycle model and checks it against COPASI's own report, pbsim-common's reference.csv.
+        The case passed through compose-api's runner (COMPOSE_RUNNER_TYPES from `types` above; process-bigraph 1.9.1,
+        bigraph-schema 1.8.1, Python 3.12, macOS) at this commit. Without `types` it fails to load, since the runner
+        registers no package's build_core. A composed environment has not run it, so this is not yet a tested level.
+      - >-
+        The pin moved from v0.2.0 (0399533) to v0.2.1 (ed3fafa), which adds `any` to viva_copasi.types:standard_types:
+        CopasiSteadyStateStep and ParameterEstimationStep emit `any`, which bigraph-schema 1.8.1 does not register,
+        so its steady-state composite failed on the runner's core before it.
+      - >-
+        The pin moved from v0.2.1 (ed3fafa) to v0.2.2 (937ff13), review follow-ups: a valid boundary-species test
+        fixture, `species_units: amount` refused at construction rather than at run, and the types module's docstring
+        naming `viva_copasi.types:standard_types`. The case passed through the runner again at v0.2.2.
+      - >-
+        Raised to tested on 2026-11-03 on composed-environment evidence. Its entry set (with its `requires`) locked through
+        compose-api's own path (Manifest.with_requirements, ComposedSpec.of, pixi_toml, build_k8s.lock_script) in the
+        pinned pixi image for linux-64; `pixi install --frozen` installed it; and its compliance case passed through
+        compose-api's runner in that environment, both for this group alone and in one set holding all seven
+        framework entries.
+
+  - id: viva-tellurium
+    package: viva-tellurium
+    # an alternative to pbsim-common, whose TelluriumUTCStep and siblings (the same class names) are the standard set
+    # the service runs; pbsim-common's UTC steps take this one's output_times, selections, tolerances and model_in.
+    # Until the two are reconciled.
+    alternative_to: pbsim-common
+    # v0.2.3 on main (viva-tellurium#37, confirmed with gh). pbg_tellurium, the deprecation shim, is not a module root.
+    # Its types module registers nothing, so no `types`.
+    source: https://github.com/vivarium-collective/viva-tellurium/tree/846f87c57058a6bfa383619c9ae7587f0d81453c
+    commit: 846f87c57058a6bfa383619c9ae7587f0d81453c
+    install:
+      git: https://github.com/vivarium-collective/viva-tellurium
+      commit: 846f87c57058a6bfa383619c9ae7587f0d81453c
+    module_roots:
+      - viva_tellurium
+    # one tellurium pin beside pbsim-common's in a mash-up
+    requires:
+      - tellurium
+    level: tested
+    evidence:
+      - >-
+        Listed on 2026-11-03. Its compliance case (registry/compliance/viva-tellurium/phase-cycle-copasi-report) runs
+        TelluriumUTCStep on the phase-cycle model at output_times 0, 2, ..., 10 and checks every species against
+        COPASI's own report (pbsim-common's reference.csv) within rel and abs 1e-3. It passed through compose-api's
+        runner (process-bigraph 1.9.1, bigraph-schema 1.8.1, tellurium 2.2.13.1, Python 3.12, macOS) at this commit.
+        A composed environment has not run it, so this is not yet a tested level.
+      - >-
+        The pin moved from v0.2.0 (e056d34) to v0.2.1 (967d5dd): the workspace image installs the `dashboard` extra
+        (with a uv default group `workbench`), the `cli` extra is restored, and the visualization error is clearer.
+        Its runtime path is unchanged; the case passed through the runner again at v0.2.1.
+      - >-
+        Raised to tested on 2026-11-03 on composed-environment evidence. Its entry set (with its `requires`) locked through
+        compose-api's own path (Manifest.with_requirements, ComposedSpec.of, pixi_toml, build_k8s.lock_script) in the
+        pinned pixi image for linux-64; `pixi install --frozen` installed it; and its compliance case passed through
+        compose-api's runner in that environment, both for this group alone and in one set holding all seven
+        framework entries.
+      - >-
+        The pin moved from v0.2.1 (967d5dd) to v0.2.3 (846f87c) on 2026-11-04. v0.2.2 takes vivarium-workbench from git
+        for the `dashboard` extra only (a `[tool.uv.sources]` line), so the runtime dependencies are unchanged. v0.2.3
+        (viva-tellurium#37) adds TelluriumProcess's `parameters_in` input: `{parameter_id: value}` set before each
+        interval, the whole map validated first, and a no-op when empty or unwired. A second case
+        (registry/compliance/viva-tellurium/stimulus-through-port) runs TelluriumProcess on BIOMD0000000786 with its
+        TNF_stimulation event removed and TNF_R set through that port. It checks all 15 floating species at six times
+        against COPASI's sim1 of the original model (viva-biomodels' corpus), within rel 1e-3 or abs 1e-7. With TNF_R = 0
+        on the port, or at v0.2.1, which has no such port, 90 of its 91 expectations fail. Both cases passed through
+        compose-api's runner (process-bigraph 1.9.1, bigraph-schema 1.8.1, tellurium 2.2.13.1, Python 3.12, macOS) at
+        846f87c.
+      - >-
+        Raised to tested again on 2026-11-04, for 846f87c, on composed-environment evidence (a new pin starts again at
+        listed). Its entry set (with its `requires`) locked through compose-api's own path (Manifest.with_requirements,
+        ComposedSpec.of, pixi_toml, build_k8s.lock_script) in the pinned pixi image for linux-64; `pixi install --frozen`
+        installed it; and both compliance cases passed through compose-api's runner in that environment. That held for
+        this group alone, for it with viva-maboss, viva-basic-processes and viva-pde-particle (the set
+        viva-multiscale-nfkb's composite runs in), and for one set holding all seven framework entries.
+
+  # --- FBA ---
+  - id: viva-cobra
+    package: viva-cobra
+    # v0.1.2 on main (confirmed with gh)
+    source: https://github.com/vivarium-collective/viva-cobra/tree/098d600432417163baa3be2855045b3686c5023a
+    commit: 098d600432417163baa3be2855045b3686c5023a
+    install:
+      git: https://github.com/vivarium-collective/viva-cobra
+      commit: 098d600432417163baa3be2855045b3686c5023a
+    module_roots:
+      - viva_cobra
+    level: tested
+    evidence:
+      - >-
+        Listed on 2026-11-03. Its compliance case (registry/compliance/viva-cobra/textbook-fba-optimum) runs FBAStep on
+        COBRApy's textbook model and checks the growth against COBRApy's own optimum, 0.8739215069684295 (biomass 1.0
+        to 1.8739215069684295, glucose 100 to 90). It passed through compose-api's runner (process-bigraph 1.9.1,
+        bigraph-schema 1.8.1, cobra 0.32.1, Python 3.12, macOS) at this commit, with no `types`: its domain types
+        (mass, concentration, count, bounds) live in a private table, viva_cobra.core._TYPE_DEFS, and the result does
+        not depend on them. A composed environment has not run it, so this is not yet a tested level.
+      - >-
+        The pin moved from v0.1.1 (dc893ed) to v0.1.2 (098d600): a starved batch (no uptake possible) now returns zero
+        deltas instead of raising, and requires-python is >=3.11. The case passed through the runner again at v0.1.2.
+      - >-
+        Raised to tested on 2026-11-03 on composed-environment evidence. Its entry set (with its `requires`) locked through
+        compose-api's own path (Manifest.with_requirements, ComposedSpec.of, pixi_toml, build_k8s.lock_script) in the
+        pinned pixi image for linux-64; `pixi install --frozen` installed it; and its compliance case passed through
+        compose-api's runner in that environment, both for this group alone and in one set holding all seven
+        framework entries.
+
+  # --- Boolean ---
+  - id: viva-maboss
+    package: viva-maboss
+    # v0.1.1 on main (tag, confirmed with gh). Its ports are map[float] and integer, so no `types`. Runtime
+    # dependencies: process-bigraph>=1.9.1, bigraph-schema>=1.8.1, cmaboss==1.0.0b34, numpy, typer, rich.
+    source: https://github.com/vivarium-collective/viva-maboss/tree/3fdccd7bb605109f3284e6ff9be2616b50b19ca7
+    commit: 3fdccd7bb605109f3284e6ff9be2616b50b19ca7
+    install:
+      git: https://github.com/vivarium-collective/viva-maboss
+      commit: 3fdccd7bb605109f3284e6ff9be2616b50b19ca7
+    module_roots:
+      - viva_maboss
+    level: tested
+    evidence:
+      - >-
+        Listed on 2026-11-03 as the Boolean layer's simulator. MaBoSS was chosen over BoolNet, which is R-only with no
+        Python port on PyPI, so it would need an R runtime in every environment; the repository README ("Why MaBoSS,
+        not BoolNet") gives the reasons. Its compliance case (registry/compliance/viva-maboss/switching-analytic-oracle)
+        checks MaBoSSProcess against an analytic oracle, the window average of an absorbing switch's on-probability.
+        It passed through compose-api's runner (process-bigraph 1.9.1, bigraph-schema 1.8.1, cmaboss 1.0.0b34, Python
+        3.12, macOS) from a non-editable install at this commit. A composed environment has not run it, so this is not
+        yet a tested level.
+      - >-
+        Raised to tested on 2026-11-03 on composed-environment evidence. Its entry set (with its `requires`) locked through
+        compose-api's own path (Manifest.with_requirements, ComposedSpec.of, pixi_toml, build_k8s.lock_script) in the
+        pinned pixi image for linux-64; `pixi install --frozen` installed it; and its compliance case passed through
+        compose-api's runner in that environment, both for this group alone and in one set holding all seven
+        framework entries.
+
+  # --- Rule-based ---
+  - id: viva-nfsim
+    package: viva-nfsim
+    # v0.2.0 on main (tag and release, confirmed with gh). pbg_nfsim is its only package; the dist name is viva-nfsim.
+    # Its types hook registers nothing, so no `types`.
+    source: https://github.com/vivarium-collective/viva-nfsim/tree/76ff7fc0f59dea815e8b1c211c03550612357cae
+    commit: 76ff7fc0f59dea815e8b1c211c03550612357cae
+    install:
+      git: https://github.com/vivarium-collective/viva-nfsim
+      commit: 76ff7fc0f59dea815e8b1c211c03550612357cae
+    # NFsim runs through bionetgen 0.8.7's bundled BNG2.pl, which needs a full Perl with the core FindBin module; the
+    # pixi base image is not known to have one
+    conda:
+      perl: "*"
+    module_roots:
+      - pbg_nfsim
+    level: tested
+    evidence:
+      - >-
+        Listed on 2026-11-03. Its compliance case (registry/compliance/viva-nfsim/flagella-seeded) runs NFSimProcess on
+        the package's flagella model, seed 7, from the model's own seed counts to t = 50. The row count, end time and
+        initial flgE are hand-computed; the other values are seeded package output (reproducible run to run, and
+        consistent with the model's flhDC stoichiometry). It passed through compose-api's runner (process-bigraph
+        1.9.1, bigraph-schema 1.8.1, bionetgen 0.8.7, Python 3.12, macOS with the system Perl) at this commit. Not yet
+        verified: FindBin under conda-forge perl, and the numbers from Linux's bundled NFsim build. A composed
+        environment has not run it, so this is not yet a tested level. The seed restarts NFsim's RNG every interval.
+      - >-
+        Raised to tested on 2026-11-03 on composed-environment evidence. Its entry set (with its `requires`) locked through
+        compose-api's own path (Manifest.with_requirements, ComposedSpec.of, pixi_toml, build_k8s.lock_script) in the
+        pinned pixi image for linux-64; `pixi install --frozen` installed it; and its compliance case passed through
+        compose-api's runner in that environment, both for this group alone and in one set holding all seven
+        framework entries.
+
+  # --- Spatial/particle ---
+  - id: viva-smoldyn
+    package: viva-smoldyn
+    # v0.2.0 on main (confirmed with gh). Its types hook registers nothing, so no `types`.
+    source: https://github.com/vivarium-collective/viva-smoldyn/tree/54c56a1e3b80ea1afb4e9570e9a1534031db8aca
+    commit: 54c56a1e3b80ea1afb4e9570e9a1534031db8aca
+    install:
+      git: https://github.com/vivarium-collective/viva-smoldyn
+      commit: 54c56a1e3b80ea1afb4e9570e9a1534031db8aca
+    module_roots:
+      - viva_smoldyn
+    # it declares plain `smoldyn`, but PyPI's 2.76 wheel does not import on Linux CPython 3.12; the fork wheel does
+    requires:
+      - smoldyn-vcell
+    level: tested
+    evidence:
+      - >-
+        Listed on 2026-11-03. Its compliance case (registry/compliance/viva-smoldyn/seeded-decay-2d) runs SmoldynProcess
+        in 2D, seed 7, 200 A converting to B. The row count and times are hand-computed; the counts are package output,
+        reported identical on Linux (the fork wheel, CPython 3.12) and macOS (PyPI, CPython 3.14). It passed through
+        compose-api's runner (process-bigraph 1.9.1, bigraph-schema 1.8.1) on macOS with PyPI smoldyn 2.76 under
+        CPython 3.14, because PyPI's macOS CPython 3.12 wheel does not import either. Not yet verified: that a lock
+        picks the smoldyn-vcell URL wheel for its unconstrained `smoldyn` requirement. A composed environment has not
+        run it, so this is not yet a tested level.
+      - >-
+        Raised to tested on 2026-11-03 on composed-environment evidence. Its entry set (with its `requires`) locked through
+        compose-api's own path (Manifest.with_requirements, ComposedSpec.of, pixi_toml, build_k8s.lock_script) in the
+        pinned pixi image for linux-64; `pixi install --frozen` installed it; and its compliance case passed through
+        compose-api's runner in that environment, both for this group alone and in one set holding all seven
+        framework entries. Alone, it needed the smoldyn-vcell entry's libstdcxx floor (GLIBCXX_3.4.32).
+
+  - id: viva-fenics
+    package: viva-fenics
+    # v0.1.1 (#16): the standalone FEniCSx package, not the PDE component of viva-pde-particle, which is unchanged.
+    # 0.1.1 fixed what a5023cc had: composites imported viva_superpowers, undeclared, and __init__.py swallowed the
+    # ImportError so classes vanished; scipy was undeclared. viva-superpowers is now only a `dashboard` extra.
+    source: https://github.com/vivarium-collective/viva-fenics/tree/a1105fcae77019f6a2430c612df44c8a285792a6
+    commit: a1105fcae77019f6a2430c612df44c8a285792a6
+    install:
+      git: https://github.com/vivarium-collective/viva-fenics
+      commit: a1105fcae77019f6a2430c612df44c8a285792a6
+    # dolfinx is conda-only. 0.10.* is the pin viva-pde-particle and vcell-fenics use, inside viva-fenics's own tested
+    # range (>=0.10,<0.12, its suite passed on 0.10.0 and 0.11.0), so a set with both never splits on dolfinx.
+    # The rest is from that pixi.toml's conda dependencies; pip dependencies come from its pyproject.
+    conda:
+      fenics-dolfinx: "0.10.*"
+      mpich: "*"
+      gmsh: "*"
+      python-gmsh: "*"
+      matplotlib: "*"
+      python-dateutil: ">=2.8,<3"
+    module_roots:
+      - viva_fenics
+    level: tested
+    evidence:
+      - >-
+        Listed on 2026-11-03. Its compliance case (registry/compliance/viva-fenics/poisson-quadratic-mms) runs
+        PoissonSolverStep on a quadratic manufactured solution, which P2 represents exactly, so the expected L2 error is
+        round-off. It needs the dolfinx stack, so it has not run through compose-api's runner or anywhere else here.
+        Its one custom type (viva_fenics.types.FENICS_TYPES, fem_field) is on no process's ports at this commit, so
+        the entry has no `types`.
+      - >-
+        Re-pinned to a1105fc (v0.1.1) and raised to tested on 2026-11-03. Its entry set locked through compose-api's own
+        path in the pinned pixi image for linux-64 (fenics-dolfinx 0.10.0, scipy 1.18.1), installed with `pixi install
+        --frozen`, and poisson-quadratic-mms passed through compose-api's runner, alone and in one set with all seven
+        framework entries (all seven cases passed). Importing viva_fenics there loads no viva_superpowers or
+        vivarium_workbench.
+
   # --- core: classes of the engine every composed environment installs (environments.yaml `composition.core`) -------
   # Provided by every composed version and mash-up without being listed or installed, and by the prebuilt images its
   # `bundles` name (docs/plan-environment-composition.md, 7c-1, D7c.2). Its version is the core's.
@@ -210,6 +483,11 @@ entries:
     install:
       url: https://github.com/virtualcell/Smoldyn/releases/download/vcell-pyhybrid-e86d552/smoldyn-2.76.dev0%2Bvcell.e86d552-cp312-cp312-linux_x86_64.whl
       sha256: bb033bccff9481a075603d4a79fefe249b152fac5544a716adf16761adc29d14
+    # its extension needs GLIBCXX_3.4.32 (GCC 13.2), newer than the pixi image's system libstdc++; conda-forge's
+    # `libstdcxx` has it from 13.3.0 (13.1 and 13.2 were published only as libstdcxx-ng). Without it, a set whose
+    # other entries bring no libstdcxx (viva-smoldyn alone) fails `import smoldyn`.
+    conda:
+      libstdcxx: ">=13.3"
     level: installable
     evidence:
       - >-
@@ -279,6 +557,11 @@ entries:
     install:
       pypi: tellurium
       version: "2.2.13.1"
+    # tellurium imports six (tellurium.visualization.sbmldiagram, on `import tellurium`) without declaring it; it came
+    # in through python-dateutil < 4, and registry_env@6 (resolved 2026-11-06, dateutil 4.0.0) lost it, so
+    # pbsim_common.simulators failed to import and every solver failed (its pbsim-common compliance cases too)
+    conda:
+      six: "*"
     level: installable
     bundles:
       - registry_env
@@ -317,13 +600,16 @@ entries:
   - id: libvcell
     kind: library
     package: libvcell
-    source: https://pypi.org/project/libvcell/0.0.24/
-    # pyvcell's own dependency, pinned for its fix: 0.0.24 registers the jsbml Annotation classes native-image
-    # reflection needs (libvcell#31), which six biomodels failed to import without; registry_env@1 has 0.0.23
-    version: "0.0.24"
+    source: https://pypi.org/project/libvcell/0.0.25/
+    # pyvcell's own dependency, pinned for its fixes: 0.0.24 registers the jsbml Annotation classes native-image
+    # reflection needs (libvcell#31), which six biomodels failed to import without; 0.0.25 (libvcell#33, vcell#2206)
+    # imports SBML L3V2 features the SBML Test Suite uses (math-less elements, rateOf, 0-D compartments, L3V2 MathML,
+    # no-ODE models) and refuses comp models and conversion factors instead of importing them wrong. registry_env@1
+    # has 0.0.23
+    version: "0.0.25"
     install:
       pypi: libvcell
-      version: "0.0.24"
+      version: "0.0.25"
     level: listed
     bundles:
       - registry_env

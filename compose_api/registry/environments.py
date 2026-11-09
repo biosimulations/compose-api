@@ -276,6 +276,8 @@ class CatalogEntry(BaseModel):
     bundles: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
     reviewer: str | None = None
+    # the standard entry this one is an alternative to (manifest.yaml's `alternative_to`), when it is one
+    alternative_to: str | None = None
     environments: list[EntryEnvironment] = Field(default_factory=list)
 
 

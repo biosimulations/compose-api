@@ -65,10 +65,15 @@ Release & deploy: `make tag` (`tag.sh` bumps `pyproject.toml` + `compose_api/ver
 **Deploys are GitOps.** Flux on the vxrails RKE2 cluster (configured in
 [`virtualcell/vcell-fluxcd`](https://github.com/virtualcell/vcell-fluxcd), `clusters/vxrails/compose-api-*.yaml`) watches
 this repo's `main`. It applies `kustomize/overlays/compose-api-rke` within a minute of a merge, with prune on. So
-**merging to main deploys**: a pin bump in `kustomize/config/compose-api-rke/api.env`, or a release PR's `newTag`.
-- **Image before tag:** push the release tag on the release PR's head commit and let the image build finish *before*
-  merging. Otherwise Flux rolls out a tag that does not exist yet. The rolling update keeps the old pod serving, but
-  the Kustomization reports unhealthy until the image appears.
+**merging to main deploys**. Every deployed state must be a release, so a deploy is always readable as one tag:
+- **Only a release deploys.** The `deploy-guard` CI job (`scripts/deploy-guard.sh`) requires the overlay's `newTag` to
+  equal the version (`pyproject.toml`, `compose_api/version.py`, the client), that tag to be on the commit's history
+  with its image pushed, and nothing Flux applies (the overlay, `kustomize/config/compose-api-rke`, `kustomize/base`)
+  to differ from the tag. A pin bump in `api.env` or any other deploy config is therefore made in a release PR, never
+  on its own. Code-only PRs pass at once and deploy nothing. Review may be bypassed; this check may not.
+- **Image before tag:** push the release tag on the release PR's head commit right after opening it; `deploy-guard`
+  waits (up to 20 min) for the tag and the image build, then passes. Re-run it if it gave up. Merging earlier would
+  roll out a tag that does not exist yet.
 - **Status / force a sync** (needs VPN): `flux get kustomization compose-api`;
   `flux reconcile kustomization compose-api --with-source`.
 - **Manual fallback:** `make deploy` (`KUBECONFIG=~/.kube/kubeconfig_vxrails.yaml`). Flux reverts anything that

@@ -83,6 +83,7 @@ async def submit(
     batch: bool = False,
     environment_versions: dict[str, int] | None = None,
     ownership: Ownership | None = None,
+    tolerances_from: str | None = None,
 ) -> list[int]:
     """One comparison per accepted task (all, or those named), one run per solver that accepted it; the ids.
     `references[origin]["<sedml>/<report>"]` (the archive's own `reports.h5`, a biosimulations.org run's) are stored
@@ -96,6 +97,8 @@ async def submit(
         if source_kind == "biomodels"
         else {"project": source_id}
         if source_kind == "biosimulations"
+        else {"sbml_test_case": source_id}
+        if source_kind == "sbml-test-suite"
         else {}
     )
     created: list[int] = []
@@ -112,6 +115,8 @@ async def submit(
             task=task.task,
             settings={
                 "tolerances": tolerances.model_dump(),
+                # set when the tolerances are the source's own, not the suite's or request's (plan-sbml-test-suite S4)
+                **({"tolerances_from": tolerances_from} if tolerances_from else {}),
                 "reports": task.reports,
                 "solvers": list(task.archives),
             },

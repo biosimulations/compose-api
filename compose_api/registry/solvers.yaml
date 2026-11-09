@@ -1,6 +1,10 @@
 # Solvers: which implementation of a role a SED-ML run uses (docs/plan-sedml.md, "Concepts"). A solver is a
 # role-specific view of a class an environment provides: the class's address, the environment it runs in, the KiSAO
 # algorithms it implements (its default first), and the kinds of SBML variable its result has columns for.
+# `parameter` covers compartments too (process-bigraph-lang reads a compartment's size as a parameter): pbsim_common's
+# steps report every non-constant parameter and compartment from pbsim_common#23 (registry_env versions composed
+# with cca48d3 or later). An older version's result lacks those columns, and the report leaves the data set out with a
+# warning, as the translator did before (docs/plan-sbml-test-suite.md, step 4c.2).
 #
 # process-bigraph-lang's `sedml translate` fills the TimeCourseSolver role with each solver's class and checks it
 # against the environment's manifest; tests/registry/test_solvers.py checks every solver here against the committed
@@ -14,7 +18,7 @@ solvers:
     address: local:pbsim_common.simulators.copasi_process.CopasiUTCStep
     # COPASI's deterministic method is the LSODA/LSODAR hybrid; LSODA itself is accepted too
     algorithms: ["KISAO:0000560", "KISAO:0000088"]
-    provides: [species]
+    provides: [species, parameter]
 
   - id: tellurium
     name: Tellurium (CVODE)
@@ -22,7 +26,7 @@ solvers:
     environment: registry_env
     address: local:pbsim_common.simulators.tellurium_process.TelluriumUTCStep
     algorithms: ["KISAO:0000019"]
-    provides: [species]
+    provides: [species, parameter]
 
   - id: vcell
     name: VCell (CVODE/IDA)
@@ -31,4 +35,4 @@ solvers:
     # VCell's Combined solver through pyvcell (docs/plan-vcell-ode.md): CVODE, or IDA when the math has fast systems
     address: local:pbsim_common.simulators.vcell_process.VCellUTCStep
     algorithms: ["KISAO:0000019", "KISAO:0000283"]
-    provides: [species]
+    provides: [species, parameter]

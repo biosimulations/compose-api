@@ -243,6 +243,8 @@ async def test_route_lists_the_catalog(client: httpx.AsyncClient) -> None:
     listing = (await client.get("/registry/entries")).json()
     pde = next(e for e in listing if e["id"] == "viva-pde-particle")
     assert pde["level"] == "tested" and pde["environments"] == [{"name": "viva-pde-particle", "components": 1}]
+    by_id = {e["id"]: e for e in listing}
+    assert by_id["viva-copasi"]["alternative_to"] == "pbsim-common" and by_id["pbsim-common"]["alternative_to"] is None
 
 
 def test_entries_may_share_a_conda_requirement_they_ask_for_alike() -> None:

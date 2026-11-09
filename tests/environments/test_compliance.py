@@ -7,7 +7,14 @@ from pathlib import Path
 import pytest
 
 from compose_api.environments import compliance
-from compose_api.environments.compliance import Case, accumulating_leaves, evaluate, load_cases, port_findings
+from compose_api.environments.compliance import (
+    Case,
+    accumulating_leaves,
+    evaluate,
+    import_findings,
+    load_cases,
+    port_findings,
+)
 
 NUMERIC_RESULT = {"time": "list[float]", "columns": "list[string]", "values": "list[list[float]]"}
 FIXED = {
@@ -67,6 +74,36 @@ def test_a_step_whose_results_accumulate_fails_and_a_process_does_not() -> None:
     assert port_findings(_manifest(), {"numeric_result": FIXED}, ["pkg"]) == []
 
 
+def test_a_module_that_does_not_import_and_a_missing_solver_class_fail() -> None:
+    """registry_env@6 (2026-11-06): python-dateutil 4 dropped six, tellurium imports it, and pbsim_common.simulators
+    did not import, so no solver class was in the image."""
+    six = "ModuleNotFoundError: No module named 'six'"
+    broken = {
+        "errors": [
+            {"module": "pbsim_common.simulators", "error": six},
+            {"module": "pbsim_common.simulators", "error": six},  # the describe script reports it once per root
+            {"module": "elsewhere.plugin", "error": "ImportError: x"},  # not under the version's roots
+        ],
+        "components": [{"module": "pbsim_common.comparison", "name": "MSEComparison", "kind": "step"}],
+    }
+    (finding,) = import_findings(broken, ["pbsim_common"], "registry_env")
+    assert (finding.component, finding.check, finding.severity) == ("pbsim_common.simulators", "module-imports", "fail")
+    assert finding.detail == f"it does not import in the image: {six}"
+    # no error recorded, yet the solvers' classes are missing: each solver says so
+    missing = import_findings({"components": broken["components"]}, ["pbsim_common"], "registry_env")
+    assert {(f.component.rsplit(".", 1)[1], f.check) for f in missing} == {
+        ("CopasiUTCStep", "solver-provided"),
+        ("TelluriumUTCStep", "solver-provided"),
+        ("VCellUTCStep", "solver-provided"),
+    }
+    # registry_env@1's image provides them all; another environment's solvers are not its business
+    manifest = json.loads((Path(__file__).parents[1] / "fixtures/resources/registry_env@1.interfaces.json").read_text())
+    assert [
+        f for f in import_findings(manifest, ["pbsim_common"], "registry_env") if f.check == "solver-provided"
+    ] == []
+    assert import_findings({"components": []}, ["pbsim_common"], "viva-pde-particle") == []
+
+
 def test_registry_env_at_1_fails_exactly_the_steps_pbsim_common_21_fixes_and_its_tools() -> None:
     """registry_env@1's image (pbest's, before pbsim_common#21), as its committed manifest recorded it."""
     manifest = json.loads((Path(__file__).parents[1] / "fixtures/resources/registry_env@1.interfaces.json").read_text())
@@ -84,6 +121,26 @@ def test_pbsim_commons_cases_are_complete() -> None:
     for case in cases:
         assert compliance.case_problems(case) == []
     assert load_cases("no-such-entry") == []
+
+
+@pytest.mark.parametrize(
+    ("entry", "case"),
+    [
+        ("viva-copasi", "phase-cycle-copasi-report"),
+        ("viva-tellurium", "phase-cycle-copasi-report"),
+        ("viva-tellurium", "stimulus-through-port"),
+        ("viva-cobra", "textbook-fba-optimum"),
+        ("viva-maboss", "switching-analytic-oracle"),
+        ("viva-nfsim", "flagella-seeded"),
+        ("viva-smoldyn", "seeded-decay-2d"),
+        ("viva-fenics", "poisson-quadratic-mms"),
+    ],
+)
+def test_onboarded_cases_load_and_their_files_exist(entry: str, case: str) -> None:
+    """Each onboarded entry's case is found by name, and its document is present and self-contained."""
+    (found,) = [c for c in load_cases(entry) if c.name == case]
+    assert found.entry == entry
+    assert compliance.case_problems(found) == []
 
 
 def _result(scale: float = 1.0) -> dict[str, object]:

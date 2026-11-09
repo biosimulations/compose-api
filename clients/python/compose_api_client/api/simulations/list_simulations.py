@@ -181,7 +181,7 @@ def sync_detailed(
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
         label (list[str] | None | Unset): Only simulations with this label, as key:value;
             repeatable, all must match. Keys: source, environment, environment_version, solver, model,
-            project, sedml_task, comparison, collection, suite_run, compliance
+            project, sbml_test_case, sedml_task, comparison, collection, suite_run, compliance
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         mine (bool | Unset): Only those the caller submitted, signed in; needs a signed-in caller
             Default: False.
@@ -250,7 +250,7 @@ def sync(
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
         label (list[str] | None | Unset): Only simulations with this label, as key:value;
             repeatable, all must match. Keys: source, environment, environment_version, solver, model,
-            project, sedml_task, comparison, collection, suite_run, compliance
+            project, sbml_test_case, sedml_task, comparison, collection, suite_run, compliance
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         mine (bool | Unset): Only those the caller submitted, signed in; needs a signed-in caller
             Default: False.
@@ -314,7 +314,7 @@ async def asyncio_detailed(
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
         label (list[str] | None | Unset): Only simulations with this label, as key:value;
             repeatable, all must match. Keys: source, environment, environment_version, solver, model,
-            project, sedml_task, comparison, collection, suite_run, compliance
+            project, sbml_test_case, sedml_task, comparison, collection, suite_run, compliance
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         mine (bool | Unset): Only those the caller submitted, signed in; needs a signed-in caller
             Default: False.
@@ -381,7 +381,7 @@ async def asyncio(
         since (datetime.datetime | None | Unset): Only simulations created at or after this time
         label (list[str] | None | Unset): Only simulations with this label, as key:value;
             repeatable, all must match. Keys: source, environment, environment_version, solver, model,
-            project, sedml_task, comparison, collection, suite_run, compliance
+            project, sbml_test_case, sedml_task, comparison, collection, suite_run, compliance
         tag (list[str] | None | Unset): Only simulations with this tag; repeatable, all must match
         mine (bool | Unset): Only those the caller submitted, signed in; needs a signed-in caller
             Default: False.
