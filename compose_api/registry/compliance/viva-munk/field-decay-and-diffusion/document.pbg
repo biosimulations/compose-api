@@ -1,0 +1,136 @@
+{
+  "state": {
+    "fields": {
+      "dye": [
+        [
+          2.0,
+          2.0,
+          2.0,
+          2.0
+        ],
+        [
+          2.0,
+          2.0,
+          2.0,
+          2.0
+        ],
+        [
+          2.0,
+          2.0,
+          2.0,
+          2.0
+        ],
+        [
+          2.0,
+          2.0,
+          2.0,
+          2.0
+        ]
+      ],
+      "ahl": [
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          8.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    "diffusion": {
+      "_type": "process",
+      "address": "local:viva_munk.processes.diffusion_advection.DiffusionAdvection",
+      "config": {
+        "n_bins": [
+          4,
+          4
+        ],
+        "bounds": [
+          4.0,
+          4.0
+        ],
+        "default_diffusion_rate": 0.05,
+        "diffusion_coeffs": {
+          "dye": 0.05,
+          "ahl": 0.05
+        },
+        "advection_coeffs": {
+          "dye": [
+            0.0,
+            0.0
+          ],
+          "ahl": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "interval": 10.0,
+      "inputs": {
+        "fields": [
+          "fields"
+        ]
+      },
+      "outputs": {
+        "fields": [
+          "fields"
+        ]
+      }
+    },
+    "decay": {
+      "_type": "process",
+      "address": "local:viva_munk.processes.field_decay.FieldDecay",
+      "config": {
+        "decay_rates": {
+          "dye": 0.01
+        }
+      },
+      "interval": 10.0,
+      "inputs": {
+        "fields": [
+          "fields"
+        ]
+      },
+      "outputs": {
+        "fields": [
+          "fields"
+        ]
+      }
+    },
+    "emitter": {
+      "_type": "step",
+      "address": "local:process_bigraph.emitter.RAMEmitter",
+      "config": {
+        "emit": {
+          "fields": "node",
+          "global_time": "float"
+        }
+      },
+      "inputs": {
+        "fields": [
+          "fields"
+        ],
+        "global_time": [
+          "global_time"
+        ]
+      }
+    }
+  }
+}
