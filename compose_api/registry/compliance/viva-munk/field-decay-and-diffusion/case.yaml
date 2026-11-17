@@ -1,13 +1,22 @@
 description: >-
   viva-munk's FieldDecay and DiffusionAdvection on a 4 by 4 grid (bounds 4 by 4, closed walls), two species, ten steps
-  of 10 s. `dye` starts uniform at 2 and only FieldDecay acts on it (k = 0.01 per s), so it stays uniform and equals
-  2 * exp(-k * t): 2 * exp(-0.1) after one step and 2 * exp(-1) = 0.7357588823428847 at 100 s, computed by hand; the run
-  agrees to 1e-15. `ahl` starts as 8 in one bin and only DiffusionAdvection acts on it (D = 0.05); its per-bin values are
-  the package's own output (viva-munk 94d9585f, locked environment of viva-munk, process-bigraph 1.9.1, bigraph-schema
-  1.8.1, run through compose-api's runner on 2026-11-02, linux/amd64; two runs gave identical results), and their sum
-  stays 8 (checked in the run, not asserted here). The case shows that both classes import, build on the runner's core and
-  step. It does not use the multibody processes: the `pymunk_agent` type is registered by viva_munk.core_import, which the
-  runner does not call.
+  of 10 s. `dye` starts uniform at 2. FieldDecay acts on it (k = 0.01 per s) and so does DiffusionAdvection (D = 0.05,
+  no advection), which leaves a uniform field unchanged, so `dye` stays uniform and equals 2 * exp(-k * t): 2 *
+  exp(-0.1) after one step and 2 * exp(-1) = 0.7357588823428847 at 100 s, computed by hand; the run agrees to 1e-15.
+  `ahl` starts as 8 in one bin (row 1, column 2) and only DiffusionAdvection acts on it (D = 0.05); its per-bin values
+  are the package's own output (viva-munk 94d9585f, locked environment of viva-munk, process-bigraph 1.9.1,
+  bigraph-schema 1.8.1, run through compose-api's runner on 2026-11-02, linux/amd64; two runs gave identical results),
+  and their sum stays 8 (checked in the run, not asserted here). `ahl` is asserted after one step (10 s), where the
+  gradient is still steep, and at 100 s, where it is within 3% of uniform (the diffusion length is about 3 bins). The
+  one-step values were taken on 2026-11-17 (same commit; the locked environment of viva-munk with viva-tumor-tcell; two
+  runs identical; the 100 s values agreed with those asserted here). A numpy re-implementation of DiffusionAdvection's
+  explicit scheme (100 substeps of 0.1 s per 10 s step, zero-gradient walls) reproduces every `ahl` value of every step
+  to better than 2e-15; the exact solution of the same grid differs from them by up to about 1.5% after one step, which
+  is the scheme's time-step error and not a defect. The case shows that both classes import, build on the runner's core
+  and step. It does not use the multibody and cell processes, which do not build on the runner's core yet: their ports
+  are `map[pymunk_agent]`, a type that viva_munk.core_import registers and neither the runner nor bigraph-schema's
+  package discovery does at this commit. Stepping a PymunkProcess here needs a type table in viva-munk that the entry's
+  `types` can name; adding one is for viva-munk's maintainers.
 document: document.pbg
 interval: 100
 expect:
@@ -16,5 +25,8 @@ expect:
   - {kind: scalar, emitter: emitter, field: fields.dye.0.0, row: 1, expected: 1.8096748360719193, rel: 1.0e-9}
   - {kind: scalar, emitter: emitter, field: fields.dye.0.0, expected: 0.7357588823428847, rel: 1.0e-9}
   - {kind: scalar, emitter: emitter, field: fields.dye.3.3, expected: 0.7357588823428847, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: fields.ahl.1.2, row: 1, expected: 1.7806688672079805, rel: 1.0e-6}
+  - {kind: scalar, emitter: emitter, field: fields.ahl.1.1, row: 1, expected: 0.7970299696864961, rel: 1.0e-6}
+  - {kind: scalar, emitter: emitter, field: fields.ahl.3.0, row: 1, expected: 0.02668039758998973, rel: 1.0e-6}
   - {kind: scalar, emitter: emitter, field: fields.ahl.1.2, expected: 0.5157535479369152, rel: 1.0e-6}
   - {kind: scalar, emitter: emitter, field: fields.ahl.0.0, expected: 0.49925469435378605, rel: 1.0e-6}
