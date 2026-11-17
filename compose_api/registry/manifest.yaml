@@ -477,11 +477,12 @@ entries:
         viva_munk, but only FieldDecay and DiffusionAdvection, whose ports are plain, are exercised and build on the
         runner's core today. The others have ports typed `map[pymunk_agent]`: PymunkProcess, GrowDivide,
         AdderGrowDivide, RemoveCrossing, SecreteEPS, Pressure, CellFieldExchange, Chemotaxis, InclusionBody, IBColony,
-        QuorumSensing, and the visualizations MultibodyVizStep and CellMassTraces. `pymunk_agent` is registered only by
-        viva_munk.core_import, which neither the runner nor bigraph-schema 1.8.1's package discovery calls (discovery
-        calls a module's `register_types` hook and registers Node classes under their class names; viva_munk at this
-        commit has neither for `pymunk_agent`). A document with a PymunkProcess fails on the runner's core with `unable
-        to parse type "map[pymunk_agent]"` (run in the locked environment on 2026-11-17).
+        QuorumSensing, and the visualizations MultibodyVizStep and CellMassTraces. The name `pymunk_agent` is registered
+        only by viva_munk.core_import (through register_pymunk_types), which the runner does not call. bigraph-schema
+        1.8.1's package discovery calls a module's `register_types` hook and registers Node classes under their class
+        names, so it registers viva_munk's PymunkAgent class as `PymunkAgent`, not as `pymunk_agent`, and viva_munk at
+        this commit has no `register_types` hook. A document with a PymunkProcess fails on the runner's core with
+        `unable to parse type "map[pymunk_agent]"` (run in the locked environment on 2026-11-17).
       - >-
         No `types` is named yet. viva_munk.types:positive_types, the one table viva-munk has at this commit, registers
         four numeric types and not `pymunk_agent`, and naming it gave the same failure. A type table in viva-munk that

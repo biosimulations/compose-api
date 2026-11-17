@@ -3,7 +3,7 @@ description: >-
   tumor cells (two PDL1n, one PDL1p) and two T cells (one PD1n, one PD1p), built with the package's own cell and field
   builders (viva_tumor_tcell.composites.microenvironment) and no behaviour or physics processes, so nothing is random. One T
   cell has 1e8 IFNg molecules in its exchange; DiffusionField deposits them into its bin on the first step, then diffuses
-  and decays IFNg (4.5 h e-fold) for five steps of 60 s. Counts and fractions are exact by construction. The deposit is
+  and decays IFNg (4.5 h half-life) for five steps of 60 s. Counts and fractions are exact by construction. The deposit is
   1e8 / (6000e-15 L * N_A) * 17000 g/mol * 1e6 = 470486.069 ng/mL, and the grid total at 300 s equals that times
   exp(-ln 2 * 300 / (4.5 * 3600)) = 464485.4765088531 (checked in the run, agreeing to 1e-16; not asserted here because the
   case format checks single values). The per-bin values asserted below are the package's own output (viva-tumor-tcell

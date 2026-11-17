@@ -7,16 +7,17 @@ description: >-
   are the package's own output (viva-munk 94d9585f, locked environment of viva-munk, process-bigraph 1.9.1,
   bigraph-schema 1.8.1, run through compose-api's runner on 2026-11-02, linux/amd64; two runs gave identical results),
   and their sum stays 8 (checked in the run, not asserted here). `ahl` is asserted after one step (10 s), where the
-  gradient is still steep, and at 100 s, where it is within 3% of uniform (the diffusion length is about 3 bins). The
-  one-step values were taken on 2026-11-17 (same commit; the locked environment of viva-munk with viva-tumor-tcell; two
-  runs identical; the 100 s values agreed with those asserted here). A numpy re-implementation of DiffusionAdvection's
-  explicit scheme (100 substeps of 0.1 s per 10 s step, zero-gradient walls) reproduces every `ahl` value of every step
-  to better than 2e-15; the exact solution of the same grid differs from them by up to about 1.5% after one step, which
-  is the scheme's time-step error and not a defect. The case shows that both classes import, build on the runner's core
-  and step. It does not use the multibody and cell processes, which do not build on the runner's core yet: their ports
-  are `map[pymunk_agent]`, a type that viva_munk.core_import registers and neither the runner nor bigraph-schema's
-  package discovery does at this commit. Stepping a PymunkProcess here needs a type table in viva-munk that the entry's
-  `types` can name; adding one is for viva-munk's maintainers.
+  gradient is still steep, and at 100 s, where every bin is within 8% of 0.5 (the diffusion length is about 3 bins; the
+  two bins asserted are 3.2% and 0.15% off). The one-step values were taken on 2026-11-17 (same commit; the locked
+  environment of viva-munk with viva-tumor-tcell; two runs identical; the 100 s values agreed with those asserted here).
+  A numpy re-implementation of DiffusionAdvection's explicit scheme (100 substeps of 0.1 s per 10 s step, zero-gradient
+  walls) reproduces every `ahl` value of every step to better than 2e-15; the exact solution of the same grid differs
+  from them by up to about 1.5% after one step, which is the scheme's time-step error and not a defect. The case shows
+  that both classes import, build on the runner's core and step. It does not use the multibody and cell processes, which
+  do not build on the runner's core yet: their ports are `map[pymunk_agent]`, a type name that only
+  viva_munk.core_import registers (the runner does not call it, and bigraph-schema's package discovery registers the
+  PymunkAgent class under the name PymunkAgent). Stepping a PymunkProcess here needs a type table in viva-munk that the
+  entry's `types` can name; adding one is for viva-munk's maintainers.
 document: document.pbg
 interval: 100
 expect:
