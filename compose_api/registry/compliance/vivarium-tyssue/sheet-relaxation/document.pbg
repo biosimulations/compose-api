@@ -1,0 +1,57 @@
+{
+  "state": {
+    "Tyssue": {
+      "_type": "process",
+      "address": "local:vivarium_tyssue.processes.eulersolver.EulerSolver",
+      "config": {
+        "name": "Epithelium 2D",
+        "eptm": "test_square.hf5",
+        "tissue_type": "Sheet",
+        "parameters": {
+          "face_df": {
+            "area_elasticity": 1.0,
+            "prefered_area": 1.0,
+            "perimeter_elasticity": 0.1,
+            "prefered_perimeter": 3.6,
+            "cell_type": "healthy",
+            "is_alive": 1.0
+          },
+          "edge_df": {"line_tension": 0.0, "is_active": 1.0},
+          "vert_df": {"viscosity": 1.0, "is_alive": 1.0}
+        },
+        "geom": "SheetGeometry",
+        "effectors": ["LineTension", "FaceAreaElasticity", "PerimeterElasticity"],
+        "ref_effector": "FaceAreaElasticity",
+        "factory": "model_factory",
+        "settings": {"threshold_length": 0.03},
+        "auto_reconnect": {"enabled": false},
+        "bounds": {},
+        "output_columns": {
+          "vert_df": ["x", "y"],
+          "edge_df": ["srce", "trgt", "face"],
+          "face_df": ["area", "perimeter"]
+        },
+        "history_columns": {},
+        "maps": {},
+        "backend": "python",
+        "substeps": 1,
+        "record_history": false
+      },
+      "inputs": {"behaviors": ["Behaviors"], "global_time": ["global_time"]},
+      "outputs": {
+        "datasets": ["Tissue State"],
+        "network_changed": ["Network Changed"],
+        "behaviors_update": ["Behaviors"]
+      },
+      "interval": 0.015625
+    },
+    "Network Changed": false,
+    "Behaviors": {},
+    "emitter": {
+      "_type": "step",
+      "address": "local:RAMEmitter",
+      "config": {"emit": {"tissue": "node", "global_time": "float"}, "subsample": 8},
+      "inputs": {"tissue": ["Tissue State"], "global_time": ["global_time"]}
+    }
+  }
+}
