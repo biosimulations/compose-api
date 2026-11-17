@@ -134,6 +134,8 @@ def test_pbsim_commons_cases_are_complete() -> None:
         ("viva-nfsim", "flagella-seeded"),
         ("viva-smoldyn", "seeded-decay-2d"),
         ("viva-fenics", "poisson-quadratic-mms"),
+        ("viva-munk", "field-decay-and-diffusion"),
+        ("viva-tumor-tcell", "ifng-field-and-observables"),
     ],
 )
 def test_onboarded_cases_load_and_their_files_exist(entry: str, case: str) -> None:
