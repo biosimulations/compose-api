@@ -146,7 +146,11 @@ Docker), and `make check` for the lint and type checks (`CLAUDE.md`).
 - **Config-driven imports.** The address check is the only gate (`registry/validation.py`) and sees only `address` values. A class
   that imports or runs what its config names escapes it: `EnsembleRunner` imported a `module:function` from its config, and
   viva-pde-particle#67 replaced it (composition plan, 7c-4). The `types` items are imported by the runner before every run
-  (`environments/runner.py`), so each should be in the entry's own package.
+  (`environments/runner.py`), so each should be in the entry's own package. Code the config or a submitted file supplies is
+  the same hole: vivarium-tyssue's `SBMLCellCycle` evaluates expressions from its config, so its module is not a root.
+- **Submitted files a class deserializes.** A file in the upload that a class unpickles runs code too. pandas unpickles HDF5 object
+  columns and some attributes, and submission refuses an HDF5 file that holds them (`registry/uploads.py`). No other format is
+  checked, so a class that loads a submitted pickle, `joblib` file or `numpy` array with `allow_pickle` must not reach `tested`.
 - **Module roots.** Admission gives a module to the entry with the longest matching root and refuses a module no root contains
   (`Manifest.entry_for_module`). A root that is not what the package ships makes its own classes unrunnable, a generic root such
   as `app` claims every module beneath it, and a root nested inside another entry's takes classes from it; nothing compares one

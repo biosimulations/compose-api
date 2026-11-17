@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from jinja2 import Template
 
+from compose_api.environments.compliance import COMPLIANCE_DIR
 from compose_api.registry.manifest import CurationLevel, Manifest, RegistryEntry, load_manifest
 from compose_api.registry.validation import (
     AddressPolicy,
@@ -189,6 +190,40 @@ def test_sbml_carries_no_addresses(tmp_path: Path) -> None:
     path = tmp_path / "model.sbml"
     path.write_text("<sbml/>")
     assert find_violations(path, SimulationFileType.SBML, load_manifest()) == []
+
+
+# --- files a simulator would unpickle (registry/uploads.py) ------------------------------------------------------
+
+OBJECT_COLUMN = (RESOURCES / "hdf5" / "object_column.h5").read_bytes()
+
+
+@pytest.mark.parametrize("policy", list(AddressPolicy))
+@pytest.mark.parametrize("registry", [True, False], ids=["registry", "prebuilt"])
+def test_a_file_a_simulator_would_unpickle_is_refused_by_content(
+    tmp_path: Path, policy: AddressPolicy, registry: bool
+) -> None:
+    """Under any name, inside a nested archive, beside addresses the service runs, for every image and policy."""
+    inner = omex_bytes({"mesh.dat": OBJECT_COLUMN})
+    path = omex(tmp_path, {"main.pbg": document(COPASI), "runs/inner.omex": inner})
+    with pytest.raises(
+        SubmissionRejectedError, match=r"experiment\.omex/runs/inner\.omex/mesh\.dat: face/block1_values"
+    ):
+        validate_submission(path, SimulationFileType.OMEX, policy, registry=registry)
+
+
+def test_a_mesh_of_plain_data_is_accepted(tmp_path: Path) -> None:
+    data = (COMPLIANCE_DIR / "vivarium-tyssue" / "sheet-relaxation" / "test_square.hf5").read_bytes()
+    path = omex(tmp_path, {"main.pbg": document(COPASI), "test_square.hf5": data})
+    assert validate_submission(path, SimulationFileType.OMEX, AddressPolicy.ENFORCE) == []
+
+
+def test_a_member_that_cannot_be_read_is_refused(tmp_path: Path) -> None:
+    """Every member is read now, so one zipfile cannot read (here a bad checksum) is a 400, not a 500."""
+    path = omex(tmp_path, {"main.pbg": document(COPASI), "mesh.dat": b"vertex positions"})
+    data = path.read_bytes()
+    path.write_bytes(data.replace(b"vertex positions", b"vertex Positions"))
+    with pytest.raises(SubmissionRejectedError, match=r"experiment\.omex/mesh\.dat cannot be read \(BadZipFile"):
+        find_violations(path, SimulationFileType.OMEX, load_manifest())
 
 
 # --- admission by what the version certifies (docs/plan-environment-composition.md, step 5c) --------------------

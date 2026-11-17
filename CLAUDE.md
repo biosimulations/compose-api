@@ -181,7 +181,8 @@ upload (nested bundle archives included) and refuses any process address that is
 a registered entry at level `tested` or higher in the `registry_env` bundle, with a 400 listing each address.
 Non-`local` protocols and the arbitrary-import `local:!` form are refused even under `address_policy=warn`, and
 for a prebuilt simulator (`?simulator=`), whose classes are not looked up (`validate_submission(..., registry=False)`). The
-container would otherwise run whatever it is sent, so this is the only check. Adding a simulator to what the service
+container would otherwise run whatever it is sent, so this is the only check. It also refuses an uploaded HDF5 file
+that pandas would unpickle code from (`registry/uploads.py`), for every image and policy. Adding a simulator to what the service
 runs means a manifest entry that says how it installs, listed in its environment's `entries` (`environments.yaml`;
 `docs/plan-environment-composition.md`). `registry/catalog.yaml` is
 generated (`uv run python -m compose_api.registry.catalog`, read-only against GitHub) and lists every vivarium-collective

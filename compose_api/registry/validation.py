@@ -2,7 +2,8 @@
 
 The container resolves process addresses itself, and will import any module it is told to, so this is the only
 place a submission is checked. It reads every composite document in the upload -- in an OMEX archive, including
-archives nested in a batch bundle -- and checks every process address against the manifest.
+archives nested in a batch bundle -- and checks every process address against the manifest. It also refuses a file in
+the upload that a simulator would unpickle (``uploads.py``), whatever the addresses.
 """
 
 import enum
@@ -17,6 +18,7 @@ from typing import Any
 
 from pydantic import BaseModel, JsonValue
 
+from compose_api.registry import uploads
 from compose_api.registry.manifest import HPC_MINIMUM_LEVEL, SERVICE_BUNDLE, Manifest, RegistryEntry, load_manifest
 from compose_api.simulation.models import SimulationFileType
 
@@ -65,7 +67,10 @@ class SubmissionRejectedError(Exception):
         self.violations = violations or []
 
 
-def _documents_in_archive(data: bytes, name: str, depth: int = 0) -> Iterator[tuple[str, Any]]:
+def _archive_members(data: bytes, name: str, depth: int = 0) -> Iterator[tuple[str, bytes]]:
+    """Every file in an archive, by name, with the files of nested archives in place of the archives. A member that
+    cannot be read (a bad checksum, encryption, a compression method zipfile lacks) is refused: the run could not read
+    it either."""
     if depth > _MAX_NESTING:
         raise SubmissionRejectedError(f"{name}: archives are nested more than {_MAX_NESTING} deep")
     try:
@@ -77,11 +82,20 @@ def _documents_in_archive(data: bytes, name: str, depth: int = 0) -> Iterator[tu
             if member.is_dir():
                 continue
             member_name = f"{name}/{member.filename}"
-            lowered = member.filename.lower()
-            if lowered.endswith(_DOCUMENT_SUFFIXES):
-                yield member_name, _parse_document(archive.read(member), member_name)
-            elif lowered.endswith(_NESTED_ARCHIVE_SUFFIX):
-                yield from _documents_in_archive(archive.read(member), member_name, depth + 1)
+            try:
+                content = archive.read(member)
+            except Exception as e:  # zipfile raises many kinds for a member it cannot read
+                raise SubmissionRejectedError(f"{member_name} cannot be read ({type(e).__name__}: {e})") from e
+            if member.filename.lower().endswith(_NESTED_ARCHIVE_SUFFIX):
+                yield from _archive_members(content, member_name, depth + 1)
+            else:
+                yield member_name, content
+
+
+def _documents_in_archive(data: bytes, name: str) -> Iterator[tuple[str, Any]]:
+    for member_name, content in _archive_members(data, name):
+        if member_name.lower().endswith(_DOCUMENT_SUFFIXES):
+            yield member_name, _parse_document(content, member_name)
 
 
 def _parse_document(data: bytes, name: str) -> JsonValue:
@@ -262,6 +276,19 @@ def find_violations(
     ]
 
 
+def find_unsafe_files(path: Path, file_type: SimulationFileType) -> list[str]:
+    """The files in a submitted archive that a simulator would unpickle, each as ``<member>: <why>``
+    (``uploads.py``). A bare document or model brings no other file. Raises SubmissionRejectedError if the archive
+    cannot be read."""
+    if file_type != SimulationFileType.OMEX:
+        return []
+    return [
+        f"{member}: {hazard}"
+        for member, content in _archive_members(path.read_bytes(), path.name)
+        for hazard in uploads.hdf5_hazards(content)
+    ]
+
+
 def validate_submission(
     path: Path,
     file_type: SimulationFileType,
@@ -277,7 +304,12 @@ def validate_submission(
 
     `registry=False` is for a prebuilt simulator's image, which brings processes this registry does not describe:
     only the addresses the container would do something unsafe with (`local:!`, any other protocol) are refused.
+    A file a simulator would unpickle is refused for every image and under every policy.
     """
+    if unsafe := find_unsafe_files(path, file_type):
+        raise SubmissionRejectedError(
+            "the upload holds data a simulator would unpickle, which can run code: " + "; ".join(unsafe)
+        )
     violations = find_violations(path, file_type, load_manifest(), standing, environment)
     if not registry:
         violations = [v for v in violations if v.always_rejected]
