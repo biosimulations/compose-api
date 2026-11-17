@@ -1,0 +1,22 @@
+description: >-
+  viva-nfsim's NFSimProcess runs the package's own flagella_complexation.bngl (pbg_nfsim/models, plus a final
+  newline) once, from t = 0 to 50, seed 7, n_steps 10. The species store starts at the model's own seed counts
+  (Free_<m> = <m>_0 from its parameters). Hand-computed: 2 rows (t = 0 and 50), the end time, and the initial flgE (600, an input).
+  The other values are seeded package output, not an independent oracle. Two runs through compose-api's runner on
+  macOS gave identical values. They agree with the model's flhDC stoichiometry (4 flhD + 2 flhC each): 3 flhDC leave
+  flhD 20 - 12 = 8 and flhC 10 - 6 = 4. Linux's bundled NFsim build has not been checked against these numbers.
+document: document.pbg
+files: [flagella_complexation.bngl]
+interval: 50
+expect:
+  - {kind: rows, emitter: emitter, min: 2}
+  - {kind: scalar, emitter: emitter, field: global_time, expected: 50.0}
+  - {kind: scalar, emitter: emitter, field: species.Free_flgE, row: 0, expected: 600.0}
+  - {kind: scalar, emitter: emitter, field: species.flhDC, expected: 3.0}
+  - {kind: scalar, emitter: emitter, field: species.Free_flhD, expected: 8.0}
+  - {kind: scalar, emitter: emitter, field: species.Free_flhC, expected: 4.0}
+  - {kind: scalar, emitter: emitter, field: species.Free_flgE, expected: 360.0}
+  - {kind: scalar, emitter: emitter, field: species.flagellar_hook, expected: 2.0}
+  - {kind: scalar, emitter: emitter, field: species.flagellar_motor, expected: 1.0}
+  - {kind: scalar, emitter: emitter, field: species.Free_fliG, expected: 52.0}
+  - {kind: scalar, emitter: emitter, field: species.Free_fliM, expected: 68.0}

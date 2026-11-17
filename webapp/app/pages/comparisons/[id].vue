@@ -145,7 +145,7 @@ watch(() => comparison.value?.status, async (status) => {
               {{ result.close_to_references ? 'and match every reference' : 'references: ' + result.references.map(oracleName).join(', ') + (result.close_to_references === false ? ': one differs' : '') }}
             </UBadge>
           </template>
-          <span class="text-sm text-muted">close when the score is below 1: max |a−b| / (atol + rtol·|b|), rtol {{ (comparison.settings as any)?.tolerances?.rel_tol }}</span>
+          <span class="text-sm text-muted">close when the score is below 1: max |a−b| / (atol + rtol·|b|), {{ toleranceText(comparison.settings) }}</span>
         </div>
         <UCard>
           <template #header><h3 class="font-semibold">Runs</h3></template>

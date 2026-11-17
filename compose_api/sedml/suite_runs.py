@@ -10,9 +10,9 @@ from pydantic import BaseModel, Field
 
 from compose_api.db.services.comparisons_db import ClaimedSuiteRun, ComparisonRow
 from compose_api.dependencies import get_required_database_service
-from compose_api.sedml import service, sources, suites
+from compose_api.sedml import sbml_test_suite, service, sources, suites
 from compose_api.sedml.compare import compare
-from compose_api.sedml.models import KnownProblem, SuiteVerifyResult
+from compose_api.sedml.models import Comparison, KnownProblem, SuiteVerifyResult
 from compose_api.sedml.suites import Suite
 from compose_api.sedml.translator import TranslatorUnavailableError
 
@@ -34,6 +34,11 @@ class SuiteRunRow(BaseModel):
     status: str
     close: bool | None = None
     close_to_references: bool | None = None
+    passes: dict[str, bool] | None = Field(
+        default=None,
+        description="where the reference decides (the suite's judged_by), each solver against it: completed and close "
+        "on every label the reference has; `close` is then every solver passing",
+    )
     worst_label: str | None = None
     worst_score: float | str | None = None
     drift: dict[str, Drift] | None = None
@@ -91,6 +96,26 @@ def suite_queue(name: str) -> str:
 def suite_environments(suite: Suite) -> set[str]:
     """The environments a suite's solvers run in (registry/solvers.yaml)."""
     return {s.environment for s in service.chosen_solvers(suite.solvers)}
+
+
+async def refusals(suite: Suite, environment_versions: dict[str, int]) -> list[str]:
+    """Why the versions named cannot run the suite's solvers, one reason each; none when they can. The check every
+    one of its runs would meet (registry/validation.py, against each version's standing), made once before the run:
+    a version whose solvers do not import, failed their compliance cases, or are still being checked there would
+    otherwise fail every source (run 2 of sbml-test-suite-sample, on registry_env@6)."""
+    from compose_api.environments.admission import standing_for
+    from compose_api.registry.manifest import load_manifest
+    from compose_api.registry.validation import check_address
+
+    db = get_required_database_service()
+    manifest = load_manifest()
+    reasons = []
+    for solver in service.chosen_solvers(suite.solvers):
+        standing = await standing_for(db, solver.environment, environment_versions.get(solver.environment))
+        violation = check_address(solver.address, suite.name, manifest, standing, environment=solver.environment)
+        if violation is not None:
+            reasons.append(f"{solver.id}: {violation.reason}")
+    return reasons
 
 
 async def start(suite: Suite, environment_versions: dict[str, int] | None = None) -> int:
@@ -162,9 +187,16 @@ async def _submit_source(
     jobs = BackgroundTasks()
     solvers = service.chosen_solvers(suite.solvers)
     kind, _, ident = source.partition(":")
+    tolerances, tolerances_from = suite.tolerances, None
     try:
         references = None
-        if kind == "biomodels":
+        if kind == sbml_test_suite.KIND:
+            # the case's archive, written from its files, and its expected results (plan-sbml-test-suite S2-S3),
+            # judged by the case's own tolerances, not the suite's (S4)
+            case, path = await sbml_test_suite.case_archive(ident)
+            references = sbml_test_suite.reference(case)
+            tolerances, tolerances_from = case.tolerances, source
+        elif kind == "biomodels":
             path = await sources.biomodel_archive(ident)
             # its original BioSimulators runs on biosimulations.org (docs/plan-verify-oracle.md, V1)
             references = await sources.biomodel_references(ident) or None
@@ -175,8 +207,8 @@ async def _submit_source(
             references = {f"biosimulations:{info.simulator or info.run}": reference} if reference else None
         translation = await service.translate_upload(path, solvers)
         ids = await service.submit(
-            translation, path, source, solvers, None, [suite.name], None, suite.tolerances, jobs,
-            references=references, collection=suite.name, suite_run=number,
+            translation, path, source, solvers, None, [suite.name], None, tolerances, jobs,
+            references=references, collection=suite.name, suite_run=number, tolerances_from=tolerances_from,
             queue=suite_queue(suite.name), priority=SUITE_PRIORITY, batch=True,
             environment_versions=environment_versions or None,
         )  # fmt: skip
@@ -227,6 +259,7 @@ async def view(suite: Suite, number: int) -> SuiteRunView | None:
             (r.comparison.source, r.comparison.task): r for r in await db.suite_comparisons(suite.name, suite.baseline)
         }
     problems = _problems_for(await db.known_problems(suite.name), number)
+    by_reference = suite.judged_by == "reference"
     found = await db.suite_comparisons(suite.name, number)
     statuses = await service.member_statuses(found)
     results: dict[int, dict[str, Any] | None] = {}
@@ -246,9 +279,8 @@ async def view(suite: Suite, number: int) -> SuiteRunView | None:
         entry.known_problems = {
             solver: reason for (source, solver), reason in problems.items() if source == c.source and solver
         }
-        if entry.known_problems and c.status != "running":
-            members = {m.solver: m.status for m in c.members}
-            entry.excused, entry.resolved = judge(c.close, members, c.result, set(entry.known_problems))
+        if c.status != "running":
+            _judge_row(entry, c, by_reference)
         before = baseline.get((c.source, c.task))
         if before is not None and c.status != "running":
             entry.drift = await _drift(row, before)
@@ -280,6 +312,12 @@ async def view(suite: Suite, number: int) -> SuiteRunView | None:
         "oracle_agrees": sum(1 for r in rows if r.verify_close is True),
         # what the 300-model triage sorts by: which of our solvers BioSimulators sides with
         **{f"oracle_agrees_with_{s}": sum(1 for r in rows if s in r.oracle_agrees_with) for s in sorted(solvers)},
+        # where the reference decides, how many rows each solver passes (plan-sbml-test-suite S3)
+        **(
+            {f"passes_{s}": sum(1 for r in rows if (r.passes or {}).get(s)) for s in sorted(solvers)}
+            if by_reference
+            else {}
+        ),
     }
     return SuiteRunView(
         suite=suite.name, number=number, created_at=service._iso(run.created_at), status=run.status,
@@ -354,6 +392,41 @@ def judge(
         ok for pair, ok in pairs if not pair & known
     )
     return excused, resolved
+
+
+def _judge_row(entry: SuiteRunRow, c: Comparison, by_reference: bool) -> None:
+    """A finished row's verdict where the reference decides (S3), and its standing against its known problems."""
+    members = {m.solver: m.status for m in c.members}
+    if by_reference:
+        entry.passes = passes(members, c.result)
+        entry.close = bool(entry.passes) and all(entry.passes.values())
+        if entry.known_problems:
+            entry.excused, entry.resolved = judge_by_reference(entry.passes, set(entry.known_problems))
+    elif entry.known_problems:
+        entry.excused, entry.resolved = judge(c.close, members, c.result, set(entry.known_problems))
+
+
+def passes(members: Mapping[str, str | None], result: dict[str, Any] | None) -> dict[str, bool]:
+    """Each solver against the reference, where it decides (docs/plan-sbml-test-suite.md, S3): it passes when it
+    completed and is close to the reference on every label the reference has. A label it lacks fails it, as does a
+    solver no reference label was scored for (nothing shows it right)."""
+    verdicts: dict[str, list[bool]] = {s: [] for s in members}
+    for report in ((result or {}).get("reports") or {}).values():
+        for by_pair in (report.get("labels") or {}).values():
+            for pair, verdict in by_pair.items():
+                solver = pair.split("|")[0]
+                if verdict.get("reference") and solver in verdicts:
+                    verdicts[solver].append(verdict.get("close") is True)
+    return {s: members[s] == "completed" and bool(found) and all(found) for s, found in verdicts.items()}
+
+
+def judge_by_reference(passing: Mapping[str, bool], known: set[str]) -> tuple[bool, list[str]]:
+    """A finished row's standing against its solvers' known problems where the reference decides: excused when it
+    fails only through solvers with a known problem, and which of those now pass (resolved)."""
+    resolved = sorted(s for s in known if passing.get(s))
+    if passing and all(passing.values()):
+        return False, resolved
+    return all(ok for s, ok in passing.items() if s not in known), resolved
 
 
 def _worst(result: dict[str, Any]) -> tuple[str | None, float | str | None]:

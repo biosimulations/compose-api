@@ -37,6 +37,8 @@ const shown = computed(() => {
 })
 const counts = computed(() => Object.fromEntries(LEVELS.map(l => [l, entries.value.filter(e => e.level === l).length])))
 
+// manifest.yaml's `alternative_to`: another entry's classes are the standard ones for the same simulator
+const ALTERNATIVE_HELP = 'Provides the same simulator as the standard entry, which is what the service runs (SED-ML solvers, suites); usable on its own level.'
 const UBadge = resolveComponent('UBadge')
 const ULink = resolveComponent('ULink')
 const levelColor = (l: string) => (l === 'listed' ? 'neutral' : l === 'installable' ? 'warning' : 'success')
@@ -46,9 +48,15 @@ const columns: TableColumn<Entry>[] = [
   {
     accessorKey: 'id',
     header: 'Entry',
-    cell: ({ row }) => h('div', { class: 'flex flex-col' }, [
+    cell: ({ row }) => h('div', { class: 'flex flex-col', id: `entry-${row.original.id}` }, [
       h(ULink, { to: repo(row.original), target: '_blank', class: 'font-medium hover:underline' }, () => row.original.id),
-      h('span', { class: 'font-mono text-xs text-muted' }, row.original.module_roots.join(', '))
+      h('span', { class: 'font-mono text-xs text-muted' }, row.original.module_roots.join(', ')),
+      row.original.alternative_to
+        ? h('span', { class: 'text-xs text-muted', title: ALTERNATIVE_HELP }, [
+            'alternative to ',
+            h(ULink, { to: `#entry-${row.original.alternative_to}`, class: 'hover:underline' }, () => row.original.alternative_to)
+          ])
+        : null
     ])
   },
   {

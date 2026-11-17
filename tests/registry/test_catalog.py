@@ -87,7 +87,9 @@ def test_shipped_catalog_entries_are_listed_and_refused_on_the_service(tmp_path:
     assert catalog, "catalog.yaml is empty; run `python -m compose_api.registry.catalog`"
     assert all(e.level == CurationLevel.LISTED and e.commit for e in catalog.values())
 
-    root = catalog["viva-tellurium"].module_roots[0]
+    # a wrapper only the catalog lists: a manifest entry for the same id wins, at its own level
+    in_manifest = {entry.id for entry in load_manifest(catalog_path=None).entries}  # the curated entries alone
+    root = next(e for entry_id, e in sorted(catalog.items()) if entry_id not in in_manifest).module_roots[0]
     path = tmp_path / "doc.pbg"
     path.write_text(f'{{"state": {{"s": {{"_type": "step", "address": "local:{root}.processes.Step"}}}}}}')
     (violation,) = find_violations(path, SimulationFileType.PBG, load_manifest())

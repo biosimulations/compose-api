@@ -191,8 +191,10 @@ goes into the shared image) and `manifest.yaml` (what is admitted) from one list
 ## Phase 6: what exists after it
 
 - **Suites** are `examples/<name>/suite.yaml` (`compose_api/sedml/suites.py`): sources (`biomodels:<id>`,
-  `biosimulations:<project>`), solvers, tolerances, expected failures (with reasons) and the accepted `baseline` run.
-  Two seeds, chosen by translating candidates on both solvers:
+  `biosimulations:<project>`, `sbml-test-suite:<release>/<case>`), solvers, tolerances, expected failures (with
+  reasons) and the accepted `baseline` run. `judged_by: reference` makes a suite's references the arbiter, each solver
+  passing or failing against them, in place of D7's agreement (the SBML Test Suite sample;
+  [plan-sbml-test-suite](plan-sbml-test-suite.md), S3). Two seeds, chosen by translating candidates on both solvers:
   - `biomodels-ode-sample`: twenty curated ODE BioModels entries (of BIOMD0000000001-60, 56 translate on both
     solvers; BIOMD0000000005 has no SED-ML, BIOMD0000000042 asks for a non-ODE algorithm, BIOMD0000000036 was
     unavailable);

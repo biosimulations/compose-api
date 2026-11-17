@@ -127,7 +127,8 @@ async def _inferred(
     why it cannot run."""
     manifest = load_manifest()
     try:
-        targets = class_targets(path, file_type)
+        # qualified as validation qualifies them, so a core short name (`local:RAMEmitter`) is not "unregistered"
+        targets = [manifest.qualified(t) for t in class_targets(path, file_type)]
         refused = any(v.always_rejected for v in find_violations(path, file_type, manifest))
     except SubmissionRejectedError:
         return _Inferred()

@@ -1,7 +1,7 @@
 [project]
 name = "compose-api-client"
 # Released in lock-step with the service (docs/strategy.md, packaging): tag.sh bumps both.
-version = "0.7.76"
+version = "0.7.88"
 description = "Python client for compose-api: generated from its OpenAPI spec, plus a hand-written application layer"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -14,8 +14,8 @@ dependencies = [
 
 [project.optional-dependencies]
 auth = [
-    "authlib>=1.8.0,<2",
-    "joserfc>=1.7.5,<2",
+    "authlib>=1.9.1,<2",
+    "joserfc>=1.7.6,<2",
     "keyring>=25.7,<26",
     "platformdirs>=4.5.1,<5",
     "portalocker>=3.2,<5",
@@ -26,8 +26,8 @@ auth = [
 # [cli] lists [auth]'s dependencies itself rather than naming compose-api-client[auth]: the build flattens such a
 # self-reference anyway. tests/cli/test_packaging.py keeps the two lists in step.
 cli = [
-    "authlib>=1.8.0,<2",
-    "joserfc>=1.7.5,<2",
+    "authlib>=1.9.1,<2",
+    "joserfc>=1.7.6,<2",
     "keyring>=25.7,<26",
     "platformdirs>=4.5.1,<5",
     "portalocker>=3.2,<5",

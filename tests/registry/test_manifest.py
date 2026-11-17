@@ -60,6 +60,35 @@ def test_duplicate_ids_are_refused() -> None:
         Manifest(entries=[entry("a", ["a"]), entry("a", ["b"])])
 
 
+def test_the_viva_copasi_and_tellurium_entries_are_alternatives_to_pbsim_common() -> None:
+    """Two families provide COPASI and Tellurium steps with the same class names; pbsim-common's are the standard set
+    the service runs (solvers.yaml), the viva ones alternatives until they are reconciled."""
+    by_id = {e.id: e for e in load_manifest().entries}
+    assert by_id["viva-copasi"].alternative_to == "pbsim-common"
+    assert by_id["viva-tellurium"].alternative_to == "pbsim-common"
+    assert by_id["pbsim-common"].alternative_to is None
+
+
+@pytest.mark.parametrize(
+    ("alternatives", "why"),
+    [
+        ({"b": "nope"}, "not another entry"),
+        ({"b": "b"}, "not another entry"),
+        ({"b": "a", "c": "b"}, "itself an alternative"),
+    ],
+)
+def test_an_alternative_names_a_standard_entry(alternatives: dict[str, str], why: str) -> None:
+    entries = [entry(i, [i], alternative_to=alternatives.get(i)) for i in ("a", "b", "c")]
+    with pytest.raises(ValidationError, match=why):
+        Manifest(entries=entries)
+
+
+def test_an_alternative_and_its_standard_are_components() -> None:
+    lib = entry("lib", [], kind="library", install={"pypi": "lib", "version": "1"})
+    with pytest.raises(ValidationError, match="both components"):
+        Manifest(entries=[lib, entry("b", ["b"], alternative_to="lib")])
+
+
 def test_longest_module_root_wins() -> None:
     manifest = Manifest(entries=[entry("outer", ["pkg"]), entry("inner", ["pkg.sub"])])
     assert (found := manifest.entry_for_module("pkg.sub.mod")) is not None and found.id == "inner"

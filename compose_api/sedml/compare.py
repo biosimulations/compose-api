@@ -76,26 +76,52 @@ def compare(
                 s = score(col_a, col_b, tolerances)
                 pairs[f"{a}|{b}"] = {"score": _json_float(s), "close": s < 1}
                 all_close = all_close and s < 1
-            for origin in sorted(references):
-                col_r = references[origin].get(report_id, {}).get(label)
-                for a in solvers:
-                    col_a = reports[a].get(report_id, {}).get(label)
-                    if col_r is None or col_a is None:
-                        continue
-                    if len(col_a) != len(col_r):
-                        pairs[f"{a}|{origin}"] = {"score": None, "close": False, "lengths": [len(col_a), len(col_r)]}
-                        to_references = False
-                        continue
-                    s = score(col_a, col_r, tolerances)
-                    pairs[f"{a}|{origin}"] = {"score": _json_float(s), "close": s < 1, "reference": True}
-                    to_references = (to_references is not False) and s < 1
+            close = _score_references(pairs, solvers, reports, references, report_id, label, tolerances)
+            if close is not None:
+                to_references = (to_references is not False) and close
             entry[label] = pairs
         scored = [(p["score"], label) for label, ps in entry.items() for p in ps.values() if p["score"] is not None]
-        worst = max(scored, default=(None, None), key=lambda t: t[0] if t[0] is not None else -1.0)
+        # a score is a float, or "inf" (JSON has no infinity); compared as numbers, or an "inf" beside a finite score
+        # raises and the comparison never computes (sbml-test-suite-sample run 3)
+        worst = max(scored, default=(None, None), key=lambda t: math.inf if t[0] == "inf" else float(t[0] or 0.0))
         out["reports"][report_id] = {"labels": entry, "worst": {"label": worst[1], "score": worst[0]}}
     out["close"] = all_close
     out["close_to_references"] = to_references
     return out
+
+
+def _score_references(
+    pairs: dict[str, Any],
+    solvers: Sequence[str],
+    reports: Mapping[str, Mapping[str, Mapping[str, Series]]],
+    references: Mapping[str, Mapping[str, Mapping[str, Series]]],
+    report_id: str,
+    label: str,
+    tolerances: Tolerances,
+) -> bool | None:
+    """Each solver against each reference on one label, into ``pairs`` as `solver|origin`; whether every scored one is
+    close (None: none was scored). A label a reference has and a solver lacks is recorded, unscored: it fails that
+    solver where a reference decides (docs/plan-sbml-test-suite.md, S3)."""
+    close: bool | None = None
+    for origin in sorted(references):
+        col_r = references[origin].get(report_id, {}).get(label)
+        if col_r is None:
+            continue
+        for a in solvers:
+            col_a = reports[a].get(report_id, {}).get(label)
+            if col_a is None:
+                pairs[f"{a}|{origin}"] = {"score": None, "close": None, "missing": [a], "reference": True}
+                continue
+            if len(col_a) != len(col_r):
+                pairs[f"{a}|{origin}"] = {
+                    "score": None, "close": False, "lengths": [len(col_a), len(col_r)], "reference": True,
+                }  # fmt: skip
+                close = False
+                continue
+            s = score(col_a, col_r, tolerances)
+            pairs[f"{a}|{origin}"] = {"score": _json_float(s), "close": s < 1, "reference": True}
+            close = (close is not False) and s < 1
+    return close
 
 
 def _float(text: str) -> float:

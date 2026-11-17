@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "compose-api",
-    "version": "0.7.76"
+    "version": "0.7.88"
   },
   "paths": {
     "/curated/copasi": {
@@ -512,10 +512,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, environment_version, solver, model, project, sedml_task, comparison, collection, suite_run, compliance",
+              "description": "Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, environment_version, solver, model, project, sbml_test_case, sedml_task, comparison, collection, suite_run, compliance",
               "title": "Label"
             },
-            "description": "Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, environment_version, solver, model, project, sedml_task, comparison, collection, suite_run, compliance"
+            "description": "Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, environment_version, solver, model, project, sbml_test_case, sedml_task, comparison, collection, suite_run, compliance"
           },
           {
             "name": "tag",
@@ -4660,7 +4660,7 @@
             }
           },
           "409": {
-            "description": "A run of the suite is still submitting or running",
+            "description": "A run of the suite is still submitting or running, or the versions named cannot run its solvers (a class that does not import there, or compliance cases failed or still running)",
             "content": {
               "application/json": {
                 "schema": {
@@ -5781,6 +5781,17 @@
               }
             ],
             "title": "Reviewer"
+          },
+          "alternative_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alternative To"
           },
           "environments": {
             "items": {
@@ -9503,6 +9514,16 @@
           "tolerances": {
             "$ref": "#/components/schemas/Tolerances"
           },
+          "judged_by": {
+            "type": "string",
+            "enum": [
+              "agreement",
+              "reference"
+            ],
+            "title": "Judged By",
+            "description": "what decides a row: the solvers' agreement with each other, references only shown (plan-sedml D7); or the reference, each solver passing when it is close to it on every label it has (plan-sbml-test-suite S3)",
+            "default": "agreement"
+          },
           "baseline": {
             "anyOf": [
               {
@@ -9626,6 +9647,21 @@
               }
             ],
             "title": "Close To References"
+          },
+          "passes": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "boolean"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passes",
+            "description": "where the reference decides (the suite's judged_by), each solver against it: completed and close on every label the reference has; `close` is then every solver passing"
           },
           "worst_label": {
             "anyOf": [

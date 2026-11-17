@@ -27,6 +27,12 @@ SHELL_HOOK = f"{WORKSPACE}/shell-hook.sh"
 # How to enter a composed image's Python: pixi's activation (conda activation scripts, for dolfinx or PETSc) first
 PYTHON = ("/bin/bash", "-c", f'source {SHELL_HOOK} && exec python "$@"', "python")
 DEFAULT_PYTHON_VERSION = "3.12"
+# Development tooling that workspaces send to a branch of its own repository (`[tool.uv.sources]`). pixi follows those
+# sources for a package it installs from git, so the only candidate is the branch's tip, whose requirements can exceed
+# the core's pins (viva-superpowers 0.24.0 needs bigraph-schema>=1.8.2, the core has 1.8.1) and make the lock
+# unsatisfiable. The lock takes these from the package index instead, unless an entry installs one itself (pixi 0.68.1
+# has no switch to ignore sources).
+INDEX_ONLY = ("pbg-superpowers", "viva-superpowers", "vivarium-workbench")
 
 
 def _toml(value: object) -> str:
@@ -97,7 +103,8 @@ class ComposedSpec:
 
 def pixi_toml(spec: ComposedSpec) -> str:
     """The pixi workspace for ``spec``: conda-forge for Python and what entries need from it, PyPI and git for the rest,
-    every PyPI release exact and every git source at its commit, nothing newer than ``resolved_at``."""
+    every PyPI release exact and every git source at its commit, nothing newer than ``resolved_at``. ``INDEX_ONLY``
+    tools come from the index whatever a git package's own sources say."""
     conda: dict[str, str] = {"python": f"{spec.python_version}.*"}
     pypi: dict[str, Any] = {name: f"=={version}" for name, version in spec.core}
     for entry in spec.entries:
@@ -129,6 +136,13 @@ def pixi_toml(spec: ComposedSpec) -> str:
         *(f"{_toml(name)} = {_toml(value)}" for name, value in pypi.items()),
         "",
     ]
+    index_only = [name for name in INDEX_ONLY if name not in pypi]
+    if index_only:
+        lines += [
+            "[pypi-options.dependency-overrides]",
+            *(f"{_toml(name)} = {_toml('>=0')}" for name in index_only),
+            "",
+        ]
     return "\n".join(lines)
 
 

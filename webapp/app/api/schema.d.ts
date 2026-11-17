@@ -1349,6 +1349,8 @@ export interface components {
             evidence?: string[];
             /** Reviewer */
             reviewer?: string | null;
+            /** Alternative To */
+            alternative_to?: string | null;
             /** Environments */
             environments?: components["schemas"]["EntryEnvironment"][];
         };
@@ -2738,6 +2740,13 @@ export interface components {
             solvers?: string[] | null;
             tolerances?: components["schemas"]["Tolerances"];
             /**
+             * Judged By
+             * @description what decides a row: the solvers' agreement with each other, references only shown (plan-sedml D7); or the reference, each solver passing when it is close to it on every label it has (plan-sbml-test-suite S3)
+             * @default agreement
+             * @enum {string}
+             */
+            judged_by: "agreement" | "reference";
+            /**
              * Baseline
              * @description the accepted suite run that later runs are compared with
              */
@@ -2780,6 +2789,13 @@ export interface components {
             close?: boolean | null;
             /** Close To References */
             close_to_references?: boolean | null;
+            /**
+             * Passes
+             * @description where the reference decides (the suite's judged_by), each solver against it: completed and close on every label the reference has; `close` is then every solver passing
+             */
+            passes?: {
+                [key: string]: boolean;
+            } | null;
             /** Worst Label */
             worst_label?: string | null;
             /** Worst Score */
@@ -3223,7 +3239,7 @@ export interface operations {
                 environment_version?: string | null;
                 /** @description Only simulations created at or after this time */
                 since?: string | null;
-                /** @description Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, environment_version, solver, model, project, sedml_task, comparison, collection, suite_run, compliance */
+                /** @description Only simulations with this label, as key:value; repeatable, all must match. Keys: source, environment, environment_version, solver, model, project, sbml_test_case, sedml_task, comparison, collection, suite_run, compliance */
                 label?: string[] | null;
                 /** @description Only simulations with this tag; repeatable, all must match */
                 tag?: string[] | null;
@@ -5864,7 +5880,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorDetail"];
                 };
             };
-            /** @description A run of the suite is still submitting or running */
+            /** @description A run of the suite is still submitting or running, or the versions named cannot run its solvers (a class that does not import there, or compliance cases failed or still running) */
             409: {
                 headers: {
                     [name: string]: unknown;

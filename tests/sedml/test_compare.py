@@ -57,3 +57,13 @@ def test_references_are_scored_against_each_solver_but_do_not_decide_agreement()
     }
     assert result["close"] is True and result["close_to_references"] is False
     assert compare({"p": {"r": a}, "q": {"r": a}}, {"r": ["t"]}, T)["close_to_references"] is None
+
+
+def test_an_infinite_score_beside_a_finite_one_is_the_worst() -> None:
+    """A NaN against a number scores inf, stored as "inf"; beside a finite score, the worst used to compare a string
+    with a float and raise, so the comparison never computed (sbml-test-suite-sample run 3)."""
+    nan = float("nan")
+    reports = {"a": {"r": {"x": [1.0, 2.0], "y": [1.0, nan]}}, "b": {"r": {"x": [1.0, 2.1], "y": [1.0, 2.0]}}}
+    result = compare(reports, {"r": ["x", "y"]}, Tolerances())
+    assert result["reports"]["r"]["labels"]["y"]["a|b"]["score"] == "inf"
+    assert result["reports"]["r"]["worst"] == {"label": "y", "score": "inf"}

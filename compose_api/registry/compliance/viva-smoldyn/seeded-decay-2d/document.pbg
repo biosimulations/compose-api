@@ -1,0 +1,26 @@
+{
+  "state": {
+    "smoldyn": {
+      "_type": "process",
+      "address": "local:viva_smoldyn.processes.SmoldynProcess",
+      "config": {
+        "dimensions": 2,
+        "bounds": [[0, 50], [0, 50]],
+        "boundary_type": "r",
+        "dt": 0.01,
+        "seed": 7,
+        "species": {"A": {"difc": 1.0, "count": 200}, "B": {"difc": 1.0, "count": 0}},
+        "reactions": [{"name": "convert", "subs": ["A"], "prds": ["B"], "rate": 0.1}]
+      },
+      "interval": 5.0,
+      "inputs": {},
+      "outputs": {"molecule_counts": ["molecule_counts"], "time": ["smoldyn_time"]}
+    },
+    "emitter": {
+      "_type": "step",
+      "address": "local:RAMEmitter",
+      "config": {"emit": {"molecule_counts": "map[integer]", "smoldyn_time": "float", "global_time": "float"}},
+      "inputs": {"molecule_counts": ["molecule_counts"], "smoldyn_time": ["smoldyn_time"], "global_time": ["global_time"]}
+    }
+  }
+}

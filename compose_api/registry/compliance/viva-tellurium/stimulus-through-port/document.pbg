@@ -1,0 +1,65 @@
+{
+  "state": {
+    "stimulus": {
+      "TNF_R": 1.0
+    },
+    "kinetic": {
+      "_type": "process",
+      "address": "local:viva_tellurium.processes.TelluriumProcess",
+      "config": {
+        "model_file": "lipniacki2004_driven.xml",
+        "bulk_species": false,
+        "species_overrides": {
+          "IKK_neutral": 0.19999999999999998,
+          "IKK_active": 5.360693719995987e-28,
+          "IKK_inact": 5.098700743695883e-27,
+          "IKKactive_IkB": 2.695407643368284e-30,
+          "IkB": 0.0025066291993849194,
+          "IKKactive_IkB_NFKB": 3.245202370383302e-28,
+          "IkB_NFKB": 0.059209565687822846,
+          "NFKB": 0.0003155054774972614,
+          "NFKB_nuc": 0.002295766799242719,
+          "IkB_nuc": 0.0034357309572257922,
+          "IkB_NFKB_nuc": 7.887637063700855e-05,
+          "IkB_mRNA": 2.8697085790772093e-06,
+          "A20_mRNA": 2.8697085790772084e-06,
+          "A20": 0.004782847514569224,
+          "cgen_mRNA": 2.869708579077208e-06
+        }
+      },
+      "interval": 1.2,
+      "inputs": {
+        "parameters_in": [
+          "stimulus"
+        ]
+      },
+      "outputs": {
+        "species": [
+          "species"
+        ],
+        "time": [
+          "kinetic_time"
+        ]
+      }
+    },
+    "emitter": {
+      "_type": "step",
+      "address": "local:RAMEmitter",
+      "config": {
+        "emit": {
+          "species": "map[float]",
+          "global_time": "float"
+        }
+      },
+      "inputs": {
+        "species": [
+          "species"
+        ],
+        "global_time": [
+          "global_time"
+        ]
+      }
+    }
+  },
+  "global_time_precision": 6
+}

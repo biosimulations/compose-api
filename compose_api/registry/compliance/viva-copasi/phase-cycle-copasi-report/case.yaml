@@ -1,0 +1,10 @@
+description: >-
+  viva-copasi's CopasiUTCStep runs the phase-cycle SBML model to t = 10 (51 points) and its species match COPASI's own
+  report at times 0, 2, ..., 10. The reference is pbsim-common's copasi-phase-cycle reference.csv (copied here
+  unchanged), which is COPASI's output, not this package's.
+document: document.pbg
+files: [phase_cycle.sbml, reference.csv]
+interval: 1
+expect:
+  - {kind: rows, emitter: emitter, min: 1}
+  - {kind: reference, emitter: emitter, reference: reference.csv, rel: 1.0e-6, abs: 1.0e-4}

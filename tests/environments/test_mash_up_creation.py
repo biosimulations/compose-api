@@ -20,7 +20,7 @@ from compose_api.authentication import DEFAULT_ROLE, AuthenticatedPrincipal, get
 from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.environments import lifecycle
 from compose_api.registry.environments import EnvironmentSpec, load_environments
-from compose_api.registry.manifest import load_manifest
+from compose_api.registry.manifest import CurationLevel, load_manifest
 from compose_api.registry.resolver import covering_environment, needed_entries
 from compose_api.simulation.models import SimulationFileType, SimulatorVersion, VersionState
 
@@ -113,8 +113,23 @@ def test_a_mash_up_is_named_by_its_entries_and_only_composable_ones_qualify() ->
     name = lifecycle.mash_up_name(NEEDED)
     assert name == lifecycle.mash_up_name(set(NEEDED)) and len(name) == len("mash-") + 10
     assert lifecycle.composable(NEEDED, manifest) == []
-    (listed,) = lifecycle.composable({"viva-tellurium"}, manifest)  # a catalog wrapper: no install, `listed`
-    assert "does not say how it installs" in listed
+    (catalog_only,) = lifecycle.composable({"viva-amici"}, manifest)  # a catalog wrapper: no install, `listed`
+    assert "does not say how it installs" in catalog_only
+    # an entry that installs but is only `listed` is refused: checked on a copy of the manifest, so the rule is tested
+    # whichever entries happen to be `listed` today
+    downgraded = manifest.model_copy(
+        update={
+            "entries": [
+                e.model_copy(update={"level": CurationLevel.LISTED}) if e.id == "viva-tellurium" else e
+                for e in manifest.entries
+            ]
+        }
+    )
+    (listed,) = lifecycle.composable({"viva-tellurium"}, downgraded)
+    assert "a mash-up needs `tested`" in listed
+    # the framework groups onboarded at `tested` compose, with their `requires`
+    groups = {"viva-copasi", "viva-tellurium", "viva-cobra", "viva-maboss", "viva-nfsim", "viva-smoldyn"}
+    assert lifecycle.composable(manifest.with_requirements(groups), manifest) == []
     # viva-pde-particle is composable since composition 7c-4: its classes may join a mash-up
     assert lifecycle.composable(manifest.with_requirements({"viva-pde-particle"}), manifest) == []
 
@@ -173,6 +188,22 @@ async def test_the_mash_up_made_for_a_run_is_built_after_the_response(
     assert (await simulation_router._inferred(path, SimulationFileType.PBG, USER, second)).mash_up == name
     await second()
     assert builds == [f"{name}@1"] and len(locks.asked) == 1  # used again, not locked or built again
+
+
+@pytest.mark.asyncio
+async def test_a_core_short_name_does_not_stop_a_mash_up_being_inferred(
+    database_service: DatabaseServiceSQL, locks: Locks, builds: list[str], tmp_path: Path
+) -> None:
+    """`local:RAMEmitter`, the engine's default emitter and a short name the core entry accepts, counts as that core
+    class: it used to be "unregistered", so a run that used it fell back to registry_env and was refused there."""
+    from compose_api.api.routers import simulation as simulation_router
+
+    path = tmp_path / "doc.pbg"
+    path.write_bytes(_document(tmp_path, COPASI, DOSE, "local:RAMEmitter")[1])
+    tasks = BackgroundTasks()
+    inferred = await simulation_router._inferred(path, SimulationFileType.PBG, USER, tasks)
+    assert (inferred.mash_up, inferred.version) == (lifecycle.mash_up_name(NEEDED), 1)
+    await tasks()
 
 
 @pytest.mark.asyncio

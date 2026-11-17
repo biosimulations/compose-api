@@ -1,0 +1,74 @@
+{
+  "state": {
+    "complexation": {
+      "_type": "process",
+      "address": "local:pbg_nfsim.processes.NFSimProcess",
+      "config": {
+        "model_file": "flagella_complexation.bngl",
+        "n_steps": 10,
+        "seed": 7
+      },
+      "interval": 50.0,
+      "inputs": {
+        "observables": [
+          "species"
+        ]
+      },
+      "outputs": {
+        "observables": [
+          "species"
+        ]
+      }
+    },
+    "species": {
+      "Free_flgB": 5.0,
+      "Free_flgC": 5.0,
+      "Free_flgE": 600.0,
+      "Free_flgF": 5.0,
+      "Free_flgG": 5.0,
+      "Free_flgH": 5.0,
+      "Free_flgI": 5.0,
+      "Free_flgK": 5.0,
+      "Free_flgL": 5.0,
+      "Free_flhA": 5.0,
+      "Free_flhB": 5.0,
+      "Free_flhC": 10.0,
+      "Free_flhD": 20.0,
+      "Free_fliC": 5.0,
+      "Free_fliD": 25.0,
+      "Free_fliE": 5.0,
+      "Free_fliF": 5.0,
+      "Free_fliG": 130.0,
+      "Free_fliH": 60.0,
+      "Free_fliI": 30.0,
+      "Free_fliJ": 5.0,
+      "Free_fliL": 10.0,
+      "Free_fliM": 170.0,
+      "Free_fliN": 5.0,
+      "Free_fliO": 5.0,
+      "Free_fliP": 5.0,
+      "Free_fliQ": 5.0,
+      "Free_fliR": 5.0,
+      "Free_motA": 5.0,
+      "Free_motB": 5.0
+    },
+    "emitter": {
+      "_type": "step",
+      "address": "local:RAMEmitter",
+      "config": {
+        "emit": {
+          "species": "map[float]",
+          "global_time": "float"
+        }
+      },
+      "inputs": {
+        "species": [
+          "species"
+        ],
+        "global_time": [
+          "global_time"
+        ]
+      }
+    }
+  }
+}

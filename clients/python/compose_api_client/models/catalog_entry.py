@@ -32,6 +32,7 @@ class CatalogEntry:
             bundles (list[str] | Unset):
             evidence (list[str] | Unset):
             reviewer (None | str | Unset):
+            alternative_to (None | str | Unset):
             environments (list[EntryEnvironment] | Unset):
     """
 
@@ -45,6 +46,7 @@ class CatalogEntry:
     bundles: list[str] | Unset = UNSET
     evidence: list[str] | Unset = UNSET
     reviewer: None | str | Unset = UNSET
+    alternative_to: None | str | Unset = UNSET
     environments: list[EntryEnvironment] | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -85,6 +87,12 @@ class CatalogEntry:
         else:
             reviewer = self.reviewer
 
+        alternative_to: None | str | Unset
+        if isinstance(self.alternative_to, Unset):
+            alternative_to = UNSET
+        else:
+            alternative_to = self.alternative_to
+
         environments: list[dict[str, Any]] | Unset = UNSET
         if not isinstance(self.environments, Unset):
             environments = []
@@ -111,6 +119,8 @@ class CatalogEntry:
             field_dict["evidence"] = evidence
         if reviewer is not UNSET:
             field_dict["reviewer"] = reviewer
+        if alternative_to is not UNSET:
+            field_dict["alternative_to"] = alternative_to
         if environments is not UNSET:
             field_dict["environments"] = environments
 
@@ -162,6 +172,15 @@ class CatalogEntry:
 
         reviewer = _parse_reviewer(d.pop("reviewer", UNSET))
 
+        def _parse_alternative_to(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        alternative_to = _parse_alternative_to(d.pop("alternative_to", UNSET))
+
         _environments = d.pop("environments", UNSET)
         environments: list[EntryEnvironment] | Unset = UNSET
         if _environments is not UNSET:
@@ -182,6 +201,7 @@ class CatalogEntry:
             bundles=bundles,
             evidence=evidence,
             reviewer=reviewer,
+            alternative_to=alternative_to,
             environments=environments,
         )
 

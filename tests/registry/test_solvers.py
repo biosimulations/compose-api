@@ -51,7 +51,7 @@ def test_the_translation_form() -> None:
         "id": "copasi",
         "address": "local:pbsim_common.simulators.copasi_process.CopasiUTCStep",
         "algorithms": ["KISAO:0000560", "KISAO:0000088"],
-        "provides": ["species"],
+        "provides": ["species", "parameter"],
     }
     assert solver("nope") is None
 

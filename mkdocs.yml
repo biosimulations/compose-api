@@ -29,6 +29,7 @@ nav:
   - Web UI: webapp.md
   - Command line: cli.md
   - Modules: modules.md
+  - Adding a simulator: registry-onboarding.md
 plugins:
   - search
   - mkdocstrings:

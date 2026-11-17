@@ -1,0 +1,17 @@
+{
+  "state": {
+    "time_course": {
+      "_type": "step",
+      "address": "local:viva_tellurium.processes.TelluriumUTCStep",
+      "config": {"model_file": "phase_cycle.sbml", "output_times": [0.0, 2.0, 4.0, 6.0, 8.0, 10.0]},
+      "inputs": {},
+      "outputs": {"time_series": ["time_series"], "species_trajectories": ["species_trajectories"]}
+    },
+    "emitter": {
+      "_type": "step",
+      "address": "local:RAMEmitter",
+      "config": {"emit": {"time_series": "list[float]", "species_trajectories": "map[list[float]]"}},
+      "inputs": {"time_series": ["time_series"], "species_trajectories": ["species_trajectories"]}
+    }
+  }
+}

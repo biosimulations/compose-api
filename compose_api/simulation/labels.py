@@ -10,12 +10,13 @@ import re
 
 #: The keys the service writes, and what each holds. Submitters cannot set labels.
 LABEL_KEYS: dict[str, str] = {
-    "source": "where the document came from: upload, curated, biomodels, biosimulations",
+    "source": "where the document came from: upload, curated, biomodels, biosimulations, sbml-test-suite",
     "environment": "the environment it ran in: registry_env, or a prebuilt simulator's name",
     "environment_version": "the version of that environment it ran in, e.g. registry_env@2",
     "solver": "the solver a SED-ML or curated run used (registry/solvers.yaml)",
     "model": "the BioModels entry, e.g. BIOMD0000000012",
     "project": "the biosimulations.org project",
+    "sbml_test_case": "the SBML Test Suite case, <release>/<case>, e.g. 3.5.0/00001 (docs/plan-sbml-test-suite.md)",
     "sedml_task": "the SED-ML task the document was translated from",
     "comparison": "the comparison the run belongs to",
     "collection": "the suite the run belongs to",

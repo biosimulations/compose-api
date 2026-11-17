@@ -2,8 +2,10 @@
 run will use, which the submission check (``registry/validation.py``) consults before the manifest's own levels.
 
 A component a generic check failed in that version is refused there on its own; an entry whose compliance cases failed
-there is refused, one whose cases passed is accepted; an entry with no cases yet, or whose cases are still running,
-keeps the manifest's level. A composed version runs only its own entries.
+there is refused, and so is one whose cases are still running there (2026-11-06: a suite ran on registry_env@6 while
+the cases that failed it were still running); one whose cases passed is accepted; an entry with no cases keeps the
+manifest's level. A composed version runs only its own entries. A module that did not import in the image, or a
+solver's class the image does not provide, is refused there by its finding (``compliance.import_findings``).
 """
 
 from compose_api.db.database_service import DatabaseService

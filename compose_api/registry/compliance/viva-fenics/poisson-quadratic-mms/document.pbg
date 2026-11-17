@@ -1,0 +1,16 @@
+{
+  "state": {
+    "poisson": {
+      "_type": "step",
+      "address": "local:viva_fenics.processes.poisson.PoissonSolverStep",
+      "config": {"resolution": 16, "degree": 2, "problem": "quadratic"},
+      "outputs": {"solution": ["solution"], "l2_error": ["l2_error"]}
+    },
+    "emitter": {
+      "_type": "step",
+      "address": "local:RAMEmitter",
+      "config": {"emit": {"l2_error": "float"}},
+      "inputs": {"l2_error": ["l2_error"]}
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "state": {
+    "time_course": {
+      "_type": "step",
+      "address": "local:viva_copasi.processes.CopasiUTCStep",
+      "config": {"model_source": "phase_cycle.sbml", "time": 10.0, "n_points": 51},
+      "inputs": {},
+      "outputs": {"result": ["result"]}
+    },
+    "emitter": {
+      "_type": "step",
+      "address": "local:RAMEmitter",
+      "config": {"emit": {"result": "numeric_result"}},
+      "inputs": {"result": ["result"]}
+    }
+  }
+}

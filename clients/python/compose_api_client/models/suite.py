@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..models.suite_judged_by import SuiteJudgedBy
 from ..models.suite_verify import SuiteVerify
 from ..types import UNSET, Unset
 
@@ -27,6 +28,9 @@ class Suite:
         tolerances (Tolerances | Unset): The platform's closeness score: close when `max |a-b| / (atol + rtol*|b|) < 1`,
             with
             `atol = max(abs_tol_min, max|a|*abs_tol_scale, max|b|*abs_tol_scale)` (docs/plan-sedml.md, D4).
+        judged_by (SuiteJudgedBy | Unset): what decides a row: the solvers' agreement with each other, references only
+            shown (plan-sedml D7); or the reference, each solver passing when it is close to it on every label it has (plan-
+            sbml-test-suite S3) Default: SuiteJudgedBy.AGREEMENT.
         baseline (int | None | Unset): the accepted suite run that later runs are compared with
         verify (SuiteVerify | Unset): check comparisons against biosim's /verify once they finish: those that differ,
             are incomplete or have no reference that agrees (failing), or every one (docs/plan-verify-oracle.md, D3)
@@ -38,6 +42,7 @@ class Suite:
     sources: list[str]
     solvers: list[str] | None | Unset = UNSET
     tolerances: Tolerances | Unset = UNSET
+    judged_by: SuiteJudgedBy | Unset = SuiteJudgedBy.AGREEMENT
     baseline: int | None | Unset = UNSET
     verify: SuiteVerify | Unset = SuiteVerify.NONE
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
@@ -62,6 +67,10 @@ class Suite:
         if not isinstance(self.tolerances, Unset):
             tolerances = self.tolerances.to_dict()
 
+        judged_by: str | Unset = UNSET
+        if not isinstance(self.judged_by, Unset):
+            judged_by = self.judged_by.value
+
         baseline: int | None | Unset
         if isinstance(self.baseline, Unset):
             baseline = UNSET
@@ -83,6 +92,8 @@ class Suite:
             field_dict["solvers"] = solvers
         if tolerances is not UNSET:
             field_dict["tolerances"] = tolerances
+        if judged_by is not UNSET:
+            field_dict["judged_by"] = judged_by
         if baseline is not UNSET:
             field_dict["baseline"] = baseline
         if verify is not UNSET:
@@ -125,6 +136,13 @@ class Suite:
         else:
             tolerances = Tolerances.from_dict(_tolerances)
 
+        _judged_by = d.pop("judged_by", UNSET)
+        judged_by: SuiteJudgedBy | Unset
+        if isinstance(_judged_by, Unset):
+            judged_by = UNSET
+        else:
+            judged_by = SuiteJudgedBy(_judged_by)
+
         def _parse_baseline(data: object) -> int | None | Unset:
             if data is None:
                 return data
@@ -147,6 +165,7 @@ class Suite:
             sources=sources,
             solvers=solvers,
             tolerances=tolerances,
+            judged_by=judged_by,
             baseline=baseline,
             verify=verify,
         )

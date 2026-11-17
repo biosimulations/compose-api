@@ -1,0 +1,37 @@
+{
+  "state": {
+    "node_state": {"A": 0.0},
+    "node_probabilities": {"A": 0.0},
+    "parameters": {},
+    "steps": 0,
+    "switch": {
+      "_type": "process",
+      "address": "local:viva_maboss.processes.MaBoSSProcess",
+      "config": {
+        "network": "Node A { logic = 1; rate_up = $k; rate_down = 0; }",
+        "parameters": {"k": 0.5},
+        "sample_count": 20000,
+        "windows_per_interval": 20,
+        "seed": 3
+      },
+      "interval": 2.0,
+      "inputs": {
+        "node_state": ["node_state"],
+        "node_probabilities": ["node_probabilities"],
+        "parameters": ["parameters"],
+        "steps": ["steps"]
+      },
+      "outputs": {
+        "node_state": ["node_state"],
+        "node_probabilities": ["node_probabilities"],
+        "steps": ["steps"]
+      }
+    },
+    "emitter": {
+      "_type": "step",
+      "address": "local:RAMEmitter",
+      "config": {"emit": {"node_probabilities": "map[float]", "steps": "integer"}},
+      "inputs": {"node_probabilities": ["node_probabilities"], "steps": ["steps"]}
+    }
+  }
+}

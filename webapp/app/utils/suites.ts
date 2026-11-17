@@ -10,15 +10,31 @@ type BadgeColor = 'success' | 'error' | 'warning' | 'neutral'
 export interface Verdict { color: BadgeColor, text: string, hint?: string }
 
 /** The row's verdict: running, agree, excused (it fails or differs only through solvers with a known problem), or
- * differ. A row whose whole source is expected keeps its raw verdict; its note says why. */
+ * differ; pass and fail where the suite is judged by its reference. A row whose whole source is expected keeps its raw verdict; its note says why. */
 export function rowVerdict(row: Row): Verdict {
   if (row.status === 'running') return { color: 'neutral', text: 'running' }
-  if (row.close === true) return { color: 'success', text: 'agree' }
+  // where the reference decides (the suite's judged_by; plan-sbml-test-suite S3), every solver passes or fails
+  const byReference = row.passes != null
+  if (row.close === true) return { color: 'success', text: byReference ? 'pass' : 'agree' }
   if (row.excused) {
-    return { color: 'neutral', text: 'excused', hint: 'Only solvers with a known problem fail or differ; the others agree' }
+    const hint = byReference
+      ? 'Only solvers with a known problem miss the expected results; the others match them'
+      : 'Only solvers with a known problem fail or differ; the others agree'
+    return { color: 'neutral', text: 'excused', hint }
   }
-  if (row.close === false) return { color: 'error', text: 'differ' }
+  if (row.close === false) return { color: 'error', text: byReference ? 'fail' : 'differ' }
   return { color: 'neutral', text: '—' }
+}
+
+/** Where the reference decides, each solver's verdict against it, by solver name. */
+export function solverPasses(row: Row): { solver: string, pass: boolean }[] {
+  return Object.entries(row.passes ?? {}).map(([solver, pass]) => ({ solver, pass })).sort((a, b) => a.solver.localeCompare(b.solver))
+}
+
+/** The summary's `passes_<solver>` counts, by solver: present only where the reference decides. */
+export function passCounts(summary: Record<string, number>): [string, number][] {
+  const prefix = 'passes_'
+  return Object.entries(summary).filter(([k]) => k.startsWith(prefix)).map(([k, n]) => [k.slice(prefix.length), n])
 }
 
 /** Whether a problem applies to run ``number``: open, or cleared by a later run (K2). */

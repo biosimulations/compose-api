@@ -30,8 +30,9 @@ per step, each merged with a merge commit; deploying is a release, as usual.
   - The default changes only by `PUT …/default`, and only to a `ready` version.
 - **Compliance already runs per version (composition step 5).**
   - Each version runs its entries' cases, and admission consults that version's standing (`environments/admission.py`).
-  - But an entry with no cases yet, or whose cases are still running, **keeps the manifest's level**. A version made
-    at an untested commit is admitted at `tested` until its cases finish.
+  - But an entry with no cases yet **keeps the manifest's level**. (Until 2026-11-06 one whose cases were still
+    running did too, so a version made at an untested commit was admitted at `tested` until its cases finished; it is
+    refused now.)
   - `PUT …/default` checks only that the version is `ready`, not its compliance.
 
 ## Decisions (proposed)

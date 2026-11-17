@@ -49,7 +49,8 @@ class AddressViolation(BaseModel):
 class Standing:
     """What the version a run will use says about its components (docs/plan-environment-composition.md, step 5c):
     its members (a composed version's entries; None for another, whose bundle decides), each entry's computed level
-    there (tested, failed, pending, untested), and the components a generic check refused there, with why."""
+    there (tested, failed, pending, untested), and the components a generic check refused there, with why: a class, or
+    a module (every class under it), such as one that failed to import in the image."""
 
     label: str
     members: frozenset[str] | None = None
@@ -159,13 +160,21 @@ def _level_reason(entry: RegistryEntry) -> str | None:
 def _component_reason(entry: RegistryEntry, target: str, standing: Standing | None, environment: str) -> str | None:
     """Why a component's (or library's) class is not allowed in the version the run will use, if it is not."""
     if standing is not None:
-        if target in standing.refused:
-            return f"`{target}` is refused in {standing.label}: {standing.refused[target]}"
+        refused = next((r for r in standing.refused if target == r or target.startswith(r + ".")), None)
+        if refused is not None:
+            return f"`{refused}` is refused in {standing.label}: {standing.refused[refused]}"
         if standing.members is not None and entry.id not in standing.members:
             return f"registry entry `{entry.id}` is not part of {standing.label}"
         level = standing.levels.get(entry.id)
         if level == "failed":
             return f"registry entry `{entry.id}` failed its compliance cases in {standing.label}"
+        if level == "pending":
+            # a new version is the least proven: its own cases decide, so nothing runs it before they finish (run 2
+            # of sbml-test-suite-sample ran on registry_env@6 while the cases that failed it were still running)
+            return (
+                f"registry entry `{entry.id}`'s compliance cases are still running in {standing.label}; it runs "
+                "there once they pass"
+            )
         if level == "tested":
             return None
     level_reason = _level_reason(entry)
