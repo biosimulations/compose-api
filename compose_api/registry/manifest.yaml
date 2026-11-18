@@ -478,8 +478,9 @@ entries:
         runner's core today. The others have ports typed `map[pymunk_agent]`: PymunkProcess, GrowDivide,
         AdderGrowDivide, RemoveCrossing, SecreteEPS, Pressure, CellFieldExchange, Chemotaxis, InclusionBody, IBColony,
         QuorumSensing, and the visualizations MultibodyVizStep and CellMassTraces. The name `pymunk_agent` is registered
-        only by viva_munk.core_import (through register_pymunk_types), which the runner does not call. bigraph-schema
-        1.8.1's package discovery calls a module's `register_types` hook and registers Node classes under their class
+        only by viva_munk.register_pymunk_types, which viva_munk.core_import calls, as do the core extensions of
+        viva-munk's own composites; the runner calls neither. bigraph-schema 1.8.1's package discovery calls a module's
+        `register_types` hook and registers Node classes under their class
         names, so it registers viva_munk's PymunkAgent class as `PymunkAgent`, not as `pymunk_agent`, and viva_munk at
         this commit has no `register_types` hook. A document with a PymunkProcess fails on the runner's core with
         `unable to parse type "map[pymunk_agent]"` (run in the locked environment on 2026-11-17).
@@ -540,7 +541,11 @@ entries:
         finding and one module-imports finding: viva_tumor_tcell.studies_lib does not import, because it imports
         vivarium_workbench, which this package does not declare. A built version's `refused` would list that module. It
         holds helper functions for the package's studies and no process or Step class, so it refuses no document's
-        class.
+        class. The step-outputs-replace check judged five of the eight Steps, the visualization Steps (`html: string`).
+        It cannot judge Pressure and RemoveCrossing, whose outputs are `map[pymunk_agent]` (no type table defines the
+        name), nor Observables, whose output is `{_type: map, _value: set_float}`, of which it reads only `_type`.
+        viva-munk defines `set_float` as replaced by its update (viva_munk/types/positive.py), so Observables does not
+        accumulate.
       - >-
         Not covered: the privileged build, a run on the service, and the mash-up created there. The case uses
         DiffusionField and Observables only. TumorCellProcess, TCellProcess and DendriticCellProcess (random),

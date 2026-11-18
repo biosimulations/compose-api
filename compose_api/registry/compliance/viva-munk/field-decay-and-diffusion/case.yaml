@@ -15,9 +15,10 @@ description: >-
   from them by up to about 1.5% after one step, which is the scheme's time-step error and not a defect. The case shows
   that both classes import, build on the runner's core and step. It does not use the multibody and cell processes, which
   do not build on the runner's core yet: their ports are `map[pymunk_agent]`, a type name that only
-  viva_munk.core_import registers (the runner does not call it, and bigraph-schema's package discovery registers the
-  PymunkAgent class under the name PymunkAgent). Stepping a PymunkProcess here needs a type table in viva-munk that the
-  entry's `types` can name; adding one is for viva-munk's maintainers.
+  viva_munk.register_pymunk_types registers (core_import calls it, and so do the core extensions of viva-munk's own
+  composites; the runner calls neither, and bigraph-schema's package discovery registers the PymunkAgent class under
+  the name PymunkAgent). Stepping a PymunkProcess here needs a type table in viva-munk that the entry's `types` can
+  name; adding one is for viva-munk's maintainers.
 document: document.pbg
 interval: 100
 expect:
