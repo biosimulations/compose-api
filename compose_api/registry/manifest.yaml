@@ -321,13 +321,14 @@ entries:
   # --- Boolean ---
   - id: viva-maboss
     package: viva-maboss
-    # v0.1.1 on main (tag, confirmed with gh). Its ports are map[float] and integer, so no `types`. Runtime
+    # v0.1.2 (tag; viva-maboss#1's merge, a57c21a): the carried joint state is drawn in a canonical order. Its ports
+    # are map[float] and integer, so no `types`. Runtime
     # dependencies: process-bigraph>=1.9.1, bigraph-schema>=1.8.1, cmaboss==1.0.0b34, numpy, typer, rich.
-    source: https://github.com/vivarium-collective/viva-maboss/tree/3fdccd7bb605109f3284e6ff9be2616b50b19ca7
-    commit: 3fdccd7bb605109f3284e6ff9be2616b50b19ca7
+    source: https://github.com/vivarium-collective/viva-maboss/tree/a57c21a1c7ca8f5aa27252d3d4c696d70153019f
+    commit: a57c21a1c7ca8f5aa27252d3d4c696d70153019f
     install:
       git: https://github.com/vivarium-collective/viva-maboss
-      commit: 3fdccd7bb605109f3284e6ff9be2616b50b19ca7
+      commit: a57c21a1c7ca8f5aa27252d3d4c696d70153019f
     module_roots:
       - viva_maboss
     level: tested
@@ -346,6 +347,14 @@ entries:
         pinned pixi image for linux-64; `pixi install --frozen` installed it; and its compliance case passed through
         compose-api's runner in that environment, both for this group alone and in one set holding all seven
         framework entries.
+      - >-
+        Moved to v0.1.2 (a57c21a) on 2026-11-18. The joint state MaBoSSProcess carries into the next interval was
+        drawn by index into cmaboss's listing, whose order follows its C++ hash tables and differs between platforms.
+        So viva-multiscale-nfkb's composite, at the same seed, carried one state here (simulation 12516, Linux) and
+        another on macOS. 0.1.2 draws in a canonical order. It is tested on a real MaBoSS distribution, with the
+        listing reordered and the draws checked against the distribution. Its runtime dependencies did not change.
+        Its compliance case passed through compose-api's runner (process-bigraph 1.9.1, cmaboss 1.0.0b34) at this
+        commit. Existing versions keep 3fdccd7; a new version of an environment that holds this entry picks it up.
 
   # --- Rule-based ---
   - id: viva-nfsim
