@@ -88,15 +88,16 @@ entries:
   - id: viva-pde-particle
     package: viva-pde-particle
     source: https://github.com/vivarium-collective/viva-pde-particle
-    # viva-pde-particle#69's merge (2026-10-29): SpatialExport's output replaces, not accumulates (the generic check
-    # step-outputs-replace refused it before). What a composed environment installs, and the commit of the prebuilt
-    # image (viva-pde-particle-compose:sha-7043882) registered as viva-pde-particle@3; #67's merge, 21dfe46, was @2
-    commit: 70438826a348cfb3feddbc928e2c9038129ff69e
+    # viva-pde-particle#70's merge (2026-11-09): the RegionMean and RegionTotal steps, which reduce a grid field over a
+    # region (its dependencies did not change since 7043882). What a composed environment installs. The prebuilt image
+    # did not move: viva-pde-particle@3 is still viva-pde-particle-compose:sha-7043882 (#69's merge, 2026-10-29), and
+    # #67's merge, 21dfe46, was @2
+    commit: 25e8a058f01cf2f107e6504899baa11d13fff0de
     # composed too (docs/plan-environment-composition.md 7c, D7c.1-D7c.3): its engines from conda-forge, as its own
     # pixi.toml's `compose` environment has them, less the Smoldyn toolchain; Smoldyn is the smoldyn-vcell wheel
     install:
       git: https://github.com/vivarium-collective/viva-pde-particle
-      commit: 70438826a348cfb3feddbc928e2c9038129ff69e
+      commit: 25e8a058f01cf2f107e6504899baa11d13fff0de
       extras: [reference]
     conda:
       fenics-dolfinx: "0.10.*"
@@ -133,8 +134,16 @@ entries:
       - >-
         Composed on 2026-10-27 (7c-4): with registry_env@5's entries in one pixi lock (472 packages, no conflict), its
         example ensemble (four PDE + Smoldyn trials) gave values identical to its prebuilt image's through
-        compose-api's runner. In a composed version its compliance case (registry/compliance/viva-pde-particle)
-        decides its level.
+        compose-api's runner. In a composed version its compliance cases (registry/compliance/viva-pde-particle)
+        decide its level.
+      - >-
+        Moved to 25e8a05 on 2026-11-18 for RegionMean, which viva-multiscale-nfkb's TNF field needs to reach its cell.
+        A second case, region-mean-closed-form, reduces FVReactionDiffusion's fields over a region against closed
+        forms (a uniform decaying bath, a masked frozen field, the volume-weighted mean). It passed through
+        compose-api's runner on process-bigraph 1.9.1 with this commit. Three mutated copies failed: a node outside
+        the mask, a transposed mask, and a different decay. At 7043882 it fails because RegionMean does not exist.
+        Don't re-run compliance on a version built before 25e8a05 (mash-05956395cf@3): that case would fail there and
+        refuse every viva_pde_particle class in it. Make a new version instead.
 
   - id: biosim-toolkit
     package: biosim-toolkit

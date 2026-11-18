@@ -1,0 +1,18 @@
+description: >-
+  RegionMean (viva-pde-particle#70) reduces FVReactionDiffusion's fields over a region, against closed forms. On an
+  13 x 11 grid (num [13, 11]; dx 1 um): A is a uniform 0.5 uM bath with D 50 um^2/s and linear decay k 0.1 /s at
+  dt 0.01 s, so it stays uniform and follows explicit Euler, 0.5 (1 - k dt)^(t/dt); B is frozen (D 0): 2 uM on a
+  5 x 5 block off centre (rows 2..6, columns 4..8), 7 uM elsewhere. RegionMean over the block gives A(t) and exactly
+  2 for B (nodes outside the mask are ignored); over every node it gives B's volume-weighted mean, 715/120 (edge
+  nodes weigh 1/2, corners 1/4), not the plain node average 876/143. The grid is not square, so a transposed mask
+  gives 5.2. Each bound is set, the other zero, as compliance compares with the larger. Values computed by hand.
+document: document.pbg
+interval: 2
+expect:
+  - {kind: rows, emitter: emitter, min: 3}
+  - {kind: scalar, emitter: emitter, field: inner.A, row: 1, expected: 0.45239607355685446, rel: 1.0e-09, abs: 0.0}
+  - {kind: scalar, emitter: emitter, field: inner.B, row: 1, expected: 2.0, rel: 0.0, abs: 1.0e-12}
+  - {kind: scalar, emitter: emitter, field: whole.B, row: 1, expected: 5.958333333333333, rel: 1.0e-12, abs: 0.0}
+  - {kind: scalar, emitter: emitter, field: inner.A, row: 2, expected: 0.4093244147393178, rel: 1.0e-09, abs: 0.0}
+  - {kind: scalar, emitter: emitter, field: inner.B, row: 2, expected: 2.0, rel: 0.0, abs: 1.0e-12}
+  - {kind: scalar, emitter: emitter, field: whole.B, row: 2, expected: 5.958333333333333, rel: 1.0e-12, abs: 0.0}

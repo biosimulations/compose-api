@@ -2,7 +2,9 @@
 cases kept with an entry, and their evaluation against a run's results."""
 
 import json
+import math
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -135,6 +137,7 @@ def test_pbsim_commons_cases_are_complete() -> None:
         ("viva-smoldyn", "seeded-decay-2d"),
         ("viva-fenics", "poisson-quadratic-mms"),
         ("vivarium-tyssue", "sheet-relaxation"),
+        ("viva-pde-particle", "region-mean-closed-form"),
     ],
 )
 def test_onboarded_cases_load_and_their_files_exist(entry: str, case: str) -> None:
@@ -204,7 +207,7 @@ def test_viva_pde_particles_case_reads_an_ensembles_values_by_path() -> None:
     """Its emitter records each seed's values as lists, so `scalar` reads `values.2.0`: a path into lists and maps
     (composition 7c-4). The rows are what compose-api's runner emitted for this document in the registry_env@5 +
     viva-pde-particle environment on 2026-10-27, identical to its prebuilt image's."""
-    (case,) = load_cases("viva-pde-particle")
+    (case,) = [c for c in load_cases("viva-pde-particle") if c.name == "fokker-planck-ensemble"]
     assert compliance.case_problems(case) == []
     values = [[0.07137369415367853, 0.0004004746655585104], [0.0, 0.0],
               [0.09234150979599469, 0.0020975747341526988], [0.0, 0.0]]  # fmt: skip
@@ -218,3 +221,39 @@ def test_viva_pde_particles_case_reads_an_ensembles_values_by_path() -> None:
     # the document names its emitter fully qualified (D7c.2), never viva-pde-particle's own short `ram-emitter`
     document = json.loads(case.path(case.document).read_text())
     assert document["state"]["emitter"]["address"] == "local:process_bigraph.emitter.RAMEmitter"
+
+
+def test_viva_pde_particles_region_mean_case_holds_its_closed_forms() -> None:
+    """RegionMean (viva-pde-particle#70) over FVReactionDiffusion's fields. The rows are what compose-api's runner
+    emitted for this document on 2026-11-18, on process-bigraph 1.9.1 with viva-pde-particle at 25e8a05. Each wrong
+    reduction fails, so the case tells them apart:
+    - a node of 7 uM inside the mask: 57/26;
+    - the mask transposed: 5.2, which the non-square grid exposes;
+    - a plain node average: 876/143;
+    - the exact exponential in place of the scheme's explicit Euler: 0.5 e^-0.1."""
+    (case,) = [c for c in load_cases("viva-pde-particle") if c.name == "region-mean-closed-form"]
+    assert compliance.case_problems(case) == []
+    whole = 715 / 120
+    rows: list[dict[str, Any]] = [
+        {"inner": {"B": 2.0, "A": 0.5}, "whole": {"B": whole}, "global_time": 0.0},
+        {"inner": {"B": 2.0, "A": 0.4523960735568535}, "whole": {"B": whole}, "global_time": 1.0},
+        {"inner": {"B": 2.0, "A": 0.40932441473931513}, "whole": {"B": whole}, "global_time": 2.0},
+    ]
+    assert evaluate(case, {"emitter": rows}).passed
+
+    def failures(field: str, value: float) -> list[str]:
+        store, species = field.split(".")
+        bad = [rows[0], *({**r, store: {**r[store], species: value}} for r in rows[1:])]
+        return evaluate(case, {"emitter": bad}).failures
+
+    assert any(f.startswith("emitter.inner.B in row 1: 2.19") for f in failures("inner.B", 57 / 26))
+    assert any(f.startswith("emitter.inner.B in row 1: 5.2") for f in failures("inner.B", 5.2))
+    assert any(f.startswith("emitter.whole.B in row 2: 6.12") for f in failures("whole.B", 876 / 143))
+    assert any(f.startswith("emitter.inner.A in row 1: 0.45241") for f in failures("inner.A", 0.5 * math.exp(-0.1)))
+    document = json.loads(case.path(case.document).read_text())
+    addresses = {node["address"] for node in document["state"].values() if isinstance(node, dict) and "address" in node}
+    assert addresses == {
+        "local:viva_pde_particle.processes.fv_reaction_diffusion.FVReactionDiffusion",
+        "local:viva_pde_particle.steps.transfer.RegionMean",
+        "local:process_bigraph.emitter.RAMEmitter",
+    }
