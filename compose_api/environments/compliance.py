@@ -11,8 +11,9 @@ Two kinds of check, both about the entry's *process classes* (what wraps a libra
   the files it reads), run in the version, their results checked against expectations: :func:`load_cases`,
   :func:`evaluate`.
 
-An entry is ``tested`` in a version when its cases pass there and no generic check fails (the level a version earns is
-recorded per entry and version, EV5); this module decides, the routes and the worker run it (step 5b).
+An entry is ``tested`` in a version when its cases pass there (the level a version earns is recorded per entry and
+version, EV5); a component a generic check fails is refused there on its own, and the entry's other components still
+run (``admission.py``). This module decides, the routes and the worker run it (step 5b).
 """
 
 import csv

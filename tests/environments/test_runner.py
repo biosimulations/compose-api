@@ -115,6 +115,41 @@ def test_type_tables_are_registered_from_the_environment(tmp_path: Path) -> None
     assert result.returncode == 0, result.stderr[-2000:]
 
 
+TABLE = """\
+import pandas as pd
+from process_bigraph import Process
+
+
+class Table(Process):
+    def outputs(self):
+        return {"table": "node"}
+
+    def update(self, state, interval):
+        return {"table": pd.DataFrame({"x": [1.0, 2.0], "n": [3, 4]}, index=[7, 9])}
+"""
+
+
+def test_a_dataframe_in_the_results_is_written_as_its_columns(workdir: Path) -> None:
+    """vivarium-tyssue's tissue state is pandas DataFrames: written as ``{column: [values]}``, the shape its solver
+    starts from, where `json.dumps` failed the run after it had finished."""
+    pytest.importorskip("pandas")
+    (workdir / "table_mod.py").write_text(TABLE)
+    document = {
+        "table_process": {
+            "_type": "process", "address": "local:!table_mod.Table", "config": {}, "interval": 1.0,
+            "inputs": {}, "outputs": {"table": ["table"]},
+        },
+        "emitter": {
+            "_type": "step", "address": "local:RAMEmitter", "config": {"emit": {"table": "node"}},
+            "inputs": {"table": ["table"]},
+        },
+    }  # fmt: skip
+    (workdir / "doc.pbg").write_text(json.dumps({"state": document}))
+    _run([sys.executable], workdir, "run", "doc.pbg", "-o", "out", "-n", "2")
+    (results,) = (workdir / "out").glob("results_*.pber")
+    assert json.loads(results.read_text())["emitter"][-1]["table"] == {"x": [1.0, 2.0], "n": [3, 4]}
+
+
 @pytest.mark.skipif(shutil.which("uv") is None, reason="needs uv to fetch the composed environments' engine")
 def test_on_a_current_engine_the_run_is_a_span_and_its_results_an_artifact(workdir: Path) -> None:
     (workdir / "doc.pbg").write_text(json.dumps({"state": _document()}))

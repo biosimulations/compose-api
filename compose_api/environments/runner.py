@@ -57,14 +57,19 @@ class _Emitter(Protocol):
 
 
 def _jsonable(value: object) -> object:
-    """Numbers and arrays as JSON (NumPy is not imported unless the results hold its types)."""
+    """Numbers and arrays as JSON (NumPy is not imported unless the results hold its types), and a pandas DataFrame
+    as ``{column: [values]}``, the shape vivarium-tyssue's EulerSolver gives its tissue state at the start, so every
+    row of a table reads the same (pandas is not imported either)."""
     if isinstance(value, dict):
         return {str(k): _jsonable(v) for k, v in value.items()}
     if isinstance(value, list | tuple):
         return [_jsonable(v) for v in value]
     tolist = getattr(value, "tolist", None)
-    if callable(tolist):  # numpy arrays and scalars
+    if callable(tolist):  # numpy arrays and scalars, pandas Series and indexes
         return tolist()
+    to_dict = getattr(value, "to_dict", None)
+    if callable(to_dict) and hasattr(value, "columns"):  # a pandas DataFrame
+        return _jsonable(to_dict(orient="list"))
     return value
 
 

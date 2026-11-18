@@ -1,0 +1,24 @@
+description: >-
+  vivarium-tyssue's EulerSolver relaxing tyssue's flat test sheet (test_square.hf5: 410 vertices, 206 faces, 1178
+  edges, no pickled data) under line tension 0, area elasticity 1 (preferred area 1) and perimeter elasticity 0.1
+  (preferred perimeter 3.6), viscosity 1, with the Python backend and reconnection off. It takes 32 explicit Euler steps
+  of 2^-6 to t = 0.5, and the emitter keeps every 8th row. The expected values are tyssue's own solver, not this
+  package's: tyssue.solvers.viscous.EulerSolver (the vivarium-collective fork at 29671f1) on the same mesh and model,
+  stepped 32 times by hand (current_pos + ode_func x dt, then set_pos), because its `solve` takes one step more. On
+  2026-11-17, in this entry's composed environment (process-bigraph 1.9.1, bigraph-schema 1.8.1, pandas 3.1.1,
+  linux-64), every vertex position and face area agreed with it exactly at all five emitted times. A relative tolerance
+  of 1e-9 leaves room for round-off from later dependency versions and none for a change in the model or the scheme:
+  one Euler step more or less moves vertex 0 by about 2e-4. Indexes are rows (the runner writes columns as lists).
+document: document.pbg
+files: [test_square.hf5]
+interval: 0.5
+expect:
+  - {kind: rows, emitter: emitter, min: 5}
+  - {kind: scalar, emitter: emitter, field: global_time, expected: 0.5}
+  - {kind: scalar, emitter: emitter, field: tissue.vert_df.x.0, expected: 0.5076354107060916, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: tissue.vert_df.y.0, expected: 5.043080805008571, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: tissue.vert_df.y.205, expected: 1.5126685801292399, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: tissue.vert_df.x.409, expected: 16.86909269761592, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: tissue.vert_df.y.409, expected: 13.733468675873313, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: tissue.face_df.area.0, expected: 0.8148807522815222, rel: 1.0e-9}
+  - {kind: scalar, emitter: emitter, field: tissue.face_df.area.205, expected: 0.8628749212057095, rel: 1.0e-9}
