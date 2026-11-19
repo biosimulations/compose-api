@@ -260,6 +260,17 @@ the service's own (suites, compliance) have no owner and are public. The owner o
 `PATCH /simulations/{id}`, a comparison's runs together. See `docs/plan-observability.md` (O7, O8) and
 `docs/plan-favorites-and-studies.md` (F1, F3).
 
+**Private repositories** (`compose_api/registry/access.py`, `docs/plan-private-repo-usage.md`). A manifest entry with
+`access_role` is usable only by callers holding that Auth0 role; there is no admin bypass. Submission validates against
+`access.usable(manifest, roles)`, so its classes are unregistered to anyone else, and never picks an environment holding
+a private entry the run does not need. Every route that names an environment or a simulator checks
+`hidden_environments` / `hidden_simulators` and answers exactly as for an unknown one (`tests/api/test_private_entries.py`
+lists them and fails on a new one); `simulation.access_roles`, stamped in `handlers.run_simulation`, is checked first by
+`can_read` and `readable_clause`. `access.problems` (a CI test) keeps private entries out of the shared environment,
+solvers, others' `requires` and roots. An environment also keeps the roles its versions recorded when they were made
+(`access.recorded_roles`), so removing or renaming an entry hides nothing less. `load_manifest` caches the parsed YAML
+per file version, since a request now reads it several times.
+
 ## Companion repositories
 
 pbest is a client of this service. `../pbest` is checked out next to this repo

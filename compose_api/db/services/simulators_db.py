@@ -139,9 +139,11 @@ class SimulatorDatabaseService(ABC):
         visibility: Visibility = Visibility.PUBLIC,
         submission: SubmissionSpec | None = None,
         environment_version_id: int | None = None,
+        access_roles: frozenset[str] = frozenset(),
     ) -> Simulation:
         """Record the simulation; with ``submission``, also its queued ``requested`` submission (one transaction), whose
-        request is ``sim_request`` as given (its paths the staged files)."""
+        request is ``sim_request`` as given (its paths the staged files). ``access_roles``: those a reader must hold,
+        for a run in a private repository's environment (compose_api.registry.access)."""
         pass
 
     @abstractmethod
@@ -509,6 +511,7 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
         visibility: Visibility = Visibility.PUBLIC,
         submission: SubmissionSpec | None = None,
         environment_version_id: int | None = None,
+        access_roles: frozenset[str] = frozenset(),
     ) -> Simulation:
         async with self.async_session_maker() as session, session.begin():
             orm_simulation = ORMSimulation(
@@ -517,6 +520,7 @@ class SimulatorORMExecutor(SimulatorDatabaseService):
                 environment_version_id=environment_version_id,
                 owner_sub=owner_sub,
                 visibility=visibility.value,
+                access_roles=sorted(access_roles),
                 labels=dict(sim_request.labels),
                 tags=list(sim_request.tags),
                 description=sim_request.description,

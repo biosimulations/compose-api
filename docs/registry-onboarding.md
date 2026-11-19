@@ -178,3 +178,14 @@ The service runs a component whose level is `tested` or higher, as the manifest 
 the entry's cases (`HPC_MINIMUM_LEVEL`, `registry/validation.py`); `listed` and `installable` components do not run. Raising a
 level needs its evidence in `evidence` (the header of `manifest.yaml`). `validated` and `curated` need more, set out in
 `docs/strategy.md`, decision 5. Ask for the level the evidence supports and say which evidence it is; the reviewer decides.
+
+## A private repository
+
+An entry whose repository is private names the Auth0 role of the people who may use it, `access_role: <role>`
+(`registry/access.py`; `docs/plan-private-repo-usage.md`). Its metadata is in this public repository like any
+entry's, but the service hides it, its environments and their runs from everyone without the role, and refuses its
+classes to them as unregistered ones. CI refuses such an entry in the shared environment, a solver, a public entry's
+`requires`, a module root another entry shares, or with compliance-case files other than its document
+(`tests/registry/test_access.py`). The role itself is created and assigned in the BioSim Auth0 tenant.
+
+Building it needs the service to fetch the private repository, which it cannot do yet (the plan's step P2).

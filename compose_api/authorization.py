@@ -12,18 +12,21 @@ one place, so adding auth changes only who the caller is (:func:`get_caller`), n
 - **A signed-in submitter owns the run, and it is private unless they ask for public**
   (docs/plan-favorites-and-studies.md, F1, F3; :func:`ownership_at_submit`). Anonymous runs, and runs the service
   starts (suites, compliance), have no owner and are public.
+- **A run in a private repository's environment needs its roles first** (``simulation.access_roles``,
+  :mod:`compose_api.registry.access`), whoever the caller is: without them, it is not found.
 """
 
 from typing import Annotated, Protocol
 
 from fastapi import Depends, HTTPException, Query
-from sqlalchemy import ColumnElement, or_
+from sqlalchemy import ColumnElement, and_, or_
 
 from compose_api.authentication import OptionalPrincipal
 from compose_api.config import get_settings
 from compose_api.db.services.comparisons_db import ComparisonRow
 from compose_api.db.tables.simulator_tables import ORMSimulation
 from compose_api.dependencies import get_required_database_service
+from compose_api.registry.access import may_use
 from compose_api.simulation.models import Ownership, SimulationAccess, Visibility
 
 
@@ -112,8 +115,17 @@ def capabilities(caller: Caller | None) -> list[str]:
     return sorted(name for name, check in CAPABILITIES.items() if check(caller))
 
 
+def roles_of(caller: Caller | None) -> frozenset[str]:
+    """The caller's roles; none for an anonymous caller."""
+    return caller.roles if caller is not None else frozenset()
+
+
 def can_read(caller: Caller | None, simulation: SimulationAccess) -> bool:
-    """The read policy: public simulations to anyone, private ones to their owner and to configured admins."""
+    """The read policy: public simulations to anyone, private ones to their owner and to configured admins. A run in a
+    private repository's environment is first restricted to the callers holding its roles, admins included
+    (docs/plan-private-repo-usage.md, B): for them "public" means every holder."""
+    if not may_use(simulation.access_roles, roles_of(caller)):
+        return False
     if simulation.visibility == Visibility.PUBLIC:
         return True
     if caller is None:
@@ -158,12 +170,13 @@ def can_change_visibility(caller: Caller, simulation: SimulationAccess) -> bool:
     return simulation.owner_sub is not None and (_is_admin(caller) or caller.subject == simulation.owner_sub)
 
 
-def readable_clause(caller: Caller | None) -> ColumnElement[bool] | None:
-    """:func:`can_read` as a SQL condition on ``simulation``, for listings; None when every simulation is readable."""
+def readable_clause(caller: Caller | None) -> ColumnElement[bool]:
+    """:func:`can_read` as a SQL condition on ``simulation``, for listings."""
+    held: ColumnElement[bool] = ORMSimulation.access_roles.contained_by(sorted(roles_of(caller)))
     if _is_admin(caller):
-        return None
+        return held
     public = ORMSimulation.visibility == Visibility.PUBLIC.value
-    return public if caller is None else or_(public, ORMSimulation.owner_sub == caller.subject)
+    return and_(held, public if caller is None else or_(public, ORMSimulation.owner_sub == caller.subject))
 
 
 async def readable_simulation(caller: OptionalCaller, simulation_id: int = Query(...)) -> SimulationAccess:

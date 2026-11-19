@@ -125,6 +125,12 @@ class ORMSimulation(DeclarativeTableBase):
     # datasets carry no owner of their own: they inherit this through their foreign key.
     owner_sub: Mapped[str | None] = mapped_column(nullable=True, index=True)
     visibility: Mapped[str] = mapped_column(nullable=False, server_default=Visibility.PUBLIC.value)
+    # The roles a caller must hold before the owner and visibility are even consulted: those of the private
+    # repositories in the environment version it ran in (compose_api.registry.access), stored so that a later manifest
+    # edit never widens who reads it. Empty for every other run.
+    access_roles: Mapped[list[str]] = mapped_column(
+        ARRAY(String), nullable=False, server_default=text("'{}'::varchar[]")
+    )
 
     # Written periodically by the task submitting the simulation, until it reaches SLURM. A simulation with no run
     # whose heartbeat (or, before the first one, creation) is stale lost its task, e.g. to an API restart (#238).
@@ -148,4 +154,5 @@ class ORMSimulation(DeclarativeTableBase):
             experiment_id=self.experiment_id,
             owner_sub=self.owner_sub,
             visibility=Visibility(self.visibility),
+            access_roles=frozenset(self.access_roles or ()),
         )

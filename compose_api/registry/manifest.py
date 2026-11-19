@@ -5,12 +5,15 @@ registry of record described by strategy decision 5; the database tables that pr
 """
 
 import enum
+import functools
 import re
 from pathlib import Path
 from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field, model_validator
+
+from compose_api.config import DEFAULT_ROLE
 
 _MANIFEST_PATH = Path(__file__).parent / "manifest.yaml"
 # Generated from the vivarium-collective catalog by `python -m compose_api.registry.catalog`: every wrapper, at
@@ -123,11 +126,17 @@ class RegistryEntry(BaseModel):
     # same class names): this one is an alternative, offered and trusted on its own level but not what the service's
     # own runs use. viva-copasi and viva-tellurium are alternatives to pbsim-common until the two are reconciled.
     alternative_to: str | None = None
+    # the Auth0 role a caller must hold to see or use this entry, for a private repository (registry/access.py;
+    # docs/plan-private-repo-usage.md): everything made of it (an environment, its versions, its runs) is hidden from
+    # every other caller
+    access_role: str | None = None
 
     @model_validator(mode="after")
     def _pinned(self) -> "RegistryEntry":
         if self.version is None and self.commit is None:
             raise ValueError(f"registry entry {self.id!r} must be pinned by version or commit")
+        if self.access_role is not None and self.access_role.strip() in ("", DEFAULT_ROLE):
+            raise ValueError(f"registry entry {self.id!r}: `access_role` names a role only some callers hold")
         if self.kind in ("component", "core") and not self.module_roots:
             raise ValueError(f"registry entry {self.id!r} is a {self.kind}, so it needs `module_roots`")
         if self.kind == "core" and (self.install is not None or self.conda):
@@ -199,11 +208,25 @@ class Manifest(BaseModel):
         return None if best is None else best[1]
 
 
-def load_manifest(path: Path = _MANIFEST_PATH, catalog_path: Path | None = CATALOG_PATH) -> Manifest:
-    """The curated manifest, plus every catalog entry it does not already name."""
-    curated = Manifest.model_validate(yaml.safe_load(path.read_text()))
+@functools.lru_cache(maxsize=8)
+def _parsed(path: Path, stamp: tuple[int, int]) -> object:
+    """A YAML file's data, parsed once for each version of the file (``stamp``: its mtime and size). Parsing the two
+    registry files takes tens of milliseconds and a request reads the manifest several times (registry/access.py);
+    validating them takes about one, so every caller still validates its own copy."""
+    return yaml.safe_load(path.read_text())
+
+
+def _read(path: Path) -> object:
+    stat = path.stat()
+    return _parsed(path, (stat.st_mtime_ns, stat.st_size))
+
+
+def load_manifest(path: Path | None = None, catalog_path: Path | None = CATALOG_PATH) -> Manifest:
+    """The curated manifest (``path``, manifest.yaml when None, read at call time), plus every catalog entry it does
+    not already name. A file is parsed again only when it changes."""
+    curated = Manifest.model_validate(_read(path or _MANIFEST_PATH))
     if catalog_path is None or not catalog_path.exists():
         return curated
     named = {entry.id for entry in curated.entries}
-    catalog = Manifest.model_validate(yaml.safe_load(catalog_path.read_text()) or {"entries": []})
+    catalog = Manifest.model_validate(_read(catalog_path) or {"entries": []})
     return Manifest(entries=[*curated.entries, *(e for e in catalog.entries if e.id not in named)])

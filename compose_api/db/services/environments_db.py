@@ -55,6 +55,8 @@ class VersionLink:
     version_id: int
     simulator_id: int | None
     ref: VersionRef
+    # the roles its spec recorded when it was made, a private repository's (compose_api.registry.access)
+    access_roles: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -513,13 +515,17 @@ class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
                 ORMEnvironmentVersion.simulator_id,
                 ORMEnvironment.name,
                 ORMEnvironmentVersion.number,
+                ORMEnvironmentVersion.spec["access_roles"],
             )
             .join(ORMEnvironment, ORMEnvironment.id == ORMEnvironmentVersion.environment_id)
             .order_by(ORMEnvironment.name, ORMEnvironmentVersion.number)
         )
         async with self.async_session_maker() as session:
             rows = (await session.execute(query)).tuples().all()
-        return [VersionLink(v, sim, VersionRef(environment=name, number=n)) for v, sim, name, n in rows]
+        return [
+            VersionLink(v, sim, VersionRef(environment=name, number=n), frozenset(roles or ()))
+            for v, sim, name, n, roles in rows
+        ]
 
     @override
     async def describe(self, environment: str, kind: str) -> EnvironmentVersions:

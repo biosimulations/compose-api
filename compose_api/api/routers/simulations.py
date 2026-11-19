@@ -20,6 +20,7 @@ from compose_api.authorization import (
     can_change_visibility,
     can_read,
     readable_clause,
+    roles_of,
 )
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.db.services.datasets_db import DatasetQuery
@@ -28,6 +29,7 @@ from compose_api.db.services.simulators_db import SUBMITTING, SimulationQuery, S
 from compose_api.dependencies import get_database_service, get_required_database_service, get_simulation_service
 from compose_api.environments.versions import prebuilt_images, prebuilt_names
 from compose_api.favorites import FavoriteKind
+from compose_api.registry.access import hidden_environments
 from compose_api.simulation import handlers
 from compose_api.simulation.hpc_utils import get_singularity_hash
 from compose_api.simulation.labels import LABEL_KEYS, LabelError, parse_label_filters
@@ -224,7 +226,9 @@ async def list_simulations(
             detail="Listing your own or your favorite simulations needs a signed-in caller",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    links = await _version_links()
+    # a private repository's environment is unknown to a caller without its role (registry/access.py)
+    hidden = await hidden_environments(get_database_service(), roles_of(caller))
+    links = [link for link in await _version_links() if link.ref.environment not in hidden]
     query = SimulationQuery(
         status=status,
         container_def_hash=_container_hash(simulator, await prebuilt_images(get_database_service()))

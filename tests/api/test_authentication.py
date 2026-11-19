@@ -698,6 +698,11 @@ async def test_submit_simulation_logs_the_caller(
         return {}
 
     monkeypatch.setattr("compose_api.api.routers.simulation.prebuilt_images", no_prebuilt)
+
+    async def nothing_hidden(*_args: object) -> frozenset[str]:
+        return frozenset()
+
+    monkeypatch.setattr("compose_api.api.routers.simulation.hidden_environments", nothing_hidden)
     monkeypatch.setattr(
         "compose_api.api.routers.simulation.get_simulation_request_from_uploaded_file",
         stop_here,

@@ -65,14 +65,21 @@ def test_private_is_readable_by_configured_admin_role() -> None:
         assert not can_read(BOB, private) and not can_read(None, private)
         assert not can_read(ALICE, unowned)
         assert can_read(ADMIN, unowned)
-        assert readable_clause(ADMIN) is None
-        assert readable_clause(ALICE) is not None
+        # every private run but a private repository's: the role gate is all that is left of the clause
+        assert _gate_only(readable_clause(ADMIN))
+        assert not _gate_only(readable_clause(ALICE))
 
     with override_settings(admin_role="compose-admin"):
         assert not can_read(ADMIN, private) and not can_read(ADMIN, unowned)
-        assert readable_clause(ADMIN) is not None
+        assert not _gate_only(readable_clause(ADMIN))
         assert can_read(COMPOSE_ADMIN, private) and can_read(COMPOSE_ADMIN, unowned)
-        assert readable_clause(COMPOSE_ADMIN) is None
+        assert _gate_only(readable_clause(COMPOSE_ADMIN))
+
+
+def _gate_only(clause: Any) -> bool:
+    """Whether a listing's clause is the private-repository role gate alone: no owner or visibility condition."""
+    sql = str(clause)
+    return "access_roles" in sql and "visibility" not in sql and "owner_sub" not in sql
 
 
 @pytest.mark.parametrize("value", [DEFAULT_ROLE, f" {DEFAULT_ROLE} "])

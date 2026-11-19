@@ -52,6 +52,8 @@ def sync_detailed(
     """The catalog: every registry entry with its curation level, pin and evidence, and the environments
     that provide its classes
 
+     Every entry but a private repository's, which only the holders of its role see (registry/access.py).
+
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
@@ -76,6 +78,8 @@ def sync(
     """The catalog: every registry entry with its curation level, pin and evidence, and the environments
     that provide its classes
 
+     Every entry but a private repository's, which only the holders of its role see (registry/access.py).
+
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
@@ -95,6 +99,8 @@ async def asyncio_detailed(
 ) -> Response[list[CatalogEntry]]:
     """The catalog: every registry entry with its curation level, pin and evidence, and the environments
     that provide its classes
+
+     Every entry but a private repository's, which only the holders of its role see (registry/access.py).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -117,6 +123,8 @@ async def asyncio(
 ) -> list[CatalogEntry] | None:
     """The catalog: every registry entry with its curation level, pin and evidence, and the environments
     that provide its classes
+
+     Every entry but a private repository's, which only the holders of its role see (registry/access.py).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.

@@ -6,11 +6,13 @@ from compose_api.authentication import (
     OptionalPrincipal,
     get_optional_principal,
 )
+from compose_api.authorization import OptionalCaller, roles_of
 from compose_api.common.gateway.models import RouterConfig, ServerMode
 from compose_api.dependencies import (
     get_database_service,
     get_required_database_service,
 )
+from compose_api.registry.access import simulators_hidden_from
 from compose_api.simulation.handlers import (
     get_simulator_versions,
 )
@@ -45,8 +47,10 @@ config = RouterConfig(router=APIRouter(), prefix="/core", dependencies=[Depends(
     dependencies=[Depends(get_database_service)],
     summary="Get the list of simulators",
 )
-async def get_simulator_list(principal: OptionalPrincipal) -> RegisteredSimulators:
-    return await get_simulator_versions()
+async def get_simulator_list(caller: OptionalCaller) -> RegisteredSimulators:
+    registered = await get_simulator_versions()
+    hidden = await simulators_hidden_from(get_database_service(), roles_of(caller))  # a private repository's
+    return RegisteredSimulators(versions=[v for v in registered.versions if v.database_id not in hidden])
 
 
 @config.router.get(

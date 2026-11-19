@@ -18,7 +18,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 
 from compose_api.api.errors import UnprocessableError, error
 from compose_api.authentication import OptionalPrincipal, get_optional_principal
-from compose_api.authorization import EnvironmentAdmin, OptionalCaller, readable_clause
+from compose_api.authorization import Caller, EnvironmentAdmin, OptionalCaller, readable_clause, roles_of
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService
@@ -36,6 +36,7 @@ from compose_api.environments.manifests import annotated, interfaces_of, manifes
 from compose_api.environments.packages import package_changes
 from compose_api.environments.service import VersionRequestError
 from compose_api.environments.versions import prebuilt_images, version_for
+from compose_api.registry.access import hidden_environments, hidden_simulators, may_use, version_roles
 from compose_api.registry.environments import (
     CatalogEntry,
     EnvironmentSpec,
@@ -48,6 +49,7 @@ from compose_api.registry.environments import (
     summarize_mash_up,
 )
 from compose_api.registry.headers import EnvironmentHeaders, environment_headers
+from compose_api.registry.manifest import load_manifest
 from compose_api.registry.solvers import Solver, load_solvers
 from compose_api.sedml.translator import TranslatorUnavailableError
 from compose_api.simulation import builds, handlers
@@ -79,12 +81,14 @@ config = RouterConfig(router=APIRouter(), prefix="/registry", dependencies=[Depe
     tags=["Registry"],
     summary="The environments documents run in, with what their interface manifests hold",
 )
-async def list_environments(principal: OptionalPrincipal) -> list[EnvironmentSummary]:
+async def list_environments(caller: OptionalCaller) -> list[EnvironmentSummary]:
     """The environments this deployment declares (environments.yaml), then the mash-ups the database holds
-    (docs/plan-environment-composition.md, D7.9). Public: the same for every caller."""
+    (docs/plan-environment-composition.md, D7.9). The same for every caller, but for a private repository's
+    environments, listed only to the holders of its role (registry/access.py)."""
     database_service = get_database_service()
+    hidden = await _hidden(caller)
     images = await prebuilt_images(database_service)
-    specs = load_environments().environments
+    specs = [spec for spec in load_environments().environments if spec.name not in hidden]
     manifests = await manifests_of(database_service, [spec.name for spec in specs])
     declared = [s for s in (summarize(spec, images, manifests[spec.name]) for spec in specs) if s is not None]
     if database_service is None:
@@ -92,7 +96,7 @@ async def list_environments(principal: OptionalPrincipal) -> list[EnvironmentSum
     environments_db = database_service.get_environments_db()
     mash_ups = []
     for record in await environments_db.environments():
-        if record.kind != "mash-up":
+        if record.kind != "mash-up" or record.name in hidden:
             continue
         default = await environments_db.get_default_detail(record.name)
         core = (default.spec or {}).get("core") if default is not None else None
@@ -111,11 +115,11 @@ async def list_environments(principal: OptionalPrincipal) -> list[EnvironmentSum
     responses={404: error("No such environment here, or no manifest has been generated for it")},
 )
 async def get_environment_manifest(
-    name: str, request: Request, response: Response, principal: OptionalPrincipal
+    name: str, request: Request, response: Response, caller: OptionalCaller
 ) -> InterfaceManifest | Response:
     """Its default version's read-back (docs/plan-environment-composition.md, D8.4); a mash-up's too."""
-    # public: the same for every caller
-    interfaces = await _offered_interfaces(name)
+    # the same for every caller who may see the environment: the ETag needs no caller
+    interfaces = await _offered_interfaces(name, caller)
     etag = '"' + hashlib.sha256(json.dumps(interfaces, sort_keys=True).encode()).hexdigest()[:32] + '"'
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers={"ETag": etag})
@@ -125,10 +129,19 @@ async def get_environment_manifest(
     return manifest
 
 
-async def _offered_interfaces(name: str) -> dict[str, Any]:
+async def _hidden(caller: Caller | None) -> frozenset[str]:
+    """The environments the caller may not see: a private repository's, without its role (registry/access.py). Each
+    is reported as not found, the same as one that does not exist."""
+    return await hidden_environments(get_database_service(), roles_of(caller))
+
+
+async def _offered_interfaces(name: str, caller: Caller | None) -> dict[str, Any]:
     """What the environment's default version provides, read back; 404 for an environment this deployment does not
-    offer (a declared one, or a mash-up the database holds) or one with nothing read back yet."""
+    offer (a declared one, or a mash-up the database holds), one hidden from the caller, or one with nothing read back
+    yet."""
     database_service = get_database_service()
+    if name in await _hidden(caller):
+        raise HTTPException(status_code=404, detail=f"no environment {name!r}")
     spec = next((e for e in load_environments().environments if e.name == name), None)
     offered_here = (spec is not None and offered(spec, await prebuilt_images(database_service))) or (
         spec is None and name in {s.name for s in await _mash_ups(database_service)}
@@ -155,9 +168,8 @@ async def _mash_ups(database_service: DatabaseService | None) -> list[Environmen
         503: error("process-bigraph-lang is not installed in this deployment"),
     },
 )
-async def get_environment_headers(name: str, principal: OptionalPrincipal) -> EnvironmentHeaders:
-    # public: the same for every caller
-    interfaces = await _offered_interfaces(name)
+async def get_environment_headers(name: str, caller: OptionalCaller) -> EnvironmentHeaders:
+    interfaces = await _offered_interfaces(name, caller)
     try:
         headers = await environment_headers(name, interfaces)
     except TranslatorUnavailableError as e:
@@ -175,11 +187,18 @@ async def get_environment_headers(name: str, principal: OptionalPrincipal) -> En
     summary="The catalog: every registry entry with its curation level, pin and evidence, and the environments that "
     "provide its classes",
 )
-async def list_registry_entries(principal: OptionalPrincipal) -> list[CatalogEntry]:
-    # public: the same for every caller
+async def list_registry_entries(caller: OptionalCaller) -> list[CatalogEntry]:
+    """Every entry but a private repository's, which only the holders of its role see (registry/access.py)."""
     database_service = get_database_service()
-    names = [spec.name for spec in load_environments().environments]
-    return catalog_entries(await prebuilt_images(database_service), await manifests_of(database_service, names))
+    hidden = await _hidden(caller)
+    names = [spec.name for spec in load_environments().environments if spec.name not in hidden]
+    entries = catalog_entries(await prebuilt_images(database_service), await manifests_of(database_service, names))
+    roles = {entry.id: entry.access_role for entry in load_manifest().entries if entry.access_role is not None}
+    return [
+        entry.model_copy(update={"environments": [e for e in entry.environments if e.name not in hidden]})
+        for entry in entries
+        if may_use([roles[entry.id]] if entry.id in roles else [], roles_of(caller))
+    ]
 
 
 @config.router.get(
@@ -197,18 +216,20 @@ async def list_solvers(principal: OptionalPrincipal) -> list[Solver]:
 # --- environments' images: status, and builds on their own (docs/plan-environment-builds.md, phase 4) -------------
 
 
-async def _environment_simulator(name: str) -> SimulatorVersion:
+async def _environment_simulator(name: str, caller: Caller | None) -> SimulatorVersion:
     spec = builds.find_environment(name, await prebuilt_images(get_database_service()))
-    if spec is None:
+    if spec is None or name in await _hidden(caller):
         raise HTTPException(status_code=404, detail=f"no environment {name!r}")
     # its default version's (docs/plan-environment-versions.md)
     _version, simulator = await version_for(get_required_database_service(), None if spec.kind == "shared" else name)
     return simulator
 
 
-async def _simulator(simulator_id: int) -> SimulatorVersion:
-    simulator = await get_required_database_service().get_simulator_db().get_simulator(simulator_id)
-    if simulator is None:
+async def _simulator(simulator_id: int, caller: Caller | None) -> SimulatorVersion:
+    database_service = get_required_database_service()
+    simulator = await database_service.get_simulator_db().get_simulator(simulator_id)
+    hidden = await hidden_simulators(database_service, await _hidden(caller))
+    if simulator is None or simulator_id in hidden:
         raise HTTPException(status_code=404, detail=f"no simulator {simulator_id}")
     return simulator
 
@@ -246,9 +267,8 @@ async def _start_build(
     summary="Whether an environment's current image is built, with its image records and newest build run",
     responses={404: error("No such environment here")},
 )
-async def get_environment_images(name: str, principal: OptionalPrincipal) -> ImageStatus:
-    # public: the same for every caller
-    simulator = await _environment_simulator(name)
+async def get_environment_images(name: str, caller: OptionalCaller) -> ImageStatus:
+    simulator = await _environment_simulator(name, caller)
     return await builds.image_status(get_required_database_service(), simulator, name)
 
 
@@ -264,10 +284,10 @@ async def get_environment_images(name: str, principal: OptionalPrincipal) -> Ima
     },
 )
 async def build_environment(
-    name: str, background_tasks: BackgroundTasks, response: Response, principal: OptionalPrincipal
+    name: str, background_tasks: BackgroundTasks, response: Response, caller: OptionalCaller
 ) -> ImageStatus:
     # anyone who may submit a run may cause this build: a run of the environment would start it
-    return await _start_build(await _environment_simulator(name), name, background_tasks, response)
+    return await _start_build(await _environment_simulator(name, caller), name, background_tasks, response)
 
 
 # --- environment versions (docs/plan-environment-versions.md, step 4) ----------------------------------------------
@@ -279,9 +299,11 @@ _ADMIN: dict[int | str, dict[str, Any]] = {
 }
 
 
-async def _known_kind(name: str) -> str:
+async def _known_kind(name: str, caller: Caller | None) -> str:
     """The kind of an environment whose versions may be read or administered: one environments.yaml declares, or a
-    mash-up the database holds (D7.9). 404 otherwise."""
+    mash-up the database holds (D7.9), that the caller may see. 404 otherwise."""
+    if name in await _hidden(caller):
+        raise HTTPException(status_code=404, detail=f"no environment {name!r}")
     spec = environment_service.environment_spec(name)
     if spec is not None:
         return spec.kind
@@ -292,9 +314,10 @@ async def _known_kind(name: str) -> str:
     return record.kind
 
 
-async def _version(name: str, number: int) -> EnvironmentVersionDetail:
+async def _version(name: str, number: int, caller: Caller | None) -> EnvironmentVersionDetail:
+    """The version, if the caller may see it: also the roles it recorded when it was made (registry/access.py)."""
     version = await get_required_database_service().get_environments_db().get_by_number(name, number)
-    if version is None:
+    if version is None or not may_use(version_roles(version.spec, load_manifest()), roles_of(caller)):
         raise HTTPException(status_code=404, detail=f"no version {name}@{number}")
     return version
 
@@ -307,9 +330,8 @@ async def _version(name: str, number: int) -> EnvironmentVersionDetail:
     summary="An environment's versions, newest first, and its default",
     responses=_NO_ENVIRONMENT,
 )
-async def list_environment_versions(name: str, principal: OptionalPrincipal) -> EnvironmentVersions:
-    # public: the same for every caller
-    kind = await _known_kind(name)
+async def list_environment_versions(name: str, caller: OptionalCaller) -> EnvironmentVersions:
+    kind = await _known_kind(name, caller)
     return await get_required_database_service().get_environments_db().describe(name, kind)
 
 
@@ -327,18 +349,17 @@ async def list_environment_versions(name: str, principal: OptionalPrincipal) -> 
 async def get_environment_version(
     name: str,
     number: int,
-    principal: OptionalPrincipal,
+    caller: OptionalCaller,
     against: Annotated[
         int | None,
         Query(description="Another version of the environment: `changes` lists how this one's packages differ from it"),
     ] = None,
 ) -> EnvironmentVersionDetail:
-    # public: the same for every caller
-    await _known_kind(name)
-    version = await _read_back(name, await _version(name, number))
+    await _known_kind(name, caller)
+    version = await _read_back(name, await _version(name, number, caller), caller)
     if against is None:
         return version
-    other = await _read_back(name, await _version(name, against))
+    other = await _read_back(name, await _version(name, against, caller), caller)
     if version.installed is None or other.installed is None:
         missing = number if version.installed is None else against
         raise HTTPException(status_code=409, detail=f"nothing has been read back from {name}@{missing}'s image yet")
@@ -347,12 +368,12 @@ async def get_environment_version(
     )
 
 
-async def _read_back(name: str, version: EnvironmentVersionDetail) -> EnvironmentVersionDetail:
+async def _read_back(name: str, version: EnvironmentVersionDetail, caller: Caller | None) -> EnvironmentVersionDetail:
     """The version, read back first if it is ready and nothing was (built by a run, or before images were read)."""
     pending = version.installed is None and version.interfaces is None
     ready = pending and version.state == VersionState.READY
     if ready and await record_contents(get_required_database_service(), version):
-        return await _version(name, version.number)
+        return await _version(name, version.number, caller)
     return version
 
 
@@ -370,14 +391,13 @@ async def _read_back(name: str, version: EnvironmentVersionDetail) -> Environmen
 async def export_environment_version(
     name: str,
     number: int,
-    principal: OptionalPrincipal,
+    caller: OptionalCaller,
     format: Annotated[  # noqa: A002 the query parameter's name
         str | None, Query(description="pixi, uv (a composed version without conda) or requirements; pixi by default")
     ] = None,
 ) -> EnvironmentExport:
-    # public: the same for every caller
-    await _known_kind(name)
-    version = await _version(name, number)
+    await _known_kind(name, caller)
+    version = await _version(name, number, caller)
     exports = await get_required_database_service().get_environments_db().get_exports(version.database_id)
     try:
         return environment_service.export(version, format, exports)
@@ -393,11 +413,11 @@ async def export_environment_version(
     summary="Where each entry of a version stands there (its cases' runs), and the components a generic check refuses",
     responses=_NO_ENVIRONMENT,
 )
-async def get_environment_version_compliance(name: str, number: int, principal: OptionalPrincipal) -> ComplianceReport:
-    # public: the same for every caller; finished runs are evaluated as this is read
-    await _known_kind(name)
+async def get_environment_version_compliance(name: str, number: int, caller: OptionalCaller) -> ComplianceReport:
+    # finished runs are evaluated as this is read
+    await _known_kind(name, caller)
     database_service = get_required_database_service()
-    version = await _version(name, number)
+    version = await _version(name, number, caller)
     await compliance_runs.refresh(database_service, version)
     return await compliance_runs.report(database_service, version)
 
@@ -414,8 +434,8 @@ async def get_environment_version_compliance(name: str, number: int, principal: 
 async def run_environment_version_compliance(
     name: str, number: int, background_tasks: BackgroundTasks, caller: EnvironmentAdmin
 ) -> ComplianceReport:
-    await _known_kind(name)
-    version = await _version(name, number)
+    await _known_kind(name, caller)
+    version = await _version(name, number, caller)
     if version.state != VersionState.READY or version.runtime_contract != pixi.RUNTIME_CONTRACT:
         raise HTTPException(status_code=409, detail=f"{version.label} is not a ready composed version")
     detail_only = {"lock", "installed", "interfaces", "findings"}
@@ -453,7 +473,7 @@ async def create_environment_version(
     database_service = get_required_database_service()
     declared = environment_service.environment_spec(name)
     spec = declared or await lifecycle.mash_up_spec(database_service, name)  # a mash-up's later versions (D7.7)
-    if spec is None:
+    if spec is None or name in await _hidden(caller):
         raise HTTPException(status_code=404, detail=f"no environment {name!r}")
     try:
         if environment_service.is_composed(spec):
@@ -497,8 +517,8 @@ async def inspect_environment_version(
 ) -> EnvironmentVersion:
     """Started in the background; `GET …/versions/{number}` shows the result. A prebuilt image is pulled and run; a
     shared one, already built, is read again as its build reads a new one (for images built before builds did)."""
-    await _known_kind(name)  # a mash-up's versions are read back like any composed one's
-    version = await _version(name, number)
+    await _known_kind(name, caller)  # a mash-up's versions are read back like any composed one's
+    version = await _version(name, number, caller)
     if version.image is None and version.state != VersionState.READY:
         raise HTTPException(status_code=409, detail=f"{version.label} is {version.state}: its build reads it back")
     if get_settings().build_backend != "k8s":
@@ -518,8 +538,8 @@ async def inspect_environment_version(
     responses={**_NO_ENVIRONMENT, **_ADMIN, 409: error("The version is not ready")},
 )
 async def set_environment_default(name: str, request: DefaultVersion, caller: EnvironmentAdmin) -> EnvironmentVersion:
-    await _known_kind(name)
-    version = await _version(name, request.number)
+    await _known_kind(name, caller)
+    version = await _version(name, request.number, caller)
     if version.state != VersionState.READY:
         raise HTTPException(status_code=409, detail=f"{version.label} is {version.state}, not ready")
     await get_required_database_service().get_environments_db().set_default(name, version.database_id)
@@ -536,8 +556,8 @@ async def set_environment_default(name: str, request: DefaultVersion, caller: En
     responses={**_NO_ENVIRONMENT, **_ADMIN, 409: error("It is the default; make another the default first")},
 )
 async def retire_environment_version(name: str, number: int, caller: EnvironmentAdmin) -> EnvironmentVersion:
-    await _known_kind(name)
-    version = await _version(name, number)
+    await _known_kind(name, caller)
+    version = await _version(name, number, caller)
     environments_db = get_required_database_service().get_environments_db()
     default = await environments_db.get_default(name)
     if default is not None and default.database_id == version.database_id:
@@ -567,12 +587,13 @@ def _simulator_summary(use: SimulatorUse, versions: dict[int, list[VersionRef]])
 
 async def _simulator_uses(caller: OptionalCaller, only: int | None = None) -> list[SimulatorSummary]:
     db = get_required_database_service()
+    hidden = await hidden_simulators(db, await _hidden(caller))  # a private repository's, without its role
     versions: dict[int, list[VersionRef]] = {}
     for link in await db.get_environments_db().version_links():
-        if link.simulator_id is not None:
+        if link.simulator_id is not None and link.simulator_id not in hidden:
             versions.setdefault(link.simulator_id, []).append(link.ref)
     uses = await db.get_simulator_db().simulator_uses(readable_clause(caller), list(versions), only)
-    return [_simulator_summary(use, versions) for use in uses]
+    return [_simulator_summary(use, versions) for use in uses if use.simulator_id not in hidden]
 
 
 @config.router.get(
@@ -599,7 +620,7 @@ async def get_simulator(simulator_id: int, caller: OptionalCaller) -> SimulatorD
     found = await _simulator_uses(caller, only=simulator_id)
     if not found:
         raise HTTPException(status_code=404, detail=f"no simulator {simulator_id}")
-    simulator = await _simulator(simulator_id)
+    simulator = await _simulator(simulator_id, caller)
     return SimulatorDetail(**found[0].model_dump(), definition=simulator.container_def.representation)
 
 
@@ -611,9 +632,8 @@ async def get_simulator(simulator_id: int, caller: OptionalCaller) -> SimulatorD
     summary="Whether a simulator's image is built, with its image records and newest build run",
     responses={404: error("No such simulator")},
 )
-async def get_simulator_images(simulator_id: int, principal: OptionalPrincipal) -> ImageStatus:
-    # public: the same for every caller
-    return await builds.image_status(get_required_database_service(), await _simulator(simulator_id))
+async def get_simulator_images(simulator_id: int, caller: OptionalCaller) -> ImageStatus:
+    return await builds.image_status(get_required_database_service(), await _simulator(simulator_id, caller))
 
 
 @config.router.post(
@@ -628,6 +648,6 @@ async def get_simulator_images(simulator_id: int, principal: OptionalPrincipal) 
     },
 )
 async def build_simulator(
-    simulator_id: int, background_tasks: BackgroundTasks, response: Response, principal: OptionalPrincipal
+    simulator_id: int, background_tasks: BackgroundTasks, response: Response, caller: OptionalCaller
 ) -> ImageStatus:
-    return await _start_build(await _simulator(simulator_id), None, background_tasks, response)
+    return await _start_build(await _simulator(simulator_id, caller), None, background_tasks, response)
