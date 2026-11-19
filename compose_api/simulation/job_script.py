@@ -5,7 +5,10 @@ Besides running the simulator, the script makes the run observable (docs/plan-ob
 
 - **It records the job itself** in ``events/job.jsonl``: a ``job`` span that every other span of the run hangs from,
   ``job.start``, and ``job.end`` with the exit code. They're written from an ``EXIT`` trap, so a failure that
-  ``set -e`` turns into an early exit is recorded too, and SIGTERM (a time limit, ``scancel``) exits through it.
+  ``set -e`` turns into an early exit is recorded too, and SIGTERM (a time limit, ``scancel``) exits through it. The
+  simulator runs in the background and is waited on, because bash runs a trap only once its foreground command returns:
+  a simulator that outlives SIGTERM would otherwise hold the trap until SLURM's SIGKILL, and the run would end with no
+  ``job.end`` and no SLURM log dataset.
 - **It announces the files the run left** (O5): after the run, success or failure, one ``artifact.written`` event per
   file under ``output/`` and for ``results.zip``, with its size and sha256. ``output/`` is kept.
 - **It hands the trace context to the simulator** through an env file: ``PBG_TRACEPARENT`` and friends. A simulator
@@ -133,7 +136,8 @@ singularity run \
     run \
     /experiment/@@JOB_NAME@@.@@SUFFIX@@ \
     -o "@@OUTPUT_DIR@@" \
-    -n @@END_TIME@@
+    -n @@END_TIME@@ &
+wait $!  # returns as soon as SIGTERM arrives, so the TERM trap runs even if the simulator ignores it
 
 # output/ stays: each file in it is a dataset (docs/plan-observability.md O5). results.zip keeps the archive endpoint.
 (cd "$EXPERIMENT/output" && zip -r ../results.zip ./*)

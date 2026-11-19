@@ -3,11 +3,14 @@
 trace context to the simulator through the env file, and records a failure with its exit code
 (docs/plan-observability.md O2, O3)."""
 
+import contextlib
 import hashlib
 import os
 import shutil
+import signal
 import stat
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -36,6 +39,9 @@ if [ -n "${FAKE_BUNDLE:-}" ]; then  # a zarr store: a directory of chunk files, 
   mkdir -p "$HOST/output/run.fenics/u"; echo '{}' > "$HOST/output/run.fenics/.zattrs"; printf 'abcd' > "$HOST/output/run.fenics/u/0.0"
   chmod 600 "$HOST/output/run.fenics/.zattrs"  # as a mkstemp file renamed into place
 fi
+if [ -n "${FAKE_IGNORE_TERM:-}" ]; then  # hung, and deaf to SIGTERM, as on a bad node: only SIGKILL ends it
+  trap '' TERM; sleep 60
+fi
 exit "${FAKE_EXIT:-0}"
 """
 
@@ -43,9 +49,8 @@ exit "${FAKE_EXIT:-0}"
 INPUT = b"PK\x03\x04 a COMBINE archive"
 
 
-def _run(
-    tmp_path: Path, exit_code: int, bundle: bool = False, staged_input: bool = True
-) -> tuple[subprocess.CompletedProcess[str], Path]:
+def _job(tmp_path: Path, exit_code: int, staged_input: bool = True) -> tuple[str, dict[str, str], Path]:
+    """The script, its environment (the fake singularity first on PATH) and the experiment directory."""
     if shutil.which("zip") is None:
         pytest.skip("zip is not installed")
     experiment = tmp_path / "experiment-x"
@@ -76,6 +81,13 @@ def _run(
         )
     )
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "SLURM_JOB_ID": "4242", "FAKE_EXIT": str(exit_code)}
+    return script, env, experiment
+
+
+def _run(
+    tmp_path: Path, exit_code: int, bundle: bool = False, staged_input: bool = True
+) -> tuple[subprocess.CompletedProcess[str], Path]:
+    script, env, experiment = _job(tmp_path, exit_code, staged_input)
     if bundle:
         env["FAKE_BUNDLE"] = "1"
     result = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True, check=False)  # noqa: S603, S607
@@ -171,3 +183,45 @@ def test_a_failed_job_records_its_exit_code(tmp_path: Path) -> None:
     span = spans[job_span_id(CORRELATION)]
     assert span.status == "error" and span.error == "exit code 3"
     assert not (experiment / "results.zip").exists()
+
+
+def test_a_time_limit_ends_the_job_through_its_trap_while_the_simulator_ignores_sigterm(tmp_path: Path) -> None:
+    """Regression: at a time limit SLURM sends SIGTERM to every process of the job, then SIGKILL after KillWait. Bash
+    runs its TERM trap only once its foreground command returns, so a simulator that outlived the SIGTERM held the trap
+    until the SIGKILL: runs 12536-12538 (hung on one node) ended with no job.end, and their SLURM log was never a
+    dataset. Waiting on the simulator in the background lets the trap run at once."""
+    script, env, experiment = _job(tmp_path, 0, staged_input=False)
+    env["FAKE_IGNORE_TERM"] = "1"
+    job = subprocess.Popen(  # noqa: S603
+        ["bash", "-c", script],  # noqa: S607
+        env=env,
+        start_new_session=True,  # its own process group, signalled as a whole, as SLURM signals a job
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        deadline = time.monotonic() + 10
+        while not (experiment / "output" / "out.txt").exists():  # the simulator wrote its output and hangs
+            assert time.monotonic() < deadline, "the fake simulator never started"
+            time.sleep(0.05)
+        os.killpg(job.pid, signal.SIGTERM)
+        code = job.wait(timeout=10)  # before the fix: still blocked here, until a SIGKILL
+    finally:
+        with contextlib.suppress(ProcessLookupError, PermissionError):  # macOS: EPERM once the group has exited
+            os.killpg(job.pid, signal.SIGKILL)  # the simulator, deaf to SIGTERM
+        job.wait()
+    assert code == 143
+    events = _read(experiment / "events" / "job.jsonl")
+    assert [e.event for e in events] == [
+        "span.start",
+        "job.start",
+        "artifact.written",
+        "artifact.written",
+        "job.end",
+        "span.end",
+    ]
+    assert [events[2].payload["uri"], events[3].payload] == [
+        "output/out.txt",
+        {"uri": "job.out", "kind": "log", "name": "SLURM log"},
+    ]
+    assert events[4].level == "error" and events[4].payload["exit_code"] == 143
