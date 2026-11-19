@@ -198,3 +198,36 @@ async def test_a_class_under_no_entry_is_not_sent_to_the_prebuilt_image_that_cov
         assert inferred == simulation_router._Inferred()
     finally:
         await unregister_prebuilt(database_service, PREBUILT)
+
+
+# under a registered package, but not a class the image has
+ABSENT = "local:viva_pde_particle.processes.fv_reaction_diffusion.NotAClass"
+
+
+@pytest.mark.asyncio
+async def test_a_class_the_image_does_not_advertise_is_not_sent_to_it(
+    database_service: DatabaseServiceSQL, http_api_client: AsyncClient, tmp_path: Path
+) -> None:
+    """A run that names no environment is inferred only to an environment whose image advertises every class it names
+    (the interface manifest read back from the image). A class under a registered package that the image does not have
+    is refused with a 400 naming it, not sent to the image to fail at import there."""
+    from compose_api.api.routers import simulation as simulation_router
+
+    version = await register_prebuilt(database_service, PREBUILT, IMAGE)
+    components = [{"module": "viva_pde_particle.processes.fv_reaction_diffusion", "name": "FVReactionDiffusion"}]
+    await database_service.get_environments_db().set_contents(version.database_id, None, {"components": components})
+    try:
+        listed = _composite(tmp_path / "listed.pbg", PDE)
+        absent = _composite(tmp_path / "absent.pbg", PDE, ABSENT)
+        inferred = await simulation_router._inferred(listed, SimulationFileType.PBG, None, BackgroundTasks())
+        assert inferred.simulator == PREBUILT  # control: every class advertised, so the image is chosen
+
+        response = await http_api_client.post(
+            "/simulation/run", files={"uploaded_file": ("doc.pbg", absent.read_bytes(), "application/json")}
+        )
+        assert response.status_code == 400
+        violations = response.json()["detail"]["violations"]
+        assert [v["address"] for v in violations] == [ABSENT]
+        assert PREBUILT in violations[0]["reason"]
+    finally:
+        await unregister_prebuilt(database_service, PREBUILT)
