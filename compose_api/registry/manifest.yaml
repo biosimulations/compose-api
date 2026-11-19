@@ -291,14 +291,17 @@ entries:
   # --- FBA ---
   - id: viva-cobra
     package: viva-cobra
-    # v0.1.2 on main (confirmed with gh)
-    source: https://github.com/vivarium-collective/viva-cobra/tree/098d600432417163baa3be2855045b3686c5023a
-    commit: 098d600432417163baa3be2855045b3686c5023a
+    # v0.1.3 (tag; viva-cobra#5's merge, 57db42b): its type table is public as viva_cobra.core.standard_types
+    source: https://github.com/vivarium-collective/viva-cobra/tree/57db42b2b386ca6e6dc4a1a1fc78cec380077a95
+    commit: 57db42b2b386ca6e6dc4a1a1fc78cec380077a95
     install:
       git: https://github.com/vivarium-collective/viva-cobra
-      commit: 098d600432417163baa3be2855045b3686c5023a
+      commit: 57db42b2b386ca6e6dc4a1a1fc78cec380077a95
     module_roots:
       - viva_cobra
+    # concentration, mass, count and bounds, the types FBAStep's ports use; registered before every run
+    types:
+      - viva_cobra.core:standard_types
     level: tested
     evidence:
       - >-
@@ -317,6 +320,13 @@ entries:
         pinned pixi image for linux-64; `pixi install --frozen` installed it; and its compliance case passed through
         compose-api's runner in that environment, both for this group alone and in one set holding all seven
         framework entries.
+      - >-
+        Moved to v0.1.3 (57db42b) on 2026-11-19, which makes the type table public as viva_cobra.core.standard_types,
+        so the entry now declares `types`. Without them the step-outputs-replace check could not resolve `mass` and
+        missed that FBAStep's `biomass` output adds (#542); with them it reports both `substrates` and `biomass`.
+        FBAStep returns deltas by design, so it stays refused either way. textbook-fba-optimum passed through
+        compose-api's runner with COMPOSE_RUNNER_TYPES=viva_cobra.core:standard_types (process-bigraph 1.9.1,
+        bigraph-schema 1.8.1, cobra 0.32.1, Python 3.12), with results byte-identical to the run without the types.
 
   # --- Boolean ---
   - id: viva-maboss
@@ -422,14 +432,15 @@ entries:
 
   - id: viva-fenics
     package: viva-fenics
-    # v0.1.1 (#16): the standalone FEniCSx package, not the PDE component of viva-pde-particle, which is unchanged.
-    # 0.1.1 fixed what a5023cc had: composites imported viva_superpowers, undeclared, and __init__.py swallowed the
-    # ImportError so classes vanished; scipy was undeclared. viva-superpowers is now only a `dashboard` extra.
-    source: https://github.com/vivarium-collective/viva-fenics/tree/a1105fcae77019f6a2430c612df44c8a285792a6
-    commit: a1105fcae77019f6a2430c612df44c8a285792a6
+    # v0.1.2 (#18, be157ab): the standalone FEniCSx package, not the PDE component of viva-pde-particle, which is
+    # unchanged. 0.1.1 fixed what a5023cc had: composites imported viva_superpowers, undeclared, and __init__.py
+    # swallowed the ImportError so classes vanished; scipy was undeclared. viva-superpowers is now only a `dashboard`
+    # extra. 0.1.2 declares every Step output overwrite[...], so step-outputs-replace no longer refuses its Steps.
+    source: https://github.com/vivarium-collective/viva-fenics/tree/be157ab1bc3d1556960a9cd140634280b0473aa1
+    commit: be157ab1bc3d1556960a9cd140634280b0473aa1
     install:
       git: https://github.com/vivarium-collective/viva-fenics
-      commit: a1105fcae77019f6a2430c612df44c8a285792a6
+      commit: be157ab1bc3d1556960a9cd140634280b0473aa1
     # dolfinx is conda-only. 0.10.* is the pin viva-pde-particle and vcell-fenics use, inside viva-fenics's own tested
     # range (>=0.10,<0.12, its suite passed on 0.10.0 and 0.11.0), so a set with both never splits on dolfinx.
     # The rest is from that pixi.toml's conda dependencies; pip dependencies come from its pyproject.
@@ -456,6 +467,13 @@ entries:
         --frozen`, and poisson-quadratic-mms passed through compose-api's runner, alone and in one set with all seven
         framework entries (all seven cases passed). Importing viva_fenics there loads no viva_superpowers or
         vivarium_workbench.
+      - >-
+        Moved to v0.1.2 (be157ab) on 2026-11-19. All four of its Steps (AdaptiveRefinementStep, PorousFlowStep,
+        PoissonSolverStep, MultisolutePoreStep) had declared bare float, integer and array[float] outputs, which add
+        into a store, so step-outputs-replace refused every one in mash-425e535ee9@1 (#542). 0.1.2 declares all 20
+        outputs overwrite[...], and its regression tests fail on the old types. poisson-quadratic-mms passed through
+        compose-api's runner at this commit (process-bigraph 1.9.1, bigraph-schema 1.8.1, dolfinx 0.11.0, macOS).
+        Existing versions keep a1105fc; a new version of an environment that holds this entry picks it up.
 
   # --- Tissue mechanics ---
   - id: vivarium-tyssue
