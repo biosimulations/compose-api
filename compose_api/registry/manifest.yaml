@@ -478,22 +478,22 @@ entries:
   # --- Tissue mechanics ---
   - id: vivarium-tyssue
     package: vivarium-tyssue
-    # vivarium-tyssue#33's merge (2026-11-17, approved by Tasnif): tyssue from the vivarium-collective fork at its main
-    # (29671f1, [tool.uv.sources]), which has EventManager.extend_current and an https docs submodule; viva-copasi and
-    # viva-emitters pinned by commit. No tags yet. The `sim` extra is what installs tyssue.
-    source: https://github.com/vivarium-collective/vivarium-tyssue/tree/e2ba3fd3f04ec784a92f3e17b0f12828ff982df8
-    commit: e2ba3fd3f04ec784a92f3e17b0f12828ff982df8
+    # vivarium-tyssue#37's merge (2026-11-19, Tasnif): the compose-api fixes asked for in #34–#36, over #33's
+    # dependencies (tyssue from the vivarium-collective fork at 29671f1; viva-copasi and viva-emitters pinned by
+    # commit). No tags yet. The `sim` extra is what installs tyssue.
+    source: https://github.com/vivarium-collective/vivarium-tyssue/tree/5cd5cd9946d099e65dcfa0a5747b75589368b41f
+    commit: 5cd5cd9946d099e65dcfa0a5747b75589368b41f
     install:
       git: https://github.com/vivarium-collective/vivarium-tyssue
-      commit: e2ba3fd3f04ec784a92f3e17b0f12828ff982df8
+      commit: 5cd5cd9946d099e65dcfa0a5747b75589368b41f
       extras: [sim]
-    # The solver, Gillespie and the regulators. Not vivarium_tyssue.processes.cell_cycle: SBMLCellCycle evaluates phase
-    # rules from its config (cell_cycle.py:197-215) and executes code generated from the submitted SBML
-    # (sbml/vectorized.py:156), which the address check cannot see.
+    # The solver, Gillespie, the regulators and, since #37, the SBML cell cycle, which parses its phase rules and
+    # compiles SBML math into numpy closures instead of evaluating or generating code.
     module_roots:
       - vivarium_tyssue.processes.eulersolver
       - vivarium_tyssue.processes.gillespie
       - vivarium_tyssue.processes.regulations
+      - vivarium_tyssue.processes.cell_cycle
     level: tested
     evidence:
       - >-
@@ -517,6 +517,17 @@ entries:
         so an uploaded mesh could run code. The service refuses such an HDF5 file at submission (registry/uploads.py).
         test_square.hf5 holds plain data; six of the workspace's seven meshes have object columns and are refused until
         they are saved without them.
+      - >-
+        Moved to vivarium-tyssue#37's merge (5cd5cd9) on 2026-11-19; its two commits change no dependency file. (#34)
+        ParameterGradient and AnisotropicTension are Processes that ship deltas: each remembers the share it last
+        contributed (`_Contribution`) and emits the change, so the parameter settles at the regulator's value rather
+        than accumulating; step-outputs-replace no longer applies to them. (#35) SBMLCellCycle parses each phase rule
+        against one comparison pattern (cell_cycle.py `_CONDITION`, operators from a fixed table) and compiles SBML math
+        by walking libsbml's AST into numpy closures, raising on any node it does not support (sbml/vectorized.py); no
+        `eval`, `exec`, `compile` or code generation remains under vivarium_tyssue, so its module is now a root.
+        python-libsbml is already a runtime dependency. (#36) All seven workspace meshes pass registry/uploads.py's
+        HDF5 check at this commit; six were refused before. sheet-relaxation is unchanged; its result at this commit is
+        the compliance run of the version made from it.
 
   # --- core: classes of the engine every composed environment installs (environments.yaml `composition.core`) -------
   # Provided by every composed version and mash-up without being listed or installed, and by the prebuilt images its
