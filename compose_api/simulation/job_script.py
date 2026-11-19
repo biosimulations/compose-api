@@ -8,9 +8,10 @@ Besides running the simulator, the script makes the run observable (docs/plan-ob
   ``set -e`` turns into an early exit is recorded too, and SIGTERM (a time limit, ``scancel``) exits through it. The
   simulator runs in the background and is waited on, because bash runs a trap only once its foreground command returns:
   a simulator that outlives SIGTERM (a ``--compat`` container's PID 1 ignores it) would otherwise hold the trap until
-  SLURM's SIGKILL, and the run would end with no ``job.end`` and no SLURM log dataset. On SIGTERM the record waits up
-  to 10 s for the simulator to finish writing, then the script stays in the job until the simulator exits or SLURM's
-  SIGKILL ends both, so no simulator is left running outside SLURM's process tracking.
+  SLURM's SIGKILL, and the run would end with no ``job.end`` and no SLURM log dataset. On SIGTERM the end is recorded
+  at once, then the script stays in the job until the simulator exits or SLURM's SIGKILL ends both, so no simulator is
+  left running outside SLURM's process tracking; if the simulator exits, its files are announced again, so what it
+  wrote while shutting down is what the datasets describe.
 - **It announces the files the run left** (O5): after the run, success or failure, one ``artifact.written`` event per
   file under ``output/`` and for ``results.zip``, with its size and sha256. ``output/`` is kept.
 - **It hands the trace context to the simulator** through an env file: ``PBG_TRACEPARENT`` and friends. A simulator
@@ -110,18 +111,19 @@ finish() {
     code=$?
     trap - EXIT
     trap '' TERM  # a second SIGTERM must not cut the record short
-    # Stopped (a time limit, scancel) while the simulator runs: SLURM sent it SIGTERM too. Give it up to 10 s, well
-    # inside SLURM's KillWait, to finish writing, so the manifest reads its final files.
-    for ((i = 0; i < 100; i++)); do simulator_running || break; sleep 0.1; done
     manifest || true
     elapsed=$(awk -v a="$JOB_START_S" -v b="$(date +%s.%N)" 'BEGIN { printf "%.3f", b - a }')
     if [ "$code" -eq 0 ]; then status=ok; level=info; error=null
     else status=error; level=error; error="\"exit code $code\""; fi
     emit job.end "$level" "{\"exit_code\":$code,\"wall_s\":$elapsed}"
     emit span.end "$level" "{\"name\":\"job\",\"attrs\":$JOB_ATTRS,\"start_ts\":\"$JOB_START_TS\",\"end_ts\":\"$(now_ts)\",\"duration_s\":$elapsed,\"status\":\"$status\",\"error\":$error}"
-    # Then stay in the job until the simulator exits or SLURM's SIGKILL ends both: leaving first would orphan it,
-    # still running on the node, outside SLURM's process tracking.
-    if simulator_running; then wait "$SIM" || true; fi
+    # Stopped (a time limit, scancel) while the simulator still runs: SLURM sent it SIGTERM too. Stay in the job until it
+    # exits or SLURM's SIGKILL ends both, since leaving first would orphan it outside SLURM's process tracking. If it
+    # exits, announce its files again: what it wrote while shutting down replaces what the record above saw.
+    if simulator_running; then
+        wait "$SIM" || true
+        manifest || true
+    fi
     exit "$code"
 }
 trap finish EXIT
@@ -149,7 +151,9 @@ singularity run \
     -o "@@OUTPUT_DIR@@" \
     -n @@END_TIME@@ &
 SIM=$!
-wait "$SIM"  # returns as soon as SIGTERM arrives, so the TERM trap runs even if the simulator ignores it
+# `wait` returns as soon as SIGTERM arrives, so the TERM trap runs even if the simulator ignores it. SIM is cleared once
+# the simulator is reaped, so a PID reused later is never taken for it.
+if wait "$SIM"; then SIM=; else sim_status=$?; SIM=; exit "$sim_status"; fi
 
 # output/ stays: each file in it is a dataset (docs/plan-observability.md O5). results.zip keeps the archive endpoint.
 (cd "$EXPERIMENT/output" && zip -r ../results.zip ./*)

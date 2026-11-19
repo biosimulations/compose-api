@@ -11,10 +11,12 @@ import signal
 import stat
 import subprocess
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
+from compose_api.observability.datasets import DatasetRow, artifact_records, merge
 from compose_api.observability.events import RunSpan, apply_span_events, parse_complete_lines
 from compose_api.observability.identity import job_span_id, trace_id_from_correlation
 from compose_api.simulation.job_script import SimulationJob, simulation_job_script
@@ -35,6 +37,7 @@ while [ $# -gt 0 ]; do
     *) shift ;;
   esac
 done
+if [ -n "${FAKE_PIDFILE:-}" ]; then echo $$ > "$HOST/sim.pid"; fi
 TRACE=$(echo "$PBG_TRACEPARENT" | cut -d- -f2); PARENT=$(echo "$PBG_TRACEPARENT" | cut -d- -f3)
 SINK="${PBG_EVENT_SINKS#file:}"; SINK="$HOST${SINK#/experiment}"
 printf '{"v":1,"ts":"2026-10-07T12:00:01.000Z","seq":1,"source":"node-42","component":"process_bigraph","event":"run.start","level":"info","trace_id":"%s","span_id":null,"parent_span_id":"%s","baggage":{"simulation_id":"%s"},"payload":{}}\n' "$TRACE" "$PARENT" "$PBG_TRACE_BAGGAGE" >> "$SINK"
@@ -43,7 +46,7 @@ if [ -n "${FAKE_BUNDLE:-}" ]; then  # a zarr store: a directory of chunk files, 
   mkdir -p "$HOST/output/run.fenics/u"; echo '{}' > "$HOST/output/run.fenics/.zattrs"; printf 'abcd' > "$HOST/output/run.fenics/u/0.0"
   chmod 600 "$HOST/output/run.fenics/.zattrs"  # as a mkstemp file renamed into place
 fi
-if [ -n "${FAKE_IGNORE_TERM:-}${FAKE_FLUSH_ON_TERM:-}" ]; then  # still running when SLURM stops the job
+if [ -n "${FAKE_IGNORE_TERM:-}${FAKE_FLUSH_ON_TERM:-}${FAKE_PIDFILE:-}" ]; then  # still running when the job is stopped
   while :; do sleep 1; done
 fi
 exit "${FAKE_EXIT:-0}"
@@ -220,18 +223,22 @@ def _kill(job: subprocess.Popen[bytes]) -> None:
     job.wait()
 
 
+def _until(predicate: Callable[[], bool], what: str, seconds: float = 60) -> None:
+    deadline = time.monotonic() + seconds  # generous: it only matters when something is wrong
+    while not predicate():
+        assert time.monotonic() < deadline, what
+        time.sleep(0.05)
+
+
 def test_a_time_limit_records_the_job_end_while_the_simulator_ignores_sigterm(tmp_path: Path) -> None:
     """Regression: bash runs its TERM trap only once its foreground command returns, so a simulator that outlived
     SLURM's SIGTERM (runs 12536-12538, hung on one node) held the trap until the SIGKILL: no job.end, and the SLURM log
-    never became a dataset. Now the end is recorded within the 10 s grace, and the script then stays in the job, so the
-    simulator is not orphaned outside SLURM's process tracking: SLURM's SIGKILL ends both."""
+    never became a dataset. Now the end is recorded at once, and the script then stays in the job, so the simulator is
+    not orphaned outside SLURM's process tracking: SLURM's SIGKILL ends both."""
     job, experiment = _stopped(tmp_path, "FAKE_IGNORE_TERM")
+    events_file = experiment / "events" / "job.jsonl"
     try:
-        events_file = experiment / "events" / "job.jsonl"
-        deadline = time.monotonic() + 60  # the 10 s grace, and room for a loaded machine
-        while "job.end" not in events_file.read_text():
-            assert time.monotonic() < deadline, "no job.end after SIGTERM"
-            time.sleep(0.1)
+        _until(lambda: "span.end" in events_file.read_text(), "the end was not recorded after SIGTERM")
         time.sleep(0.5)
         assert job.poll() is None  # still in the job with the simulator
     finally:
@@ -252,9 +259,11 @@ def test_a_time_limit_records_the_job_end_while_the_simulator_ignores_sigterm(tm
     assert events[4].level == "error" and events[4].payload["exit_code"] == 143
 
 
-def test_a_simulator_stopped_by_sigterm_finishes_writing_before_the_manifest(tmp_path: Path) -> None:
-    """A simulator with a shutdown handler writes its final output after SIGTERM. The manifest waits for it (within the
-    grace), so the dataset's checksum is the final file's, and the job then exits on its own."""
+def test_files_a_simulator_finishes_writing_after_sigterm_are_what_the_datasets_describe(tmp_path: Path) -> None:
+    """A simulator with a shutdown handler writes its final output after SIGTERM. The end is recorded at once, with the
+    file as it was; when the simulator then exits, its files are announced again, and compose-api's own dataset
+    registration (artifact_records, then merge, in event order) keeps the final file's checksum. The job then exits on
+    its own."""
     job, experiment = _stopped(tmp_path, "FAKE_FLUSH_ON_TERM")
     try:
         code = job.wait(timeout=60)
@@ -263,6 +272,37 @@ def test_a_simulator_stopped_by_sigterm_finishes_writing_before_the_manifest(tmp
     assert code == 143
     out = experiment / "output" / "out.txt"
     assert out.read_text() == "flushed\n"
-    announced = [e.payload for e in _read(experiment / "events" / "job.jsonl") if e.event == "artifact.written"]
-    assert announced[0]["uri"] == "output/out.txt"
-    assert announced[0]["sha256"] == hashlib.sha256(out.read_bytes()).hexdigest()
+    events = _read(experiment / "events" / "job.jsonl")
+    assert [e.event for e in events][-4:] == ["job.end", "span.end", "artifact.written", "artifact.written"]
+    rows: dict[str, DatasetRow] = {}
+    for record in artifact_records(events):
+        rows[record.path] = merge(rows.get(record.path), record)
+    assert rows["output/out.txt"].sha256 == hashlib.sha256(out.read_bytes()).hexdigest()
+
+
+@pytest.mark.parametrize("skew", [0.001, 0.003, 0.005, 0.01])
+def test_a_second_sigterm_while_the_end_is_recorded_does_not_cut_it_short(tmp_path: Path, skew: float) -> None:
+    """SLURM signals every process of the job, the simulator first by a few milliseconds at most. A simulator without a
+    handler dies at once; the script then records the end, and its own SIGTERM arrives in the middle of that. It must
+    not cut the record short."""
+    script, env, experiment = _job(tmp_path, 0, staged_input=False)
+    env["FAKE_PIDFILE"] = "1"
+    job = subprocess.Popen(  # noqa: S603
+        ["bash", "-c", script],  # noqa: S607
+        env=env,
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    pid_file = experiment / "sim.pid"
+    try:
+        _until(lambda: (experiment / "output" / "out.txt").exists() and pid_file.read_text().strip() != "", "no start")
+        os.kill(int(pid_file.read_text()), signal.SIGTERM)
+        time.sleep(skew)
+        os.kill(job.pid, signal.SIGTERM)
+        code = job.wait(timeout=60)
+    finally:
+        _kill(job)
+    assert code == 143
+    events = [e.event for e in _read(experiment / "events" / "job.jsonl")]
+    assert events[-2:] == ["job.end", "span.end"], events
