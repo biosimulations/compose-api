@@ -1,17 +1,17 @@
 # Private workspace repositories on compose-api (first case: vivarium-collective/v2ecoli)
 
-**Status (2026-11-19): approved; P0 next.** A private viva workspace repository is onboarded (a registry entry and an
-environment) and used (run, status, results) on compose-api, with v2ecoli as the first case of a general mechanism.
-Checked against `main` at `53db5d9` (#547 merged). One PR per step, each merged with a merge commit; deploying is a
-release, one at a time, as usual.
+**Status (2026-11-19): approved; P0 in progress.** A private viva workspace repository is onboarded (a registry entry
+and an environment) and used (run, status, results) on compose-api, with v2ecoli as the first case of a general
+mechanism. Checked against `main` at `53db5d9` (#547 merged). One PR per step, each merged with a merge commit;
+deploying is a release, one at a time, as usual.
 
 | Phase | What | State |
 |---|---|---|
-| P0 | Outreach (Auth0, design review, v2ecoli) and three probes; no code | next |
+| P0 | Outreach (Auth0, design review, v2ecoli) and three probes; no code | in progress ("P0 results") |
 | P1 | compose-api: restricted entries, gates and the disk fix (A, B) | — |
 | P2 | compose-api: fetching private source (C) | — |
 | P3 | Prove it live on a tiny private probe repository | — |
-| P4 | v2ecoli readiness (v2ecoli PRs) | — |
+| P4 | v2ecoli readiness (v2ecoli PRs) | list from the real lock (below) |
 | P5 | Onboard and use v2ecoli | — |
 | P6 | Docs | — |
 
@@ -28,13 +28,12 @@ release, one at a time, as usual.
   environments, manifests, locks, failure text, compliance and build logs to anyone. Anonymous callers can start builds
   and are routed into existing mash-ups. Compliance runs have no owner, so they are public. `readable_clause`
   short-circuits for admins before any other rule (`authorization.py`).
-- **v2ecoli cannot be locked yet** (separate from credentials):
-  - Python `==3.12.12` (vEcoli `==3.12.9`) vs compose-api's `3.12.*`;
-  - its `[tool.uv.sources]` float on `main`, and process-bigraph and bigraph-schema then clash with the core's 1.9.1
-    and 1.8.1;
+- **v2ecoli does not lock as it is** (separate from credentials; measured in P0): its `[tool.uv.sources]` send
+  process-bigraph to `main` (1.11.0), which clashes with the core's 1.9.1. With the two core pins taken from the index,
+  it locks. It also cannot run yet:
   - the ParCa blob and cache builder are not in the wheel;
   - no saved document uses full `local:module.Class` addresses;
-  - its Cython needs a compiler.
+  - its Cython, and vEcoli's source distribution, need a compiler at build time.
 
   Eran (eagmon) owns the repository.
 
@@ -48,6 +47,7 @@ release, one at a time, as usual.
    only. Code, images, locks, interfaces, failure text and runs stay private: hidden by the API and unreadable on disk.
 3. **v2ecoli is composed from git**, not a prebuilt image. The mechanism is proven first on a tiny private probe
    repository, so it does not wait on v2ecoli's readiness.
+4. **We open and merge the v2ecoli PRs ourselves**, working actively with Eran but not gated by him.
 
 ## Design
 
@@ -113,16 +113,27 @@ release, one at a time, as usual.
 - **Lock and uv-lock Jobs.**
   - Create the Job first (`K8sBuilds.create` currently drops the returned uid).
   - Then create a per-Job Secret with an ownerReference to it, without `blockOwnerDeletion`.
-  - The Secret holds a gitconfig whose credential helper only answers `get` (an inline shell helper reading the mounted
-    file, so git never tries to write to the read-only mount). The Jobs get `GIT_CONFIG_GLOBAL` pointing at it.
+  - The Secret holds a gitconfig whose credential helper only answers `get`:
+    `!f() { if [ "$1" = get ]; then cat /run/compose-git/credentials; fi; }; f`. It is an inline shell helper reading
+    the mounted file, so git never tries to write to the read-only mount. The Jobs get `GIT_CONFIG_GLOBAL` pointing at
+    it.
+  - Measured in P0: against the private repository, `git ls-remote` and a fetch of the pinned commit worked and wrote
+    nothing to the mount. pixi's lock honours `GIT_CONFIG_GLOBAL`. The lock records the `https` URL, never a rewrite.
 - **Build Job.**
   - An unprivileged init container clones each restricted repository at its locked commit into an emptyDir.
-  - The privileged `apptainer build` sees only that clone, through a file-URL `insteadOf` gitconfig bound into the
-    build.
+  - The privileged `apptainer build` sees only that clone, through a file-URL `insteadOf`.
+    - The emptyDir, holding the clones and that gitconfig, is bound onto `/mnt`, and the build process gets
+      `APPTAINERENV_GIT_CONFIG_GLOBAL=/mnt/gitconfig`.
+    - The gitconfig also sets `safe.directory` (the clone has another owner) and `uploadpack.allowAnySHA1InWant`, as
+      the P0 lock probe did.
+  - Measured in P0 with apptainer 1.3.6 on the production pixi base:
+    - `build --bind` needs a destination that already exists in the base. `/mnt` does, so a file bind onto
+      `/etc/gitconfig` fails.
+    - The build's own environment does not reach `%post`, but the `APPTAINERENV_` prefix does.
+    - Neither the bind nor the variable is kept in the SIF.
+    - So the definition, and every hash, stays as it is.
   - So the token never enters the privileged pod that runs third-party build code, and can't expire during a build of
     up to 7200 s.
-  - If that gitconfig can't reach `%post` without editing the definition (P0 probe), the edit keys on the spec's
-    recorded roles, so only restricted hashes move.
 - **RBAC:** the `compose-api-builds` Role gains `secrets: create, get, delete`.
 - **Accepted and documented:** lock Jobs run package metadata and build code while the token is present. They are
   unprivileged, and the token is read-only, limited to those repositories and lasts at most 1 h.
@@ -142,8 +153,8 @@ Each compose-api PR bundles the fix, its tests and the version bump, then tag �
 
   **Member email addresses go to the Auth0 admins only**: never into this repository (public, archived to Zenodo),
   its issues or this plan. compose-api sees only the role name.
-- **Jim (design):** an issue covering A–C, reviewed before P1 merges.
-- **Eran:** the P4 list, agreed before any v2ecoli PR.
+- **Jim (design):** issue #552 covers A–C, and it is reviewed before P1 merges.
+- **Eran:** the P4 list, worked through with him (decision 4).
 - **Probe, HPC permissions:**
   - `ls -ld` on each directory level down to `images/` and to an experiment directory;
   - the owners and modes of a SIF and a run's outputs;
@@ -155,6 +166,21 @@ Each compose-api PR bundles the fix, its tests and the version bump, then tag �
   gitconfig reaches `%post`.
 - **Probe, v2ecoli lock:** run `docs/registry-onboarding.md` "Check that it locks" with a local credential, to replace
   the predicted blockers with pixi's actual errors.
+
+**P0 results (2026-11-19).**
+- **git and apptainer:** done, with results under C. No change to the image definition is needed.
+- **The v2ecoli lock:** done. This was `pixi_toml()` from `main` at 36b328c, for v2ecoli at e9250af, in the pinned
+  pixi image. v2ecoli was fetched from a local clone through a file-URL `insteadOf`, so no credential was used.
+  - As it is, the lock fails on one thing only: process-bigraph from `main` (1.11.0) against the core's `==1.9.1`.
+  - With `dependency-overrides` for the two core pins, it locks. That is the mechanism `INDEX_ONLY` already uses.
+    - Python resolves to 3.12.16, so the `==3.12.12` and `==3.12.9` pins do not block.
+    - 333 PyPI and 22 conda packages, including torch 2.15 with 15 NVIDIA wheels.
+    - vEcoli comes as a source distribution, so the build compiles it.
+  - Eight git sources still follow `main`, which the onboarding check refuses: Viva-munk, investigation-contracts,
+    spatio-flux, viva-bioreactordesign, viva-copasi, viva-ketchup, viva-torch, viva-workspace.
+  - Whether composed locks should always override the core pins is question 4 in #552.
+- **HPC permissions:** waits on a run from a login node, by an ordinary (non-service) account. Running it as such an
+  account is itself the test.
 
 **P1. compose-api: restricted entries, gates and the disk fix** (A, B).
 - Tests:
@@ -184,17 +210,21 @@ case, shaped like viva-basic-processes).
   lock, export, failure text, build log and SIF; file modes on the SIF and the run directory.
 - A runbook for a failed first version: `compose-api environments create mash-…`.
 
-**P4. v2ecoli readiness** (v2ecoli PRs, reviewed by Eran), driven by P0's real lock errors. Expected:
-- Python `>=3.12,<3.13`, and resolve vEcoli's `==3.12.9`.
-- Pin the sources to commits that work with the core's 1.9.1 and 1.8.1. If process-bigraph's newer scheduling is
-  needed, a core bump is a separate decision.
-- Ship the ParCa blob and the cache builder in the package.
-- A short single-cell document with full addresses, which becomes the case. It must fit 2 CPU / 8 GB / 30 min
+**P4. v2ecoli readiness** (v2ecoli PRs that we open and merge, working with Eran; decision 4), from P0's real lock:
+- **process-bigraph and bigraph-schema** take releases, not `main`, unless compose-api overrides the core pins (#552,
+  question 4). Whether v2ecoli's composites behave the same on process-bigraph 1.9.1 is unproven: they are tested past
+  it.
+- **The eight `main` sources** are pinned to commits or releases.
+- **Size:** torch/CUDA (through viva-torch) and vEcoli's `[dev]` tooling move out of the base dependencies, if a
+  single-cell run doesn't need them.
+- **Python:** the pin is relaxed to `>=3.12,<3.13`, which the lock already shows works. Check that the ParCa pickle
+  loads on 3.12.16.
+- **Runtime data:** the ParCa blob and the cache builder ship in the package.
+- **A document:** a short single-cell one with full addresses, which becomes the case. It must fit 2 CPU / 8 GB / 30 min
   (`job_script.py`).
-- `conda:` compilers.
-- torch/CUDA and vEcoli `[dev]` move out of the base dependencies.
-- Keep the `method` type and dill-config imports out of the entry's `types`.
-- Check `Metabolism` against `step-outputs-replace`.
+- **Compilers:** `conda:` compilers on the entry, which is compose-api's side.
+- **Address-check gaps:** keep the `method` type and dill-config imports out of the entry's `types`.
+- **step-outputs-replace:** check `Metabolism` against it.
 
 **P5. Onboard and use v2ecoli.**
 - The manifest entry (`access_role: v2ecoli`, roots `v2ecoli` and `pbg_v2ecoli`), its case, a release.
