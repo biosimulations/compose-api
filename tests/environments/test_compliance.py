@@ -136,6 +136,8 @@ def test_pbsim_commons_cases_are_complete() -> None:
         ("viva-nfsim", "flagella-seeded"),
         ("viva-smoldyn", "seeded-decay-2d"),
         ("viva-fenics", "poisson-quadratic-mms"),
+        ("viva-munk", "field-decay-and-diffusion"),
+        ("viva-tumor-tcell", "ifng-field-and-observables"),
         ("vivarium-tyssue", "sheet-relaxation"),
         ("viva-pde-particle", "region-mean-closed-form"),
     ],
