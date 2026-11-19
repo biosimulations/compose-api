@@ -11,6 +11,7 @@ from compose_api.common.ssh.ssh_service import get_ssh_service
 from compose_api.config import get_settings
 from compose_api.db.database_service import DatabaseService, DatabaseServiceSQL
 from compose_api.db.db_utils import create_db
+from compose_api.db.deployment import ensure_deployment_id
 from compose_api.log_config import setup_logging
 from compose_api.observability.ingest import EventIngester
 from compose_api.simulation.data_service import DataService, DataServiceHpc
@@ -38,6 +39,20 @@ def set_postgres_engine(engine: AsyncEngine | None) -> None:
 def get_postgres_engine() -> AsyncEngine | None:
     global global_postgres_engine
     return global_postgres_engine
+
+
+# ------- this deployment's identity (#543), read from its database at startup ------
+
+global_deployment_id: str | None = None
+
+
+def set_deployment_id(deployment_id: str | None) -> None:
+    global global_deployment_id
+    global_deployment_id = deployment_id
+
+
+def get_deployment_id() -> str | None:
+    return global_deployment_id
 
 
 # ------- simulation database service (standalone or pytest) ------
@@ -190,6 +205,7 @@ async def init_standalone(enable_ssl: bool = True) -> None:
 
     logging.warning("calling create_db() to create missing tables and apply pending migrations")
     await create_db(engine)
+    set_deployment_id(await ensure_deployment_id(engine))
 
     database = DatabaseServiceSQL(engine)
     set_database_service(database)
@@ -228,6 +244,7 @@ async def shutdown_standalone() -> None:
 
     set_simulation_service(None)
     set_database_service(None)
+    set_deployment_id(None)
     set_data_service(None)
 
     worker = get_submission_worker()
