@@ -18,6 +18,7 @@ from compose_api.authentication import BEARER_SCHEME_NAME
 from compose_api.common.gateway.models import ServerMode
 from compose_api.config import get_settings
 from compose_api.dependencies import (
+    get_deployment_id,
     get_job_monitor,
     get_required_database_service,
     get_submission_worker,
@@ -161,7 +162,13 @@ mount_webapp(app, Path(get_settings().webapp_dist_dir))
 
 @app.get("/health", tags=["BIOSIM API"])
 async def check_health() -> dict[str, str]:
-    return {"docs": f"{ACTIVE_URL}{app.docs_url}", "version": APP_VERSION}
+    health = {"docs": f"{ACTIVE_URL}{app.docs_url}", "version": APP_VERSION}
+    # Stable for this deployment, distinct between deployments, opaque (#543). Absent until startup has read it from
+    # the database, and absent means unsupported to a client, so it is left out rather than sent as null.
+    deployment_id = get_deployment_id()
+    if deployment_id is not None:
+        health["deployment_id"] = deployment_id
+    return health
 
 
 @app.get("/version", tags=["BIOSIM API"])
