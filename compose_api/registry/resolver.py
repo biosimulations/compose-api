@@ -38,12 +38,14 @@ def covering_environment(
     environments: EnvironmentsFile,
     offered: Callable[[EnvironmentSpec], bool] = lambda spec: True,
     mash_ups: Iterable[EnvironmentSpec] = (),
+    provides: Callable[[EnvironmentSpec], bool] = lambda spec: True,
 ) -> EnvironmentSpec | None:
     """The environment whose entries cover ``needed``, if one does: the shared one, then the other declared ones this
-    deployment offers, then the mash-ups (D7.3); among each, the fewest entries, then the name."""
+    deployment offers, then the mash-ups (D7.3); among each, the fewest entries, then the name. ``provides`` narrows
+    them to those whose image advertises the run's classes (its interface manifest), when the caller knows them."""
     shared = next(spec for spec in environments.environments if spec.kind == "shared")
     declared = [spec for spec in environments.environments if spec is shared or offered(spec)]
-    covering = [spec for spec in [*declared, *mash_ups] if needed <= members_of(spec, manifest)]
+    covering = [spec for spec in [*declared, *mash_ups] if needed <= members_of(spec, manifest) and provides(spec)]
     if not covering:
         return None
     return min(

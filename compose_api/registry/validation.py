@@ -11,7 +11,7 @@ import io
 import json
 import logging
 import zipfile
-from collections.abc import Iterator
+from collections.abc import Collection, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -273,6 +273,24 @@ def unregistered_violations(path: Path, file_type: SimulationFileType, manifest:
                 violation = check_address(address, name, manifest)
                 if violation is not None:
                     violations.append(violation)
+    return violations
+
+
+def unprovided_violations(
+    path: Path, file_type: SimulationFileType, manifest: Manifest, provided: Collection[str], environment: str
+) -> list[AddressViolation]:
+    """Every safe address in a submitted file whose class (`<module>.<Class>`) is not among ``provided``, the classes
+    ``environment``'s image advertises (its interface manifest, read back from the image), each naming the class."""
+    violations = []
+    for name, document in _documents(path, file_type):
+        for address in _addresses(document):
+            protocol, target = _split_address(address)
+            if _unsafe_reason(protocol, target) is not None or target is None:
+                continue
+            qualified = manifest.qualified(target)
+            if qualified not in provided:
+                reason = f"`{qualified}` is not among the classes {environment} provides"
+                violations.append(AddressViolation(document=name, address=str(address), reason=reason))
     return violations
 
 

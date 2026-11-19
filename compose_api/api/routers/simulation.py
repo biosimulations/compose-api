@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
@@ -16,6 +17,7 @@ from compose_api.authorization import RequestedVisibility, ownership_at_submit
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.common.gateway.utils import get_simulation_request_from_uploaded_file, wrap_document_in_omex
 from compose_api.config import get_settings
+from compose_api.db.database_service import DatabaseService
 from compose_api.dependencies import (
     get_database_service,
     get_job_monitor,
@@ -24,16 +26,19 @@ from compose_api.dependencies import (
 )
 from compose_api.environments import lifecycle
 from compose_api.environments.admission import standing_for
+from compose_api.environments.manifests import interfaces_of
 from compose_api.environments.versions import VersionUnavailableError, chosen_version, environment_of, prebuilt_images
-from compose_api.registry.environments import load_environments, offered
+from compose_api.registry.environments import EnvironmentSpec, load_environments, members_of, offered
 from compose_api.registry.manifest import SERVICE_BUNDLE, load_manifest
 from compose_api.registry.resolver import covering_environment, needed_entries
 from compose_api.registry.validation import (
     REFUSED,
     AddressPolicy,
+    AddressViolation,
     SubmissionRejectedError,
     class_targets,
     find_violations,
+    unprovided_violations,
     unregistered_violations,
     validate_submission,
 )
@@ -115,6 +120,64 @@ class _Inferred:
     version: int | None = None
 
 
+async def _advertised(database_service: DatabaseService | None, environment: str) -> frozenset[str] | None:
+    """The classes (`<module>.<Class>`) an environment's default version advertises, as read back from its image; None
+    when nothing has been read back from it yet."""
+    interfaces = await interfaces_of(database_service, environment)
+    if interfaces is None:
+        return None
+    components = interfaces.get("components") or []
+    return frozenset(f"{c.get('module')}.{c.get('name')}" for c in components if isinstance(c, dict))
+
+
+def _refused(path: Path, violations: list[AddressViolation]) -> HTTPException:
+    """The 400 for a run refused before an environment is chosen; its upload is removed, as validation's refusal is."""
+    path.unlink(missing_ok=True)
+    return HTTPException(status_code=400, detail=Rejection(message=REFUSED, violations=violations).model_dump())
+
+
+async def _covering(
+    path: Path,
+    file_type: SimulationFileType,
+    targets: list[str],
+    needed: set[str],
+    database_service: DatabaseService | None,
+) -> EnvironmentSpec | None:
+    """The environment that holds the run's packages and whose image advertises every class it names (its interface
+    manifest, read back from the image); one with nothing read back yet (a version still building) is judged by its
+    packages, as before. One that holds the packages but lacks a class (a class the package does not have at that pin,
+    or one that failed to import there) is a 400 naming it under `enforce`, rather than a run sent to fail at import."""
+    manifest = load_manifest()
+    mash_ups = await lifecycle.mash_up_specs(database_service) if database_service is not None else []
+    images = await prebuilt_images(database_service)
+    environments = load_environments()
+    on_offer = [s for s in environments.environments if s.kind == "shared" or offered(s, images)] + list(mash_ups)
+    advertised = {
+        spec.name: await _advertised(database_service, spec.name)
+        for spec in on_offer
+        if needed <= members_of(spec, manifest)
+    }
+    classes = set(targets)
+
+    def provides(spec: EnvironmentSpec) -> bool:
+        found = advertised.get(spec.name)
+        return found is None or classes <= found
+
+    def covering_by(check: Callable[[EnvironmentSpec], bool]) -> EnvironmentSpec | None:
+        return covering_environment(
+            needed, manifest, environments, offered=lambda s: offered(s, images), mash_ups=mash_ups, provides=check
+        )
+
+    covering = covering_by(provides)
+    if covering is not None:
+        return covering
+    by_packages = covering_by(lambda spec: True)
+    if by_packages is None or AddressPolicy(get_settings().address_policy) != AddressPolicy.ENFORCE:
+        return by_packages  # warn: as before, the environment holding the packages
+    provided = advertised.get(by_packages.name) or frozenset()
+    raise _refused(path, unprovided_violations(path, file_type, manifest, provided, by_packages.name))
+
+
 async def _inferred(
     path: Path,
     file_type: SimulationFileType,
@@ -142,16 +205,10 @@ async def _inferred(
     if unregistered:
         if AddressPolicy(get_settings().address_policy) != AddressPolicy.ENFORCE:
             return _Inferred()  # warn: the shared environment's validation logs them and the run goes ahead there
-        path.unlink(missing_ok=True)
-        blocking = [v for v in violations if v.always_rejected] + unregistered
-        raise HTTPException(status_code=400, detail=Rejection(message=REFUSED, violations=blocking).model_dump())
+        raise _refused(path, [v for v in violations if v.always_rejected] + unregistered)
     needed = needed_entries(targets, manifest)
     database_service = get_database_service()
-    mash_ups = await lifecycle.mash_up_specs(database_service) if database_service is not None else []
-    images = await prebuilt_images(database_service)
-    covering = covering_environment(
-        needed, manifest, load_environments(), offered=lambda spec: offered(spec, images), mash_ups=mash_ups
-    )
+    covering = await _covering(path, file_type, targets, needed, database_service)
     if covering is not None:
         if covering.kind == "prebuilt":
             return _Inferred(simulator=covering.name)
