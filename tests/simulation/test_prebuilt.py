@@ -1,10 +1,11 @@
 """Prebuilt simulator images: a request names an owner-published image the deployment lists."""
 
+import json
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from fastapi import FastAPI
+from fastapi import BackgroundTasks, FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from compose_api.config import override_settings
@@ -18,6 +19,7 @@ from compose_api.simulation.models import (
     EnvironmentImage,
     ImageKind,
     RemoteContainerImage,
+    SimulationFileType,
     SimulationRequest,
     SimulatorVersion,
 )
@@ -156,3 +158,43 @@ async def test_an_unlisted_simulator_is_a_bad_request(
         )
     assert response.status_code == 400
     assert "unknown simulator" in response.json()["detail"]
+
+
+PDE = "local:viva_pde_particle.processes.fv_reaction_diffusion.FVReactionDiffusion"
+UNREGISTERED = "local:numpy.Solver"  # a module under no registry entry
+
+
+def _composite(path: Path, *addresses: str) -> Path:
+    state = {f"p{i}": {"_type": "process", "address": a} for i, a in enumerate(addresses)}
+    path.write_text(json.dumps({"state": state}))
+    return path
+
+
+@pytest.mark.asyncio
+async def test_a_class_under_no_entry_is_not_sent_to_the_prebuilt_image_that_covers_the_rest(
+    database_service: DatabaseServiceSQL, http_api_client: AsyncClient, tmp_path: Path
+) -> None:
+    """A run that names no environment, whose registered classes the prebuilt viva-pde-particle image covers, but that
+    also names a class under no registry entry, is not inferred to that image. A prebuilt image is validated without
+    the registry lookup, so the class would only fail at import on the cluster. It is refused with a 400 that names
+    that class alone: listing the registered ones too would point at the environment they would run in."""
+    from compose_api.api.routers import simulation as simulation_router
+
+    await register_prebuilt(database_service, PREBUILT, IMAGE)
+    try:
+        covered = _composite(tmp_path / "covered.pbg", PDE)
+        mixed = _composite(tmp_path / "mixed.pbg", PDE, UNREGISTERED)
+        inferred = await simulation_router._inferred(covered, SimulationFileType.PBG, None, BackgroundTasks())
+        assert inferred.simulator == PREBUILT  # control: with only registered classes, the image is still chosen
+
+        response = await http_api_client.post(
+            "/simulation/run", files={"uploaded_file": ("doc.pbg", mixed.read_bytes(), "application/json")}
+        )
+        assert response.status_code == 400
+        assert [v["address"] for v in response.json()["detail"]["violations"]] == [UNREGISTERED]
+
+        with override_settings(address_policy="warn"):  # tolerated: the shared environment, never the image
+            inferred = await simulation_router._inferred(mixed, SimulationFileType.PBG, None, BackgroundTasks())
+        assert inferred == simulation_router._Inferred()
+    finally:
+        await unregister_prebuilt(database_service, PREBUILT)

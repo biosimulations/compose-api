@@ -29,10 +29,12 @@ from compose_api.registry.environments import load_environments, offered
 from compose_api.registry.manifest import SERVICE_BUNDLE, load_manifest
 from compose_api.registry.resolver import covering_environment, needed_entries
 from compose_api.registry.validation import (
+    REFUSED,
     AddressPolicy,
     SubmissionRejectedError,
     class_targets,
     find_violations,
+    unregistered_violations,
     validate_submission,
 )
 from compose_api.simulation.handlers import (
@@ -123,15 +125,26 @@ async def _inferred(
     shared environment for everything it covers, as before, then the smallest declared one, then a mash-up that
     covers them. Nothing covering entries that can be composed, the mash-up of exactly those is made for the run
     (step 7b, D7.4): only for a signed-in caller (D7.5); its build follows in the background. Anything else (an
-    unreadable submission, an entry that cannot be composed) goes to the shared environment, whose validation says
-    why it cannot run."""
+    unreadable submission, a class under no entry, an entry that cannot be composed) goes to the shared environment,
+    whose validation says why it cannot run."""
     manifest = load_manifest()
     try:
         # qualified as validation qualifies them, so a core short name (`local:RAMEmitter`) is not "unregistered"
         targets = [manifest.qualified(t) for t in class_targets(path, file_type)]
-        refused = any(v.always_rejected for v in find_violations(path, file_type, manifest))
+        violations = find_violations(path, file_type, manifest)
+        unregistered = unregistered_violations(path, file_type, manifest)
     except SubmissionRejectedError:
         return _Inferred()
+    refused = any(v.always_rejected for v in violations)
+    # A class under no entry is refused before an environment is chosen: an inferred prebuilt image is validated without
+    # the registry lookup, so it would reach the image and fail at import there instead of being refused by name. The
+    # rejection names those classes (and any unsafe address), not the rest: naming those would point at an environment.
+    if unregistered:
+        if AddressPolicy(get_settings().address_policy) != AddressPolicy.ENFORCE:
+            return _Inferred()  # warn: the shared environment's validation logs them and the run goes ahead there
+        path.unlink(missing_ok=True)
+        blocking = [v for v in violations if v.always_rejected] + unregistered
+        raise HTTPException(status_code=400, detail=Rejection(message=REFUSED, violations=blocking).model_dump())
     needed = needed_entries(targets, manifest)
     database_service = get_database_service()
     mash_ups = await lifecycle.mash_up_specs(database_service) if database_service is not None else []
@@ -143,9 +156,8 @@ async def _inferred(
         if covering.kind == "prebuilt":
             return _Inferred(simulator=covering.name)
         return _Inferred(mash_up=covering.name) if covering.kind == "mash-up" else _Inferred()
-    # nothing is made for a run validation will refuse anyway: an unsafe address, or a class under no entry
-    unregistered = any(manifest.entry_for_module(t.rpartition(".")[0]) is None for t in targets)
-    if not needed or refused or unregistered or database_service is None or lifecycle.composable(needed, manifest):
+    # nothing is made for a run validation will refuse anyway: an unsafe address
+    if not needed or refused or database_service is None or lifecycle.composable(needed, manifest):
         return _Inferred()
     if principal is None:
         raise HTTPException(

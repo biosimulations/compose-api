@@ -32,6 +32,7 @@ _MAX_NESTING = 3
 
 #: A process address as a document writes it: `local:<module>.<Class>`, or `{"protocol": ..., "data": ...}`.
 Address = str | dict[str, Any]
+REFUSED = "the composite names processes this service will not run"
 
 
 class AddressPolicy(enum.StrEnum):
@@ -259,6 +260,22 @@ def class_targets(path: Path, file_type: SimulationFileType) -> list[str]:
     return targets
 
 
+def unregistered_violations(path: Path, file_type: SimulationFileType, manifest: Manifest) -> list[AddressViolation]:
+    """What `check_address` says about every safe address in a submitted file whose class is under no registry entry:
+    refused in any environment, so a run that names one is refused before an environment is inferred for it."""
+    violations = []
+    for name, document in _documents(path, file_type):
+        for address in _addresses(document):
+            protocol, target = _split_address(address)
+            if _unsafe_reason(protocol, target) is not None or target is None:
+                continue
+            if manifest.entry_for_module(manifest.qualified(target).rpartition(".")[0]) is None:
+                violation = check_address(address, name, manifest)
+                if violation is not None:
+                    violations.append(violation)
+    return violations
+
+
 def find_violations(
     path: Path,
     file_type: SimulationFileType,
@@ -317,7 +334,7 @@ def validate_submission(
         return []
     blocking = violations if policy == AddressPolicy.ENFORCE else [v for v in violations if v.always_rejected]
     if blocking:
-        raise SubmissionRejectedError("the composite names processes this service will not run", blocking)
+        raise SubmissionRejectedError(REFUSED, blocking)
     for v in violations:
         logger.warning("Accepted under address_policy=warn: %s in %s: %s", v.address, v.document, v.reason)
     return violations
