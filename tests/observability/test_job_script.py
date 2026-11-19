@@ -24,6 +24,10 @@ CORRELATION = "simulation-abc1234"
 # Stands in for `singularity run --compat --env-file F --bind HOST:/experiment IMAGE run ...`: reads the env file the
 # way apptainer does, writes one engine event under the run's traceparent and one output file, then exits FAKE_EXIT.
 FAKE_SINGULARITY = r"""#!/bin/bash
+if [ -n "${FAKE_IGNORE_TERM:-}" ]; then trap '' TERM; fi  # first, so no SIGTERM can land before it
+if [ -n "${FAKE_FLUSH_ON_TERM:-}" ]; then  # a simulator with a shutdown handler: its final output comes after SIGTERM
+  trap 'sleep 1; echo flushed > "$HOST/output/out.txt"; exit 0' TERM
+fi
 while [ $# -gt 0 ]; do
   case "$1" in
     --env-file) set -a; . "$2"; set +a; shift 2 ;;
@@ -39,8 +43,8 @@ if [ -n "${FAKE_BUNDLE:-}" ]; then  # a zarr store: a directory of chunk files, 
   mkdir -p "$HOST/output/run.fenics/u"; echo '{}' > "$HOST/output/run.fenics/.zattrs"; printf 'abcd' > "$HOST/output/run.fenics/u/0.0"
   chmod 600 "$HOST/output/run.fenics/.zattrs"  # as a mkstemp file renamed into place
 fi
-if [ -n "${FAKE_IGNORE_TERM:-}" ]; then  # hung, and deaf to SIGTERM, as on a bad node: only SIGKILL ends it
-  trap '' TERM; sleep 60
+if [ -n "${FAKE_IGNORE_TERM:-}${FAKE_FLUSH_ON_TERM:-}" ]; then  # still running when SLURM stops the job
+  while :; do sleep 1; done
 fi
 exit "${FAKE_EXIT:-0}"
 """
@@ -185,13 +189,11 @@ def test_a_failed_job_records_its_exit_code(tmp_path: Path) -> None:
     assert not (experiment / "results.zip").exists()
 
 
-def test_a_time_limit_ends_the_job_through_its_trap_while_the_simulator_ignores_sigterm(tmp_path: Path) -> None:
-    """Regression: at a time limit SLURM sends SIGTERM to every process of the job, then SIGKILL after KillWait. Bash
-    runs its TERM trap only once its foreground command returns, so a simulator that outlived the SIGTERM held the trap
-    until the SIGKILL: runs 12536-12538 (hung on one node) ended with no job.end, and their SLURM log was never a
-    dataset. Waiting on the simulator in the background lets the trap run at once."""
+def _stopped(tmp_path: Path, fake_mode: str) -> tuple[subprocess.Popen[bytes], Path]:
+    """The job with the fake simulator in ``fake_mode``, stopped as SLURM stops a job at its time limit: SIGTERM to
+    every process of the job once the simulator has written its output."""
     script, env, experiment = _job(tmp_path, 0, staged_input=False)
-    env["FAKE_IGNORE_TERM"] = "1"
+    env[fake_mode] = "1"
     job = subprocess.Popen(  # noqa: S603
         ["bash", "-c", script],  # noqa: S607
         env=env,
@@ -200,18 +202,41 @@ def test_a_time_limit_ends_the_job_through_its_trap_while_the_simulator_ignores_
         stderr=subprocess.DEVNULL,
     )
     try:
-        deadline = time.monotonic() + 10
-        while not (experiment / "output" / "out.txt").exists():  # the simulator wrote its output and hangs
+        deadline = time.monotonic() + 60  # generous: it only matters when the fake never starts
+        while not (experiment / "output" / "out.txt").exists():
             assert time.monotonic() < deadline, "the fake simulator never started"
             time.sleep(0.05)
         os.killpg(job.pid, signal.SIGTERM)
-        code = job.wait(timeout=10)  # before the fix: still blocked here, until a SIGKILL
+    except BaseException:
+        _kill(job)
+        raise
+    return job, experiment
+
+
+def _kill(job: subprocess.Popen[bytes]) -> None:
+    """SLURM's SIGKILL at KillWait, to everything left in the job."""
+    with contextlib.suppress(ProcessLookupError, PermissionError):  # macOS: EPERM once the group has exited
+        os.killpg(job.pid, signal.SIGKILL)
+    job.wait()
+
+
+def test_a_time_limit_records_the_job_end_while_the_simulator_ignores_sigterm(tmp_path: Path) -> None:
+    """Regression: bash runs its TERM trap only once its foreground command returns, so a simulator that outlived
+    SLURM's SIGTERM (runs 12536-12538, hung on one node) held the trap until the SIGKILL: no job.end, and the SLURM log
+    never became a dataset. Now the end is recorded within the 10 s grace, and the script then stays in the job, so the
+    simulator is not orphaned outside SLURM's process tracking: SLURM's SIGKILL ends both."""
+    job, experiment = _stopped(tmp_path, "FAKE_IGNORE_TERM")
+    try:
+        events_file = experiment / "events" / "job.jsonl"
+        deadline = time.monotonic() + 60  # the 10 s grace, and room for a loaded machine
+        while "job.end" not in events_file.read_text():
+            assert time.monotonic() < deadline, "no job.end after SIGTERM"
+            time.sleep(0.1)
+        time.sleep(0.5)
+        assert job.poll() is None  # still in the job with the simulator
     finally:
-        with contextlib.suppress(ProcessLookupError, PermissionError):  # macOS: EPERM once the group has exited
-            os.killpg(job.pid, signal.SIGKILL)  # the simulator, deaf to SIGTERM
-        job.wait()
-    assert code == 143
-    events = _read(experiment / "events" / "job.jsonl")
+        _kill(job)
+    events = _read(events_file)
     assert [e.event for e in events] == [
         "span.start",
         "job.start",
@@ -225,3 +250,19 @@ def test_a_time_limit_ends_the_job_through_its_trap_while_the_simulator_ignores_
         {"uri": "job.out", "kind": "log", "name": "SLURM log"},
     ]
     assert events[4].level == "error" and events[4].payload["exit_code"] == 143
+
+
+def test_a_simulator_stopped_by_sigterm_finishes_writing_before_the_manifest(tmp_path: Path) -> None:
+    """A simulator with a shutdown handler writes its final output after SIGTERM. The manifest waits for it (within the
+    grace), so the dataset's checksum is the final file's, and the job then exits on its own."""
+    job, experiment = _stopped(tmp_path, "FAKE_FLUSH_ON_TERM")
+    try:
+        code = job.wait(timeout=60)
+    finally:
+        _kill(job)
+    assert code == 143
+    out = experiment / "output" / "out.txt"
+    assert out.read_text() == "flushed\n"
+    announced = [e.payload for e in _read(experiment / "events" / "job.jsonl") if e.event == "artifact.written"]
+    assert announced[0]["uri"] == "output/out.txt"
+    assert announced[0]["sha256"] == hashlib.sha256(out.read_bytes()).hexdigest()
