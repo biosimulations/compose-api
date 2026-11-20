@@ -6,6 +6,7 @@ what is asked of them is proven live, in the plan's P5."""
 
 import datetime
 import os
+import re
 import subprocess
 from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
@@ -23,6 +24,7 @@ from compose_api.simulation.build_k8s import (
     CREDENTIALS_DIR,
     GITCONFIG,
     BuildSite,
+    Evidence,
     PrivateBuild,
     build_gitconfig,
     build_job,
@@ -186,6 +188,38 @@ async def test_only_a_private_versions_lock_jobs_read_a_secret_and_it_is_theirs(
         assert (mount.mount_path, mount.read_only) == (CREDENTIALS_DIR, True)
         assert {e.name: e.value for e in container.env}["GIT_CONFIG_GLOBAL"] == f"{CREDENTIALS_DIR}/gitconfig"
     assert [m["repositories"] for m in fake_github.minted] == [["v2ecoli"]]
+
+
+@pytest.mark.asyncio
+async def test_a_private_entrys_evidence_is_checked_by_the_job_that_holds_its_token(
+    fake_github: FakeGitHub, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An accepted finding's evidence in a private repository is fetched by the lock Job's own git, before pixi lock:
+    the one container that reads the repository through the Job's Secret, with nothing in its script changing which
+    git config that is. The evidence fetch with real git: test_pixi's; GitHub answering it with the token: P5."""
+    monkeypatch.setattr(BuildSite, "from_settings", classmethod(lambda cls, s: SITE))
+    builds = RecordingBuilds(
+        f"{build_k8s.INSPECT_MARKER} {build_k8s.LOCKED}\nversion: 7\n\n{build_k8s.INSPECT_MARKER} end\n"
+    )
+    monkeypatch.setattr(build_k8s, "k8s_builds", lambda: builds)
+    evidence = Evidence(V2ECOLI.url, V2ECOLI.commit, ("tests/test_metabolism_gate.py",))
+    locked = await build_k8s.lock_composed(
+        "[workspace]\n", PIXI_IMAGE, "abcde", (V2ECOLI,), poll_seconds=0, evidence=(evidence,)
+    )
+    assert locked == "version: 7\n"
+    assert [kind for kind, _ in builds.calls] == ["job", "secret"]
+    (job,) = builds.of("job")
+    (container,) = job.spec.template.spec.containers
+    assert {e.name: e.value for e in container.env}["GIT_CONFIG_GLOBAL"] == f"{CREDENTIALS_DIR}/gitconfig"
+    script = container.command[-1]
+    # The evidence check exactly, and no other git call in the Job: no flag or config can be slipped into its fetch.
+    expected = build_k8s.evidence_script((evidence,))
+    assert expected in script
+    assert re.search(r"(?<!--spec )\bgit\b", script.replace(expected, "")) is None  # only pixi's `--spec git`
+    assert f"git -C evidence/0 fetch -q --depth 1 -- {V2ECOLI.url} {V2ECOLI.commit}" in expected
+    assert script.index(expected) < script.index("pixi lock")
+    assert "GIT_CONFIG" not in script  # the Job's git config is the helper's, set in its env, not by the script
+    assert TOKEN not in serialized(job)
 
 
 @pytest.mark.asyncio

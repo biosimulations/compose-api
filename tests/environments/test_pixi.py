@@ -303,12 +303,17 @@ def test_the_lock_checks_an_entrys_evidence_at_its_pinned_commit(
     assert unfetched[build_k8s.EVIDENCE_ERROR].strip() == f"{absent} at {pinned} could not be fetched"
 
 
-def test_a_versions_evidence_is_recorded_and_a_missing_one_fails_it(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("access_role", [None, "gated-members"])
+def test_a_versions_evidence_is_recorded_and_a_missing_one_fails_it(
+    access_role: str | None, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The spec records each entry's evidence paths; resolving passes them to the lock, at the entry's commit, and a
-    missing one fails the version with that reason (not as a conflict)."""
+    missing one fails the version with that reason (not as a conflict). A private entry's evidence goes to the same
+    lock as its repository's credentials: one Job reads both, at the one commit."""
     import asyncio
 
     from compose_api.environments import service
+    from compose_api.environments.source_credentials import PrivateSource
     from compose_api.simulation.models import EnvironmentVersion, VersionState
 
     gated = RegistryEntry.model_validate({
@@ -317,6 +322,7 @@ def test_a_versions_evidence_is_recorded_and_a_missing_one_fails_it(monkeypatch:
         "install": {"git": "https://github.com/o/gated", "commit": "c" * 40},
         "accepted_findings": [{"component": "gated.Step", "check": "step-outputs-replace", "reason": "gated",
                                "evidence": "tests/test_gate.py"}],
+        **({"access_role": access_role} if access_role else {}),
     })  # fmt: skip
     spec = ComposedSpec(
         environment="mash-gated", entries=(gated,), core=(("process-bigraph", "1.9.1"),), platform="linux-64",
@@ -325,12 +331,16 @@ def test_a_versions_evidence_is_recorded_and_a_missing_one_fails_it(monkeypatch:
     recorded = spec.as_json()
     assert recorded["entries"][0]["accepted"] == [gated.accepted_findings[0].model_dump()]
 
-    asked: list[tuple[Evidence, ...]] = []
+    asked: list[tuple[tuple[PrivateSource, ...], tuple[Evidence, ...]]] = []
 
     async def lock_composed(
-        toml: str, image: str, suffix: str, sources: Sequence[object] = (), evidence: Sequence[Evidence] = ()
+        toml: str,
+        image: str,
+        suffix: str,
+        sources: Sequence[PrivateSource] = (),
+        evidence: Sequence[Evidence] = (),
     ) -> str:
-        asked.append(tuple(evidence))
+        asked.append((tuple(sources), tuple(evidence)))
         raise EvidenceMissingError(f"tests/test_gate.py is not in https://github.com/o/gated at {'c' * 40}")
 
     failures: list[str] = []
@@ -350,7 +360,8 @@ def test_a_versions_evidence_is_recorded_and_a_missing_one_fails_it(monkeypatch:
         spec={**recorded, "pixi_toml": "[workspace]\n", "pixi_image": COMPOSITION.pixi_image},
     )  # fmt: skip
     assert asyncio.run(service.resolve_composed(Database(), version, "abcde")) is None  # type: ignore[arg-type]
-    assert asked == [(Evidence("https://github.com/o/gated", "c" * 40, ("tests/test_gate.py",)),)]
+    private = (PrivateSource("https://github.com/o/gated", "c" * 40),) if access_role else ()
+    assert asked == [(private, (Evidence("https://github.com/o/gated", "c" * 40, ("tests/test_gate.py",)),))]
     (failure,) = failures
     assert failure.startswith("an accepted finding's evidence is missing:\ntests/test_gate.py is not in")
 
