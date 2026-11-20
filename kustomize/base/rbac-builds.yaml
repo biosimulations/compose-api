@@ -1,6 +1,8 @@
 # The API's service account, allowed to run container builds as Kubernetes Jobs in its own namespace
 # (compose_api/simulation/build_k8s.py, settings.build_backend=k8s): create and read the Job, read its pods and their
-# logs (the build log route), and its events (a pod the namespace refuses to admit fails the build at once).
+# logs (the build log route), and its events (a pod the namespace refuses to admit fails the build at once). It may
+# create Secrets, and nothing else with them: a Job that reads private repositories gets its token in one it owns,
+# which goes when the Job does (build_k8s.credentials_secret).
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -19,6 +21,9 @@ rules:
   - apiGroups: [""]
     resources: ["pods", "pods/log", "events"]
     verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
 
 ---
 

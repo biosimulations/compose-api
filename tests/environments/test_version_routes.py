@@ -6,7 +6,7 @@ replaced too, so nothing reaches PyPI or a cluster."""
 
 import hashlib
 import uuid
-from collections.abc import AsyncGenerator, Iterator
+from collections.abc import AsyncGenerator, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -21,6 +21,7 @@ from compose_api.api.routers import registry as registry_router
 from compose_api.authorization import get_caller
 from compose_api.config import override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
+from compose_api.environments.source_credentials import PrivateSource
 from compose_api.environments.versions import version_for
 from compose_api.simulation import handlers
 from compose_api.simulation.models import SimulatorVersion
@@ -199,7 +200,7 @@ class Locks:
     text: str = "version: 7\n"  # the lock every request gets while `same`
     asked: list[str] = field(default_factory=list)
 
-    async def __call__(self, toml: str, pixi_image: str, suffix: str) -> str:
+    async def __call__(self, toml: str, pixi_image: str, suffix: str, sources: Sequence[PrivateSource] = ()) -> str:
         from compose_api.simulation.build_k8s import LockFailedError
 
         self.asked.append(toml)
@@ -327,7 +328,7 @@ async def test_a_composition_without_conda_also_exports_as_uv(
     projects: list[str] = []
     answer = {"lock": 'version = 1\n\n[[package]]\nname = "registry-env"\nversion = "0"\nsource = { virtual = "." }\n'}
 
-    async def uv_lock(project: str, pixi_image: str, suffix: str) -> str:
+    async def uv_lock(project: str, pixi_image: str, suffix: str, sources: Sequence[PrivateSource] = ()) -> str:
         projects.append(project)
         return answer["lock"]
 

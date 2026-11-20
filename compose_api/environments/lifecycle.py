@@ -17,6 +17,7 @@ from compose_api.db.database_service import DatabaseService
 from compose_api.environments import compliance_runs
 from compose_api.environments import service as environment_service
 from compose_api.environments.contents import inspect_prebuilt_version, inspect_shared_version, record_contents
+from compose_api.environments.source_credentials import SourceCredentialsError
 from compose_api.registry.environments import EnvironmentSpec, load_environments
 from compose_api.registry.manifest import HPC_MINIMUM_LEVEL, Manifest
 from compose_api.simulation import handlers
@@ -46,6 +47,10 @@ async def build_version(version: EnvironmentVersion, simulator: SimulatorVersion
             job_monitor=dependencies.get_required_job_monitor(),
             random_string=_suffix(),
         )
+    except SourceCredentialsError as e:  # nothing was built; its page, and a mash-up's 409, say why
+        logger.exception(f"The build of {version.label} could not read its private repositories")
+        await environments_db.set_failure(version.database_id, f"its build could not read its repositories: {e}")
+        return
     except Exception:
         logger.exception(f"The image of {version.label} (simulator {simulator.database_id}) failed")
         await environments_db.set_state(version.database_id, VersionState.FAILED)
@@ -212,6 +217,8 @@ async def mash_up_for(
         )
     except environment_service.VersionRequestError as e:
         raise MashUpError(409, str(e)) from e
+    except SourceCredentialsError as e:  # no version was recorded, so the next run tries again
+        raise MashUpError(503, f"its private repositories cannot be read now: {e}") from e
     resolved = await environment_service.resolve_composed(database_service, version, _suffix())
     if resolved is None:
         failed = await environments_db.get_version(version.database_id)

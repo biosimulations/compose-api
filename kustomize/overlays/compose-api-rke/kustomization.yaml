@@ -5,7 +5,7 @@ namespace: compose-api-rke
 
 images:
   - name: ghcr.io/biosimulations/compose-api
-    newTag: 0.7.97
+    newTag: 0.7.98
   - name: docker.io/library/mongo
     newTag: 8.3.11
 
@@ -23,6 +23,7 @@ resources:
   - compose-api-home-pvc.yaml
 #  - mongodb-pvc.yaml
   - secret-ghcr.yaml
+  - secret-github-app.yaml
   - secret-shared.yaml
   - secret-ssh.yaml
   - ../../config/compose-api-rke

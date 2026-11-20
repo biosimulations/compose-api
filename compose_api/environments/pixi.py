@@ -84,13 +84,15 @@ class ComposedSpec:
         return [t for entry in self.entries for t in entry.types]
 
     def as_json(self) -> dict[str, Any]:
-        """The spec as a version records it."""
+        """The spec as a version records it. A private repository's entry also records its role, so the Jobs that
+        fetch it, later as well, know to (``source_credentials.private_sources``)."""
         return {
             "entries": [
                 {
                     "id": e.id,
                     "install": e.install.model_dump(exclude_defaults=True) if e.install else None,
                     "conda": e.conda,
+                    **({"access_role": e.access_role} if e.access_role else {}),
                 }
                 for e in self.entries
             ],

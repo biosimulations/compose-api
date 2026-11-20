@@ -4,10 +4,12 @@ caller (anonymous, signed in, or an administrator without the role) the entry, t
 and its runs do not exist: each answers exactly as something unknown does, and keeps doing so after the entry leaves
 the manifest."""
 
+import asyncio
+import datetime
 import importlib
 import json
 import re
-from collections.abc import AsyncIterator, Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -26,11 +28,14 @@ from compose_api.db.database_service import DatabaseServiceSQL
 from compose_api.db.tables.environment_tables import ORMEnvironment, ORMEnvironmentVersion
 from compose_api.db.tables.hpc_tables import ORMHpcRun
 from compose_api.db.tables.simulator_tables import ORMSimulation
-from compose_api.environments import lifecycle
+from compose_api.environments import lifecycle, source_credentials
+from compose_api.environments.source_credentials import PrivateSource
 from compose_api.registry import manifest as manifest_module
 from compose_api.registry.manifest import load_manifest
+from compose_api.simulation import build_k8s
 from compose_api.simulation.models import JobType, SimulationRequest, SimulatorVersion, Visibility
 from tests.fixtures.mash_up_fixtures import Locks
+from tests.fixtures.private_source_fixtures import TOKEN, FakeGitHub, RecordingBuilds, serialized
 
 DOSE = "local:viva_basic_processes.intervention.Intervention"
 MABOSS = "local:viva_maboss.processes.MaBoSSProcess"
@@ -102,9 +107,10 @@ _NAMING_PARAMETERS = {"environment", "environment_version", "simulator", "simula
 
 
 @pytest.fixture
-def private_entry(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Callable[[], None]:
+def private_entry(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fake_github: FakeGitHub) -> Callable[[], None]:
     """manifest.yaml as committed, with viva-basic-processes private to ``ROLE``; call the result to drop the entry from
-    the manifest again, as a later release might."""
+    the manifest again, as a later release might. It installs from git, so its versions' Jobs fetch it with a token
+    from this deployment's GitHub App (``fake_github``)."""
     committed = manifest_module._MANIFEST_PATH
     data = yaml.safe_load(committed.read_text())
     entry = next(e for e in data["entries"] if e["id"] == "viva-basic-processes")
@@ -370,3 +376,155 @@ def test_every_route_that_names_or_lists_environments_or_simulators_is_checked()
     assert naming <= checked | set(NAMING), sorted(naming - checked - set(NAMING))
     assert listing == LISTINGS, sorted(listing ^ LISTINGS)
     assert checked <= named | naming and set(NAMING) <= naming  # no row names a route that is gone
+
+
+def _basic_processes() -> PrivateSource:
+    """The private repository, as the manifest installs it."""
+    entry = next(e for e in load_manifest().entries if e.id == "viva-basic-processes")
+    assert entry.install is not None and entry.install.git is not None and entry.install.commit is not None
+    return PrivateSource(entry.install.git, entry.install.commit)
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("private_entry", "clean", "queued")
+async def test_without_a_token_nothing_is_made_and_the_next_run_makes_it(
+    as_caller: Any, locks: Locks, builds: list[str], fake_github: FakeGitHub, database_service: DatabaseServiceSQL
+) -> None:
+    """GitHub gives no token: the run is a 503 and no version is recorded. A failed first version would refuse every
+    later run of these classes with a 409 until an administrator stepped in; this one is simply tried again."""
+    environments_db = database_service.get_environments_db()
+    fake_github.available = False
+    as_caller(HOLDER)
+    async with _client() as client:
+        refused = await _submit(client, DOSE, MABOSS)
+    assert refused.status_code == 503, refused.text
+    assert "private repositories cannot be read now" in refused.json()["detail"]
+    assert locks.asked == [] and await environments_db.list_versions(PRIVATE_MASH_UP) == []
+
+    fake_github.available = True
+    await _holders_mash_up(as_caller, database_service)
+
+    # an administrator holding the role asks for another version while GitHub is down: refused, nothing recorded
+    source_credentials._tokens.clear()  # the run's token, which would still serve
+    fake_github.available = False
+    as_caller(_principal("auth0|operator", ROLE, "admin"))
+    async with _client() as client:
+        again = await client.post(f"/registry/environments/{PRIVATE_MASH_UP}/versions", json={"note": "again"})
+    assert again.status_code == 503, again.text
+    assert [v.number for v in await environments_db.list_versions(PRIVATE_MASH_UP)] == [1]
+
+
+SITE = build_k8s.BuildSite(
+    namespace="ns", image="ghcr.io/apptainer/apptainer:1.3.6", pvc_claim="home", pvc_mount_path="/projects/CRBM",
+    pvc_sub_path="", run_as_uid=16997, run_as_gid=10000, supplemental_groups=(), timeout_seconds=600,
+)  # fmt: skip
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("private_entry", "clean", "queued")
+async def test_its_jobs_alone_are_given_a_token_and_only_in_their_secrets(
+    as_caller: Any,
+    locks: Locks,
+    builds: list[str],
+    fake_github: FakeGitHub,
+    database_service: DatabaseServiceSQL,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The holder's mash-up and another caller's public one, each locked, built and given its uv form as the service
+    would: the private one's Jobs read its repository with a token minted for it alone, the build's in its Secret; the
+    public one's get none; and the token is in nothing the version records. (Its lock is pixi's, a stand-in here: the
+    plan's local probes show pixi records the https URL and no token.)"""
+    from compose_api.environments import service as environment_service
+    from compose_api.environments import uv_export
+
+    private = _basic_processes()
+    fake_github.lifetime = datetime.timedelta(minutes=50)  # enough for a lock Job, not for a build
+    await _holders_mash_up(as_caller, database_service)
+    as_caller(OTHER)
+    async with _client() as client:
+        assert (await _submit(client, MABOSS)).status_code == 200
+    assert locks.sources == [(private,), ()]
+    assert fake_github.minted == [{"repositories": [private.repository[1]], "permissions": {"contents": "read"}}]
+
+    monkeypatch.setattr(build_k8s.BuildSite, "from_settings", classmethod(lambda cls, s: SITE))
+    monkeypatch.setattr(uv_export, "needs_conda", lambda spec: False)  # so each gets a uv form, whatever it installs
+    uv_locked: list[tuple[PrivateSource, ...]] = []
+
+    async def uv_lock(project: str, pixi_image: str, suffix: str, sources: Sequence[PrivateSource] = ()) -> str:
+        uv_locked.append(tuple(sources))
+        return "version = 1\n"
+
+    monkeypatch.setattr(build_k8s, "uv_lock", uv_lock)
+    environments_db = database_service.get_environments_db()
+    for name, is_private in ((PRIVATE_MASH_UP, True), (PUBLIC_MASH_UP, False)):
+        version = await environments_db.get_default(name)
+        assert version is not None and version.simulator_id is not None
+        detail = await environments_db.get_by_number(name, version.number)
+        simulator = await database_service.get_simulator_db().get_simulator(version.simulator_id)
+        assert detail is not None and simulator is not None
+        recording = RecordingBuilds()
+        monkeypatch.setattr(build_k8s, "k8s_builds", lambda r=recording: r)
+        await build_k8s.submit_build(simulator, database_service.get_hpc_db(), "AbCdE")
+        await environment_service.export_uv(database_service, version, "AbCdE")
+        assert uv_locked[-1] == ((private,) if is_private else ())
+        (job,) = recording.of("job")
+        containers = job.spec.template.spec.init_containers
+        recorded = json.dumps([detail.spec, simulator.container_def.representation])
+        assert TOKEN not in recorded and TOKEN not in serialized(job)
+        if not is_private:
+            assert [c.name for c in containers] == ["build"] and recording.of("secret") == []
+            continue
+        assert [c.name for c in containers] == ["clone", "build"]
+        assert f"fetch -q --depth 1 {private.url} {private.commit}\n" in containers[0].command[-1]
+        (secret,) = recording.of("secret")
+        assert secret.string_data["credentials"] == f"username=x-access-token\npassword={TOKEN}\n"
+    # the run's token, with 50 minutes left, served the uv-lock Job; the build's clone was given a fresh one
+    assert len(fake_github.minted) == 2
+
+
+class _NoDownload:
+    """A simulation service whose shared image repository has no image, so the image is built."""
+
+    async def download_container(self, image: object) -> None:
+        raise RuntimeError("not published")
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("private_entry", "clean", "queued")
+async def test_a_build_given_no_token_fails_its_version_and_says_why(
+    as_caller: Any,
+    locks: Locks,
+    builds: list[str],
+    fake_github: FakeGitHub,
+    database_service: DatabaseServiceSQL,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The build asks for a token of its own when it starts. If GitHub refuses then, nothing is built, and the version
+    is failed with the reason, which the next run's 409 repeats instead of "see its page"."""
+    from compose_api import dependencies
+
+    fake_github.lifetime = datetime.timedelta(minutes=50)  # the run's token will not do for the build
+    as_caller(HOLDER)
+    async with _client() as client:
+        assert (await _submit(client, DOSE, MABOSS)).status_code == 200
+    environments_db = database_service.get_environments_db()
+    version = await environments_db.get_default(PRIVATE_MASH_UP)
+    assert version is not None and version.simulator_id is not None
+    simulator = await database_service.get_simulator_db().get_simulator(version.simulator_id)
+    assert simulator is not None
+
+    fake_github.available = False
+    recording = RecordingBuilds()
+    monkeypatch.setattr(build_k8s, "k8s_builds", lambda: recording)
+    monkeypatch.setattr(build_k8s.BuildSite, "from_settings", classmethod(lambda cls, s: SITE))
+    monkeypatch.setattr(dependencies, "get_required_simulation_service", lambda: _NoDownload())
+    monkeypatch.setattr(dependencies, "get_required_job_monitor", lambda: object())
+    with override_settings(build_backend="k8s"):  # a build that started would wait on a monitor there is none of
+        await asyncio.wait_for(lifecycle.build_version(version, simulator), timeout=30)
+    assert recording.calls == []  # no Job: the token is had before anything is created
+    failed = await environments_db.get_version(version.database_id)
+    assert failed is not None and failed.state == "failed"
+    assert (failed.failure or "").startswith("its build could not read its repositories: GitHub gave no read access")
+    async with _client() as client:
+        again = await _submit(client, DOSE, MABOSS)
+    assert again.status_code == 409 and "could not read its repositories" in again.json()["detail"]

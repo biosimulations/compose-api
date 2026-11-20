@@ -8,7 +8,7 @@ import re
 
 from compose_api.db.database_service import DatabaseService
 from compose_api.db.services.environments_db import VersionSource
-from compose_api.environments import pixi, uv_export
+from compose_api.environments import pixi, source_credentials, uv_export
 from compose_api.registry.access import entry_roles
 from compose_api.registry.environments import EnvironmentSpec, load_environments, spec_problems
 from compose_api.registry.manifest import load_manifest
@@ -100,6 +100,9 @@ async def create_composed(
     roles = entry_roles([entry.id for entry in spec.entries], manifest)
     if roles:  # a private repository's version keeps its roles, whatever the manifest says later (registry/access.py)
         recorded["access_roles"] = sorted(roles)
+    sources = source_credentials.private_sources(recorded["entries"])
+    if sources:  # before anything is recorded: a version its Jobs cannot fetch would only fail, and a mash-up's
+        await source_credentials.token_for(sources)  # failed first version blocks its entries (lifecycle.mash_up_for)
     source = VersionSource(
         spec=recorded,
         origin="registry",
@@ -121,7 +124,8 @@ async def resolve_composed(
     environments_db = database_service.get_environments_db()
     recorded = version.spec or {}
     try:
-        text = await lock_composed(recorded["pixi_toml"], recorded["pixi_image"], suffix)
+        sources = source_credentials.private_sources(recorded.get("entries") or [])
+        text = await lock_composed(recorded["pixi_toml"], recorded["pixi_image"], suffix, sources)
     except LockFailedError as e:
         await environments_db.set_failure(version.database_id, f"its entries do not resolve together:\n{e}")
         return None
@@ -200,7 +204,8 @@ async def export_uv(database_service: DatabaseService, version: EnvironmentVersi
     pins = uv_export.pypi_pins(detail.lock)
     project = uv_export.pyproject(version.environment, version.number, spec, pins)
     try:
-        locked = await uv_lock(project, str(spec["pixi_image"]), suffix)
+        sources = source_credentials.private_sources(spec.get("entries") or [])
+        locked = await uv_lock(project, str(spec["pixi_image"]), suffix, sources)
     except Exception:
         logger.exception(f"The uv form of {version.label} could not be locked")
         return False

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: compose-api
-  version: 0.7.97
+  version: 0.7.98
 paths:
   /curated/copasi:
     post:
@@ -1465,6 +1465,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UnprocessableError'
+        '503':
+          description: Its private repositories cannot be read now; nothing was recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
   /registry/environments/{name}/versions/{number}:
     get:
       tags:
