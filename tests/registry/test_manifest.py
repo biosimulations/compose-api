@@ -154,11 +154,17 @@ GATED = {
 }
 
 
+GIT = {"install": {"git": "https://github.com/vivarium-collective/v2ecoli", "commit": "e" * 40}}
+
+
 def test_an_entry_accepts_a_finding_for_its_own_component_with_a_reason_and_evidence() -> None:
-    (accepted,) = entry("v2ecoli", ["v2ecoli"], accepted_findings=[GATED]).accepted_findings
+    (accepted,) = entry("v2ecoli", ["v2ecoli"], accepted_findings=[GATED], **GIT).accepted_findings
     assert (accepted.component, accepted.check) == (GATED["component"], GATED["check"])
     with pytest.raises(ValidationError, match="not its own"):
-        entry("other", ["other"], accepted_findings=[GATED])
+        entry("other", ["other"], accepted_findings=[GATED], **GIT)
     for missing in ("reason", "evidence"):
         with pytest.raises(ValidationError, match="needs a reason and its evidence"):
-            entry("v2ecoli", ["v2ecoli"], accepted_findings=[{**GATED, missing: "  "}])
+            entry("v2ecoli", ["v2ecoli"], accepted_findings=[{**GATED, missing: "  "}], **GIT)
+    # its evidence is a path at a commit, so only an entry installed from git can name one
+    with pytest.raises(ValidationError, match="checked at a git commit"):
+        entry("v2ecoli", ["v2ecoli"], accepted_findings=[GATED])

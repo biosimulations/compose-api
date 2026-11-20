@@ -119,13 +119,21 @@ async def resolve_composed(
 ) -> tuple[EnvironmentVersion, SimulatorVersion] | None:
     """Lock a resolving version in its Job, then give it its definition's simulator: the version, now `building`, and
     the simulator to build; None when it failed (it is `failed`, with pixi's explanation or the version it repeats)."""
-    from compose_api.simulation.build_k8s import LockFailedError, lock_composed
+    from compose_api.simulation.build_k8s import Evidence, EvidenceMissingError, LockFailedError, lock_composed
 
     environments_db = database_service.get_environments_db()
     recorded = version.spec or {}
     try:
         sources = source_credentials.private_sources(recorded.get("entries") or [])
-        text = await lock_composed(recorded["pixi_toml"], recorded["pixi_image"], suffix, sources)
+        evidence = tuple(
+            Evidence(str(e["install"]["git"]), str(e["install"]["commit"]), tuple(e["evidence"]))
+            for e in recorded.get("entries") or []
+            if e.get("evidence") and (e.get("install") or {}).get("git")
+        )
+        text = await lock_composed(recorded["pixi_toml"], recorded["pixi_image"], suffix, sources, evidence=evidence)
+    except EvidenceMissingError as e:
+        await environments_db.set_failure(version.database_id, f"an accepted finding's evidence is missing:\n{e}")
+        return None
     except LockFailedError as e:
         await environments_db.set_failure(version.database_id, f"its entries do not resolve together:\n{e}")
         return None

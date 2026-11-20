@@ -8,6 +8,7 @@ import hashlib
 import os
 import subprocess
 import tomllib
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +19,15 @@ from compose_api.environments.pixi import ComposedSpec, PixiLock, composed_defin
 from compose_api.registry.environments import Composition, load_environments
 from compose_api.registry.manifest import CurationLevel, Install, Manifest, RegistryEntry, load_manifest
 from compose_api.simulation import build_k8s
-from compose_api.simulation.build_k8s import BuildSite, LockFailedError, lock_job, lock_script, read_inspection_log
+from compose_api.simulation.build_k8s import (
+    BuildSite,
+    Evidence,
+    EvidenceMissingError,
+    LockFailedError,
+    lock_job,
+    lock_script,
+    read_inspection_log,
+)
 
 SITE = BuildSite(
     namespace="ns", image="ghcr.io/apptainer/apptainer:1.3.6", pvc_claim="home", pvc_mount_path="/projects/CRBM",
@@ -220,6 +229,10 @@ async def test_locking_returns_the_lock_or_explains_the_conflict(monkeypatch: py
     for log, expected in [
         (f"{marker} pixi.lock\nversion: 7\n\n{marker} end\n", "version: 7\n"),
         (f"{marker} lock.err\nNo solution: a==1 conflicts\n{marker} end\n", LockFailedError("a==1 conflicts")),
+        (
+            f"{marker} evidence.err\ntests/t.py is not in u at c\n{marker} end\n",
+            EvidenceMissingError("is not in u at c"),
+        ),
         ("killed\n", RuntimeError("without a lock")),
     ]:
         builds = FakeBuilds(log)
@@ -232,3 +245,106 @@ async def test_locking_returns_the_lock_or_explains_the_conflict(monkeypatch: py
                 expected
             )
         assert builds.created[0].metadata.name.startswith("lock-")
+
+
+def _git(*args: str, cwd: Path, env: dict[str, str]) -> str:
+    done = subprocess.run(["git", *args], cwd=cwd, env=env, capture_output=True, text=True, check=True)  # noqa: S603, S607
+    return done.stdout.strip()
+
+
+def test_the_lock_checks_an_entrys_evidence_at_its_pinned_commit(
+    stand_in: tuple[Path, dict[str, str]], tmp_path: Path
+) -> None:
+    """An entry's evidence is looked up at the commit it is pinned to, before anything is locked: a path its main
+    gained later is missing there. The repository here is public (no credential helper at all), so the check is the
+    same with or without a token; a repository that cannot be fetched is said so."""
+    scratch, env = stand_in
+    plain = {**env, "GIT_CONFIG_GLOBAL": str(tmp_path / "none"), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "a",
+             "GIT_AUTHOR_EMAIL": "a@a", "GIT_COMMITTER_NAME": "a", "GIT_COMMITTER_EMAIL": "a@a"}  # fmt: skip
+    origin = tmp_path / "origin"
+    (origin / "tests").mkdir(parents=True)
+    (origin / "tests" / "test_gate.py").write_text("def test_gate(): pass\n")
+    _git("init", "-q", "-b", "main", cwd=origin, env=plain)
+    _git("add", ".", cwd=origin, env=plain)
+    _git("commit", "-qm", "pinned", cwd=origin, env=plain)
+    pinned = _git("rev-parse", "HEAD", cwd=origin, env=plain)
+    (origin / "tests" / "test_late.py").write_text("def test_late(): pass\n")
+    _git("add", ".", cwd=origin, env=plain)
+    _git("commit", "-qm", "later, on main", cwd=origin, env=plain)
+    url, absent = "https://github.com/vivarium-collective/gated", "https://github.com/vivarium-collective/absent"
+    github = tmp_path / "github.gitconfig"  # GitHub, here: the local repository, and one that is not there
+    github.write_text(
+        f'[url "file://{origin}"]\n\tinsteadOf = {url}\n[url "file://{tmp_path}/nowhere"]\n\tinsteadOf = {absent}\n'
+        "[uploadpack]\n\tallowAnySHA1InWant = true\n"
+    )
+    env = {**env, "GIT_CONFIG_GLOBAL": str(github), "GIT_CONFIG_NOSYSTEM": "1", "GIT_TERMINAL_PROMPT": "0",
+           build_k8s.PIXI_TOML_ENV: base64.b64encode(b"[workspace]\n").decode()}  # fmt: skip
+
+    def lock(*evidence: Evidence) -> dict[str, str]:
+        (scratch / "pixi.lock").unlink(missing_ok=True)
+        (scratch / build_k8s.EVIDENCE_ERROR).unlink(missing_ok=True)
+        ran = subprocess.run(  # noqa: S603 the Job's script, rendered from test constants
+            ["/bin/bash", "-c", lock_script(evidence)], env=env, capture_output=True, text=True, check=False
+        )
+        assert ran.returncode == 0, ran.stderr
+        return read_inspection_log(ran.stdout)
+
+    assert lock(Evidence(url, pinned, ("tests/test_gate.py",))) == {build_k8s.LOCKED: "version: 7\nplatforms: []\n"}
+    missing = lock(Evidence(url, pinned, ("tests/test_gate.py", "tests/test_late.py")))
+    assert list(missing) == [build_k8s.EVIDENCE_ERROR]
+    assert missing[build_k8s.EVIDENCE_ERROR].strip() == f"tests/test_late.py is not in {url} at {pinned}"
+    assert not (scratch / "pixi.lock").exists()  # nothing was locked
+    unfetched = lock(Evidence(absent, pinned, ("tests/test_gate.py",)))
+    assert unfetched[build_k8s.EVIDENCE_ERROR].strip() == f"{absent} at {pinned} could not be fetched"
+
+
+def test_a_versions_evidence_is_recorded_and_a_missing_one_fails_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The spec records each entry's evidence paths; resolving passes them to the lock, at the entry's commit, and a
+    missing one fails the version with that reason (not as a conflict)."""
+    import asyncio
+
+    from compose_api.environments import service
+    from compose_api.simulation.models import EnvironmentVersion, VersionState
+
+    gated = RegistryEntry.model_validate({
+        "id": "gated", "package": "gated", "source": "https://github.com/o/gated", "commit": "c" * 40,
+        "level": "tested", "module_roots": ["gated"],
+        "install": {"git": "https://github.com/o/gated", "commit": "c" * 40},
+        "accepted_findings": [{"component": "gated.Step", "check": "step-outputs-replace", "reason": "gated",
+                               "evidence": "tests/test_gate.py"}],
+    })  # fmt: skip
+    spec = ComposedSpec(
+        environment="mash-gated", entries=(gated,), core=(("process-bigraph", "1.9.1"),), platform="linux-64",
+        python_version="3.12", resolved_at=datetime.datetime(2026, 11, 20, tzinfo=datetime.UTC),
+    )  # fmt: skip
+    recorded = spec.as_json()
+    assert recorded["entries"][0]["evidence"] == ["tests/test_gate.py"]
+
+    asked: list[tuple[Evidence, ...]] = []
+
+    async def lock_composed(
+        toml: str, image: str, suffix: str, sources: Sequence[object] = (), evidence: Sequence[Evidence] = ()
+    ) -> str:
+        asked.append(tuple(evidence))
+        raise EvidenceMissingError(f"tests/test_gate.py is not in https://github.com/o/gated at {'c' * 40}")
+
+    failures: list[str] = []
+
+    class Versions:
+        async def set_failure(self, version_id: int, failure: str) -> None:
+            failures.append(failure)
+
+    class Database:
+        def get_environments_db(self) -> Versions:
+            return Versions()
+
+    monkeypatch.setattr(build_k8s, "lock_composed", lock_composed)
+    version = EnvironmentVersion(
+        database_id=1, environment_id=1, environment="mash-gated", number=1, state=VersionState.RESOLVING,
+        simulator_id=None,
+        spec={**recorded, "pixi_toml": "[workspace]\n", "pixi_image": COMPOSITION.pixi_image},
+    )  # fmt: skip
+    assert asyncio.run(service.resolve_composed(Database(), version, "abcde")) is None  # type: ignore[arg-type]
+    assert asked == [(Evidence("https://github.com/o/gated", "c" * 40, ("tests/test_gate.py",)),)]
+    (failure,) = failures
+    assert failure.startswith("an accepted finding's evidence is missing:\ntests/test_gate.py is not in")

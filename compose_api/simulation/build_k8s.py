@@ -306,30 +306,79 @@ LOCK_ERROR = "lock.err"
 GIT_SPEC = "git"  # from conda-forge, for the git sources a lock resolves (viva-pde-particle's, first: 7c-5)
 
 
-def lock_script() -> str:
+EVIDENCE_ERROR = "evidence.err"
+
+
+@dataclass(frozen=True)
+class Evidence:
+    """The tests an entry names as evidence for its accepted findings (``RegistryEntry.accepted_findings``), each a
+    path in its repository at the commit it is pinned to."""
+
+    url: str
+    commit: str
+    paths: tuple[str, ...]
+
+
+def evidence_script(evidence: Sequence[Evidence]) -> str:
+    """Before locking: each entry's evidence paths looked up at its pinned commit, fetched alone (``--depth 1``) with
+    the Job's git, so a private repository's through the Job's credential helper and a public one's anonymously. Each
+    path that is not there, or a repository that cannot be fetched, is a line of ``EVIDENCE_ERROR``."""
+    git = f"pixi exec --spec {GIT_SPEC} -- git"
+    lines = []
+    for i, item in enumerate(evidence):
+        repo, where = f"evidence/{i}", f"{item.url} at {item.commit}"
+        lines += [
+            f"{git} init -q {repo}",
+            f"if {git} -C {repo} fetch -q --depth 1 {shlex.quote(item.url)} {shlex.quote(item.commit)}; then",
+            *(
+                f"  {git} -C {repo} cat-file -e {shlex.quote(f'{item.commit}:{path}')}"
+                f" || echo {shlex.quote(f'{path} is not in {where}')} >> {EVIDENCE_ERROR}"
+                for path in item.paths
+            ),
+            f"else echo {shlex.quote(f'{where} could not be fetched')} >> {EVIDENCE_ERROR}; fi",
+        ]
+    return "".join(f"{line}\n" for line in lines)
+
+
+def lock_script(evidence: Sequence[Evidence] = ()) -> str:
     """Inside the pixi image, unprivileged, in scratch: lock the workspace the Job carries (base64, in the env) and
-    print the lock, or why it did not resolve. Locking reads packages' metadata, which can run their build code: it
-    happens here, never in the API pod. pixi resolves a git source with the git executable, which the pixi image
-    lacks and an unprivileged Job cannot apt-get, so `pixi exec` fetches it from conda-forge (`GIT_SPEC`)."""
-    return dedent(f"""        set -u
+    print the lock, or why it did not resolve, or (``evidence``) which accepted finding's evidence is missing, before
+    locking anything. Locking reads packages' metadata, which can run their build code: it happens here, never in the
+    API pod. pixi resolves a git source with the git executable, which the pixi image lacks and an unprivileged Job
+    cannot apt-get, so `pixi exec` fetches it from conda-forge (`GIT_SPEC`)."""
+    head = dedent(f"""\
+        set -u
         cd {SCRATCH_DIR}
-        export HOME={SCRATCH_DIR} PIXI_CACHE_DIR={SCRATCH_DIR}/cache RATTLER_CACHE_DIR={SCRATCH_DIR}/cache \
+        export HOME={SCRATCH_DIR} PIXI_CACHE_DIR={SCRATCH_DIR}/cache RATTLER_CACHE_DIR={SCRATCH_DIR}/cache \\
           UV_CACHE_DIR={SCRATCH_DIR}/uv
         echo "${PIXI_TOML_ENV}" | base64 -d > pixi.toml
-        if pixi exec --spec {GIT_SPEC} -- pixi lock > lock.out 2> {LOCK_ERROR}; then kind={LOCKED}
+        """)
+    tail = dedent(f"""\
+        if [ -s {EVIDENCE_ERROR} ]; then kind={EVIDENCE_ERROR}
+        elif pixi exec --spec {GIT_SPEC} -- pixi lock > lock.out 2> {LOCK_ERROR}; then kind={LOCKED}
         else kind={LOCK_ERROR}; fi
         echo "{INSPECT_MARKER} $kind"
         cat "$kind"
         echo
         echo "{INSPECT_MARKER} end"
         """)
+    return head + evidence_script(evidence) + tail
 
 
-def lock_job(name: str, site: BuildSite, pixi_image: str, toml: str, credentials: bool = False) -> V1Job:
-    """The Job that locks a composed environment's ``pixi.toml`` (docs/plan-environment-composition.md, step 3); with
-    ``credentials``, one that reads private repositories through its Secret."""
+def lock_job(
+    name: str,
+    site: BuildSite,
+    pixi_image: str,
+    toml: str,
+    credentials: bool = False,
+    evidence: Sequence[Evidence] = (),
+) -> V1Job:
+    """The Job that locks a composed environment's ``pixi.toml`` (docs/plan-environment-composition.md, step 3),
+    checking first that its entries' ``evidence`` is where they say; with ``credentials``, one that reads private
+    repositories (their evidence included) through its Secret."""
     env = {PIXI_TOML_ENV: base64.b64encode(toml.encode()).decode()}
-    return _scratch_job(name, site, pixi_image, lock_script(), env, deadline_seconds=1800, credentials=credentials)
+    script = lock_script(evidence)
+    return _scratch_job(name, site, pixi_image, script, env, deadline_seconds=1800, credentials=credentials)
 
 
 PYPROJECT_ENV = "PYPROJECT_B64"
@@ -422,19 +471,30 @@ class LockFailedError(Exception):
     """The workspace did not resolve; the message is pixi's explanation (the conflicting requirements)."""
 
 
+class EvidenceMissingError(Exception):
+    """An accepted finding's evidence is not in its entry's repository at the pinned commit; the message says which."""
+
+
 async def lock_composed(
-    toml: str, pixi_image: str, suffix: str, sources: Sequence[PrivateSource] = (), poll_seconds: float = 5.0
+    toml: str,
+    pixi_image: str,
+    suffix: str,
+    sources: Sequence[PrivateSource] = (),
+    poll_seconds: float = 5.0,
+    evidence: Sequence[Evidence] = (),
 ) -> str:
     """Lock ``toml`` in a Job of its own (reading the private repositories ``sources``) and wait for it: the
-    ``pixi.lock`` text. `LockFailedError` when it does not resolve, with pixi's explanation; `RuntimeError` when the
-    Job failed without saying."""
+    ``pixi.lock`` text. `EvidenceMissingError` when an entry's ``evidence`` is not at its commit; `LockFailedError`
+    when it does not resolve, with pixi's explanation; `RuntimeError` when the Job failed without saying."""
     site = BuildSite.from_settings(get_settings())
     name = f"lock-{hashlib.sha256(toml.encode()).hexdigest()[:12]}-{suffix.lower()[:5]}"
     token = await token_for(sources) if sources else None
-    job = lock_job(name, site, pixi_image, toml, credentials=token is not None)
+    job = lock_job(name, site, pixi_image, toml, credentials=token is not None, evidence=evidence)
     found = await _run_scratch_job(name, job, poll_seconds, token)
     if LOCKED in found:
         return found[LOCKED]
+    if EVIDENCE_ERROR in found:
+        raise EvidenceMissingError(found[EVIDENCE_ERROR].strip()[-4000:])
     if LOCK_ERROR in found:
         raise LockFailedError(found[LOCK_ERROR].strip()[-4000:])
     raise RuntimeError(f"lock Job {name} ended without a lock or an explanation")

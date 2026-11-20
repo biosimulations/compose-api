@@ -200,7 +200,14 @@ class Locks:
     text: str = "version: 7\n"  # the lock every request gets while `same`
     asked: list[str] = field(default_factory=list)
 
-    async def __call__(self, toml: str, pixi_image: str, suffix: str, sources: Sequence[PrivateSource] = ()) -> str:
+    async def __call__(
+        self,
+        toml: str,
+        pixi_image: str,
+        suffix: str,
+        sources: Sequence[PrivateSource] = (),
+        evidence: object = (),
+    ) -> str:
         from compose_api.simulation.build_k8s import LockFailedError
 
         self.asked.append(toml)

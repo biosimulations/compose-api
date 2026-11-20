@@ -161,6 +161,8 @@ class RegistryEntry(BaseModel):
             raise ValueError(f"registry entry {self.id!r} is a {self.kind}, so it needs `module_roots`")
         if self.kind == "core" and (self.install is not None or self.conda):
             raise ValueError(f"registry entry {self.id!r} is core: the composition installs it, so it has no install")
+        if self.accepted_findings and (self.install is None or self.install.git is None):
+            raise ValueError(f"registry entry {self.id!r} accepts findings: its evidence is checked at a git commit")
         for accepted in self.accepted_findings:
             if not any(accepted.component == r or accepted.component.startswith(f"{r}.") for r in self.module_roots):
                 raise ValueError(f"registry entry {self.id!r} accepts a finding for {accepted.component}, not its own")

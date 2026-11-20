@@ -196,8 +196,10 @@ accepted_findings:
 ```
 
 The finding stays on the version's record, marked with the reason, and the class is admitted. `reason` and `evidence`
-are both required. `evidence` is a test in the entry's own repository, at its pinned commit, showing why the check's
-concern does not apply. A reviewer reads it as they would any evidence for a level.
+are both required, and only an entry installed from git can accept a finding. `evidence` is a test in the entry's own
+repository, showing why the check's concern does not apply. A reviewer reads it as they would any evidence for a
+level. When a version is made, its lock Job checks first that each evidence path exists at the entry's pinned commit
+(a private repository's through its token), and a missing one fails the version, saying which.
 
 ## A private repository
 

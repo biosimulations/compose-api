@@ -280,7 +280,7 @@ def test_an_accepted_failure_stays_on_the_record_and_refuses_nothing() -> None:
 
     entry = RegistryEntry.model_validate({
         "id": "pkg", "package": "pkg", "source": "https://example.org", "version": "1", "level": "tested",
-        "module_roots": ["pkg"],
+        "module_roots": ["pkg"], "install": {"git": "https://github.com/o/pkg", "commit": "a" * 40},
         "accepted_findings": [{"component": "pkg.Gated", "check": "step-outputs-replace", "reason": "gated",
                                "evidence": "tests/test_gate.py"}],
     })  # fmt: skip
