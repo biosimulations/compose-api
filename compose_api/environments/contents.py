@@ -70,7 +70,8 @@ async def _store(
     database_service: DatabaseService, version: EnvironmentVersion, files: dict[str, str]
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Store what was read back, and the generic compliance checks over it (environments/compliance.py, step 5)."""
-    from compose_api.environments.compliance import import_findings, port_findings
+    from compose_api.environments.compliance import accept, import_findings, port_findings
+    from compose_api.registry.manifest import load_manifest
 
     installed, interfaces = _parse(version, files)
     environments_db = database_service.get_environments_db()
@@ -80,6 +81,8 @@ async def _store(
         findings = port_findings(interfaces, _types(version, files), roots) + import_findings(
             interfaces, roots, version.environment
         )
+        # a failure an entry accepts stays on the record, marked, and refuses nothing (admission.standing_of)
+        findings = accept(findings, load_manifest().entries)
         await environments_db.set_findings(version.database_id, [f.model_dump() for f in findings])
     return installed, interfaces
 

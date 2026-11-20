@@ -1,15 +1,16 @@
 """Admission by what a version certifies (docs/plan-environment-composition.md, step 5c): the standing of the version a
 run will use, which the submission check (``registry/validation.py``) consults before the manifest's own levels.
 
-A component a generic check failed in that version is refused there on its own; an entry whose compliance cases failed
-there is refused, and so is one whose cases are still running there (2026-11-06: a suite ran on registry_env@6 while
-the cases that failed it were still running); one whose cases passed is accepted; an entry with no cases keeps the
-manifest's level. A composed version runs only its own entries. A module that did not import in the image, or a
+A component a generic check failed in that version is refused there on its own, unless its entry accepts that failure
+(``accepted_findings``, marked on the record: ``compliance.accept``). An entry whose compliance cases failed there is
+refused, and so is one whose cases are still running there (2026-11-06: a suite ran on registry_env@6 while the cases
+that failed it were still running); one whose cases passed is accepted; an entry with no cases keeps the manifest's
+level. A composed version runs only its own entries. A module that did not import in the image, or a
 solver's class the image does not provide, is refused there by its finding (``compliance.import_findings``).
 """
 
 from compose_api.db.database_service import DatabaseService
-from compose_api.environments import compliance_runs, pixi
+from compose_api.environments import compliance, compliance_runs, pixi
 from compose_api.registry.validation import Standing
 from compose_api.simulation.models import EnvironmentVersionDetail
 
@@ -20,7 +21,7 @@ async def standing_of(database_service: DatabaseService, version: EnvironmentVer
     refused = {
         str(f["component"]): str(f.get("detail", f.get("check", "")))
         for f in (version.findings or [])
-        if f.get("severity") == "fail"
+        if compliance.refuses(f)
     }
     composed = version.runtime_contract == pixi.RUNTIME_CONTRACT
     return Standing(

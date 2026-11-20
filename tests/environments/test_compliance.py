@@ -270,3 +270,25 @@ def test_viva_pde_particles_region_mean_case_holds_its_closed_forms() -> None:
         "local:viva_pde_particle.steps.transfer.RegionMean",
         "local:process_bigraph.emitter.RAMEmitter",
     }
+
+
+def test_an_accepted_failure_stays_on_the_record_and_refuses_nothing() -> None:
+    """A failure the component's entry accepts is marked with the entry's reason and no longer refuses it; another
+    check's failure, or the same check on another component, still does."""
+    from compose_api.environments.compliance import Finding, accept, refuses
+    from compose_api.registry.manifest import RegistryEntry
+
+    entry = RegistryEntry.model_validate({
+        "id": "pkg", "package": "pkg", "source": "https://example.org", "version": "1", "level": "tested",
+        "module_roots": ["pkg"],
+        "accepted_findings": [{"component": "pkg.Gated", "check": "step-outputs-replace", "reason": "gated",
+                               "evidence": "tests/test_gate.py"}],
+    })  # fmt: skip
+    findings = [
+        Finding(component="pkg.Gated", check="step-outputs-replace", severity="fail", detail="adds"),
+        Finding(component="pkg.Gated", check="module-imports", severity="fail", detail="no module"),
+        Finding(component="pkg.Other", check="step-outputs-replace", severity="fail", detail="adds"),
+    ]
+    marked = [f.model_dump() for f in accept(findings, [entry])]
+    assert [f["accepted"] for f in marked] == ["gated", None, None]
+    assert [refuses(f) for f in marked] == [False, True, True]

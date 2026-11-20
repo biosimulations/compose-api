@@ -21,12 +21,16 @@ import io
 import json
 import math
 import re
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from compose_api.registry.manifest import RegistryEntry
 
 COMPLIANCE_DIR = Path(__file__).parent.parent / "registry" / "compliance"
 
@@ -91,12 +95,31 @@ def _dict_leaves(schema: dict[str, Any], named: dict[str, Any], path: str, seen:
 
 
 class Finding(BaseModel):
-    """What a generic check found in one component."""
+    """What a generic check found in one component; ``accepted``, the reason its entry accepts a failure
+    (``accept``)."""
 
     component: str
     check: str
     severity: Literal["fail", "warn"]
     detail: str
+    accepted: str | None = None
+
+
+def accept(findings: list[Finding], entries: "Iterable[RegistryEntry]") -> list[Finding]:
+    """The findings, each failure an entry accepts (its ``accepted_findings``: the same component and check) marked
+    with the entry's reason. It stays on the record; it no longer refuses the component (``refuses``)."""
+    reasons = {(a.component, a.check): a.reason for entry in entries for a in entry.accepted_findings}
+    return [
+        f.model_copy(update={"accepted": reasons[(f.component, f.check)]})
+        if f.severity == "fail" and (f.component, f.check) in reasons
+        else f
+        for f in findings
+    ]
+
+
+def refuses(finding: Mapping[str, Any]) -> bool:
+    """Whether a recorded finding refuses its component: a failure its entry did not accept."""
+    return finding.get("severity") == "fail" and not finding.get("accepted")
 
 
 def port_findings(interfaces: dict[str, Any], named: dict[str, Any], module_roots: list[str]) -> list[Finding]:

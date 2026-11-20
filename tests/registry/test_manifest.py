@@ -144,3 +144,21 @@ def test_an_edited_manifest_is_read_again(tmp_path: Path) -> None:
     assert load_manifest(path, catalog_path=None) is not load_manifest(path, catalog_path=None)  # each its own copy
     path.write_text(yaml.safe_dump({"entries": [entry, {**entry, "id": "b", "package": "b"}]}))
     assert [e.id for e in load_manifest(path, catalog_path=None).entries] == ["a", "b"]
+
+
+GATED = {
+    "component": "v2ecoli.processes.metabolism.Metabolism",
+    "check": "step-outputs-replace",
+    "reason": "gated by update_condition: fires once per scheduled solve, so its deltas count once",
+    "evidence": "tests/test_metabolism_gate.py",
+}
+
+
+def test_an_entry_accepts_a_finding_for_its_own_component_with_a_reason_and_evidence() -> None:
+    (accepted,) = entry("v2ecoli", ["v2ecoli"], accepted_findings=[GATED]).accepted_findings
+    assert (accepted.component, accepted.check) == (GATED["component"], GATED["check"])
+    with pytest.raises(ValidationError, match="not its own"):
+        entry("other", ["other"], accepted_findings=[GATED])
+    for missing in ("reason", "evidence"):
+        with pytest.raises(ValidationError, match="needs a reason and its evidence"):
+            entry("v2ecoli", ["v2ecoli"], accepted_findings=[{**GATED, missing: "  "}])

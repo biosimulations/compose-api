@@ -179,6 +179,26 @@ the entry's cases (`HPC_MINIMUM_LEVEL`, `registry/validation.py`); `listed` and 
 level needs its evidence in `evidence` (the header of `manifest.yaml`). `validated` and `curated` need more, set out in
 `docs/strategy.md`, decision 5. Ask for the level the evidence supports and say which evidence it is; the reviewer decides.
 
+## Accepted findings
+
+When a version's image is read back, generic checks run over its classes (`environments/compliance.py`), and a class
+that fails one is refused in that version. One check, `step-outputs-replace`, fails a Step whose outputs add or
+append, because a Step may fire more than once in a tick and would count its results twice. Some Steps add deliberately
+and cannot fire twice, for example one gated by `update_condition` to once per scheduled solve. An entry can accept
+such a failure for one of its own classes:
+
+```yaml
+accepted_findings:
+  - component: v2ecoli.processes.metabolism.Metabolism
+    check: step-outputs-replace
+    reason: gated by update_condition to once per scheduled solve; its exchange deltas count once
+    evidence: tests/test_metabolism_gate.py
+```
+
+The finding stays on the version's record, marked with the reason, and the class is admitted. `reason` and `evidence`
+are both required. `evidence` is a test in the entry's own repository, at its pinned commit, showing why the check's
+concern does not apply. A reviewer reads it as they would any evidence for a level.
+
 ## A private repository
 
 An entry whose repository is private names the Auth0 role of the people who may use it, `access_role: <role>`

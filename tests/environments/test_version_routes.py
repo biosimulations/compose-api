@@ -450,6 +450,15 @@ async def test_a_ready_composed_version_runs_its_entries_cases_and_reports_their
     assert refused["refused"] == [component]
     assert {e["entry"]: e["level"] for e in refused["entries"]}["pbsim-common"] == "tested"
 
+    # the same failure, accepted for its entry (accepted_findings): still on the record, marked; it refuses nothing
+    await database_service.get_environments_db().set_findings(
+        version.database_id,
+        [{"component": component, "check": "step-outputs-replace", "severity": "fail", "detail": "x",
+          "accepted": "gated"}],
+    )  # fmt: skip
+    accepted = await report()
+    assert accepted["refused"] == [] and accepted["findings"][0]["accepted"] == "gated"
+
     # run again: the cases are pending again, then a run that fails is an error
     async with _as(app, ADMIN) as admin:
         again = await admin.post(f"/registry/environments/registry_env/versions/{number}/compliance")
