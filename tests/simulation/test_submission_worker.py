@@ -38,6 +38,7 @@ class FakeCluster:
         self.submitted: list[str] = []
         self.fail_submits = 0  # this many submissions raise first
         self.staged: list[bool] = []
+        self.time_limits: list[int | None] = []
 
     async def download_container(self, remote_container_image: RemoteContainerImage) -> None:
         return None
@@ -53,6 +54,7 @@ class FakeCluster:
             raise OSError("ssh: connection reset")
         assert simulation.sim_request.request_file_path.is_file(), "the worker submits from the staged file"
         self.staged.append(staged_on_store)
+        self.time_limits.append(simulation.sim_request.time_limit_minutes)
         self.submitted.append(experiment_id)
         job_id = 700000 + len(self.submitted)
         self.jobs[experiment_id] = job_id
@@ -113,6 +115,22 @@ async def test_a_queued_run_is_staged_then_submitted_once(
     assert not staged.parent.exists(), "the staging directory is removed once the run is on the cluster"
     await _worker(database_service, cluster).drain()
     assert len(cluster.submitted) == 1, "a submitted run is never claimed again"
+
+
+@pytest.mark.asyncio
+async def test_a_runs_time_limit_is_kept_in_the_queue_and_reaches_the_cluster(
+    database_service: DatabaseServiceSQL, simulation_request: SimulationRequest, simulator: SimulatorVersion,
+    staging_dir: Path,
+) -> None:  # fmt: skip
+    """Set at admission and stored with the queued request, so a worker that claims it after a restart still has it."""
+    long_run = await _queue(database_service, simulation_request.model_copy(update={"time_limit_minutes": 720}))
+    usual = await _queue(database_service, simulation_request)
+    hpc_db = database_service.get_hpc_db()
+    queued = [await hpc_db.get_submission(i) for i in (long_run, usual)]
+    assert [q.request.time_limit_minutes for q in queued if q is not None] == [720, None]
+    cluster = FakeCluster()
+    await _worker(database_service, cluster).drain()
+    assert len(cluster.time_limits) == 2 and set(cluster.time_limits) == {720, None}  # in either order
 
 
 @pytest.mark.asyncio

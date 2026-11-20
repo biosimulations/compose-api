@@ -116,14 +116,16 @@ A server started from `assets/dev/config/.dev_env` uses whatever `AUTH0_AUDIENCE
 
 A verified caller is recorded with the role `user`. If the access token includes the `https://api.biosimulations.org/roles` claim (tokens for a person signed in through BioSim, the CLI or the web UI do; client-credentials tokens do not), those role names are recorded as well. An anonymous caller has no role.
 
-Roles identify the caller. Three settings name the roles this API checks; each is empty by default, which turns its
-check off, and none may be `user`, the role every signed-in caller holds:
+Roles identify the caller. Four settings name the roles this API checks. The first three are empty by default, which
+turns their check off, and none may be `user`, the role every signed-in caller holds. An empty `LONG_RUN_ROLE` lets
+any signed-in caller run long:
 
 | Setting | Grants | Production |
 |---|---|---|
 | `ENVIRONMENT_ADMIN_ROLE` | create, default, retire and read back environment versions | `admin` |
 | `SUITE_CURATOR_ROLE` | mark, edit and clear a suite's known problems | `admin` |
 | `ADMIN_ROLE` | read every private simulation | unset |
+| `LONG_RUN_ROLE` | simulate past `MAX_INTERVAL_TIME` ([Longer runs](#longer-runs)) | `long-runs` (not yet granted) |
 
 The shared BioSim `admin` role grants only what a deployment names it for. Do not assume any other role grants or
 denies access unless this API documents that check.
@@ -157,9 +159,23 @@ configuration.
 | `environments:admin` | `ENVIRONMENT_ADMIN_ROLE` |
 | `suites:curate` | `SUITE_CURATOR_ROLE` |
 | `simulations:read-all` | `ADMIN_ROLE`; every simulation but a private repository's, which needs its role |
+| `simulations:long-runs` | `LONG_RUN_ROLE` (any signed-in caller while it is empty), once `MAX_LONG_RUN_INTERVAL_TIME` exceeds `MAX_INTERVAL_TIME` |
 
-`compose-api auth status --verify` prints them. The list is empty for a caller with none of the roles; an anonymous
-caller has no `/auth/me`. A capability only says what the API will accept: every request is checked again.
+`compose-api auth status --verify` prints them. The list is empty for a caller the deployment grants nothing beyond
+what anyone may do; an anonymous caller has no `/auth/me`. A capability only says what the API will accept: every request is checked again.
+
+## Longer runs
+
+A run simulates up to `interval_time`, its end time in the document's own time units, and any caller may ask for up to
+`MAX_INTERVAL_TIME` (1,000). A caller holding `LONG_RUN_ROLE` may ask for up to `MAX_LONG_RUN_INTERVAL_TIME`; while
+that role is unset, any signed-in caller may. The second cap equals the first unless the deployment raises it. Long
+runs sit behind a role because the cluster has no fair-share scheduler, so anyone's long runs could fill it.
+
+A run past `MAX_INTERVAL_TIME` gets a SLURM time limit scaled by its interval, `SLURM_TIME_LIMIT_MINUTES` (30) for each
+`MAX_INTERVAL_TIME` of it, up to `SLURM_MAX_TIME_LIMIT_MINUTES`. Every other run, the service's own compliance and
+SED-ML runs included, gets `SLURM_TIME_LIMIT_MINUTES`. A job still running at its limit is stopped, and the run's
+status is `timeout`. `GET /webapp/config` publishes both caps, and the web UI offers the longer one to a caller whose
+capabilities include `simulations:long-runs`.
 
 ## Do not
 

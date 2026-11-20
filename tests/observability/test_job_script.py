@@ -85,6 +85,7 @@ def _job(tmp_path: Path, exit_code: int, staged_input: bool = True) -> tuple[str
             is_batch=False,
             partition="p",
             qos="q",
+            time_limit_minutes=30,
         )
     )
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "SLURM_JOB_ID": "4242", "FAKE_EXIT": str(exit_code)}

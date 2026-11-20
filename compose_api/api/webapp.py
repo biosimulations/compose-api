@@ -43,6 +43,9 @@ class WebappConfig(BaseModel):
     prebuilt_simulators: list[str]
     # The kinds the API infers from file names, for the datasets filter; a simulator may announce others.
     dataset_kinds: list[str]
+    # The longest interval /simulation/run takes: from anyone, and from one who may run long (may_run_long).
+    max_interval_time: float
+    max_long_run_interval_time: float
 
 
 def inline_script_hashes(dist_dir: Path) -> list[str]:
@@ -140,6 +143,8 @@ async def get_webapp_config() -> WebappConfig:
         # the prebuilt environments a run may name: those with a default version (D8.3)
         prebuilt_simulators=sorted(await prebuilt_images(get_database_service())),
         dataset_kinds=DATASET_KINDS,
+        max_interval_time=settings.max_interval_time,
+        max_long_run_interval_time=settings.max_long_run_interval_time,
     )
 
 
