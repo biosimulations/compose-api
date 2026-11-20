@@ -1465,6 +1465,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UnprocessableError'
+        '503':
+          description: Its private repositories cannot be read now; nothing was recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
   /registry/environments/{name}/versions/{number}:
     get:
       tags:

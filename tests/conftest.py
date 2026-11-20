@@ -25,6 +25,7 @@ from tests.fixtures.mongodb_fixtures import (  # noqa: F401
     mongodb_container,
 )
 from tests.fixtures.postgres_fixtures import async_postgres_engine, database_service, postgres_url  # noqa: F401
+from tests.fixtures.private_source_fixtures import fake_github  # noqa: F401
 from tests.fixtures.simulation_fixtures import (  # noqa: F401
     PRODUCTION_SIMULATOR_DEF_HASH,
     job_monitor,

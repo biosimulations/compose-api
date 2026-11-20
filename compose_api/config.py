@@ -84,6 +84,11 @@ class Settings(BaseSettings):
     build_k8s_supplemental_groups: str = ""
     build_k8s_timeout_seconds: int = 7200
     build_k8s_ephemeral_storage: str = "20Gi"  # requested for a build's scratch volume ("" requests none)
+    # The GitHub App that reads private repositories for lock and build Jobs (environments/source_credentials.py):
+    # its id, and its key, mounted from the Secret `github-app`. Without an id, a private repository's version is
+    # refused before anything is recorded.
+    github_app_id: str = ""
+    github_app_key_file: str = "/run/secrets/github-app/private-key.pem"
     slurm_qos: str = ""
     batch_slurm_qos: str = ""
     batch_slurm_partition: str = ""

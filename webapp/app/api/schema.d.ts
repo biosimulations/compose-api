@@ -4384,6 +4384,15 @@ export interface operations {
                     "application/json": components["schemas"]["UnprocessableError"];
                 };
             };
+            /** @description Its private repositories cannot be read now; nothing was recorded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
         };
     };
     "get-environment-version": {

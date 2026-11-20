@@ -2191,6 +2191,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Its private repositories cannot be read now; nothing was recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            }
           }
         }
       }

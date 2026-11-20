@@ -26,8 +26,10 @@ import gzip
 import hashlib
 import io
 import logging
+import re
 import shlex
 import tarfile
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from textwrap import dedent
@@ -36,12 +38,13 @@ from typing import TYPE_CHECKING
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.config import Settings, get_settings
 from compose_api.db.services.hpc_db import HPCDatabaseService
+from compose_api.environments.source_credentials import PrivateSource, private_sources, token_for
 from compose_api.simulation.builds import BuildFailedError, wait_for_run
 from compose_api.simulation.hpc_utils import get_image_inspection_file, get_slurm_singularity_container_file
 from compose_api.simulation.models import EnvironmentVersion, HpcRun, JobType, SimulatorVersion
 
 if TYPE_CHECKING:
-    from kubernetes.client import V1Job
+    from kubernetes.client import V1Container, V1EnvVar, V1Job, V1Secret, V1Volume, V1VolumeMount
 
 logger = logging.getLogger(__name__)
 
@@ -204,14 +207,63 @@ def inspection_job(name: str, site: BuildSite, image: str, inspection: Inspectio
     return _scratch_job(name, site, image, prebuilt_inspect_script(inspection), env, deadline_seconds=900)
 
 
-def _scratch_job(
-    name: str, site: BuildSite, image: str, script: str, env: dict[str, str], deadline_seconds: int
-) -> V1Job:
-    """A Job of one unprivileged container: the service user, no service account token, nothing mounted but an
-    emptyDir at ``SCRATCH_DIR``; what it produces it prints, between ``INSPECT_MARKER`` lines (``read_inspection_log``),
-    since its log is all it leaves."""
+CREDENTIALS_DIR = "/run/compose-git"
+CREDENTIALS_VOLUME = "git-credentials"
+# What a Job's git reads when it fetches private repositories (GIT_CONFIG_GLOBAL): a credential helper that answers
+# `get` only, from the mounted file, so git never tries to store or erase a credential in the read-only mount.
+GITCONFIG = (
+    '[credential "https://github.com"]\n'
+    f'\thelper = "!f() {{ if [ \\"$1\\" = get ]; then cat {CREDENTIALS_DIR}/credentials; fi; }}; f"\n'
+)
+
+
+def credentials_secret(name: str, uid: str, token: str) -> V1Secret:
+    """The Secret the Job ``name`` reads ``token`` through (``GITCONFIG`` and the credentials it answers with), owned
+    by the Job, which is created first so that it has its ``uid``: the Secret goes when the Job does. No
+    ``blockOwnerDeletion``, which would need more than the API's Role allows. The Job's pod waits for it to mount."""
     from kubernetes import client as k8s
 
+    return k8s.V1Secret(
+        metadata=k8s.V1ObjectMeta(
+            name=f"{name}-git",
+            labels={"app": LABEL, "compose-api-build": name},
+            owner_references=[k8s.V1OwnerReference(api_version="batch/v1", kind="Job", name=name, uid=uid)],
+        ),
+        type="Opaque",
+        string_data={"gitconfig": GITCONFIG, "credentials": f"username=x-access-token\npassword={token}\n"},
+    )
+
+
+def _credentials(job_name: str) -> tuple[V1Volume, list[V1EnvVar], list[V1VolumeMount]]:
+    """The Secret's volume, and what a container that reads it adds: the variable naming its gitconfig, the mount."""
+    from kubernetes import client as k8s
+
+    volume = k8s.V1Volume(name=CREDENTIALS_VOLUME, secret=k8s.V1SecretVolumeSource(secret_name=f"{job_name}-git"))
+    env = [k8s.V1EnvVar(name="GIT_CONFIG_GLOBAL", value=f"{CREDENTIALS_DIR}/gitconfig")]
+    mounts = [k8s.V1VolumeMount(name=CREDENTIALS_VOLUME, mount_path=CREDENTIALS_DIR, read_only=True)]
+    return volume, env, mounts
+
+
+def _scratch_job(
+    name: str,
+    site: BuildSite,
+    image: str,
+    script: str,
+    env: dict[str, str],
+    deadline_seconds: int,
+    credentials: bool = False,
+) -> V1Job:
+    """A Job of one unprivileged container: the service user, no service account token, nothing mounted but an
+    emptyDir at ``SCRATCH_DIR`` (and, with ``credentials``, its Secret: ``credentials_secret``); what it produces it
+    prints, between ``INSPECT_MARKER`` lines (``read_inspection_log``), since its log is all it leaves."""
+    from kubernetes import client as k8s
+
+    variables = [k8s.V1EnvVar(name=k, value=v) for k, v in env.items()]
+    mounts = [k8s.V1VolumeMount(name="scratch", mount_path=SCRATCH_DIR)]
+    volumes = [k8s.V1Volume(name="scratch", empty_dir=k8s.V1EmptyDirVolumeSource())]
+    if credentials:
+        volume, more_env, more_mounts = _credentials(name)
+        variables, mounts, volumes = variables + more_env, mounts + more_mounts, [*volumes, volume]
     labels = {"app": LABEL, "compose-api-build": name}
     return k8s.V1Job(
         metadata=k8s.V1ObjectMeta(name=name, labels=labels),
@@ -230,7 +282,7 @@ def _scratch_job(
                             name=INSPECT_CONTAINER,
                             image=image,
                             command=["/bin/bash", "-c", script],
-                            env=[k8s.V1EnvVar(name=k, value=v) for k, v in env.items()],
+                            env=variables,
                             security_context=k8s.V1SecurityContext(
                                 privileged=False,
                                 run_as_user=site.run_as_uid or None,
@@ -238,10 +290,10 @@ def _scratch_job(
                                 run_as_non_root=bool(site.run_as_uid),
                                 allow_privilege_escalation=False,
                             ),
-                            volume_mounts=[k8s.V1VolumeMount(name="scratch", mount_path=SCRATCH_DIR)],
+                            volume_mounts=mounts,
                         )
                     ],
-                    volumes=[k8s.V1Volume(name="scratch", empty_dir=k8s.V1EmptyDirVolumeSource())],
+                    volumes=volumes,
                 ),
             ),
         ),
@@ -273,10 +325,11 @@ def lock_script() -> str:
         """)
 
 
-def lock_job(name: str, site: BuildSite, pixi_image: str, toml: str) -> V1Job:
-    """The Job that locks a composed environment's ``pixi.toml`` (docs/plan-environment-composition.md, step 3)."""
+def lock_job(name: str, site: BuildSite, pixi_image: str, toml: str, credentials: bool = False) -> V1Job:
+    """The Job that locks a composed environment's ``pixi.toml`` (docs/plan-environment-composition.md, step 3); with
+    ``credentials``, one that reads private repositories through its Secret."""
     env = {PIXI_TOML_ENV: base64.b64encode(toml.encode()).decode()}
-    return _scratch_job(name, site, pixi_image, lock_script(), env, deadline_seconds=1800)
+    return _scratch_job(name, site, pixi_image, lock_script(), env, deadline_seconds=1800, credentials=credentials)
 
 
 PYPROJECT_ENV = "PYPROJECT_B64"
@@ -302,16 +355,41 @@ def uv_lock_script() -> str:
         """)
 
 
-def uv_lock_job(name: str, site: BuildSite, pixi_image: str, project: str) -> V1Job:
+def uv_lock_job(name: str, site: BuildSite, pixi_image: str, project: str, credentials: bool = False) -> V1Job:
     """The Job that locks a composed version's uv project (docs/plan-environment-composition.md, step 4b)."""
     env = {PYPROJECT_ENV: base64.b64encode(project.encode()).decode()}
-    return _scratch_job(name, site, pixi_image, uv_lock_script(), env, deadline_seconds=1800)
+    return _scratch_job(name, site, pixi_image, uv_lock_script(), env, deadline_seconds=1800, credentials=credentials)
 
 
-async def _run_scratch_job(name: str, job: V1Job, poll_seconds: float) -> dict[str, str]:
-    """Create ``job`` and wait for it: the files it printed, by kind ({} when it printed none to its end)."""
+async def _create(builds: K8sBuilds, name: str, job: V1Job, token: str | None) -> None:
+    """Create the Job ``name`` and then, when it reads private repositories, its Secret (``credentials_secret``). A
+    Secret that cannot be created takes the Job with it, rather than leave its pod waiting for it until the Job's
+    deadline."""
+    created = await asyncio.to_thread(builds.create, job)
+    if token is None:
+        return
+    try:
+        await asyncio.to_thread(builds.create_secret, credentials_secret(name, _uid(name, created), token))
+    except BaseException:  # cancelled as well
+        try:
+            await asyncio.to_thread(builds.delete, name)
+        except Exception:  # the Secret's failure is the one to report
+            logger.exception(f"The Job {name} could not be deleted after its Secret was not made")
+        raise
+
+
+def _uid(name: str, created: V1Job) -> str:
+    uid = created.metadata.uid if created.metadata is not None else None
+    if not uid:
+        raise RuntimeError(f"the Job {name} was created without a uid to own its Secret")
+    return str(uid)
+
+
+async def _run_scratch_job(name: str, job: V1Job, poll_seconds: float, token: str | None = None) -> dict[str, str]:
+    """Create ``job`` (with its Secret, given ``token``) and wait for it: the files it printed, by kind ({} when it
+    printed none to its end)."""
     builds = k8s_builds()
-    await asyncio.to_thread(builds.create, job)
+    await _create(builds, name, job, token)
     deadline = asyncio.get_running_loop().time() + 1860
     state = "running"
     while state == "running" and asyncio.get_running_loop().time() < deadline:
@@ -322,12 +400,17 @@ async def _run_scratch_job(name: str, job: V1Job, poll_seconds: float) -> dict[s
     return read_inspection_log(await asyncio.to_thread(builds.container_log, name, INSPECT_CONTAINER))
 
 
-async def uv_lock(project: str, pixi_image: str, suffix: str, poll_seconds: float = 5.0) -> str:
-    """Lock ``project`` with uv in a Job of its own: the ``uv.lock`` text. `LockFailedError` with uv's explanation
-    when it does not resolve; `RuntimeError` when the Job failed without saying."""
+async def uv_lock(
+    project: str, pixi_image: str, suffix: str, sources: Sequence[PrivateSource] = (), poll_seconds: float = 5.0
+) -> str:
+    """Lock ``project`` with uv in a Job of its own (reading the private repositories ``sources``): the ``uv.lock``
+    text. `LockFailedError` with uv's explanation when it does not resolve; `RuntimeError` when the Job failed without
+    saying."""
     site = BuildSite.from_settings(get_settings())
     name = f"uvlock-{hashlib.sha256(project.encode()).hexdigest()[:12]}-{suffix.lower()[:5]}"
-    found = await _run_scratch_job(name, uv_lock_job(name, site, pixi_image, project), poll_seconds)
+    token = await token_for(sources) if sources else None
+    job = uv_lock_job(name, site, pixi_image, project, credentials=token is not None)
+    found = await _run_scratch_job(name, job, poll_seconds, token)
     if UV_LOCKED in found:
         return found[UV_LOCKED]
     if UV_ERROR in found:
@@ -339,12 +422,17 @@ class LockFailedError(Exception):
     """The workspace did not resolve; the message is pixi's explanation (the conflicting requirements)."""
 
 
-async def lock_composed(toml: str, pixi_image: str, suffix: str, poll_seconds: float = 5.0) -> str:
-    """Lock ``toml`` in a Job of its own and wait for it: the ``pixi.lock`` text. `LockFailedError` when it does not
-    resolve, with pixi's explanation; `RuntimeError` when the Job failed without saying."""
+async def lock_composed(
+    toml: str, pixi_image: str, suffix: str, sources: Sequence[PrivateSource] = (), poll_seconds: float = 5.0
+) -> str:
+    """Lock ``toml`` in a Job of its own (reading the private repositories ``sources``) and wait for it: the
+    ``pixi.lock`` text. `LockFailedError` when it does not resolve, with pixi's explanation; `RuntimeError` when the
+    Job failed without saying."""
     site = BuildSite.from_settings(get_settings())
     name = f"lock-{hashlib.sha256(toml.encode()).hexdigest()[:12]}-{suffix.lower()[:5]}"
-    found = await _run_scratch_job(name, lock_job(name, site, pixi_image, toml), poll_seconds)
+    token = await token_for(sources) if sources else None
+    job = lock_job(name, site, pixi_image, toml, credentials=token is not None)
+    found = await _run_scratch_job(name, job, poll_seconds, token)
     if LOCKED in found:
         return found[LOCKED]
     if LOCK_ERROR in found:
@@ -396,19 +484,104 @@ def unpack_files_script(chunks: int, directory: str) -> str:
     return f"mkdir -p {directory}\nprintf '%s' {joined} | base64 -d | tar -xz -C {directory}\n"
 
 
-def build_script() -> str:
-    """PRIVILEGED, as root, in scratch: the image built from the definition the Job carries (base64, in the env).
-    Apptainer's temporary sandbox and its cache go in the scratch volume too, not the container's own /tmp and /root,
-    so everything the build writes is the volume the Job requests ephemeral storage for."""
-    return dedent(f"""\
+def build_script(before: str = "", options: str = "") -> str:
+    """PRIVILEGED, as root, in scratch: the image built from the definition the Job carries (base64, in the env),
+    after the lines ``before`` and with the build options ``options``. Apptainer's temporary sandbox and its cache go
+    in the scratch volume too, not the container's own /tmp and /root, so everything the build writes is the volume
+    the Job requests ephemeral storage for."""
+    return (
+        dedent(f"""\
         set -eu
         export APPTAINER_TMPDIR={WORK_DIR}/scratch APPTAINER_CACHEDIR={WORK_DIR}/cache
         mkdir -p "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"
         apptainer --version
         echo "${DEFINITION_ENV}" | base64 -d | gunzip > {WORK_DIR}/image.def
-        apptainer build {WORK_DIR}/image.sif {WORK_DIR}/image.def
-        ls -la {WORK_DIR}/image.sif
         """)
+        + before
+        + f"apptainer build {options}{WORK_DIR}/image.sif {WORK_DIR}/image.def\nls -la {WORK_DIR}/image.sif\n"
+    )
+
+
+# --- a private repository's build (docs/plan-private-repo-usage.md, C) -----------------------------------------------
+#
+# The token never reaches the privileged build container: an unprivileged container before it clones each private
+# repository at its locked commit into the work volume, and the build fetches from those clones, bound at
+# ``BUILD_GIT_MOUNT``, through a gitconfig of file URLs (APPTAINERENV_ carries it into %post, and neither the bind nor
+# the variable is kept in the image: measured with Apptainer 1.3.6 in P0). So the definition, and its hash, is that of
+# any version, and a build longer than the token's hour still finishes.
+
+GIT_DIR = f"{WORK_DIR}/git"
+# The clone runs when the build's pod starts, which can wait for a node with room for its scratch: its token is one
+# with nearly all of its hour left. A pod that waits longer fails to clone, and its build with it.
+BUILD_TOKEN_LIFETIME_SECONDS = 55 * 60
+BUILD_GIT_MOUNT = "/mnt"  # a bind needs a destination the base image has; the pixi image has /mnt
+CLONE_CONTAINER = "clone"
+_LOCKED_GIT_URL = re.compile(r"git\+(https://[^\s?#]+)")
+
+
+@dataclass(frozen=True)
+class PrivateBuild:
+    """What a private repository's build needs besides the definition: the repositories at their commits, the pixi
+    image (whose git, from conda-forge, clones them), and the lock (every git URL the build fetches)."""
+
+    sources: tuple[PrivateSource, ...]
+    pixi_image: str
+    lock: str
+
+
+def build_gitconfig(private: PrivateBuild) -> str:
+    """The build's gitconfig: each private repository, spelled with or without `.git`, fetched from its clone by a file
+    URL. git rewrites a URL by the longest prefix it matches, so any other git URL in the lock that one of those is a
+    prefix of maps to itself. The clones belong to the service user, not root, so they are trusted; and the locked
+    commit may be fetched by id."""
+    lines = []
+    spellings: set[str] = set()
+    for index, source in enumerate(private.sources):
+        bare = source.url.removesuffix(".git")
+        lines += [f'[url "file://{BUILD_GIT_MOUNT}/{index}"]', f"\tinsteadOf = {bare}", f"\tinsteadOf = {bare}.git"]
+        spellings |= {bare, f"{bare}.git"}
+    for url in sorted(set(_LOCKED_GIT_URL.findall(private.lock)) - spellings):
+        if any(url.startswith(spelling) for spelling in spellings):
+            lines += [f'[url "{url}"]', f"\tinsteadOf = {url}"]
+    lines += ["[safe]", "\tdirectory = *", "[uploadpack]", "\tallowAnySHA1InWant = true"]
+    return "\n".join(lines) + "\n"
+
+
+def clone_script(private: PrivateBuild, work: str = WORK_DIR) -> str:
+    """UNPRIVILEGED, before the build, with the token: each private repository's locked commit fetched into the work
+    volume ``work`` (git from conda-forge, as in a lock Job), then the gitconfig the build reads them through."""
+    git, git_dir, home = f"pixi exec --spec {GIT_SPEC} -- git", f"{work}/git", f"{work}/clone"
+    fetches = "".join(
+        f"{git} init -q {git_dir}/{i}\n"
+        f"{git} -C {git_dir}/{i} fetch -q --depth 1 {shlex.quote(s.url)} {shlex.quote(s.commit)}\n"
+        for i, s in enumerate(private.sources)
+    )
+    return (
+        f"set -eu\nexport HOME={home} PIXI_CACHE_DIR={home}/cache RATTLER_CACHE_DIR={home}/cache\n"
+        f"{fetches}"
+        f"cat > {git_dir}/gitconfig <<'COMPOSE_API_GITCONFIG'\n{build_gitconfig(private)}COMPOSE_API_GITCONFIG\n"
+        f"rm -rf {home}\n"
+    )
+
+
+def _clone_container(name: str, site: BuildSite, private: PrivateBuild, work: V1VolumeMount) -> V1Container:
+    from kubernetes import client as k8s
+
+    _volume, env, mounts = _credentials(name)
+    return k8s.V1Container(
+        name=CLONE_CONTAINER,
+        image=private.pixi_image,
+        command=["/bin/bash", "-c", clone_script(private)],
+        env=env,
+        security_context=k8s.V1SecurityContext(
+            privileged=False,
+            run_as_user=site.run_as_uid or None,
+            run_as_group=site.run_as_gid or None,
+            run_as_non_root=bool(site.run_as_uid),
+            allow_privilege_escalation=False,
+        ),
+        volume_mounts=[work, *mounts],
+    )
 
 
 def _publish_inspections(inspections: dict[str, Path]) -> str:
@@ -451,22 +624,25 @@ def build_job(
     container: Path,
     inspection: Inspection | None = None,
     files: dict[str, str] | None = None,
+    private: PrivateBuild | None = None,
 ) -> V1Job:
     """The build Job, as a value (what a test reads). With ``inspection``, the image is read back once built, and
-    what was read is placed beside it (``get_image_inspection_file``)."""
+    what was read is placed beside it (``get_image_inspection_file``). With ``private``, its private repositories are
+    cloned first, by a container that reads them through the Job's Secret (``credentials_secret``)."""
     from kubernetes import client as k8s
 
-    script, env = (
-        build_script(),
-        [k8s.V1EnvVar(name=DEFINITION_ENV, value=encode_definition(definition))],
-    )
+    env = [k8s.V1EnvVar(name=DEFINITION_ENV, value=encode_definition(definition))]
+    before, options = "", ""
     if files:  # a composed definition's files, written where it copies them from (pixi.BUILD_FILES)
         from compose_api.environments.pixi import BUILD_FILES
 
         chunks = encode_files(files)
         env += [k8s.V1EnvVar(name=f"{FILES_ENV}{i}", value=chunk) for i, chunk in enumerate(chunks)]
-        unpack = unpack_files_script(len(chunks), BUILD_FILES)
-        script = script.replace("apptainer build ", unpack + "apptainer build ", 1)
+        before = unpack_files_script(len(chunks), BUILD_FILES)
+    if private is not None:
+        before += f"export APPTAINERENV_GIT_CONFIG_GLOBAL={BUILD_GIT_MOUNT}/gitconfig\n"
+        options = f"--bind {GIT_DIR}:{BUILD_GIT_MOUNT} "
+    script = build_script(before, options)
     inspections: dict[str, Path] = {}
     if inspection is not None:
         script += inspect_script(inspection)
@@ -485,6 +661,17 @@ def build_job(
         if site.ephemeral_storage
         else None
     )
+    volumes = [
+        k8s.V1Volume(
+            name="shared",
+            persistent_volume_claim=k8s.V1PersistentVolumeClaimVolumeSource(claim_name=site.pvc_claim),
+        ),
+        k8s.V1Volume(name="work", empty_dir=k8s.V1EmptyDirVolumeSource()),
+    ]
+    clone = []
+    if private is not None:
+        clone = [_clone_container(name, site, private, work)]
+        volumes.append(_credentials(name)[0])
     labels = {"app": LABEL, "compose-api-build": name}
     return k8s.V1Job(
         metadata=k8s.V1ObjectMeta(name=name, labels=labels),
@@ -501,6 +688,7 @@ def build_job(
                         fs_group=site.run_as_gid or None, supplemental_groups=list(site.supplemental_groups) or None
                     ),
                     init_containers=[
+                        *clone,
                         k8s.V1Container(
                             name="build",
                             image=site.image,
@@ -509,7 +697,7 @@ def build_job(
                             security_context=k8s.V1SecurityContext(privileged=True, run_as_user=0),
                             resources=scratch,
                             volume_mounts=[work],
-                        )
+                        ),
                     ],
                     containers=[
                         k8s.V1Container(
@@ -526,13 +714,7 @@ def build_job(
                             volume_mounts=[shared, work],
                         )
                     ],
-                    volumes=[
-                        k8s.V1Volume(
-                            name="shared",
-                            persistent_volume_claim=k8s.V1PersistentVolumeClaimVolumeSource(claim_name=site.pvc_claim),
-                        ),
-                        k8s.V1Volume(name="work", empty_dir=k8s.V1EmptyDirVolumeSource()),
-                    ],
+                    volumes=volumes,
                 ),
             ),
         ),
@@ -666,8 +848,17 @@ class K8sBuilds:
         self.batch = k8s.BatchV1Api()
         self.core = k8s.CoreV1Api()
 
-    def create(self, job: V1Job) -> None:
-        self.batch.create_namespaced_job(namespace=self.namespace, body=job)
+    def create(self, job: V1Job) -> V1Job:
+        """The Job as created: with its uid, which its Secret's owner reference names."""
+        created: V1Job = self.batch.create_namespaced_job(namespace=self.namespace, body=job)
+        return created
+
+    def create_secret(self, secret: V1Secret) -> None:
+        self.core.create_namespaced_secret(namespace=self.namespace, body=secret)
+
+    def delete(self, name: str) -> None:
+        """The Job and its pods (and so its Secret, which it owns)."""
+        self.batch.delete_namespaced_job(name=name, namespace=self.namespace, propagation_policy="Background")
 
     def state(self, name: str) -> tuple[str, str]:
         """`running`, `completed` or `failed`, and why when it failed. A Job whose pod cannot be created (refused by
@@ -687,14 +878,17 @@ class K8sBuilds:
         return "running", ""
 
     def logs(self, name: str) -> str:
-        """The build's pods' logs, both containers, for the build log route and failures."""
+        """The build's pods' logs, every container (a private repository's clone, then build and copy), for the build
+        log route and failures."""
         pods = self.core.list_namespaced_pod(namespace=self.namespace, label_selector=f"compose-api-build={name}")
         out: list[str] = []
         for pod in pods.items:
             pod_name = pod.metadata.name if pod.metadata is not None else None
             if not pod_name:
                 continue
-            for container in ("build", "copy"):
+            spec = pod.spec
+            names = {c.name for c in [*(spec.init_containers or []), *(spec.containers or [])]} if spec else set()
+            for container in [*([CLONE_CONTAINER] if CLONE_CONTAINER in names else []), "build", "copy"]:
                 try:
                     text = self.core.read_namespaced_pod_log(
                         name=pod_name, namespace=self.namespace, container=container, tail_lines=400
@@ -822,16 +1016,36 @@ async def files_for(simulator_version: SimulatorVersion) -> dict[str, str] | Non
     return await build_files(database_service, simulator_version.database_id)
 
 
+async def private_build_for(simulator_version: SimulatorVersion, files: dict[str, str] | None) -> PrivateBuild | None:
+    """What the build of a private repository's version needs (None for any other simulator): its recorded entries
+    say which repositories are private (``source_credentials.private_sources``), whatever the manifest says now."""
+    from compose_api.dependencies import get_database_service  # late: dependencies imports the simulation modules
+    from compose_api.environments.pixi import LOCK_FILE
+
+    database_service = get_database_service()
+    if database_service is None or not files:
+        return None
+    version = await database_service.get_environments_db().of_simulator(simulator_version.database_id)
+    spec = (version.spec if version is not None else None) or {}
+    sources = private_sources(spec.get("entries") or [])
+    if not sources:
+        return None
+    return PrivateBuild(sources=sources, pixi_image=str(spec["pixi_image"]), lock=files[LOCK_FILE])
+
+
 async def submit_build(simulator_version: SimulatorVersion, hpc_db: HPCDatabaseService, suffix: str) -> HpcRun:
     """Create the build Job, carrying the definition, and record it as the simulator's build run: backend ``k8s``,
-    external id the Job's name; the monitor polls it. An environment version's image is read back once built."""
+    external id the Job's name; the monitor polls it. An environment version's image is read back once built; a
+    private repository's version is given a token for its repositories, in the Job's Secret, when its build starts."""
     site = BuildSite.from_settings(get_settings())
     container = get_slurm_singularity_container_file(singularity_hash=simulator_version.container_def_hash)
     name = job_name(simulator_version, suffix)
     inspection = await inspection_for(simulator_version)
     files = await files_for(simulator_version)
-    job = build_job(name, site, simulator_version.container_def.representation, container, inspection, files)
-    await asyncio.to_thread(k8s_builds().create, job)
+    private = await private_build_for(simulator_version, files)
+    token = await token_for(private.sources, BUILD_TOKEN_LIFETIME_SECONDS) if private is not None else None
+    job = build_job(name, site, simulator_version.container_def.representation, container, inspection, files, private)
+    await _create(k8s_builds(), name, job, token)
     logger.info("Submitted container build %s as a Kubernetes Job (-> %s)", name, container)
     return await hpc_db.insert_hpcrun(
         slurmjobid=None, job_type=JobType.BUILD_CONTAINER, ref_id=simulator_version.database_id,

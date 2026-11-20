@@ -35,6 +35,7 @@ from compose_api.environments.contents import record_contents
 from compose_api.environments.manifests import annotated, interfaces_of, manifests_of
 from compose_api.environments.packages import package_changes
 from compose_api.environments.service import VersionRequestError
+from compose_api.environments.source_credentials import SourceCredentialsError
 from compose_api.environments.versions import prebuilt_images, version_for
 from compose_api.registry.access import hidden_environments, hidden_simulators, may_use, version_roles
 from compose_api.registry.environments import (
@@ -457,6 +458,7 @@ async def run_environment_version_compliance(
         **_NO_ENVIRONMENT,
         **_ADMIN,
         422: error("The request cannot make a version of this environment", UnprocessableError),
+        503: error("Its private repositories cannot be read now; nothing was recorded"),
     },
 )
 async def create_environment_version(
@@ -486,6 +488,8 @@ async def create_environment_version(
         version, created = await environment_service.create(database_service, spec, request, caller.subject)
     except VersionRequestError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+    except SourceCredentialsError as e:
+        raise HTTPException(status_code=503, detail=f"its private repositories cannot be read now: {e}") from e
     if not created:
         response.status_code = 200
     if (created or version.state in (VersionState.BUILDING, VersionState.FAILED)) and version.simulator_id is not None:

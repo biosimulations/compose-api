@@ -9,7 +9,7 @@ deploying is a release, one at a time, as usual.
 |---|---|---|
 | P0 | Outreach (Auth0, design review, v2ecoli) and three probes; no code | in progress ("P0 results") |
 | P1 | compose-api: restricted entries, gates and the disk fix (A, B) | gates built locally, unpushed; disk fix after 3(a) |
-| P2 | compose-api: fetching private source (C) | — |
+| P2 | compose-api: fetching private source (C) | built locally, unpushed; local probes pass ("P2 results") |
 | P3 | ~~Prove it live on a tiny private probe repository~~ | dropped: the live trial is on v2ecoli, in P5 |
 | P4 | v2ecoli readiness (v2ecoli PRs) | list from the real lock (below) |
 | P5 | Onboard v2ecoli, prove it live, and use it | — |
@@ -105,7 +105,8 @@ deploying is a release, one at a time, as usual.
 ### C. Fetching private source
 
 - **compose-api's own GitHub App** (2026-11-20): private, owned by `vivarium-collective`, with Contents read-only and
-  no webhook, installed on v2ecoli only. Alex, an owner of the organization, creates it.
+  no webhook, installed on v2ecoli only. Alex, an owner of the organization, created it:
+  [`compose-api-private-source`](https://github.com/apps/compose-api-private-source), App ID 5850349.
   - A private App can be installed only on the account that owns it, so a private repository in another organization
     later needs this App made public, or a second App.
   - Not an existing App: any App's key mints tokens for every repository it is installed on, so sharing one widens
@@ -114,17 +115,24 @@ deploying is a release, one at a time, as usual.
     `kustomize/scripts/sealed_secret_github_app.sh` copied from `sealed_secret_ghcr.sh`. The key is generated when the
     release PR that seals it is ready, and goes straight from GitHub into that script.
   - The key is mounted into the API pods `optional: true`, so P2 can deploy before the key exists. `GITHUB_APP_ID` goes
-    in `api.env`.
+    in `kustomize/config/compose-api-rke/api.env`, in P2's release PR (deploy-guard allows deploy config there only).
+    Without both, a private repository's version is a 503 and no version is recorded.
 - **Minting** (`compose_api/environments/source_credentials.py`):
   - an app JWT, using the existing `pyjwt[crypto]`;
   - the installation, from `GET /repos/{o}/{r}/installation`;
   - `POST /app/installations/{id}/access_tokens`, scoped to the spec's restricted repositories with `contents: read`
     (1 h, the existing `httpx`). The token is never logged.
-- **Mint before recording anything.** In `mash_up_for`, mint before `create_composed`. A mint failure is a 503 with
-  nothing recorded, because a failed first version blocks that entry set with 409 until an admin intervenes.
+  - One organization per version, since a token comes from one installation.
+  - A token is reused for the same repositories while it has more than 40 minutes left (a lock Job's 30, and a
+    margin), so a version's creation and lock share one. A build asks for one with 55 minutes left, usually a new
+    one, because its clone runs only when its pod starts.
+- **Mint before recording anything.** `create_composed` mints before it records the version, for a mash-up and the
+  create-version route alike. A mint failure is a 503 with no version recorded, because a failed first version blocks
+  that entry set with 409 until an admin intervenes.
 - **Lock and uv-lock Jobs.**
-  - Create the Job first (`K8sBuilds.create` currently drops the returned uid).
-  - Then create a per-Job Secret with an ownerReference to it, without `blockOwnerDeletion`.
+  - Create the Job first (`K8sBuilds.create` returns it, with its uid).
+  - Then create a per-Job Secret with an ownerReference to it, without `blockOwnerDeletion`. If the Secret cannot be
+    created, the Job is deleted at once rather than left waiting for it until its deadline.
   - The Secret holds a gitconfig whose credential helper only answers `get`:
     `!f() { if [ "$1" = get ]; then cat /run/compose-git/credentials; fi; }; f`. It is an inline shell helper reading
     the mounted file, so git never tries to write to the read-only mount. The Jobs get `GIT_CONFIG_GLOBAL` pointing at
@@ -132,21 +140,37 @@ deploying is a release, one at a time, as usual.
   - Measured in P0: against the private repository, `git ls-remote` and a fetch of the pinned commit worked and wrote
     nothing to the mount. pixi's lock honours `GIT_CONFIG_GLOBAL`. The lock records the `https` URL, never a rewrite.
 - **Build Job.**
-  - An unprivileged init container clones each restricted repository at its locked commit into an emptyDir.
+  - An unprivileged init container, `clone`, clones each restricted repository at its locked commit (`--depth 1`) into
+    the work emptyDir. It runs in the pixi image as the service user, its git brought by `pixi exec --spec git` as a
+    lock Job's is, and is the only container that mounts the Secret.
   - The privileged `apptainer build` sees only that clone, through a file-URL `insteadOf`.
-    - The emptyDir, holding the clones and that gitconfig, is bound onto `/mnt`, and the build process gets
-      `APPTAINERENV_GIT_CONFIG_GLOBAL=/mnt/gitconfig`.
+    - The emptyDir's `git` directory, holding the clones and that gitconfig, is bound onto `/mnt`, and the build
+      process gets `APPTAINERENV_GIT_CONFIG_GLOBAL=/mnt/gitconfig`.
     - The gitconfig also sets `safe.directory` (the clone has another owner) and `uploadpack.allowAnySHA1InWant`, as
       the P0 lock probe did.
+    - Each private URL is mapped with and without `.git`. git rewrites a URL by its longest matching `insteadOf`, so
+      any other locked git URL that a private one is a prefix of (`…/v2ecoli-extras`) is mapped to itself.
+    - The clone is shallow, so when uv fetches the commit from it (`+<sha>:refs/commit/<sha>`), git keeps no ref, but
+      the commit arrives, and uv uses only the commit. A full clone would fetch v2ecoli's whole 1.2 GB history for
+      every build. uv's behaviour is fixed by the pinned pixi image, and the P2 probe built through it.
   - Measured in P0 with apptainer 1.3.6 on the production pixi base:
     - `build --bind` needs a destination that already exists in the base. `/mnt` does, so a file bind onto
       `/etc/gitconfig` fails.
     - The build's own environment does not reach `%post`, but the `APPTAINERENV_` prefix does.
     - Neither the bind nor the variable is kept in the SIF.
     - So the definition, and every hash, stays as it is.
-  - So the token never enters the privileged pod that runs third-party build code, and can't expire during a build of
-    up to 7200 s.
-- **RBAC:** the `compose-api-builds` Role gains `secrets: create, get, delete`.
+  - So the token never enters the privileged container that runs third-party build code, and can't expire during a
+    build of up to 7200 s. The Secret is still a volume of the build's pod: a privileged container that escaped to its
+    node could read it there, as it could any Secret on that node. It would gain only read access to repositories whose
+    code the build already holds.
+  - The clone must start within the token's hour. A pod that waits longer for a node fails to clone, and its build
+    with it.
+  - The build asks for its token when it starts. If GitHub refuses, nothing is created, and the version is failed with
+    that reason, which a mash-up's 409 repeats.
+- **RBAC:** the `compose-api-builds` Role gains `secrets: create` only. The ownerReference has Kubernetes delete each
+  Secret with its Job, so the API never reads or deletes one.
+- **Release:** P2 changes `kustomize/base`, so deploy-guard passes it only as a release PR, which also carries
+  `GITHUB_APP_ID` and the sealed key.
 - **Accepted and documented:** lock Jobs run package metadata and build code while the token is present. They are
   unprivileged, and the token is read-only, limited to those repositories and lasts at most 1 h.
 
@@ -202,6 +226,20 @@ Each compose-api PR bundles the fix, its tests and the version bump, then tag �
   - Whether composed locks should always override the core pins is question 4 in #552.
 - **HPC permissions:** waits on a run from a login node, by an ordinary (non-service) account. Running it as such an
   account is itself the test.
+
+**P2 results (2026-11-20, local).** The Jobs P2 generates, run in Docker as the cluster runs them (amd64; the service
+user; privileged Apptainer 1.3.6), with scratch and work as volumes:
+- **A stand-in private repository**, behind its GitHub URL, was locked, cloned and built:
+  - the lock records the `https` URL at the commit, with no file URL;
+  - the package imports from the image;
+  - `/mnt` is empty and `GIT_CONFIG_GLOBAL` unset in the image;
+  - a sentinel token is in neither the image nor the work volume;
+  - the image's definition is the version's, byte for byte.
+- **v2ecoli itself**, from github.com, was fetched by pixi's lock through the credential helper. The workspace set
+  `no-build`, so no package code ran beside the local credential used.
+  - With a wrong token, the fetch fails. With a good one, it gets past the fetch, v2ecoli's commit is in the cache,
+    and the lock stops at `vecoli[dev]`, which has no wheel.
+  - Neither token is in any log or the cache.
 
 **P1. compose-api: restricted entries, gates and the disk fix** (A, B).
 - Tests:

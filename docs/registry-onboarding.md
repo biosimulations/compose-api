@@ -188,4 +188,11 @@ classes to them as unregistered ones. CI refuses such an entry in the shared env
 `requires`, a module root another entry shares, or with compliance-case files other than its document
 (`tests/registry/test_access.py`). The role itself is created and assigned in the BioSim Auth0 tenant.
 
-Building it needs the service to fetch the private repository, which it cannot do yet (the plan's step P2).
+The service fetches the repository through its own GitHub App, `compose-api-private-source`, which reads repository
+contents and nothing else. The App is private to `vivarium-collective`, where an owner of the organization installs it
+on the repository. A repository in another organization needs the App made public, or an App of its own. The entry installs from git at a commit
+(`install: {git, commit}`). Each Job that locks or builds one of its versions gets a token for that version's private
+repositories alone, valid for an hour, in a Secret the Job owns. The build is made from a clone taken before it starts,
+so the token is in neither the image nor anything the service records. An environment's private repositories come from
+one organization. When no token can be had (the App is not installed, or GitHub is down), the request is a 503 and no
+version is recorded, so it can simply be made again (`compose_api/environments/source_credentials.py`).
