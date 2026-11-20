@@ -72,7 +72,7 @@ async def test_webapp_config_publishes_login_settings_and_simulator_names(
 ) -> None:
     """The prebuilt environments a run may name: those with a registered default version (D8.3)."""
     await register_prebuilt(database_service, "viva-pde-particle", "ghcr.io/example/pde@sha256:" + "2" * 64)
-    with override_settings(auth0_spa_client_id="spa-client"):
+    with override_settings(auth0_spa_client_id="spa-client", max_long_run_interval_time=86400.0):
         response = await http_api_client.get("/webapp/config")
     assert response.status_code == 200
     assert response.json() == {
@@ -81,6 +81,8 @@ async def test_webapp_config_publishes_login_settings_and_simulator_names(
         "auth0_client_id": "spa-client",
         "prebuilt_simulators": ["viva-pde-particle"],
         "dataset_kinds": DATASET_KINDS,
+        "max_interval_time": 1000.0,
+        "max_long_run_interval_time": 86400.0,
     }
     assert "results-bundle" in DATASET_KINDS
     assert "file" in DATASET_KINDS

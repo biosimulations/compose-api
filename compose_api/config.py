@@ -4,10 +4,10 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal, Self
 
 from dotenv import load_dotenv
-from pydantic import ValidationInfo, field_validator
+from pydantic import Field, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 KV_DRIVER = Literal["file", "s3", "gcs"]
@@ -87,6 +87,17 @@ class Settings(BaseSettings):
     slurm_qos: str = ""
     batch_slurm_qos: str = ""
     batch_slurm_partition: str = ""
+    # How long a run may simulate (`interval_time`), and how long its SLURM job may take. A run may simulate up to
+    # max_interval_time; a caller holding long_run_role (any signed-in caller while it is empty) up to
+    # max_long_run_interval_time. A job gets slurm_time_limit_minutes; a run past max_interval_time gets that limit
+    # scaled by its interval, up to slurm_max_time_limit_minutes, which must stay within the partition's and the QOS's
+    # own maximum. With no fair-share scheduler, long runs from anyone could fill the cluster: deployments name a role.
+    # Each is positive and finite: 0 would divide by zero (an interval cap) or mean no limit at all to sbatch (a time).
+    max_interval_time: Annotated[float, Field(gt=0, allow_inf_nan=False)] = 1000.0
+    max_long_run_interval_time: Annotated[float, Field(gt=0, allow_inf_nan=False)] = 1000.0
+    slurm_time_limit_minutes: Annotated[int, Field(gt=0)] = 30
+    slurm_max_time_limit_minutes: Annotated[int, Field(gt=0)] = 30
+    long_run_role: str = ""
 
     simulation_store_base_path: str = ""
     hpc_sim_config_file: str = "publish.json"
@@ -186,6 +197,15 @@ class Settings(BaseSettings):
     # Enforce the UI's Content-Security-Policy (compose_api/api/webapp.py) instead of only reporting violations to
     # /webapp/csp-report. Production turns it on (kustomize/config/compose-api-rke/api.env).
     webapp_csp_enforce: bool = False
+
+    @model_validator(mode="after")
+    def _run_limits_are_ordered(self) -> Self:
+        # Fails at startup rather than giving signed-in callers, or long runs, less than everyone else gets.
+        if self.max_long_run_interval_time < self.max_interval_time:
+            raise ValueError("MAX_LONG_RUN_INTERVAL_TIME must not be below MAX_INTERVAL_TIME")
+        if self.slurm_max_time_limit_minutes < self.slurm_time_limit_minutes:
+            raise ValueError("SLURM_MAX_TIME_LIMIT_MINUTES must not be below SLURM_TIME_LIMIT_MINUTES")
+        return self
 
     @field_validator("admin_role", "environment_admin_role", "suite_curator_role")
     @classmethod

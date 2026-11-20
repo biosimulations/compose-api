@@ -4,6 +4,7 @@ recording its end and announcing its SLURM log, and must not outlive the job on 
 
 import asyncio
 import json
+import re
 import shlex
 import tempfile
 import time
@@ -13,8 +14,11 @@ from pathlib import Path
 import pytest
 
 from compose_api.common.hpc.slurm_service import SlurmService
-from compose_api.simulation.hpc_utils import get_slurm_sim_experiment_dir, get_slurm_sim_log_file
+from compose_api.common.ssh.ssh_service import SSHService
+from compose_api.simulation.hpc_utils import get_slurm_job_name, get_slurm_sim_experiment_dir, get_slurm_sim_log_file
 from compose_api.simulation.job_script import SimulationJob, simulation_job_script
+from compose_api.simulation.models import Simulation, SimulationRequest, SimulatorVersion
+from compose_api.simulation.simulation_service import SimulationServiceHpc
 from tests.fixtures.slurm_fixtures_backend import SlurmBackend
 
 # Stands in for singularity: hung, and deaf to SIGTERM, so only SLURM's SIGKILL ends it. It stays a bash process, so
@@ -47,6 +51,7 @@ async def test_a_time_limit_records_the_job_end_and_its_log_while_the_simulator_
             is_batch=True,
             partition=slurm_backend.partition,
             qos=slurm_backend.qos,
+            time_limit_minutes=30,
         )
     )
     await ssh.run_command(f"mkdir -p {shlex.quote(str(bin_dir))}")
@@ -107,3 +112,35 @@ async def _ended(slurm_service: SlurmService, job_id: int) -> str:
             return jobs[0].job_state
         assert time.monotonic() < deadline, f"job {job_id} never ended: {jobs}"
         await asyncio.sleep(5)
+
+
+@pytest.mark.slurm
+@pytest.mark.asyncio
+async def test_a_runs_time_limit_is_its_slurm_jobs_own(
+    slurm_backend: SlurmBackend, simulation_request: SimulationRequest, simulator: SimulatorVersion
+) -> None:
+    """The limit set at admission reaches SLURM through the service and the script: SLURM reads 90 as an hour and a
+    half, and a run with none gets the usual 30 minutes. A form SLURM read otherwise (90 as seconds, "30:00" as hours
+    and minutes) would show here. The jobs have no image, so they fail at once; only their limits are read."""
+    ssh = slurm_backend.ssh_service
+    service = SimulationServiceHpc()
+    for limit, expected in ((90, "01:30:00"), (None, "00:30:00")):
+        experiment_id = f"time-limit-{uuid.uuid4().hex[:8]}"
+        request = simulation_request.model_copy(update={"time_limit_minutes": limit})
+        simulation = Simulation(database_id=1, sim_request=request, simulator_version=simulator)
+        job_id = await service.submit_simulation_job(simulation, experiment_id, f"simulation-{experiment_id}")
+        try:
+            assert await _time_limit(ssh, job_id) == expected
+        finally:
+            await ssh.run_command(f"scancel {job_id}")
+            experiment = get_slurm_sim_experiment_dir(get_slurm_job_name(experiment_id))
+            await ssh.run_command(f"rm -rf {shlex.quote(str(experiment))}")
+
+
+async def _time_limit(ssh: SSHService, job_id: int) -> str:
+    """The job's time limit as the controller holds it (`scontrol`, which keeps an ended job for MinJobAge)."""
+    code, out, err = await ssh.run_command(f"scontrol -o show job {job_id}")
+    assert code == 0, err
+    found = re.search(r"\bTimeLimit=(\S+)", out)
+    assert found is not None, out
+    return found.group(1)

@@ -31,7 +31,7 @@ from compose_api.observability.identity import job_span_id, trace_id_from_correl
 
 _TEMPLATE = r"""#!/bin/bash
 #SBATCH --job-name=@@JOB_NAME@@
-#SBATCH --time=30:00
+#SBATCH --time=@@TIME_LIMIT@@
 #SBATCH --cpus-per-task @@CPUS@@
 #SBATCH --mem=@@MEM@@
 #SBATCH --partition=@@PARTITION@@
@@ -180,6 +180,7 @@ class SimulationJob:
     is_batch: bool
     partition: str
     qos: str
+    time_limit_minutes: int
     node_list: str = ""
 
 
@@ -190,6 +191,7 @@ def simulation_job_script(job: SimulationJob) -> str:
         "MEM": "1GB" if job.is_batch else "8GB",
         "PARTITION": job.partition,
         "QOS": job.qos,
+        "TIME_LIMIT": str(job.time_limit_minutes),  # sbatch reads a bare number as minutes
         "LOG_FILE": job.log_file,
         "NODELIST": f"#SBATCH --nodelist={job.node_list}" if job.node_list else "",
         "EXPERIMENT_DIR": job.experiment_dir,

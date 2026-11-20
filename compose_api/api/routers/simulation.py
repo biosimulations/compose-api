@@ -1,4 +1,5 @@
 import logging
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,7 +14,7 @@ from compose_api.authentication import (
     describe_caller,
     get_optional_principal,
 )
-from compose_api.authorization import RequestedVisibility, ownership_at_submit
+from compose_api.authorization import RequestedVisibility, may_run_long, ownership_at_submit
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.common.gateway.utils import get_simulation_request_from_uploaded_file, wrap_document_in_omex
 from compose_api.config import get_settings
@@ -230,17 +231,38 @@ async def _inferred(
     return _Inferred(mash_up=version.environment, version=version.number)
 
 
+def time_limit_minutes(interval_time: float) -> int | None:
+    """The SLURM time limit for a run of this interval: None (the usual limit) up to the anonymous interval cap; past
+    it, the usual limit scaled by the interval, up to the longest the deployment allows."""
+    settings = get_settings()
+    if interval_time <= settings.max_interval_time:
+        return None
+    scaled = math.ceil(settings.slurm_time_limit_minutes * interval_time / settings.max_interval_time)
+    return min(settings.slurm_max_time_limit_minutes, scaled)
+
+
 def _checked_options(
-    simulator: str | None, interval_time: float, tags: list[str] | None, description: str | None
-) -> tuple[list[str], str | None]:
-    """The request's own parameters, checked before its file is read: a 400 for any the service does not accept."""
+    principal: AuthenticatedPrincipal | None, interval_time: float, tags: list[str] | None, description: str | None
+) -> tuple[list[str], str | None, int | None]:
+    """The request's own parameters, checked before its file is read: a 400 for any the service does not accept.
+    Also the run's SLURM time limit, which only a long run (authorization.may_run_long) raises."""
     try:
         run_tags, run_description = clean_tags(tags), clean_description(description)
     except LabelError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    if interval_time < 0 or interval_time > 1000:
-        raise HTTPException(status_code=400, detail="Invalid interval time, it has to be between 0 and 1000")
-    return run_tags, run_description
+    settings = get_settings()
+    long_runs = may_run_long(principal)
+    cap = settings.max_long_run_interval_time if long_runs else settings.max_interval_time
+    if not 0 <= interval_time <= cap:  # NaN fails every comparison, so it is refused too
+        longer = ""
+        if not long_runs and settings.max_long_run_interval_time > cap:
+            role = settings.long_run_role.strip()
+            who = f"with the {role} role" if role else "signed in"
+            longer = f"; up to {settings.max_long_run_interval_time:.15g} {who}"
+        raise HTTPException(
+            status_code=400, detail=f"Invalid interval time, it has to be between 0 and {cap:.15g}{longer}"
+        )
+    return run_tags, run_description, time_limit_minutes(interval_time)
 
 
 @config.router.post(
@@ -294,7 +316,7 @@ async def submit_simulation(
     The run is labelled `source=upload` and `environment=<simulator or registry_env>`; `tags` and `description` are
     stored with it as given (compose_api/simulation/labels.py) and filter `GET /simulations`."""
     logger.info("Simulation submission from %s", describe_caller(principal))
-    run_tags, run_description = _checked_options(simulator, interval_time, tags, description)
+    run_tags, run_description, time_limit = _checked_options(principal, interval_time, tags, description)
     ownership = ownership_at_submit(principal, visibility)
     simulator, composed = await _named_environment(environment, simulator)
     named = environment is not None or simulator is not None or environment_version is not None
@@ -315,6 +337,7 @@ async def submit_simulation(
         )
         simulator, composed, environment_version = inferred.simulator, inferred.mash_up, inferred.version
     simulation_request.end_time_point = interval_time
+    simulation_request.time_limit_minutes = time_limit
     simulation_request.simulator = simulator
     simulation_request.environment_version = environment_version
     simulation_request.environment = composed
@@ -373,6 +396,7 @@ async def submit_simulation(
             background_tasks=background_tasks,
             job_monitor=job_monitor,
             ownership=ownership,  # docs/plan-favorites-and-studies.md, F1, F3
+            requested_by=principal.subject if principal is not None else None,  # the queue's fair-share seam
         )
     except Exception as e:
         logger.exception("Error running simulation")

@@ -1,7 +1,15 @@
 import type { Schemas, Violation } from './useApi'
 
+/** The longest interval the API takes from this caller: longer for one GET /auth/me says may run long. */
+export function useMaxIntervalTime() {
+  const config = useWebappConfig()
+  const { principal, rejected } = useAuth()
+  // a rejected token is not sent, so the API sees an anonymous caller
+  return computed(() => maxIntervalTime(config.value, rejected.value ? null : principal.value?.capabilities))
+}
+
 export interface RunOptions {
-  /** the runner's interval, 0 to 1000 */
+  /** the runner's interval, 0 to useMaxIntervalTime() */
   intervalTime: number
   /** a batch job (smaller partition, 1 CPU) */
   batch?: boolean

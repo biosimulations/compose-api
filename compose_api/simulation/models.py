@@ -408,6 +408,9 @@ class SimulationRequest(BaseModel):
     simulation_file_type: SimulationFileType
     end_time_point: float = 1.0
     is_batch: bool
+    # The SLURM time limit, set at admission for a run past the anonymous interval cap
+    # (compose_api/api/routers/simulation.py); None: settings.slurm_time_limit_minutes.
+    time_limit_minutes: int | None = None
     # A prebuilt environment by name (its default version's image, D8.3); None runs the shared one.
     simulator: str | None = None
     # The version of that environment to run in (docs/plan-environment-versions.md, step 5); None: its default.
