@@ -23,6 +23,7 @@ resources:
   - compose-api-home-pvc.yaml
 #  - mongodb-pvc.yaml
   - secret-ghcr.yaml
+  - secret-github-app.yaml
   - secret-shared.yaml
   - secret-ssh.yaml
   - ../../config/compose-api-rke
