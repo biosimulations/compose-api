@@ -28,6 +28,7 @@ const intervalTime = ref(1)
 const batch = ref(false)
 const visibility = ref<Schemas['Visibility']>('private')
 const { isAuthenticated } = useAuth()
+const maxIntervalTime = useMaxIntervalTime()
 const loadError = ref<string | null>(null)
 const counts = ref({ error: 0, warning: 0, info: 0 })
 const compileFindings = ref<Diagnostic[]>([])
@@ -211,7 +212,7 @@ function reveal(d: Diagnostic) {
           <USelect v-model="environment" :items="environmentItems" class="min-w-80" />
         </UFormField>
         <UFormField label="Interval">
-          <UInputNumber v-model="intervalTime" :min="0" :max="1000" :step="0.1" class="w-32" />
+          <UInputNumber v-model="intervalTime" :min="0" :max="maxIntervalTime" :step="0.1" class="w-32" />
         </UFormField>
         <UFormField label="Batch">
           <USwitch v-model="batch" />

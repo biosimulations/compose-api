@@ -97,12 +97,25 @@ async def require_suite_curator(caller: OptionalCaller) -> Caller:
 SuiteCurator = Annotated[Caller, Depends(require_suite_curator)]
 
 
+def may_run_long(caller: Caller | None) -> bool:
+    """Whether the caller may ask for an interval past max_interval_time, up to max_long_run_interval_time: a signed-in
+    caller holding long_run_role, or any signed-in caller while it is empty. No one, while the two caps are equal."""
+    if caller is None:
+        return False
+    settings = get_settings()
+    if settings.max_long_run_interval_time <= settings.max_interval_time:
+        return False
+    configured = settings.long_run_role.strip()
+    return not configured or configured in caller.roles
+
+
 #: what a caller may do, by name, as ``GET /auth/me`` reports it (docs/plan-webapp-admin.md, A1); each is the check
 #: that enforces it, so the two cannot disagree
 CAPABILITIES = {
     "environments:admin": is_environment_admin,
     "suites:curate": is_suite_curator,
     "simulations:read-all": _is_admin,
+    "simulations:long-runs": may_run_long,
 }
 
 

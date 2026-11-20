@@ -29,6 +29,7 @@ const tags = ref<string[]>([])
 const description = ref('')
 const visibility = ref<Schemas['Visibility']>('private')
 const { isAuthenticated } = useAuth()
+const maxIntervalTime = useMaxIntervalTime()
 // what to send: nothing signed out (an anonymous run is public)
 const chosenVisibility = computed(() => (isAuthenticated.value ? visibility.value : undefined))
 // /curated/*
@@ -57,7 +58,7 @@ const modes = [
 const accept = computed(() => (mode.value === 'archive' ? '.omex,.pbg,.sbml' : '.xml,.sbml'))
 const fileOk = computed(() => !!file.value)
 const optionsOk = computed(() => {
-  if (mode.value === 'archive') return intervalTime.value >= 0 && intervalTime.value <= 1000
+  if (mode.value === 'archive') return intervalTime.value >= 0 && intervalTime.value <= maxIntervalTime.value
   if (points.value < 1) return false
   return mode.value === 'copasi' ? duration.value > 0 : endTime.value > startTime.value
 })
@@ -153,8 +154,8 @@ async function submit() {
           <UFormField label="Environment" help="Automatic picks an environment that provides every process the document uses, and makes a new one combining several when none does" :error="environmentsError ?? undefined">
             <AnySelect v-model="environment" :items="environmentItems" placeholder="Automatic" class="w-96" />
           </UFormField>
-          <UFormField label="Interval time" help="End time point, between 0 and 1000">
-            <UInputNumber v-model="intervalTime" :min="0" :max="1000" :step="0.1" class="w-48" />
+          <UFormField label="Interval time" :help="`End time point, between 0 and ${maxIntervalTime}`">
+            <UInputNumber v-model="intervalTime" :min="0" :max="maxIntervalTime" :step="0.1" class="w-48" />
           </UFormField>
           <USwitch v-model="batch" label="Batch submission" description="Use the batch partition (1 CPU, 1 GB)" />
           <UFormField label="Tags" help="To find the run by later (Enter after each); letters, digits, spaces and _ . : / + -">

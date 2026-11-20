@@ -26,6 +26,7 @@ def test_the_uploaded_input_is_the_file_the_job_runs(file_type: SimulationFileTy
             is_batch=False,
             partition="p",
             qos="q",
+            time_limit_minutes=30,
         )
     )
     uploaded = get_slurm_sim_input_file_path(experiment_id="job1", suffix=suffix)

@@ -134,6 +134,7 @@ class SimulationServiceHpc(SimulationService):
                     if simulation.sim_request.is_batch
                     else settings.slurm_partition,
                     qos=settings.batch_slurm_qos if simulation.sim_request.is_batch else settings.slurm_qos,
+                    time_limit_minutes=simulation.sim_request.time_limit_minutes or settings.slurm_time_limit_minutes,
                     node_list=settings.slurm_node_list,
                 )
             )

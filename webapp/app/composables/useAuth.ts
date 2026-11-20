@@ -3,7 +3,7 @@ import type { components } from '~/api/schema'
 
 /**
  * What the API publishes for this app at GET /webapp/config: its Auth0 settings (login is offered only when all
- * three are set) and the prebuilt simulator names a submission may ask for.
+ * three are set), the prebuilt simulator names a submission may ask for, and the longest interval a run may ask for.
  */
 export interface WebappConfig {
   auth0_domain: string
@@ -11,6 +11,8 @@ export interface WebappConfig {
   auth0_client_id: string
   prebuilt_simulators: string[]
   dataset_kinds?: string[]
+  max_interval_time?: number
+  max_long_run_interval_time?: number
 }
 
 const webappConfig = ref<WebappConfig | null>(null)
