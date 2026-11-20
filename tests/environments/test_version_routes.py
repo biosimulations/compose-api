@@ -456,6 +456,10 @@ async def test_a_ready_composed_version_runs_its_entries_cases_and_reports_their
     refused = await report()
     assert refused["refused"] == [component]
     assert {e["entry"]: e["level"] for e in refused["entries"]}["pbsim-common"] == "tested"
+    from compose_api.environments import admission
+
+    standing = await admission.standing_for(database_service, version.environment, version.number)
+    assert standing is not None and component in standing.refused  # what a run's admission consults
 
     # the same failure, accepted for its entry (accepted_findings): still on the record, marked; it refuses nothing
     await database_service.get_environments_db().set_findings(
@@ -465,6 +469,8 @@ async def test_a_ready_composed_version_runs_its_entries_cases_and_reports_their
     )  # fmt: skip
     accepted = await report()
     assert accepted["refused"] == [] and accepted["findings"][0]["accepted"] == "gated"
+    standing = await admission.standing_for(database_service, version.environment, version.number)
+    assert standing is not None and component not in standing.refused  # admitted
 
     # run again: the cases are pending again, then a run that fails is an error
     async with _as(app, ADMIN) as admin:

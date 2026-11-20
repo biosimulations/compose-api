@@ -1477,7 +1477,7 @@ export interface components {
             }[];
             /**
              * Refused
-             * @description Components a generic check failed
+             * @description Components a generic check failed, less those whose failure it accepts
              */
             refused?: string[];
         };
@@ -1873,7 +1873,7 @@ export interface components {
             } | null;
             /**
              * Findings
-             * @description What the generic compliance checks found in its components: a component with a `fail` is refused in this version (docs/plan-environment-composition.md, step 5)
+             * @description What the generic compliance checks found in its components: a component with a `fail` is refused in this version unless the version accepts it (`accepted`, its entry's reason; docs/registry-onboarding.md, Accepted findings) (docs/plan-environment-composition.md, step 5)
              */
             findings?: {
                 [key: string]: unknown;

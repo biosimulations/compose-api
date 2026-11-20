@@ -191,7 +191,10 @@ const caseColor = (state: string) =>
               >
                 <template #description>
                   <ul class="text-xs flex flex-col gap-1 mt-1">
-                    <li v-for="(f, i) in compliance.findings" :key="i"><code>{{ f.component }}</code> ({{ f.check }}, {{ f.severity }}): {{ f.detail }}</li>
+                    <li v-for="(f, i) in compliance.findings" :key="i">
+                      <code>{{ f.component }}</code> ({{ f.check }}, {{ f.accepted ? 'accepted' : f.severity }}): {{ f.detail }}
+                      <span v-if="f.accepted" class="text-muted"> Accepted for its entry: {{ f.accepted }}</span>
+                    </li>
                   </ul>
                 </template>
               </UAlert>

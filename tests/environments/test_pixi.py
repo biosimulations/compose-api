@@ -264,6 +264,7 @@ def test_the_lock_checks_an_entrys_evidence_at_its_pinned_commit(
     origin = tmp_path / "origin"
     (origin / "tests").mkdir(parents=True)
     (origin / "tests" / "test_gate.py").write_text("def test_gate(): pass\n")
+    (origin / "tests" / "link.py").symlink_to("test_gate.py")
     _git("init", "-q", "-b", "main", cwd=origin, env=plain)
     _git("add", ".", cwd=origin, env=plain)
     _git("commit", "-qm", "pinned", cwd=origin, env=plain)
@@ -292,7 +293,11 @@ def test_the_lock_checks_an_entrys_evidence_at_its_pinned_commit(
     assert lock(Evidence(url, pinned, ("tests/test_gate.py",))) == {build_k8s.LOCKED: "version: 7\nplatforms: []\n"}
     missing = lock(Evidence(url, pinned, ("tests/test_gate.py", "tests/test_late.py")))
     assert list(missing) == [build_k8s.EVIDENCE_ERROR]
-    assert missing[build_k8s.EVIDENCE_ERROR].strip() == f"tests/test_late.py is not in {url} at {pinned}"
+    assert missing[build_k8s.EVIDENCE_ERROR].strip() == f"tests/test_late.py is not a file in {url} at {pinned}"
+    # a folder, the repository's root or a link is not a file, though git has an object for each
+    for path in ("tests", "tests/link.py"):
+        refused = lock(Evidence(url, pinned, (path,)))
+        assert refused[build_k8s.EVIDENCE_ERROR].strip() == f"{path} is not a file in {url} at {pinned}"
     assert not (scratch / "pixi.lock").exists()  # nothing was locked
     unfetched = lock(Evidence(absent, pinned, ("tests/test_gate.py",)))
     assert unfetched[build_k8s.EVIDENCE_ERROR].strip() == f"{absent} at {pinned} could not be fetched"
@@ -318,7 +323,7 @@ def test_a_versions_evidence_is_recorded_and_a_missing_one_fails_it(monkeypatch:
         python_version="3.12", resolved_at=datetime.datetime(2026, 11, 20, tzinfo=datetime.UTC),
     )  # fmt: skip
     recorded = spec.as_json()
-    assert recorded["entries"][0]["evidence"] == ["tests/test_gate.py"]
+    assert recorded["entries"][0]["accepted"] == [gated.accepted_findings[0].model_dump()]
 
     asked: list[tuple[Evidence, ...]] = []
 
@@ -348,3 +353,20 @@ def test_a_versions_evidence_is_recorded_and_a_missing_one_fails_it(monkeypatch:
     assert asked == [(Evidence("https://github.com/o/gated", "c" * 40, ("tests/test_gate.py",)),)]
     (failure,) = failures
     assert failure.startswith("an accepted finding's evidence is missing:\ntests/test_gate.py is not in")
+
+
+@pytest.mark.asyncio
+async def test_the_lock_job_is_given_the_evidence_to_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    """lock_composed's evidence reaches the Job's script (each path looked up at its commit) before pixi lock."""
+    monkeypatch.setattr(BuildSite, "from_settings", classmethod(lambda cls, s: SITE))
+    builds = FakeBuilds(f"{build_k8s.INSPECT_MARKER} pixi.lock\nversion: 7\n\n{build_k8s.INSPECT_MARKER} end\n")
+    monkeypatch.setattr(build_k8s, "k8s_builds", lambda: builds)
+    evidence = Evidence("https://github.com/o/gated", "c" * 40, ("tests/test_gate.py",))
+    await build_k8s.lock_composed(
+        "[workspace]\n", COMPOSITION.pixi_image, "abcde", poll_seconds=0, evidence=(evidence,)
+    )
+    (job,) = builds.created
+    script = job.spec.template.spec.containers[0].command[-1]
+    assert "fetch -q --depth 1 -- https://github.com/o/gated " + "c" * 40 in script
+    assert f"ls-tree --format='%(objectmode) %(objecttype)' {'c' * 40} -- tests/test_gate.py" in script
+    assert script.index("ls-tree") < script.index("pixi lock")

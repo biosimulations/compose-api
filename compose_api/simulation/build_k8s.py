@@ -321,18 +321,20 @@ class Evidence:
 
 def evidence_script(evidence: Sequence[Evidence]) -> str:
     """Before locking: each entry's evidence paths looked up at its pinned commit, fetched alone (``--depth 1``) with
-    the Job's git, so a private repository's through the Job's credential helper and a public one's anonymously. Each
-    path that is not there, or a repository that cannot be fetched, is a line of ``EVIDENCE_ERROR``."""
+    the Job's git, so a private repository's through the Job's credential helper and a public one's anonymously. A
+    path must be a file there (mode 100644 or 100755): not a folder, a link or nothing. Each that is not, or a
+    repository that cannot be fetched, is a line of ``EVIDENCE_ERROR``."""
     git = f"pixi exec --spec {GIT_SPEC} -- git"
     lines = []
     for i, item in enumerate(evidence):
         repo, where = f"evidence/{i}", f"{item.url} at {item.commit}"
         lines += [
             f"{git} init -q {repo}",
-            f"if {git} -C {repo} fetch -q --depth 1 {shlex.quote(item.url)} {shlex.quote(item.commit)}; then",
+            f"if {git} -C {repo} fetch -q --depth 1 -- {shlex.quote(item.url)} {shlex.quote(item.commit)}; then",
             *(
-                f"  {git} -C {repo} cat-file -e {shlex.quote(f'{item.commit}:{path}')}"
-                f" || echo {shlex.quote(f'{path} is not in {where}')} >> {EVIDENCE_ERROR}"
+                f"  case \"$({git} -C {repo} ls-tree --format='%(objectmode) %(objecttype)'"
+                f" {shlex.quote(item.commit)} -- {shlex.quote(path)})\" in '100644 blob'|'100755 blob') ;;"
+                f" *) echo {shlex.quote(f'{path} is not a file in {where}')} >> {EVIDENCE_ERROR} ;; esac"
                 for path in item.paths
             ),
             f"else echo {shlex.quote(f'{where} could not be fetched')} >> {EVIDENCE_ERROR}; fi",

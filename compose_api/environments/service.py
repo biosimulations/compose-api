@@ -126,9 +126,13 @@ async def resolve_composed(
     try:
         sources = source_credentials.private_sources(recorded.get("entries") or [])
         evidence = tuple(
-            Evidence(str(e["install"]["git"]), str(e["install"]["commit"]), tuple(e["evidence"]))
+            Evidence(
+                str(e["install"]["git"]),
+                str(e["install"]["commit"]),
+                tuple(sorted({str(a["evidence"]) for a in e["accepted"]})),
+            )
             for e in recorded.get("entries") or []
-            if e.get("evidence") and (e.get("install") or {}).get("git")
+            if e.get("accepted") and (e.get("install") or {}).get("git")
         )
         text = await lock_composed(recorded["pixi_toml"], recorded["pixi_image"], suffix, sources, evidence=evidence)
     except EvidenceMissingError as e:

@@ -18,11 +18,7 @@ from compose_api.simulation.models import EnvironmentVersionDetail
 async def standing_of(database_service: DatabaseService, version: EnvironmentVersionDetail) -> Standing:
     """The version's standing, as recorded (finished runs are evaluated when the compliance report is read)."""
     report = await compliance_runs.report(database_service, version)
-    refused = {
-        str(f["component"]): str(f.get("detail", f.get("check", "")))
-        for f in (version.findings or [])
-        if compliance.refuses(f)
-    }
+    refused = compliance.refused(version.findings or [])
     composed = version.runtime_contract == pixi.RUNTIME_CONTRACT
     return Standing(
         label=version.label,

@@ -196,10 +196,12 @@ accepted_findings:
 ```
 
 The finding stays on the version's record, marked with the reason, and the class is admitted. `reason` and `evidence`
-are both required, and only an entry installed from git can accept a finding. `evidence` is a test in the entry's own
+are both required; only an entry installed from git can accept a finding, only for its own classes (not a nested
+root's), and only `step-outputs-replace` (a class that does not import is never admitted). A composed version records
+the acceptances it was made with, and only those apply in it: a prebuilt or shared version accepts nothing. `evidence` is a test in the entry's own
 repository, showing why the check's concern does not apply. A reviewer reads it as they would any evidence for a
-level. When a version is made, its lock Job checks first that each evidence path exists at the entry's pinned commit
-(a private repository's through its token), and a missing one fails the version, saying which.
+level. When a version is made, its lock Job checks first that each evidence path is a file at the entry's pinned
+commit (a private repository's through its token), and one that is not fails the version, saying which.
 
 ## A private repository
 

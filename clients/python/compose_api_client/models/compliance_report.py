@@ -27,7 +27,7 @@ class ComplianceReport:
             number (int):
             entries (list[EntryCompliance] | Unset):
             findings (list[ComplianceReportFindingsItem] | Unset):
-            refused (list[str] | Unset): Components a generic check failed
+            refused (list[str] | Unset): Components a generic check failed, less those whose failure it accepts
     """
 
     environment: str

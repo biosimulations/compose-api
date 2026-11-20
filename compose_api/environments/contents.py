@@ -52,6 +52,18 @@ def _types(version: EnvironmentVersion, files: dict[str, str]) -> dict[str, Any]
     return tables if isinstance(tables, dict) else {}
 
 
+def recorded_acceptances(version: EnvironmentVersion) -> list[dict[str, Any]]:
+    """The accepted findings a version recorded when it was made (its entries' ``accepted``). Its lock Job checked
+    their evidence at the entries' commits before it locked (build_k8s.evidence_script), so a locked version that
+    records one has checked it. Only a composed version records them: a prebuilt or shared one, or one made before
+    acceptances, accepts nothing."""
+    from compose_api.environments import pixi
+
+    if version.runtime_contract != pixi.RUNTIME_CONTRACT:
+        return []
+    return [dict(a) for e in (version.spec or {}).get("entries") or [] for a in e.get("accepted") or []]
+
+
 def version_roots(version: EnvironmentVersion) -> list[str]:
     """The module roots a version provides: its entries' and the core's (a composed version records its entries),
     else its bundle's."""
@@ -71,7 +83,6 @@ async def _store(
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Store what was read back, and the generic compliance checks over it (environments/compliance.py, step 5)."""
     from compose_api.environments.compliance import accept, import_findings, port_findings
-    from compose_api.registry.manifest import load_manifest
 
     installed, interfaces = _parse(version, files)
     environments_db = database_service.get_environments_db()
@@ -81,8 +92,8 @@ async def _store(
         findings = port_findings(interfaces, _types(version, files), roots) + import_findings(
             interfaces, roots, version.environment
         )
-        # a failure an entry accepts stays on the record, marked, and refuses nothing (admission.standing_of)
-        findings = accept(findings, load_manifest().entries)
+        # a failure the version accepts stays on the record, marked, and refuses nothing (admission.standing_of)
+        findings = accept(findings, recorded_acceptances(version))
         await environments_db.set_findings(version.database_id, [f.model_dump() for f in findings])
     return installed, interfaces
 

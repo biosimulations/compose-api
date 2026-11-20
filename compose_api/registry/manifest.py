@@ -7,7 +7,7 @@ registry of record described by strategy decision 5; the database tables that pr
 import enum
 import functools
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Literal
 
 import yaml
@@ -100,7 +100,9 @@ class AcceptedFinding(BaseModel):
     apply there."""
 
     component: str
-    check: str
+    # the only check a reason can answer for now: a Step whose outputs add, and cannot fire twice in a tick. A class
+    # that does not import (module-imports) or a missing solver is never admitted.
+    check: Literal["step-outputs-replace"]
     reason: str
     evidence: str
 
@@ -108,6 +110,12 @@ class AcceptedFinding(BaseModel):
     def _said(self) -> "AcceptedFinding":
         if not self.reason.strip() or not self.evidence.strip():
             raise ValueError(f"an accepted finding for {self.component} needs a reason and its evidence (a test)")
+        path = PurePosixPath(self.evidence)
+        if not path.parts or path.is_absolute() or str(path) != self.evidence or ".." in path.parts:
+            raise ValueError(
+                f"the evidence for {self.component} is a file's path in its repository (tests/test_x.py), not "
+                f"{self.evidence!r}"
+            )
         return self
 
 
@@ -222,6 +230,17 @@ class Manifest(BaseModel):
                 if target in entry.short_names:
                     return f"{entry.module_roots[0]}.{target}"
         return target
+
+    @model_validator(mode="after")
+    def _accepted_findings_are_their_own(self) -> "Manifest":
+        """An entry accepts findings only for its own classes: a nested root's class is its entry's."""
+        for entry in self.entries:
+            for accepted in entry.accepted_findings:
+                if self.entry_for_module(accepted.component) is not entry:
+                    raise ValueError(
+                        f"{entry.id!r} accepts a finding for {accepted.component}, which another entry's root holds"
+                    )
+        return self
 
     def entry_for_module(self, module: str) -> RegistryEntry | None:
         """The entry whose longest module root contains `module`, so a nested root wins over its parent."""

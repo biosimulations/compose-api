@@ -3995,7 +3995,8 @@ components:
             type: string
           type: array
           title: Refused
-          description: Components a generic check failed
+          description: Components a generic check failed, less those whose failure
+            it accepts
       type: object
       required:
       - environment
@@ -4645,8 +4646,9 @@ components:
           - type: 'null'
           title: Findings
           description: 'What the generic compliance checks found in its components:
-            a component with a `fail` is refused in this version (docs/plan-environment-composition.md,
-            step 5)'
+            a component with a `fail` is refused in this version unless the version
+            accepts it (`accepted`, its entry''s reason; docs/registry-onboarding.md,
+            Accepted findings) (docs/plan-environment-composition.md, step 5)'
         against:
           anyOf:
           - type: integer

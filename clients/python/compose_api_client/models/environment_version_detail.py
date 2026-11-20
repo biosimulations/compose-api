@@ -47,7 +47,8 @@ class EnvironmentVersionDetail:
         installed (None | str | Unset): What its image installed, read from the image
         interfaces (EnvironmentVersionDetailInterfacesType0 | None | Unset): Its process interfaces (pbg-interfaces/1)
         findings (list[EnvironmentVersionDetailFindingsType0Item] | None | Unset): What the generic compliance checks
-            found in its components: a component with a `fail` is refused in this version (docs/plan-environment-
+            found in its components: a component with a `fail` is refused in this version unless the version accepts it
+            (`accepted`, its entry's reason; docs/registry-onboarding.md, Accepted findings) (docs/plan-environment-
             composition.md, step 5)
         against (int | None | Unset): The version `changes` compares it with, when asked
         changes (list[PackageChange] | None | Unset): With `against`: how its installed packages differ from that
