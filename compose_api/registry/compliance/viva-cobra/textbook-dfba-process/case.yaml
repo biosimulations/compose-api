@@ -1,0 +1,13 @@
+description: >-
+  viva-cobra's DynamicFBAProcess (Michaelis-Menten uptake and the FBA solve in one Process) on COBRApy's textbook E. coli
+  core model, over one 0.5 interval from biomass 0.5 and glucose 100, with Km 100 and Vmax 10. The uptake is
+  10 x 100 / (100 + 100) = 5, so the growth rate is the model's optimum with the glucose exchange at -5,
+  0.4155977750929061 (cobra.io.load_model("textbook"), EX_glc__D_e lower bound -5, slim_optimize()). Biomass ends at
+  0.5 + 0.4155977750929061 x 0.5 x 0.5 and glucose at 100 - 5 x 0.5 x 0.5 = 98.75. Biomass, interval and Km all differ
+  from 1 and 0, so a Process that dropped the biomass, the interval or the concentration dependence would not match.
+document: document.pbg
+interval: 0.5
+expect:
+  - {kind: rows, emitter: emitter, min: 1}
+  - {kind: scalar, emitter: emitter, field: biomass, expected: 0.6038994437732266, rel: 1.0e-12, abs: 0.0}
+  - {kind: scalar, emitter: emitter, field: substrates.glucose, expected: 98.75, rel: 1.0e-12, abs: 0.0}

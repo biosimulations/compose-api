@@ -291,15 +291,15 @@ entries:
   # --- FBA ---
   - id: viva-cobra
     package: viva-cobra
-    # v0.1.3 (tag; viva-cobra#5's merge, 57db42b): its type table is public as viva_cobra.core.standard_types
-    source: https://github.com/vivarium-collective/viva-cobra/tree/57db42b2b386ca6e6dc4a1a1fc78cec380077a95
-    commit: 57db42b2b386ca6e6dc4a1a1fc78cec380077a95
+    # v0.1.4 (tag; viva-cobra#6's merge, 025761f): DynamicFBAProcess, FBA as a Process compose-api runs
+    source: https://github.com/vivarium-collective/viva-cobra/tree/025761f7fd818ba5835bd30a322252cd2580dbbd
+    commit: 025761f7fd818ba5835bd30a322252cd2580dbbd
     install:
       git: https://github.com/vivarium-collective/viva-cobra
-      commit: 57db42b2b386ca6e6dc4a1a1fc78cec380077a95
+      commit: 025761f7fd818ba5835bd30a322252cd2580dbbd
     module_roots:
       - viva_cobra
-    # concentration, mass, count and bounds, the types FBAStep's ports use; registered before every run
+    # concentration, mass, count and bounds, the types its ports use; registered before every run
     types:
       - viva_cobra.core:standard_types
     level: tested
@@ -327,6 +327,17 @@ entries:
         FBAStep returns deltas by design, so it stays refused either way. textbook-fba-optimum passed through
         compose-api's runner with COMPOSE_RUNNER_TYPES=viva_cobra.core:standard_types (process-bigraph 1.9.1,
         bigraph-schema 1.8.1, cobra 0.32.1, Python 3.12), with results byte-identical to the run without the types.
+      - >-
+        Moved to v0.1.4 (025761f) on 2026-11-19. It adds DynamicFBAProcess, dynamic FBA as one temporal Process
+        (Michaelis-Menten uptake, then the FBA solve, each interval), which compose-api admits: a Process's deltas
+        apply once per interval, while FBAStep's re-apply whenever the Step fires and stay refused (#542). 0.1.4 also
+        caps each uptake at what its pool can supply over the step, so growth matches the substrate consumed (unchanged
+        on textbook-fba-optimum). A second case, textbook-dfba-process, runs the Process from biomass 0.5, interval
+        0.5, Km 100, Vmax 10 against COBRApy's optimum at a glucose exchange of -5 (slim_optimize, 0.4155977750929061).
+        Its biomass, interval and Km differ from 1 and 0, so dropping any of them from the Process fails it; a
+        constant-uptake mutant did. Both cases passed through compose-api's runner from the GitHub commit
+        (COMPOSE_RUNNER_TYPES=viva_cobra.core:standard_types; process-bigraph 1.9.1, bigraph-schema 1.8.1, cobra 0.32.1,
+        Python 3.12).
 
   # --- Boolean ---
   - id: viva-maboss

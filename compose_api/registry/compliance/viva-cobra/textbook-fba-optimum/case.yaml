@@ -2,7 +2,7 @@ description: >-
   viva-cobra's FBAStep on COBRApy's textbook E. coli core model, with glucose uptake 10 and the default bounds, over
   a 1.0 interval from biomass 1.0 and glucose 100, wired as the package's own dFBA wires it (its deltas land on the
   biomass and substrate stores). The growth rate is COBRApy's own textbook optimum, 0.8739215069684295
-  (cobra.io.load_model("textbook").optimize(), default bounds: EX_glc__D_e -10, EX_o2_e -1000), so biomass ends at
+  (cobra.io.load_model("textbook").slim_optimize(), default bounds: EX_glc__D_e -10, EX_o2_e -1000), so biomass ends at
   1.0 + 0.8739215069684295; glucose ends at 100 - 10 x 1.0 x 1.0 = 90.
 document: document.pbg
 interval: 1

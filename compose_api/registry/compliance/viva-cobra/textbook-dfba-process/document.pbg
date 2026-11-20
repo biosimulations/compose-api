@@ -1,0 +1,31 @@
+{
+  "state": {
+    "substrates": {"glucose": 100.0},
+    "biomass": 0.5,
+    "dfba": {
+      "_type": "process",
+      "address": "local:viva_cobra.processes.fba.DynamicFBAProcess",
+      "config": {
+        "model_file": "textbook",
+        "substrate_update_reactions": {"glucose": "EX_glc__D_e"},
+        "bounds": {},
+        "kinetic_params": {"glucose": [100.0, 10.0]}
+      },
+      "interval": 0.5,
+      "inputs": {
+        "substrates": ["substrates"],
+        "biomass": ["biomass"]
+      },
+      "outputs": {
+        "substrates": ["substrates"],
+        "biomass": ["biomass"]
+      }
+    },
+    "emitter": {
+      "_type": "step",
+      "address": "local:RAMEmitter",
+      "config": {"emit": {"biomass": "float", "substrates": "map[float]"}},
+      "inputs": {"biomass": ["biomass"], "substrates": ["substrates"]}
+    }
+  }
+}
