@@ -127,7 +127,7 @@ any signed-in caller run long:
 | `ENVIRONMENT_ADMIN_ROLE` | create, default, retire and read back environment versions | `admin` |
 | `SUITE_CURATOR_ROLE` | mark, edit and clear a suite's known problems | `admin` |
 | `ADMIN_ROLE` | read every private simulation | unset |
-| `LONG_RUN_ROLE` | simulate past `MAX_INTERVAL_TIME` ([Longer runs](#longer-runs)) | unset |
+| `LONG_RUN_ROLE` | simulate past `MAX_INTERVAL_TIME` ([Longer runs](#longer-runs)) | `long-runs` (not yet granted) |
 
 The shared BioSim `admin` role grants only what a deployment names it for. No simulation is private yet, so today no
 role changes what a caller can read. Do not assume any other role grants or denies access unless this API documents
