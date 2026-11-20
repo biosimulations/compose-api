@@ -391,7 +391,8 @@ export interface paths {
         /**
          * The environments documents run in, with what their interface manifests hold
          * @description The environments this deployment declares (environments.yaml), then the mash-ups the database holds
-         *     (docs/plan-environment-composition.md, D7.9). Public: the same for every caller.
+         *     (docs/plan-environment-composition.md, D7.9). The same for every caller, but for a private repository's
+         *     environments, listed only to the holders of its role (registry/access.py).
          */
         get: operations["list-environments"];
         put?: never;
@@ -446,7 +447,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The catalog: every registry entry with its curation level, pin and evidence, and the environments that provide its classes */
+        /**
+         * The catalog: every registry entry with its curation level, pin and evidence, and the environments that provide its classes
+         * @description Every entry but a private repository's, which only the holders of its role see (registry/access.py).
+         */
         get: operations["list-registry-entries"];
         put?: never;
         post?: never;

@@ -17,6 +17,7 @@ from tests.fixtures.cli_fixtures import (  # noqa: F401
     no_os_keyring,
     windows_credential_manager,
 )
+from tests.fixtures.mash_up_fixtures import builds, locks  # noqa: F401
 from tests.fixtures.mongodb_fixtures import (  # noqa: F401
     mongo_test_client,
     mongo_test_collection,

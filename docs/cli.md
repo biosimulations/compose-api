@@ -5,9 +5,9 @@ keep the session in your operating system's credential store, submit simulations
 and inspect what the service has registered. It covers every operation in the API (a test fails if an operation is
 added without a command). How it is built and why: [plan-cli.md](plan-cli.md).
 
-Signing in identifies you to the API. It does not make your simulations private: anyone with a simulation's numeric ID
-can read its status and results (see [Authentication](authentication.md#authentication-does-not-make-a-simulation-private)).
-Roles are labels on your identity, not access controls on simulations.
+Signing in identifies you to the API. A run you submit signed in is yours, and private unless you ask for it to be
+public; an anonymous run is public (see [Authentication](authentication.md#who-may-read-a-simulation)). Roles identify
+you; the API checks only the few that page lists, such as a private repository's.
 
 ## Install
 

@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.responses import FileResponse, PlainTextResponse
 
 from compose_api.api.errors import error
-from compose_api.authentication import OptionalPrincipal, get_optional_principal
-from compose_api.authorization import OptionalCaller, readable_simulation, readable_simulation_ids
+from compose_api.authentication import get_optional_principal
+from compose_api.authorization import OptionalCaller, readable_simulation, readable_simulation_ids, roles_of
 from compose_api.common.gateway.models import Namespace, RouterConfig
 from compose_api.common.gateway.utils import get_hpc_run_status
 from compose_api.common.ssh.ssh_service import get_ssh_service
@@ -21,6 +21,7 @@ from compose_api.dependencies import (
 )
 from compose_api.observability.chrome_trace import TraceDocument, chrome_trace_document
 from compose_api.observability.events import RunEvent, RunEventPage, RunSpan, RunTraceTree, build_span_tree
+from compose_api.registry.access import simulators_hidden_from
 from compose_api.simulation.models import (
     HpcRun,
     JobType,
@@ -168,10 +169,13 @@ async def get_results(simulation: ReadableSimulation) -> FileResponse:
     dependencies=[Depends(get_database_service)],
     summary="Get the simulator build status record by its ID",
 )
-async def get_simulator_build_status(principal: OptionalPrincipal, simulator_id: int = Query(...)) -> HpcRun:
+async def get_simulator_build_status(caller: OptionalCaller, simulator_id: int = Query(...)) -> HpcRun:
     db_service = get_database_service()
     if db_service is None:
         raise HTTPException(status_code=500, detail="Database service is not initialized")
+    if simulator_id in await simulators_hidden_from(db_service, roles_of(caller)):  # a private repository's
+        # as for a simulator with no build (get_hpc_run_status): one hidden from the caller is unknown to them
+        raise HTTPException(status_code=404, detail=f"{JobType.BUILD_CONTAINER} with id {simulator_id} not found.")
     return await get_hpc_run_status(db_service=db_service, ref_id=simulator_id, job_type=JobType.BUILD_CONTAINER)
 
 
@@ -183,9 +187,10 @@ async def get_simulator_build_status(principal: OptionalPrincipal, simulator_id:
     tags=["Results"],
     summary="The SLURM log of a simulator's newest container build (its last 200 KB)",
 )
-async def get_simulator_build_log(principal: OptionalPrincipal, simulator_id: int = Query(...)) -> PlainTextResponse:
-    simulator = await get_required_database_service().get_simulator_db().get_simulator(simulator_id)
-    if simulator is None:
+async def get_simulator_build_log(caller: OptionalCaller, simulator_id: int = Query(...)) -> PlainTextResponse:
+    database_service = get_required_database_service()
+    simulator = await database_service.get_simulator_db().get_simulator(simulator_id)
+    if simulator is None or simulator_id in await simulators_hidden_from(database_service, roles_of(caller)):
         raise HTTPException(status_code=404, detail=f"Simulator {simulator_id} not found.")
     settings = get_settings()
     build = (

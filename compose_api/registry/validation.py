@@ -332,10 +332,13 @@ def validate_submission(
     registry: bool = True,
     standing: Standing | None = None,
     environment: str = SERVICE_BUNDLE,
+    manifest: Manifest | None = None,
 ) -> list[AddressViolation]:
     """Raise SubmissionRejectedError if the submission may not run; return any violations tolerated under `warn`.
 
     ``standing`` is what the version the run will use says about its components (step 5c; ``admission.standing``).
+    ``manifest`` is the one the caller may use (``registry.access.usable``; the whole manifest by default), so a
+    private repository's class is refused to a caller without its role exactly as an unregistered one is.
 
     `registry=False` is for a prebuilt simulator's image, which brings processes this registry does not describe:
     only the addresses the container would do something unsafe with (`local:!`, any other protocol) are refused.
@@ -345,7 +348,7 @@ def validate_submission(
         raise SubmissionRejectedError(
             "the upload holds data a simulator would unpickle, which can run code: " + "; ".join(unsafe)
         )
-    violations = find_violations(path, file_type, load_manifest(), standing, environment)
+    violations = find_violations(path, file_type, manifest or load_manifest(), standing, environment)
     if not registry:
         violations = [v for v in violations if v.always_rejected]
     if not violations:

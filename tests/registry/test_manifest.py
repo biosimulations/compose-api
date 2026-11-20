@@ -1,4 +1,7 @@
+from pathlib import Path
+
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from compose_api.registry.manifest import (
@@ -129,3 +132,15 @@ def test_every_library_says_how_it_installs() -> None:
     for e in load_manifest().entries:
         if e.kind == "library":
             assert e.install is not None or e.conda, f"library {e.id} says nothing about how it installs"
+
+
+def test_an_edited_manifest_is_read_again(tmp_path: Path) -> None:
+    """Parsing is cached for each version of the file; an edit is read at the next call."""
+    entry = {"id": "a", "package": "a", "source": "https://github.com/o/a", "version": "1", "level": "listed"}
+    entry["kind"] = "library"  # no module roots needed
+    path = tmp_path / "manifest.yaml"
+    path.write_text(yaml.safe_dump({"entries": [entry]}))
+    assert [e.id for e in load_manifest(path, catalog_path=None).entries] == ["a"]
+    assert load_manifest(path, catalog_path=None) is not load_manifest(path, catalog_path=None)  # each its own copy
+    path.write_text(yaml.safe_dump({"entries": [entry, {**entry, "id": "b", "package": "b"}]}))
+    assert [e.id for e in load_manifest(path, catalog_path=None).entries] == ["a", "b"]

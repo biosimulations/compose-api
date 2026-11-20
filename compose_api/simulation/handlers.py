@@ -21,7 +21,8 @@ from compose_api.dependencies import (
 )
 from compose_api.environments.versions import version_for
 from compose_api.observability.api_events import record_api_event
-from compose_api.registry.manifest import SERVICE_BUNDLE
+from compose_api.registry.access import run_roles
+from compose_api.registry.manifest import SERVICE_BUNDLE, load_manifest
 from compose_api.simulation import builds, images, staging
 from compose_api.simulation.hpc_utils import get_experiment_id
 from compose_api.simulation.job_monitor import JobMonitor
@@ -106,6 +107,8 @@ async def run_simulation(
         environment_version_id=version.database_id,
         owner_sub=ownership.owner_sub if ownership is not None else None,
         visibility=ownership.visibility if ownership is not None else Visibility.PUBLIC,
+        # a private repository's run, compliance runs too, is read only by its role's holders (registry/access.py)
+        access_roles=run_roles(version.environment, version.spec, load_manifest()),
         submission=SubmissionSpec(staged_on_store=on_store, queue=queue, priority=priority, requested_by=requested_by),
     )
     worker = get_submission_worker()

@@ -56,7 +56,9 @@ def sync_detailed(
     """The environments documents run in, with what their interface manifests hold
 
      The environments this deployment declares (environments.yaml), then the mash-ups the database holds
-    (docs/plan-environment-composition.md, D7.9). Public: the same for every caller.
+    (docs/plan-environment-composition.md, D7.9). The same for every caller, but for a private
+    repository's
+    environments, listed only to the holders of its role (registry/access.py).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -82,7 +84,9 @@ def sync(
     """The environments documents run in, with what their interface manifests hold
 
      The environments this deployment declares (environments.yaml), then the mash-ups the database holds
-    (docs/plan-environment-composition.md, D7.9). Public: the same for every caller.
+    (docs/plan-environment-composition.md, D7.9). The same for every caller, but for a private
+    repository's
+    environments, listed only to the holders of its role (registry/access.py).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -104,7 +108,9 @@ async def asyncio_detailed(
     """The environments documents run in, with what their interface manifests hold
 
      The environments this deployment declares (environments.yaml), then the mash-ups the database holds
-    (docs/plan-environment-composition.md, D7.9). Public: the same for every caller.
+    (docs/plan-environment-composition.md, D7.9). The same for every caller, but for a private
+    repository's
+    environments, listed only to the holders of its role (registry/access.py).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -128,7 +134,9 @@ async def asyncio(
     """The environments documents run in, with what their interface manifests hold
 
      The environments this deployment declares (environments.yaml), then the mash-ups the database holds
-    (docs/plan-environment-composition.md, D7.9). Public: the same for every caller.
+    (docs/plan-environment-composition.md, D7.9). The same for every caller, but for a private
+    repository's
+    environments, listed only to the holders of its role (registry/access.py).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.

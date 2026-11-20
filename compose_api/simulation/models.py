@@ -534,6 +534,9 @@ class SimulationAccess(BaseModel):
     experiment_id: str
     owner_sub: str | None = None  # the submitter's identity-provider subject; None for anonymous and older runs
     visibility: Visibility = Visibility.PUBLIC
+    # the roles a caller needs before anything else, for a run in a private repository's environment
+    # (compose_api.registry.access); empty for every other run
+    access_roles: frozenset[str] = frozenset()
 
 
 class SubmissionInfo(BaseModel):

@@ -9,6 +9,7 @@ import re
 from compose_api.db.database_service import DatabaseService
 from compose_api.db.services.environments_db import VersionSource
 from compose_api.environments import pixi, uv_export
+from compose_api.registry.access import entry_roles
 from compose_api.registry.environments import EnvironmentSpec, load_environments, spec_problems
 from compose_api.registry.manifest import load_manifest
 from compose_api.simulation import builds
@@ -96,6 +97,9 @@ async def create_composed(
         "pixi_image": composition.pixi_image,
         "runner": pixi.runner_source(),  # what it is built and rebuilt with, whatever compose-api's runner becomes
     }
+    roles = entry_roles([entry.id for entry in spec.entries], manifest)
+    if roles:  # a private repository's version keeps its roles, whatever the manifest says later (registry/access.py)
+        recorded["access_roles"] = sorted(roles)
     source = VersionSource(
         spec=recorded,
         origin="registry",

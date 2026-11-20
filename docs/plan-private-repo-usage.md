@@ -1,6 +1,6 @@
 # Private workspace repositories on compose-api (first case: vivarium-collective/v2ecoli)
 
-**Status (2026-11-19): approved; P0 in progress.** A private viva workspace repository is onboarded (a registry entry
+**Status (2026-11-20): approved; P0 in progress.** A private viva workspace repository is onboarded (a registry entry
 and an environment) and used (run, status, results) on compose-api, with v2ecoli as the first case of a general
 mechanism. Checked against `main` at `53db5d9` (#547 merged). One PR per step, each merged with a merge commit;
 deploying is a release, one at a time, as usual.
@@ -8,11 +8,11 @@ deploying is a release, one at a time, as usual.
 | Phase | What | State |
 |---|---|---|
 | P0 | Outreach (Auth0, design review, v2ecoli) and three probes; no code | in progress ("P0 results") |
-| P1 | compose-api: restricted entries, gates and the disk fix (A, B) | — |
+| P1 | compose-api: restricted entries, gates and the disk fix (A, B) | gates built locally, unpushed; disk fix after 3(a) |
 | P2 | compose-api: fetching private source (C) | — |
-| P3 | Prove it live on a tiny private probe repository | — |
+| P3 | ~~Prove it live on a tiny private probe repository~~ | dropped: the live trial is on v2ecoli, in P5 |
 | P4 | v2ecoli readiness (v2ecoli PRs) | list from the real lock (below) |
-| P5 | Onboard and use v2ecoli | — |
+| P5 | Onboard v2ecoli, prove it live, and use it | — |
 | P6 | Docs | — |
 
 ## Context
@@ -45,8 +45,8 @@ deploying is a release, one at a time, as usual.
    - The v2ecoli members are people who have not signed up yet (P0).
 2. **Entry metadata may be public**: repository URL, commit, module roots, and a compliance case that is a document
    only. Code, images, locks, interfaces, failure text and runs stay private: hidden by the API and unreadable on disk.
-3. **v2ecoli is composed from git**, not a prebuilt image. The mechanism is proven first on a tiny private probe
-   repository, so it does not wait on v2ecoli's readiness.
+3. **v2ecoli is composed from git**, not a prebuilt image. There is no probe repository (2026-11-20): P2 is proven
+   locally on a stand-in, and live on v2ecoli itself once it is ready (P4), in P5.
 4. **We open and merge the v2ecoli PRs ourselves**, working actively with Eran but not gated by him.
 
 ## Design
@@ -56,13 +56,19 @@ deploying is a release, one at a time, as usual.
 - A manifest entry gains an optional `access_role: <name>` (`registry/manifest.py`; not empty, not `user`).
 - `create_composed` (`environments/service.py`) records the version's roles in its spec (`spec["access_roles"]`).
   Everything about a version and its runs then uses those recorded roles, so a later manifest edit can't narrow them.
+  An environment needs the roles all its versions recorded as well (`access.recorded_roles`), so removing an entry
+  or renaming its role hides nothing less; built in P1.
   Changing an entry's role means a new version. Runs from before a role was added stay as they were (documented).
+- **Removing a member is not immediate** (Nov, P0). compose-api reads roles from the access token, which stays valid
+  for up to 24 h after the role is removed, so a removed member keeps access until it expires. That is a delay in
+  revoking a member, not access for anyone who never held the role, so compose-api needs nothing for it (documented
+  in `docs/authentication.md`). The member must also leave the allow-list, or the Action gives the role back at their
+  next sign-in.
 - **CI rules** (`tests/registry/`). A restricted entry:
   - is never in a shared or `core` environment, `solvers.yaml`, or a suite;
   - is never in an unrestricted entry's `requires`;
   - has no `module_roots` overlapping another entry's, and no `alternative_to`;
   - has a compliance case that is a document only;
-  - is `tested`, which is required to be composable (`lifecycle.py:142`).
 
   This keeps SED-ML, suites, sources, curated runs and comparisons out of scope.
 - One predicate in `compose_api/authorization.py`, `may_use(caller, roles)`: true when `roles ⊆ caller.roles`. An
@@ -83,7 +89,9 @@ deploying is a release, one at a time, as usual.
     (`results.py`), and the `environment=` / `environment_version=` filters (`simulations.py`).
   - The admin routes (create version, inspect, default, retire, compliance POST) also answer 404 without the role.
   - Unknown and forbidden look the same.
-  - `Vary: Authorization` on gated responses, and `useRegistry.ts` drops its cache when the sign-in changes.
+  - No `Vary: Authorization` and no web UI change: a hidden name is a 404 before any ETag comparison, gated responses
+    carry no freshness, and signing in or out reloads the page. A session that expires in place keeps showing what that
+    same person saw until they sign in again.
 - **Runs.**
   - A new column `simulation.access_roles TEXT[] NOT NULL DEFAULT '{}'`, added by an idempotent alembic revision. It
     is stamped in `handlers.run_simulation`, the single funnel, so compliance runs get it too.
@@ -96,11 +104,15 @@ deploying is a release, one at a time, as usual.
 
 ### C. Fetching private source
 
-- **A GitHub App,** created under `biosimulations` by an owner of both organizations, with Contents read-only and no
-  webhooks.
-  - It is installed on `vivarium-collective` for selected repositories only: v2ecoli and the probe repository.
+- **compose-api's own GitHub App** (2026-11-20): private, owned by `vivarium-collective`, with Contents read-only and
+  no webhook, installed on v2ecoli only. Alex, an owner of the organization, creates it.
+  - A private App can be installed only on the account that owns it, so a private repository in another organization
+    later needs this App made public, or a second App.
+  - Not an existing App: any App's key mints tokens for every repository it is installed on, so sharing one widens
+    what its key reaches.
   - Its key is the SealedSecret `github-app` in `kustomize/overlays/compose-api-rke`, made by a new
-    `kustomize/scripts/sealed_secret_github_app.sh` copied from `sealed_secret_ghcr.sh`.
+    `kustomize/scripts/sealed_secret_github_app.sh` copied from `sealed_secret_ghcr.sh`. The key is generated when the
+    release PR that seals it is ready, and goes straight from GitHub into that script.
   - The key is mounted into the API pods `optional: true`, so P2 can deploy before the key exists. `GITHUB_APP_ID` goes
     in `api.env`.
 - **Minting** (`compose_api/environments/source_credentials.py`):
@@ -144,7 +156,7 @@ Each compose-api PR bundles the fix, its tests and the version bump, then tag �
 
 **P0. Outreach and probes (no code).**
 - **Nov (auth):**
-  - roles `v2ecoli` and a probe role;
+  - a role per repository;
   - whether the "BioSim Roles" Action emits every assigned role;
   - **granting a role to someone before their account exists**: likely an allow-list keyed on *verified* email that
     assigns the role and adds it to that first token (`email_verified` is required);
@@ -168,6 +180,15 @@ Each compose-api PR bundles the fix, its tests and the version bump, then tag �
   the predicted blockers with pixi's actual errors.
 
 **P0 results (2026-11-19).**
+- **Auth0 (Nov):** answered.
+  - v2ecoli's role is `repo-v2ecoli` (a `repo-` prefix for repository roles), made through auth0-pulumi.
+  - Every role a user holds is in the roles claim, in BioSim Platform tokens as well as compose-api's.
+  - People without an account get theirs from an allow-list in the BioSim Roles Action, applied only when
+    `email_verified`, the list kept as Pulumi secrets. Google sign-in is recommended for members until the tenant has
+    a production email provider.
+  - Removing a member takes effect when their token expires (section A).
+  - Repository owners decide who is a member; changes are auth0-pulumi PRs.
+  - One role adds about 25 bytes to a CLI session, so Windows' 2560 B leaves room for about 30 more.
 - **git and apptainer:** done, with results under C. No change to the image definition is needed.
 - **The v2ecoli lock:** done. This was `pixi_toml()` from `main` at 36b328c, for v2ecoli at e9250af, in the pinned
   pixi image. v2ecoli was fetched from a local clone through a file-URL `insteadOf`, so no credential was used.
@@ -199,16 +220,9 @@ Each compose-api PR bundles the fix, its tests and the version bump, then tag �
   - a sentinel token appears in none of pixi.toml, the lock, the definition or the Job env;
   - the token request lists exactly the spec's repositories;
   - a mint failure records nothing.
-- Release. The App is created and its key sealed.
+- Release, with the App's key sealed in it (section C).
 
-**P3. Prove it live on the probe repository** (`vivarium-collective/compose-private-probe`, private: one Step and one
-case, shaped like viva-basic-processes).
-- A manifest PR with `access_role`, then a release.
-- Pre-flight: mint one token from an API pod.
-- On production, as a holder: the mash-up locks, builds and passes compliance, and the results download.
-- Negative sweep: every route in B as anonymous, as `user` and as `admin` without the role; `ghs_` absent from the
-  lock, export, failure text, build log and SIF; file modes on the SIF and the run directory.
-- A runbook for a failed first version: `compose-api environments create mash-…`.
+**P3. Dropped** (2026-11-20). There is no probe repository; its live trial is v2ecoli's, in P5.
 
 **P4. v2ecoli readiness** (v2ecoli PRs that we open and merge, working with Eran; decision 4), from P0's real lock:
 - **process-bigraph and bigraph-schema** take releases, not `main`, unless compose-api overrides the core pins (#552,
@@ -226,9 +240,14 @@ case, shaped like viva-basic-processes).
 - **Address-check gaps:** keep the `method` type and dill-config imports out of the entry's `types`.
 - **step-outputs-replace:** check `Metabolism` against it.
 
-**P5. Onboard and use v2ecoli.**
-- The manifest entry (`access_role: v2ecoli`, roots `v2ecoli` and `pbg_v2ecoli`), its case, a release.
-- As a holder, `compose-api run` → build → compliance → `status` → `results`.
+**P5. Onboard v2ecoli, prove it live, and use it.**
+- The manifest entry (`access_role: repo-v2ecoli`, roots `v2ecoli` and `pbg_v2ecoli`), its case, a release.
+- Pre-flight: mint one token from an API pod.
+- On production, as a holder: the mash-up locks, builds and passes compliance, and the results download; then
+  `compose-api run` → `status` → `results`.
+- Negative sweep: every route in B as anonymous, as `user` and as `admin` without the role; `ghs_` absent from the
+  lock, export, failure text, build log and SIF; file modes on the SIF and the run directory.
+- A runbook for a failed first version: `compose-api environments create mash-…`.
 - Then the workbench with `COMPOSE_API_TOKEN` and `serve --backend-base-url https://compose.cam.uchc.edu`.
   `resolve_environment` finds the entry only when signed in; no workbench change is expected (verify).
   `COMPOSE_API_TOKEN` is never renewed, so lasting use needs the open workbench item: use the CLI's stored session.
@@ -243,5 +262,5 @@ case, shaped like viva-basic-processes).
 - Per PR: `uv run python -m pytest tests/registry tests/api tests/environments tests/common -q` (Docker), `make
   check`, `make check-clients`, and an adversarial review.
 - Mocked tests prove only shape: the spec, the Job manifest and the absence of the sentinel.
-- **The live runs are the evidence that counts.** P3's end-to-end run and negative sweep on production gate P5. P5's
-  CLI and workbench runs close the task.
+- **The live runs are the evidence that counts.** P5's end-to-end run and negative sweep on production come before
+  anyone else uses v2ecoli there; its CLI and workbench runs close the task.

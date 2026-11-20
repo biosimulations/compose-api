@@ -72,6 +72,8 @@ def test_the_cli_page_is_published_and_linked() -> None:
     assert "docs/cli.md" in (ROOT / "README.md").read_text()
 
 
-def test_the_docs_say_roles_are_not_access_controls() -> None:
-    assert "Roles are labels on your identity, not access controls on simulations." in CLI_DOC
-    assert "does not make your simulations private" in CLI_DOC
+def test_the_docs_say_who_reads_a_run_and_which_roles_are_checked() -> None:
+    """A signed-in run is its submitter's and private (docs/plan-favorites-and-studies.md, F3), and the API checks only
+    the roles authentication.md lists, a private repository's among them (docs/plan-private-repo-usage.md)."""
+    assert "A run you submit signed in is yours, and private" in CLI_DOC
+    assert "the API checks only the few that page lists, such as a private repository's" in " ".join(CLI_DOC.split())

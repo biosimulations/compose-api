@@ -14,7 +14,7 @@ from compose_api.authentication import (
     describe_caller,
     get_optional_principal,
 )
-from compose_api.authorization import RequestedVisibility, may_run_long, ownership_at_submit
+from compose_api.authorization import RequestedVisibility, may_run_long, ownership_at_submit, roles_of
 from compose_api.common.gateway.models import RouterConfig
 from compose_api.common.gateway.utils import get_simulation_request_from_uploaded_file, wrap_document_in_omex
 from compose_api.config import get_settings
@@ -29,8 +29,9 @@ from compose_api.environments import lifecycle
 from compose_api.environments.admission import standing_for
 from compose_api.environments.manifests import interfaces_of
 from compose_api.environments.versions import VersionUnavailableError, chosen_version, environment_of, prebuilt_images
+from compose_api.registry.access import entry_roles, environment_roles, hidden_environments, recorded_roles, usable
 from compose_api.registry.environments import EnvironmentSpec, load_environments, members_of, offered
-from compose_api.registry.manifest import SERVICE_BUNDLE, load_manifest
+from compose_api.registry.manifest import SERVICE_BUNDLE, Manifest, load_manifest
 from compose_api.registry.resolver import covering_environment, needed_entries
 from compose_api.registry.validation import (
     REFUSED,
@@ -74,13 +75,18 @@ REJECTED_RESPONSE = error(
 )
 
 
-async def _named_environment(environment: str | None, simulator: str | None) -> tuple[str | None, str | None]:
+async def _named_environment(
+    environment: str | None, simulator: str | None, hidden: frozenset[str]
+) -> tuple[str | None, str | None]:
     """The prebuilt simulator a request's `environment` and `simulator` name (None: the shared environment, or none
     named), and the undeclared composed environment it names (a mash-up), if it does. `environment` names any
     environment this deployment offers or the database holds; `simulator` is the older name for a prebuilt one, kept
     for a release (docs/plan-environment-composition.md, D7.1). A prebuilt one is offered when it has a default
-    version (D8.3). A 400 when they disagree or the name is unknown."""
-    images = await prebuilt_images(get_database_service())
+    version (D8.3). A 400 when they disagree or the name is unknown; one ``hidden`` from the caller (a private
+    repository's, registry/access.py) is unknown to them."""
+    images = {
+        name: image for name, image in (await prebuilt_images(get_database_service())).items() if name not in hidden
+    }
     if simulator is not None and simulator not in images:
         offered_here = ", ".join(sorted(images)) or "none"
         raise HTTPException(
@@ -88,8 +94,8 @@ async def _named_environment(environment: str | None, simulator: str | None) -> 
         )
     if environment is None:
         return simulator, None
-    spec = next((e for e in load_environments().environments if e.name == environment), None)
-    if spec is None and await _is_mash_up(environment):
+    spec = next((e for e in load_environments().environments if e.name == environment and e.name not in hidden), None)
+    if spec is None and environment not in hidden and await _is_mash_up(environment):
         if simulator is not None:
             raise HTTPException(status_code=400, detail=f"`environment={environment}` is a mash-up, not `{simulator}`.")
         return None, environment
@@ -147,10 +153,23 @@ async def _covering(
     """The environment that holds the run's packages and whose image advertises every class it names (its interface
     manifest, read back from the image); one with nothing read back yet (a version still building) is judged by its
     packages, as before. One that holds the packages but lacks a class (a class the package does not have at that pin,
-    or one that failed to import there) is a 400 naming it under `enforce`, rather than a run sent to fail at import."""
+    or one that failed to import there) is a 400 naming it under `enforce`, rather than a run sent to fail at import.
+    One that also holds a private repository the run does not need is never chosen: its run would need that role to
+    be read (registry/access.py)."""
     manifest = load_manifest()
-    mash_ups = await lifecycle.mash_up_specs(database_service) if database_service is not None else []
+    allowed = entry_roles(needed, manifest)
+    recorded = await recorded_roles(database_service)
+
+    def within(spec: EnvironmentSpec) -> bool:
+        """Whether the environment needs no role the run's own entries do not (registry/access.py)."""
+        return environment_roles(spec, manifest) | recorded.get(spec.name, frozenset()) <= allowed
+
     images = await prebuilt_images(database_service)
+    mash_ups = [
+        spec
+        for spec in (await lifecycle.mash_up_specs(database_service) if database_service is not None else [])
+        if within(spec)
+    ]
     environments = load_environments()
     on_offer = [s for s in environments.environments if s.kind == "shared" or offered(s, images)] + list(mash_ups)
     advertised = {
@@ -164,9 +183,12 @@ async def _covering(
         found = advertised.get(spec.name)
         return found is None or classes <= found
 
+    def on_offer_here(spec: EnvironmentSpec) -> bool:
+        return offered(spec, images) and within(spec)
+
     def covering_by(check: Callable[[EnvironmentSpec], bool]) -> EnvironmentSpec | None:
         return covering_environment(
-            needed, manifest, environments, offered=lambda s: offered(s, images), mash_ups=mash_ups, provides=check
+            needed, manifest, environments, offered=on_offer_here, mash_ups=mash_ups, provides=check
         )
 
     covering = covering_by(provides)
@@ -184,14 +206,16 @@ async def _inferred(
     file_type: SimulationFileType,
     principal: AuthenticatedPrincipal | None,
     background_tasks: BackgroundTasks,
+    manifest: Manifest | None = None,
 ) -> _Inferred:
     """The environment a run that names none uses, from the classes its documents name (registry/resolver.py): the
     shared environment for everything it covers, as before, then the smallest declared one, then a mash-up that
     covers them. Nothing covering entries that can be composed, the mash-up of exactly those is made for the run
     (step 7b, D7.4): only for a signed-in caller (D7.5); its build follows in the background. Anything else (an
     unreadable submission, a class under no entry, an entry that cannot be composed) goes to the shared environment,
-    whose validation says why it cannot run."""
-    manifest = load_manifest()
+    whose validation says why it cannot run. ``manifest`` is the one the caller may use (registry/access.py): a
+    private repository's class is unregistered to a caller without its role, and never joins a mash-up made for them."""
+    manifest = manifest or load_manifest()
     try:
         # qualified as validation qualifies them, so a core short name (`local:RAMEmitter`) is not "unregistered"
         targets = [manifest.qualified(t) for t in class_targets(path, file_type)]
@@ -318,7 +342,12 @@ async def submit_simulation(
     logger.info("Simulation submission from %s", describe_caller(principal))
     run_tags, run_description, time_limit = _checked_options(principal, interval_time, tags, description)
     ownership = ownership_at_submit(principal, visibility)
-    simulator, composed = await _named_environment(environment, simulator)
+    # what this caller may use: without a private repository's entries and environments unless they hold its role
+    roles = roles_of(principal)
+    manifest = usable(load_manifest(), roles)
+    simulator, composed = await _named_environment(
+        environment, simulator, await hidden_environments(get_database_service(), roles)
+    )
     named = environment is not None or simulator is not None or environment_version is not None
     if environment_version is not None:
         try:
@@ -333,7 +362,11 @@ async def submit_simulation(
     )
     if not named:  # D7.1: the environment inferred from the documents, a mash-up made for it if need be (7b)
         inferred = await _inferred(
-            simulation_request.request_file_path, simulation_request.simulation_file_type, principal, background_tasks
+            simulation_request.request_file_path,
+            simulation_request.simulation_file_type,
+            principal,
+            background_tasks,
+            manifest,
         )
         simulator, composed, environment_version = inferred.simulator, inferred.mash_up, inferred.version
     simulation_request.end_time_point = interval_time
@@ -365,6 +398,7 @@ async def submit_simulation(
             registry=simulator is None,
             standing=standing,
             environment=composed or environment_of(simulator),
+            manifest=manifest,
         )
     except SubmissionRejectedError as e:
         simulation_request.request_file_path.unlink(missing_ok=True)

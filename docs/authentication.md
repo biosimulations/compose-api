@@ -39,9 +39,9 @@ To call anonymously, leave the header out.
 
 `GET /health` and `GET /version` ignore the header. A missing, valid, or garbage `Authorization` value still returns 200.
 
-## Authentication does not make a simulation private
+## Who may read a simulation
 
-A valid access token identifies the caller. It does not attach the simulation to that caller, and it does not hide the simulation from anyone else.
+A run submitted by a signed-in caller is theirs, and private unless they ask for `visibility=public`; the owner can change that later with `PATCH /simulations/<id>`. An anonymous run, and a run the service starts (suites, compliance cases), has no owner and is public.
 
 Every route that reads something a simulation owns asks the server's read policy whether the caller may read it, and the verified caller is the one it asks about:
 
@@ -53,9 +53,7 @@ Every route that reads something a simulation owns asks the server's read policy
 - `GET /datasets`, `GET /datasets/<id>`, `GET /datasets/<id>/content` and `GET /datasets/<id>/files/<subpath>`
 - `GET /comparisons`, `GET /comparisons/<id>` and `GET /comparisons/<id>/series`, readable only when every run in the comparison is readable by the caller
 
-The policy lets anyone read a public simulation, and only its owner read a private one. A deployment can also let one role read every private simulation by setting `ADMIN_ROLE` (`Settings.admin_role`); it is empty by default, so no role does. It refuses `user`, the role every signed-in caller holds, so a deployment configured with it fails to start. Submitting a simulation does not record an owner yet, so every simulation is public. Anyone who has the id can read its status, events and datasets and, when the results file exists, download it. Anonymous and authenticated callers see the same record. A missing simulation, or results that are not ready yet, is 404.
-
-Do not treat bearer authentication as an access-control boundary for simulation status or results.
+The policy first asks, of a run in a private repository's environment, whether the caller holds that repository's role ("Private repositories" below); without it the run is not readable, whoever they are. Then anyone may read a public simulation, and only its owner a private one. A deployment can also let one role read every private simulation by setting `ADMIN_ROLE` (`Settings.admin_role`); it is empty by default, so no role does. It refuses `user`, the role every signed-in caller holds, so a deployment configured with it fails to start. Whoever may read a simulation can read its status, events and datasets and, when the results file exists, download it. A simulation the caller may not read is 404, the same as a missing one or results that are not ready yet.
 
 ## Human callers
 
@@ -129,9 +127,25 @@ any signed-in caller run long:
 | `ADMIN_ROLE` | read every private simulation | unset |
 | `LONG_RUN_ROLE` | simulate past `MAX_INTERVAL_TIME` ([Longer runs](#longer-runs)) | `long-runs` (not yet granted) |
 
-The shared BioSim `admin` role grants only what a deployment names it for. No simulation is private yet, so today no
-role changes what a caller can read. Do not assume any other role grants or denies access unless this API documents
-that check.
+The shared BioSim `admin` role grants only what a deployment names it for. Do not assume any other role grants or
+denies access unless this API documents that check.
+
+### Private repositories
+
+A registry entry for a private repository names an `access_role` (`compose_api/registry/manifest.yaml`;
+docs/plan-private-repo-usage.md). Only a caller whose token carries that role sees the entry, the environments that
+hold it with their versions, manifests and simulators, and the runs in them. To anyone else each of these is not found,
+answered exactly as something that does not exist, and the entry's classes are refused as unregistered ones are. A
+run's roles are stored with it (`simulation.access_roles`), so "public" on such a run means every holder of the role.
+There is no administrator bypass: neither `ADMIN_ROLE` nor `ENVIRONMENT_ADMIN_ROLE` reaches them, and an operator who
+needs one is given the role. Roles are assigned in the BioSim Auth0 tenant, and a token carries a new one after the
+next sign-in. Removing one takes effect only when the caller's token expires, up to 24 hours later: compose-api reads
+roles from the token, so a member removed from a repository can still use it until then.
+
+An environment keeps the roles its versions recorded when they were made, so removing an entry from the manifest or
+renaming its role hides nothing less. Runs from before an entry was made private keep what they had (no roles).
+Two things are shared with everyone, as counts only: the limit on mash-ups being made at once (a 429 counts
+everyone's) and a run's place in the queue.
 
 ## Capabilities
 
@@ -144,7 +158,7 @@ configuration.
 |---|---|
 | `environments:admin` | `ENVIRONMENT_ADMIN_ROLE` |
 | `suites:curate` | `SUITE_CURATOR_ROLE` |
-| `simulations:read-all` | `ADMIN_ROLE` |
+| `simulations:read-all` | `ADMIN_ROLE`; every simulation but a private repository's, which needs its role |
 | `simulations:long-runs` | `LONG_RUN_ROLE` (any signed-in caller while it is empty), once `MAX_LONG_RUN_INTERVAL_TIME` exceeds `MAX_INTERVAL_TIME` |
 
 `compose-api auth status --verify` prints them. The list is empty for a caller the deployment grants nothing beyond

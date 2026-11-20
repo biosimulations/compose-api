@@ -584,6 +584,12 @@ def fake_compose_api(auth0_verifier: Auth0Verifier, monkeypatch: pytest.MonkeyPa
 
     monkeypatch.setattr(simulation_router, "prebuilt_images", no_prebuilt)
 
+    async def nothing_hidden(*_args: object) -> frozenset[object]:
+        return frozenset()  # the fake database holds no private repository's environment
+
+    monkeypatch.setattr(simulation_router, "hidden_environments", nothing_hidden)
+    monkeypatch.setattr(results_router, "simulators_hidden_from", nothing_hidden)
+
     async def shared(*_args: object) -> object:
         return simulation_router._Inferred()  # no file to infer from: the shared environment
 
