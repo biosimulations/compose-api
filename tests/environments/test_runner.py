@@ -3,6 +3,7 @@
 It is run here as the image runs it, as a script in a subprocess, on this environment's process-bigraph (the dev
 group's, the release composed environments install) and, when uv can fetch it, on that release with events written."""
 
+import importlib.metadata
 import json
 import os
 import shutil
@@ -14,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from compose_api.environments import runner
+from compose_api.registry.environments import load_environments
 
 RUNNER = Path(runner.__file__)
 
@@ -150,13 +152,25 @@ def test_a_dataframe_in_the_results_is_written_as_its_columns(workdir: Path) -> 
     assert json.loads(results.read_text())["emitter"][-1]["table"] == {"x": [1.0, 2.0], "n": [3, 4]}
 
 
+def _core() -> dict[str, str]:
+    composition = load_environments().composition
+    assert composition is not None
+    return composition.core
+
+
+def test_the_runners_tests_run_on_the_engine_composed_images_install() -> None:
+    """pyproject's dev pins of the engine are the composed core (environments.yaml), so the tests here exercise the
+    runner on what every composed image runs it on."""
+    assert {name: importlib.metadata.version(name) for name in _core()} == _core()
+
+
 @pytest.mark.skipif(shutil.which("uv") is None, reason="needs uv to fetch the composed environments' engine")
 def test_on_a_current_engine_the_run_is_a_span_and_its_results_an_artifact(workdir: Path) -> None:
     (workdir / "doc.pbg").write_text(json.dumps({"state": _document()}))
     events = workdir / "engine.jsonl"
     uv = [
         shutil.which("uv") or "uv", "run", "-q", "--isolated", "--no-project", "--python", "3.12",
-        "--with", "process-bigraph==1.9.1", "--with", "bigraph-schema==1.8.1", "python",
+        *[arg for name, version in sorted(_core().items()) for arg in ("--with", f"{name}=={version}")], "python",
     ]  # fmt: skip
     _run(uv, workdir, "run", "doc.pbg", "-o", "out", "-n", "3", env={"PBG_EVENT_SINKS": f"file:{events}"})
     assert _counts(workdir / "out") == [0.0, 2.0, 4.0, 6.0]

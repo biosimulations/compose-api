@@ -49,7 +49,7 @@ def test_registry_env_becomes_a_pixi_workspace_pinned_to_releases_and_commits() 
     assert 'exclude-newer = "2026-10-25T22:00:05Z"' in toml  # nothing newer than the resolution date, to the second
     assert 'platforms = ["linux-64"]' in toml
     assert '"python" = "3.12.*"' in toml and '"readdy" = "==2.0.13"' in toml  # conda-forge
-    assert '"process-bigraph" = "==1.9.1"' in toml and '"bigraph-schema" = "==1.8.1"' in toml  # the common core
+    assert '"process-bigraph" = "==1.11.1"' in toml and '"bigraph-schema" = "==1.8.3"' in toml  # the common core
     pbsim = next(e for e in load_manifest().entries if e.id == "pbsim-common").install
     assert pbsim is not None and pbsim.commit is not None
     assert (
@@ -63,7 +63,7 @@ def test_registry_env_becomes_a_pixi_workspace_pinned_to_releases_and_commits() 
 
 def test_development_tooling_comes_from_the_index_whatever_a_git_package_says() -> None:
     # a workspace's `[tool.uv.sources]` sent viva-superpowers to the tip of its branch (0.24.0, bigraph-schema>=1.8.2)
-    # while the core pins 1.8.1, so its first lock failed; pixi 0.68.1 has no switch to ignore sources, so these
+    # while the core pinned 1.8.1, so its first lock failed; pixi 0.68.1 has no switch to ignore sources, so these
     # names are overridden
     parsed = tomllib.loads(pixi_toml(_registry_env()))
     assert parsed["pypi-options"]["dependency-overrides"] == dict.fromkeys(pixi.INDEX_ONLY, ">=0")
@@ -89,7 +89,7 @@ def test_a_tool_an_entry_installs_itself_is_not_overridden() -> None:
 def test_a_spec_records_its_entries_and_the_runner_types_they_declare() -> None:
     spec = _registry_env()
     recorded = spec.as_json()
-    assert recorded["core"] == {"bigraph-schema": "1.8.1", "process-bigraph": "1.9.1"}
+    assert recorded["core"] == {"bigraph-schema": "1.8.3", "process-bigraph": "1.11.1"}
     assert recorded["types"] == ["pbsim_common:standard_types"]
     by_id = {e["id"]: e for e in recorded["entries"]}
     assert by_id["readdy"] == {"id": "readdy", "install": None, "conda": {"readdy": "==2.0.13"}}
