@@ -28,6 +28,7 @@ nav:
   - Authentication: authentication.md
   - Web UI: webapp.md
   - Command line: cli.md
+  - "Private models: getting started": private-models.md
   - Modules: modules.md
   - Adding a simulator: registry-onboarding.md
 plugins:
