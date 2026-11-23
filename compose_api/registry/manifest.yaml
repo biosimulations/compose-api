@@ -603,8 +603,8 @@ entries:
         that 1.11.1 records the seeded store values in row 0 (t = 0), where 1.9.1 left them empty (viva-tellurium's
         stimulus-through-port, viva-smoldyn's seeded-decay-2d). vivarium-tyssue's sheet-relaxation fails on 1.11.1
         (that entry says why). viva-fenics' poisson-quadratic-mms fails on both cores on 2026-11-23, for a reason
-        outside the core: conda-forge's yaml 0.2.6 (2026-11-23) renames libyaml-0.so.2, which petsc 3.25.6 links, so
-        viva_fenics does not import. With yaml held below 0.2.6, as the entries that bring PETSc now hold it, it
+        outside the core: conda-forge's yaml 0.2.6 (2026-11-23) ships libyaml-0.so.1 instead of the libyaml-0.so.2
+        petsc 3.25.6 links, so viva_fenics does not import. With yaml held below 0.2.6, as the entries that bring PETSc now hold it, it
         passes on both cores, with identical results.
         Existing versions keep their images; each environment's next version is checked against its cases.
 

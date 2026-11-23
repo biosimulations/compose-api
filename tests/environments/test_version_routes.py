@@ -252,6 +252,43 @@ async def test_a_composed_version_resolves_in_the_background_then_builds(
 
 
 @pytest.mark.asyncio
+async def test_a_version_keeps_its_core_when_the_services_core_moves(
+    app: FastAPI,
+    builds: Builds,
+    locks: Locks,
+    database_service: DatabaseServiceSQL,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Versions are immutable (docs/registry-onboarding.md): after composition.core moves, an existing version is
+    still built from the workspace and lock it recorded, and only a new version takes the new core."""
+    from compose_api.environments import pixi, service
+    from compose_api.registry.environments import load_environments
+
+    current = load_environments()
+    assert current.composition is not None
+    old_core = current.composition.core
+    async with _as(app, ADMIN) as admin:
+        number = (await admin.post("/registry/environments/registry_env/versions", json={})).json()["number"]
+        first = (await admin.get(f"/registry/environments/registry_env/versions/{number}")).json()
+    new_core = {name: f"{version}.post1" for name, version in old_core.items()}
+    moved = current.model_copy(update={"composition": current.composition.model_copy(update={"core": new_core})})
+    monkeypatch.setattr(service, "load_environments", lambda: moved)
+
+    files = await service.build_files(database_service, first["simulator_id"])
+    assert files is not None
+    assert files[pixi.TOML_FILE].rstrip("\n") == first["spec"]["pixi_toml"].rstrip("\n")
+    assert files[pixi.LOCK_FILE].rstrip("\n") == first["lock"].rstrip("\n")
+    for name, version in old_core.items():
+        assert f'"{name}" = "=={version}"' in files[pixi.TOML_FILE]
+    # the move is real: the next version takes the new core
+    async with _as(app, ADMIN) as admin:
+        later = (await admin.post("/registry/environments/registry_env/versions", json={})).json()
+    for name, version in new_core.items():
+        assert f'"{name}" = "=={version}"' in later["spec"]["pixi_toml"]
+        assert later["spec"]["core"][name] == version
+
+
+@pytest.mark.asyncio
 async def test_a_composition_that_does_not_resolve_fails_with_pixis_explanation(
     app: FastAPI, builds: Builds, locks: Locks
 ) -> None:
