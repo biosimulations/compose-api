@@ -200,7 +200,14 @@ class Locks:
     text: str = "version: 7\n"  # the lock every request gets while `same`
     asked: list[str] = field(default_factory=list)
 
-    async def __call__(self, toml: str, pixi_image: str, suffix: str, sources: Sequence[PrivateSource] = ()) -> str:
+    async def __call__(
+        self,
+        toml: str,
+        pixi_image: str,
+        suffix: str,
+        sources: Sequence[PrivateSource] = (),
+        evidence: object = (),
+    ) -> str:
         from compose_api.simulation.build_k8s import LockFailedError
 
         self.asked.append(toml)
@@ -449,6 +456,21 @@ async def test_a_ready_composed_version_runs_its_entries_cases_and_reports_their
     refused = await report()
     assert refused["refused"] == [component]
     assert {e["entry"]: e["level"] for e in refused["entries"]}["pbsim-common"] == "tested"
+    from compose_api.environments import admission
+
+    standing = await admission.standing_for(database_service, version.environment, version.number)
+    assert standing is not None and component in standing.refused  # what a run's admission consults
+
+    # the same failure, accepted for its entry (accepted_findings): still on the record, marked; it refuses nothing
+    await database_service.get_environments_db().set_findings(
+        version.database_id,
+        [{"component": component, "check": "step-outputs-replace", "severity": "fail", "detail": "x",
+          "accepted": "gated"}],
+    )  # fmt: skip
+    accepted = await report()
+    assert accepted["refused"] == [] and accepted["findings"][0]["accepted"] == "gated"
+    standing = await admission.standing_for(database_service, version.environment, version.number)
+    assert standing is not None and component not in standing.refused  # admitted
 
     # run again: the cases are pending again, then a run that fails is an error
     async with _as(app, ADMIN) as admin:

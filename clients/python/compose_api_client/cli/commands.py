@@ -878,6 +878,10 @@ def environments_compliance(
     emit(settings.output, rows, ["entry", "level", "cases"])
     for component in report.refused if isinstance(report.refused, list) else []:
         print(f"refused: {component}")
+    for finding in report.findings if isinstance(report.findings, list) else []:
+        reason = finding.additional_properties.get("accepted")
+        if reason:  # a failure the version accepts: admitted, and said so
+            print(f"accepted: {finding['component']} ({finding['check']}): {reason}")
 
 
 @environments_app.command("create")

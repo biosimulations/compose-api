@@ -93,6 +93,9 @@ class ComposedSpec:
                     "install": e.install.model_dump(exclude_defaults=True) if e.install else None,
                     "conda": e.conda,
                     **({"access_role": e.access_role} if e.access_role else {}),
+                    # its accepted findings: their evidence is checked at the entry's commit before the version is
+                    # locked (build_k8s.evidence_script), and only these are accepted in it (contents._store)
+                    **({"accepted": [a.model_dump() for a in e.accepted_findings]} if e.accepted_findings else {}),
                 }
                 for e in self.entries
             ],

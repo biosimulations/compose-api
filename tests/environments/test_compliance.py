@@ -270,3 +270,56 @@ def test_viva_pde_particles_region_mean_case_holds_its_closed_forms() -> None:
         "local:viva_pde_particle.steps.transfer.RegionMean",
         "local:process_bigraph.emitter.RAMEmitter",
     }
+
+
+def test_an_accepted_failure_stays_on_the_record_and_refuses_nothing() -> None:
+    """A failure a recorded acceptance names is marked with its reason and no longer refuses the component; another
+    check's failure, or the same check on another component, still does."""
+    from compose_api.environments.compliance import Finding, accept, refused, refuses
+
+    accepted = [{"component": "pkg.Gated", "check": "step-outputs-replace", "reason": "gated",
+                 "evidence": "tests/test_gate.py"}]  # fmt: skip
+    findings = [
+        Finding(component="pkg.Gated", check="step-outputs-replace", severity="fail", detail="adds"),
+        Finding(component="pkg.Gated", check="module-imports", severity="fail", detail="no module"),
+        Finding(component="pkg.Other", check="step-outputs-replace", severity="fail", detail="adds"),
+    ]
+    marked = [f.model_dump() for f in accept(findings, accepted)]
+    assert [f["accepted"] for f in marked] == ["gated", None, None]
+    assert [refuses(f) for f in marked] == [False, True, True]
+    assert refused(marked) == {"pkg.Gated": "no module", "pkg.Other": "adds"}  # admission's and the report's
+
+
+@pytest.mark.asyncio
+async def test_only_a_composed_version_accepts_and_only_what_it_recorded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reading back a version's image stores its findings with the acceptances that version recorded when it was made
+    (and its lock checked), never the manifest's now: a prebuilt or shared version, recording none, accepts none."""
+    from compose_api.environments import contents, pixi
+    from compose_api.simulation.models import EnvironmentVersion, VersionState
+
+    stored: list[list[dict[str, Any]]] = []
+
+    class Versions:
+        async def set_contents(self, *args: object) -> None:
+            pass
+
+        async def set_findings(self, version_id: int, findings: list[dict[str, Any]]) -> None:
+            stored.append(findings)
+
+    class Database:
+        def get_environments_db(self) -> Versions:
+            return Versions()
+
+    entry = {"id": "pkg", "install": {"git": "https://github.com/o/pkg", "commit": "a" * 40},
+             "accepted": [{"component": "pkg.steps.UTC", "check": "step-outputs-replace", "reason": "gated",
+                           "evidence": "tests/test_gate.py"}]}  # fmt: skip
+    monkeypatch.setattr(contents, "version_roots", lambda version: ["pkg"])  # the roots its entries provide
+    files = {"interfaces.json": json.dumps(_manifest()), "types.json": json.dumps({"numeric_result": NUMERIC_RESULT})}
+    for contract, expected in ((pixi.RUNTIME_CONTRACT, "gated"), (1, None)):
+        version = EnvironmentVersion(
+            database_id=1, environment_id=1, environment="mash-pkg", number=1, state=VersionState.READY,
+            simulator_id=1, spec={"entries": [entry]}, runtime_contract=contract,
+        )  # fmt: skip
+        await contents._store(Database(), version, files)  # type: ignore[arg-type]
+        (utc,) = [f for f in stored[-1] if f["component"] == "pkg.steps.UTC"]
+        assert (utc["severity"], utc["accepted"]) == ("fail", expected)

@@ -21,6 +21,7 @@ import io
 import json
 import math
 import re
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -91,12 +92,37 @@ def _dict_leaves(schema: dict[str, Any], named: dict[str, Any], path: str, seen:
 
 
 class Finding(BaseModel):
-    """What a generic check found in one component."""
+    """What a generic check found in one component; ``accepted``, the reason its entry accepts a failure
+    (``accept``)."""
 
     component: str
     check: str
     severity: Literal["fail", "warn"]
     detail: str
+    accepted: str | None = None
+
+
+def accept(findings: list[Finding], accepted: Iterable[Mapping[str, Any]]) -> list[Finding]:
+    """The findings, each failure a recorded acceptance names (the same component and check) marked with its reason:
+    a version's own (``contents.recorded_acceptances``), whose evidence its lock checked. It stays on the record; it no
+    longer refuses the component (``refuses``)."""
+    reasons = {(str(a["component"]), str(a["check"])): str(a["reason"]) for a in accepted}
+    return [
+        f.model_copy(update={"accepted": reasons[(f.component, f.check)]})
+        if f.severity == "fail" and (f.component, f.check) in reasons
+        else f
+        for f in findings
+    ]
+
+
+def refuses(finding: Mapping[str, Any]) -> bool:
+    """Whether a recorded finding refuses its component: a failure its entry did not accept."""
+    return finding.get("severity") == "fail" and not finding.get("accepted")
+
+
+def refused(findings: Iterable[Mapping[str, Any]]) -> dict[str, str]:
+    """The components a version's findings refuse, each with why: admission and the compliance report alike."""
+    return {str(f["component"]): str(f.get("detail", f.get("check", ""))) for f in findings if refuses(f)}
 
 
 def port_findings(interfaces: dict[str, Any], named: dict[str, Any], module_roots: list[str]) -> list[Finding]:
