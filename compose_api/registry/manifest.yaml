@@ -169,12 +169,12 @@ entries:
   # environment lists it, so a run that uses its classes beside another entry's gets an environment made for both.
   - id: viva-basic-processes
     package: viva-basic-processes
-    # not on PyPI; its v0.3.0 tag predates the pbg -> viva rename (it installs as pbg-basic-processes), so a commit
-    source: https://github.com/vivarium-collective/viva-basic-processes/tree/9a1a624dc925cf700c3f89a8cc008a8fa4b4e5d4
-    commit: 9a1a624dc925cf700c3f89a8cc008a8fa4b4e5d4
+    # not on PyPI; v0.4.0 (f9ea4bd, the merge of #5) adds TimeSeriesStep and installs as viva-basic-processes
+    source: https://github.com/vivarium-collective/viva-basic-processes/tree/f9ea4bd35f1ab94e4a8e9e715eaf78da0d04fcc4
+    commit: f9ea4bd35f1ab94e4a8e9e715eaf78da0d04fcc4
     install:
       git: https://github.com/vivarium-collective/viva-basic-processes
-      commit: 9a1a624dc925cf700c3f89a8cc008a8fa4b4e5d4
+      commit: f9ea4bd35f1ab94e4a8e9e715eaf78da0d04fcc4
     module_roots:
       - viva_basic_processes
     level: tested
@@ -185,6 +185,13 @@ entries:
         and Clock together through compose-api's runner on process-bigraph 1.9.1 and bigraph-schema 1.8.1 and matches
         values computed by hand; it passed locally on 2026-10-26. MathExpressionStep's outputs are overwrite[float],
         so the generic step-outputs-replace check passes. In a composed version, the case run there decides its level.
+      - >-
+        Moved to v0.4.0 (f9ea4bd) on 2026-11-23 for TimeSeriesStep (viva-basic-processes #5), which the NF-kB distance
+        study uses to replay each ring's recorded TNF. A second case
+        (registry/compliance/viva-basic-processes/time-series-replay) replays samples at t = 0, 30, 60 and 90 with a
+        zero-order hold, read by a MathExpressionStep at the same instant, against values computed by hand. Both cases
+        passed through compose-api's runner and compliance.evaluate on process-bigraph 1.9.1 and bigraph-schema 1.8.1
+        with the package at f9ea4bd.
 
   # --- ODE/SBML ---
   # viva-biomodels: HELD, not added. Reasons: a workspace (bypass-selection), no Process classes (only Steps),

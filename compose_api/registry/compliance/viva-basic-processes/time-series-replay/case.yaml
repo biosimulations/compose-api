@@ -1,0 +1,18 @@
+description: >-
+  TimeSeriesStep replays a series sampled at t = 0, 30, 60 and 90 (c = 0, 2.5, 1.5, 0.5) with a zero-order hold, read
+  at the time a Tick advances every 30, and a MathExpressionStep reads it at the same instant as y = 2c. At t = 0, 30,
+  60 and 90 the store holds each sample and y twice it; after the last sample (t = 120, 150) the last value holds.
+  Values by hand.
+document: document.pbg
+interval: 150
+expect:
+  - {kind: rows, emitter: emitter, min: 6}
+  - {kind: scalar, emitter: emitter, field: c, row: 0, expected: 0.0}
+  - {kind: scalar, emitter: emitter, field: c, row: 1, expected: 2.5}
+  - {kind: scalar, emitter: emitter, field: y, row: 1, expected: 5.0}
+  - {kind: scalar, emitter: emitter, field: c, row: 2, expected: 1.5}
+  - {kind: scalar, emitter: emitter, field: y, row: 2, expected: 3.0}
+  - {kind: scalar, emitter: emitter, field: c, row: 3, expected: 0.5}
+  - {kind: scalar, emitter: emitter, field: y, row: 3, expected: 1.0}
+  - {kind: scalar, emitter: emitter, field: c, row: 5, expected: 0.5}
+  - {kind: scalar, emitter: emitter, field: t, row: 5, expected: 150.0}
