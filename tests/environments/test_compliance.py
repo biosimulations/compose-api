@@ -193,7 +193,7 @@ def test_a_case_names_plain_files_that_exist(tmp_path: Path) -> None:
 def test_viva_basic_processes_case_checks_plain_numbers() -> None:
     """Its stores are floats, not a numeric_result: `scalar` expectations, here against the rows compose-api's runner
     emitted for this document on 2026-10-26 (x: 1 + 2 per step; y = 3x + 1; one tick per step)."""
-    (case,) = load_cases("viva-basic-processes")
+    (case,) = [c for c in load_cases("viva-basic-processes") if c.name == "intervention-and-expression"]
     assert compliance.case_problems(case) == []
     rows = [{"x": 1.0 + 2 * t, "y": 3 * (1.0 + 2 * t) + 1, "tick": t, "global_time": float(t)} for t in range(6)]
     assert evaluate(case, {"emitter": rows}).passed
@@ -202,6 +202,18 @@ def test_viva_basic_processes_case_checks_plain_numbers() -> None:
     assert not outcome.passed and outcome.failures == ["emitter.y in row -1: 33.0, expected 34.0"]
     missing = evaluate(case, {"emitter": [{"x": 1.0}]})
     assert any("no number" in f for f in missing.failures)
+
+
+def test_viva_basic_processes_time_series_case_checks_the_hold() -> None:
+    """TimeSeriesStep replays samples at t = 0, 30, 60, 90 with a zero-order hold, and a Step reads each at its instant
+    (y = 2c); after the last sample the last value holds. Rows by hand."""
+    (case,) = [c for c in load_cases("viva-basic-processes") if c.name == "time-series-replay"]
+    assert compliance.case_problems(case) == []
+    held = [0.0, 2.5, 1.5, 0.5, 0.5, 0.5]
+    rows = [{"t": 30.0 * k, "c": c, "y": 2 * c, "global_time": 30.0 * k} for k, c in enumerate(held)]
+    assert evaluate(case, {"emitter": rows}).passed
+    late = [{**row, "c": held[max(k - 1, 0)], "y": 2 * held[max(k - 1, 0)]} for k, row in enumerate(rows)]
+    assert not evaluate(case, {"emitter": late}).passed  # one interval late: the hold read before the sample
 
 
 def test_viva_pde_particles_case_reads_an_ensembles_values_by_path() -> None:
