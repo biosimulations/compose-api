@@ -122,78 +122,50 @@ def _note(message: str) -> None:
 def make_session(settings: Settings) -> ComposeSession:
     """The session every API command uses. Tests replace this to inject a transport.
 
-    The API is the profile's (`--profile`), unless `--url` names it. Credentials, the first that applies:
-    `COMPOSE_API_TOKEN`; `--ephemeral-auth` (sign in now, keep nothing); the profile's stored session; none, which the
-    API allows. None is attached when `--url` names another API than the profile's. A stored session that exists but
-    cannot be read is an error, never a silent anonymous call; a host with no supported credential store has no
-    stored session to fall back from.
+    The API is the profile's (`--profile`), unless `--url` names it. `--ephemeral-auth` signs in now and keeps
+    nothing; otherwise the credential is what `auth.signed_in_session` gives any program: `COMPOSE_API_TOKEN`, else the
+    profile's stored session, else none, which the API allows, and none at all when `--url` names another API than the
+    profile's. A stored session that exists but cannot be read is an error, never a silent anonymous call.
     """
     from compose_api_client import profiles
+    from compose_api_client.auth.signed_in import signed_in_session
     from compose_api_client.cli import auth_commands  # its `Wiring` is what tests replace
 
     loaded = profiles.load_cli_settings(settings.profile).settings
     wiring = auth_commands.Wiring()
+    url = settings.url if settings.url_explicit else None
     env_token = TOKEN_ENV_VAR in os.environ
-    if settings.ephemeral_auth and env_token:
-        raise UsageError(f"--ephemeral-auth and {TOKEN_ENV_VAR} both supply credentials; use one of them")
-
-    def session(base_url: str, tokens: TokenSource | None = None) -> ComposeSession:
-        return ComposeSession(
-            base_url,
-            tokens=tokens,
-            timeout=settings.timeout,
-            ca_bundle=loaded.ca_bundle,
-            transport=wiring.sync_api_transport,
-        )
-
-    if settings.url_explicit and _origin(settings.url) != loaded.api_base_url:
-        if settings.ephemeral_auth:
+    if settings.ephemeral_auth:
+        if env_token:
+            raise UsageError(f"--ephemeral-auth and {TOKEN_ENV_VAR} both supply credentials; use one of them")
+        if url is not None and not loaded.matches_url(url):
             raise UsageError(
                 f"--ephemeral-auth signs in to profile {loaded.profile!r} ({loaded.api_base_url}), and --url names"
                 " another API; drop --url, or choose the matching --profile"
             )
-        if env_token:
-            _note(
-                f"--url does not match profile {loaded.profile!r} ({loaded.api_base_url}); calling anonymously"
-                f" without {TOKEN_ENV_VAR}"
-            )
-        return session(settings.url)
-    if env_token:
+        return ComposeSession(
+            loaded.api_base_url,
+            tokens=_ephemeral_tokens(loaded, settings, wiring),
+            timeout=settings.timeout,
+            ca_bundle=loaded.ca_bundle,
+            transport=wiring.sync_api_transport,
+        )
+    session = signed_in_session(
+        loaded,
+        url=url,
+        timeout=settings.timeout,
+        open_store=wiring.store_factory,
+        transport=wiring.sync_api_transport,
+        auth0_transport=wiring.auth0_transport,
+    )
+    if env_token and isinstance(session.tokens, EnvironmentToken):
         _note(f"using {TOKEN_ENV_VAR} from the environment instead of a stored session")
-        return session(loaded.api_base_url, EnvironmentToken())
-    if settings.ephemeral_auth:
-        return session(loaded.api_base_url, _ephemeral_tokens(loaded, settings, wiring))
-    return session(loaded.api_base_url, _stored_tokens(loaded, wiring))
-
-
-def _stored_tokens(loaded: CliSettings, wiring: Wiring) -> TokenSource | None:
-    if loaded.auth0_client_id is None:
-        return None  # a profile that cannot sign in holds no session
-    from compose_api_client.auth.session import AuthSession
-    from compose_api_client.auth.sources import SyncStoredSession
-    from compose_api_client.ext.errors import StorageError
-
-    try:
-        store = wiring.store(loaded, writable=False, check=False)
-    except StorageError:
-        return None  # no supported credential store on this host
-    try:
-        auth_session = AuthSession(loaded, store)
-    except StorageError:
-        if store.load(loaded.binding_key(persistent=True)) is None:
-            return None  # no saved login; unusable state directory is not needed
-        raise
-    return SyncStoredSession(loaded, auth_session, auth0_transport=wiring.auth0_transport)
-
-
-def _origin(url: str) -> str | None:
-    """`url`'s canonical origin when a profile could name it; None otherwise (it still works, anonymously)."""
-    from compose_api_client.profiles import canonical_api_base_url
-
-    try:
-        return canonical_api_base_url(url)
-    except ValueError:
-        return None
+    elif env_token:
+        _note(
+            f"--url does not match profile {loaded.profile!r} ({loaded.api_base_url}); calling anonymously"
+            f" without {TOKEN_ENV_VAR}"
+        )
+    return session
 
 
 def _ephemeral_tokens(profile: CliSettings, settings: Settings, wiring: Wiring) -> TokenSource:
