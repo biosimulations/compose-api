@@ -111,6 +111,9 @@ entries:
       vtk: "*"
       pyvista: ">=0.49.0,<0.50"
       imageio: ">=2.38.0,<3"
+      # conda-forge's yaml 0.2.6 (2026-11-23) ships libyaml-0.so.1, not the libyaml-0.so.2 PETSc links, so PETSc does
+      # not load; drop this when conda-forge/yaml-feedstock#30 is fixed
+      yaml: "<0.2.6"
     # what its pixi.toml adds beyond its package metadata: Smoldyn, the VCell solver and geometry, results bundles
     requires:
       - smoldyn-vcell
@@ -469,6 +472,9 @@ entries:
       python-gmsh: "*"
       matplotlib: "*"
       python-dateutil: ">=2.8,<3"
+      # conda-forge's yaml 0.2.6 (2026-11-23) ships libyaml-0.so.1, not the libyaml-0.so.2 PETSc links, so PETSc does
+      # not load; drop this when conda-forge/yaml-feedstock#30 is fixed
+      yaml: "<0.2.6"
     module_roots:
       - viva_fenics
     level: tested
@@ -598,7 +604,8 @@ entries:
         stimulus-through-port, viva-smoldyn's seeded-decay-2d). vivarium-tyssue's sheet-relaxation fails on 1.11.1
         (that entry says why). viva-fenics' poisson-quadratic-mms fails on both cores on 2026-11-23, for a reason
         outside the core: conda-forge's yaml 0.2.6 (2026-11-23) renames libyaml-0.so.2, which petsc 3.25.6 links, so
-        viva_fenics does not import. With yaml held at 0.2.5 it passes on both cores, with identical results.
+        viva_fenics does not import. With yaml held below 0.2.6, as the entries that bring PETSc now hold it, it
+        passes on both cores, with identical results.
         Existing versions keep their images; each environment's next version is checked against its cases.
 
   # --- libraries: installed for the components above, with no process classes of their own ------------------------
@@ -650,6 +657,9 @@ entries:
       pyyaml: ">=6.0.3,<7"
       scikit-image: "*"
       pydantic: ">=2.10,<3"
+      # conda-forge's yaml 0.2.6 (2026-11-23) ships libyaml-0.so.1, not the libyaml-0.so.2 PETSc links, so PETSc does
+      # not load; drop this when conda-forge/yaml-feedstock#30 is fixed
+      yaml: "<0.2.6"
     requires:
       - zarr
       - pyvcell
