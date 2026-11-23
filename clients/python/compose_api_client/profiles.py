@@ -226,6 +226,13 @@ class Profile(BaseModel):
     def redirect_uri(self) -> str:
         return f"http://127.0.0.1:{self.callback_port}/callback"
 
+    def matches_url(self, url: str) -> bool:
+        """Whether `url` names this profile's API (the same canonical origin): the only API its credentials go to."""
+        try:
+            return canonical_api_base_url(url) == self.api_base_url
+        except ValueError:
+            return False
+
     def require_client_id(self) -> str:
         """The public Client ID, or a ConfigError saying where to set it. Every sign-in path needs it."""
         if self.auth0_client_id is None:

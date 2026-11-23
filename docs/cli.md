@@ -228,6 +228,37 @@ with ComposeSession() as s:  # https://compose.cam.uchc.edu
 `AsyncComposeSession` has the same methods as coroutines, and `AsyncComposeSession.in_process(app)` runs against a
 FastAPI app in a test with no network.
 
+### Use your sign-in from Python
+
+With the `[auth]` extra (`[cli]` includes it), a program can call the API as the person who ran
+`compose-api auth login`, carrying the same credential the CLI's commands would:
+
+```python
+from compose_api_client.auth import signed_in_session
+
+with signed_in_session() as s:  # the production profile; signed_in_session("local") for another
+    print(s.whoami().subject)
+    sim, state, files = s.run_and_wait("experiment.omex", dest="out/", extract=True)
+```
+
+The profile is chosen as `--profile` chooses it (a name, else `COMPOSE_API_CLI_PROFILE`, else `production`), and the
+credential as the commands choose it: `COMPOSE_API_TOKEN` when it is set, else the profile's stored login, else none,
+which the API allows. A stored login is renewed when it is about to expire, and the renewal is saved for the CLI too. A
+credential store that cannot be read, such as a locked keychain, raises `StorageError` at the first request instead of
+calling anonymously. `url=` calls another address; one that is not the profile's `api_base_url` gets no credential at
+all, so a profile's login only ever goes to its own API.
+
+`signed_in_session` reads the stored login on an event loop of its own, so it cannot run on a thread where one is
+already running, such as a Jupyter cell or a coroutine. There, use its asynchronous twin, which takes the same
+arguments:
+
+```python
+from compose_api_client.auth import async_signed_in_session
+
+async with async_signed_in_session() as s:
+    print((await s.whoami()).subject)
+```
+
 <!-- BEGIN generated reference: `make cli-docs` rewrites everything below this line -->
 
 # Command reference
