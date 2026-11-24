@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "compose-api",
-    "version": "0.7.99"
+    "version": "0.7.100"
   },
   "paths": {
     "/curated/copasi": {
