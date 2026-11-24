@@ -34,9 +34,14 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --env-file) set -a; . "$2"; set +a; shift 2 ;;
     --bind) HOST="${2%%:*}"; shift 2 ;;
+    --workdir) WORKDIR="$2"; shift 2 ;;
     *) shift ;;
   esac
 done
+if [ -n "${FAKE_RECORD_WORKDIR:-}" ]; then  # where the container's /tmp would be, and whether it could write there
+  if [ -n "${WORKDIR:-}" ] && echo x > "$WORKDIR/scratch"; then echo "$WORKDIR written" > "$HOST/workdir.txt"
+  else echo "- none" > "$HOST/workdir.txt"; fi
+fi
 if [ -n "${FAKE_PIDFILE:-}" ]; then echo $$ > "$HOST/sim.pid"; fi
 TRACE=$(echo "$PBG_TRACEPARENT" | cut -d- -f2); PARENT=$(echo "$PBG_TRACEPARENT" | cut -d- -f3)
 SINK="${PBG_EVENT_SINKS#file:}"; SINK="$HOST${SINK#/experiment}"
@@ -191,6 +196,24 @@ def test_a_failed_job_records_its_exit_code(tmp_path: Path) -> None:
     span = spans[job_span_id(CORRELATION)]
     assert span.status == "error" and span.error == "exit code 3"
     assert not (experiment / "results.zip").exists()
+
+
+@pytest.mark.parametrize("exit_code", [0, 3])
+def test_the_container_scratch_space_is_on_disk_and_removed_when_the_job_ends(tmp_path: Path, exit_code: int) -> None:
+    """Under ``--compat`` a container's /tmp, /var/tmp and $HOME are Apptainer's session tmpfs, 64 MiB in its default
+    configuration for a user who isn't root: v2ecoli's start-up bundle outgrew it (simulation 12935, ENOSPC). The job
+    gives the container a directory on the node's disk instead (``--workdir``) and removes it however the run ends."""
+    script, env, experiment = _job(tmp_path, exit_code)
+    node_tmp = tmp_path / "node-tmp"
+    node_tmp.mkdir()
+    env |= {"FAKE_RECORD_WORKDIR": "1", "TMPDIR": str(node_tmp)}
+    result = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True, check=False)  # noqa: S603, S607
+    assert result.returncode == exit_code, result.stderr
+    workdir, seen = (experiment / "workdir.txt").read_text().split()
+    assert seen == "written"  # it existed, and the simulator could write to it, while it ran
+    assert Path(workdir).parent == node_tmp  # on the node's disk, not in the shared experiment directory
+    assert not Path(workdir).exists()  # gone once the job ended
+    assert list(node_tmp.iterdir()) == []
 
 
 def _stopped(tmp_path: Path, fake_mode: str) -> tuple[subprocess.Popen[bytes], Path]:
