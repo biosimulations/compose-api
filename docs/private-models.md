@@ -33,7 +33,8 @@ v2ecoli.
   Google account.
 - If you signed in to compose-api before your access was set up, sign out and back in: your roles are read when you sign
   in.
-- Still missing? Ask Alex Patrie, and tell him the email the menu shows.
+- Still missing? Ask Alex Patrie on Slack, and tell him the email the menu shows. (Slack, not a GitHub issue: anyone
+  can read an issue.)
 
 ## 2. Install the command-line tool
 
@@ -154,4 +155,5 @@ points at other code or files is refused or fails.
 
 - `compose-api results <run number> --extract <folder>` downloads a finished run's results again.
 - `compose-api <command> --help` explains any command.
-- Questions about access or v2ecoli: ask Alex Patrie on Slack.
+- Questions: open an issue at <https://github.com/biosimulations/compose-api/issues> (anyone can read it, so leave out
+  your email and anything private), or ask Alex Patrie on Slack.
