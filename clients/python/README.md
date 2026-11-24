@@ -11,6 +11,8 @@ The Python client for [compose-api](https://github.com/biosimulations/compose-ap
 - `compose_api_client.auth` and `compose_api_client.profiles` (`compose-api-client[auth]`): Auth0 OAuth 2.0 / OIDC
   client (browser PKCE and RFC 8628 device flow), OS-keychain `CredentialStore`, journaled `AuthSession` renewal and
   revocation, and profile resolution (`BUILTIN_PROFILES`, `COMPOSE_API_CLI_*`, `config.toml`).
+  `signed_in_session()` is a `ComposeSession` signed in as the `compose-api auth login` session, for programs, and
+  `async_signed_in_session()` its async twin ([docs/cli.md](../../docs/cli.md#use-your-sign-in-from-python)).
 - `compose_api_client.cli` (`compose-api-client[cli]`): the `compose-api` command-line client.
 - `compose_api_client.utils.run_simulation_and_wait`: the hand-written helper pbest uses (kept from 0.2.0).
 

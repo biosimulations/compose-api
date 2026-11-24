@@ -2,6 +2,14 @@
 import type { ComplianceReport, EnvironmentVersionDetail, EnvironmentVersions } from '~/composables/useRegistry'
 import type { Component } from '~/viewers/composite/interfaces'
 
+// an accepted finding is shown, marked, but is not a problem: the version admits its class
+function findingsTitle(findings: { accepted?: unknown }[]): string {
+  const accepted = findings.filter(f => f.accepted).length
+  const problems = findings.length - accepted
+  return `The generic checks found ${problems} problem${problems === 1 ? '' : 's'}`
+    + (accepted ? ` and ${accepted} accepted finding${accepted === 1 ? '' : 's'}` : '')
+}
+
 // One environment version (docs/plan-webapp-admin.md, step 5): what it was made from, the packages its image installed
 // (and how they differ from another version's), where each registry entry stands in it (its compliance cases), the
 // classes its image provides, and the files that recreate it locally. `?tab=` opens a tab.
@@ -187,11 +195,14 @@ const caseColor = (state: string) =>
               </table>
               <UAlert
                 v-if="compliance?.findings?.length" color="warning" variant="subtle" icon="i-lucide-triangle-alert"
-                :title="`The generic checks found ${compliance.findings.length} problem${compliance.findings.length === 1 ? '' : 's'}`"
+                :title="findingsTitle(compliance.findings)"
               >
                 <template #description>
                   <ul class="text-xs flex flex-col gap-1 mt-1">
-                    <li v-for="(f, i) in compliance.findings" :key="i"><code>{{ f.component }}</code> ({{ f.check }}, {{ f.severity }}): {{ f.detail }}</li>
+                    <li v-for="(f, i) in compliance.findings" :key="i">
+                      <code>{{ f.component }}</code> ({{ f.check }}, {{ f.accepted ? 'accepted' : f.severity }}): {{ f.detail }}
+                      <span v-if="f.accepted" class="text-muted"> Accepted for its entry: {{ f.accepted }}</span>
+                    </li>
                   </ul>
                 </template>
               </UAlert>

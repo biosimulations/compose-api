@@ -7,7 +7,7 @@ registry of record described by strategy decision 5; the database tables that pr
 import enum
 import functools
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Literal
 
 import yaml
@@ -93,6 +93,32 @@ class Install(BaseModel):
         return re.sub(r"[-_.]+", "-", raw).lower()
 
 
+class AcceptedFinding(BaseModel):
+    """A generic check's failure the entry's reviewers accept for one of its components (docs/registry-onboarding.md,
+    "Accepted findings"): the component is admitted, and the finding stays on the version's record, marked accepted.
+    ``evidence`` is a test in the entry's own repository, at its pinned commit, showing why the check's concern does not
+    apply there."""
+
+    component: str
+    # the only check a reason can answer for now: a Step whose outputs add, and cannot fire twice in a tick. A class
+    # that does not import (module-imports) or a missing solver is never admitted.
+    check: Literal["step-outputs-replace"]
+    reason: str
+    evidence: str
+
+    @model_validator(mode="after")
+    def _said(self) -> "AcceptedFinding":
+        if not self.reason.strip() or not self.evidence.strip():
+            raise ValueError(f"an accepted finding for {self.component} needs a reason and its evidence (a test)")
+        path = PurePosixPath(self.evidence)
+        if not path.parts or path.is_absolute() or str(path) != self.evidence or ".." in path.parts:
+            raise ValueError(
+                f"the evidence for {self.component} is a file's path in its repository (tests/test_x.py), not "
+                f"{self.evidence!r}"
+            )
+        return self
+
+
 class RegistryEntry(BaseModel):
     id: str
     package: str
@@ -130,6 +156,8 @@ class RegistryEntry(BaseModel):
     # docs/plan-private-repo-usage.md): everything made of it (an environment, its versions, its runs) is hidden from
     # every other caller
     access_role: str | None = None
+    # generic-check failures accepted for this entry's components, each with its reason and evidence
+    accepted_findings: list[AcceptedFinding] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _pinned(self) -> "RegistryEntry":
@@ -141,6 +169,11 @@ class RegistryEntry(BaseModel):
             raise ValueError(f"registry entry {self.id!r} is a {self.kind}, so it needs `module_roots`")
         if self.kind == "core" and (self.install is not None or self.conda):
             raise ValueError(f"registry entry {self.id!r} is core: the composition installs it, so it has no install")
+        if self.accepted_findings and (self.install is None or self.install.git is None):
+            raise ValueError(f"registry entry {self.id!r} accepts findings: its evidence is checked at a git commit")
+        for accepted in self.accepted_findings:
+            if not any(accepted.component == r or accepted.component.startswith(f"{r}.") for r in self.module_roots):
+                raise ValueError(f"registry entry {self.id!r} accepts a finding for {accepted.component}, not its own")
         if self.short_names and (self.kind != "core" or len(self.module_roots) != 1):
             raise ValueError(f"registry entry {self.id!r}: only a core entry with one module root has `short_names`")
         return self
@@ -197,6 +230,17 @@ class Manifest(BaseModel):
                 if target in entry.short_names:
                     return f"{entry.module_roots[0]}.{target}"
         return target
+
+    @model_validator(mode="after")
+    def _accepted_findings_are_their_own(self) -> "Manifest":
+        """An entry accepts findings only for its own classes: a nested root's class is its entry's."""
+        for entry in self.entries:
+            for accepted in entry.accepted_findings:
+                if self.entry_for_module(accepted.component) is not entry:
+                    raise ValueError(
+                        f"{entry.id!r} accepts a finding for {accepted.component}, which another entry's root holds"
+                    )
+        return self
 
     def entry_for_module(self, module: str) -> RegistryEntry | None:
         """The entry whose longest module root contains `module`, so a nested root wins over its parent."""

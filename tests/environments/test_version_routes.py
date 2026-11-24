@@ -200,7 +200,14 @@ class Locks:
     text: str = "version: 7\n"  # the lock every request gets while `same`
     asked: list[str] = field(default_factory=list)
 
-    async def __call__(self, toml: str, pixi_image: str, suffix: str, sources: Sequence[PrivateSource] = ()) -> str:
+    async def __call__(
+        self,
+        toml: str,
+        pixi_image: str,
+        suffix: str,
+        sources: Sequence[PrivateSource] = (),
+        evidence: object = (),
+    ) -> str:
         from compose_api.simulation.build_k8s import LockFailedError
 
         self.asked.append(toml)
@@ -242,6 +249,43 @@ async def test_a_composed_version_resolves_in_the_background_then_builds(
     # the lock's hash is in its definition (the lock itself is built beside it): the lock is the version's identity
     assert simulator is not None and lock_hash in simulator.container_def.representation
     assert detail["spec"]["runner"].startswith('"""The entry point')  # it is built, and rebuilt, with this runner
+
+
+@pytest.mark.asyncio
+async def test_a_version_keeps_its_core_when_the_services_core_moves(
+    app: FastAPI,
+    builds: Builds,
+    locks: Locks,
+    database_service: DatabaseServiceSQL,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Versions are immutable (docs/registry-onboarding.md): after composition.core moves, an existing version is
+    still built from the workspace and lock it recorded, and only a new version takes the new core."""
+    from compose_api.environments import pixi, service
+    from compose_api.registry.environments import load_environments
+
+    current = load_environments()
+    assert current.composition is not None
+    old_core = current.composition.core
+    async with _as(app, ADMIN) as admin:
+        number = (await admin.post("/registry/environments/registry_env/versions", json={})).json()["number"]
+        first = (await admin.get(f"/registry/environments/registry_env/versions/{number}")).json()
+    new_core = {name: f"{version}.post1" for name, version in old_core.items()}
+    moved = current.model_copy(update={"composition": current.composition.model_copy(update={"core": new_core})})
+    monkeypatch.setattr(service, "load_environments", lambda: moved)
+
+    files = await service.build_files(database_service, first["simulator_id"])
+    assert files is not None
+    assert files[pixi.TOML_FILE].rstrip("\n") == first["spec"]["pixi_toml"].rstrip("\n")
+    assert files[pixi.LOCK_FILE].rstrip("\n") == first["lock"].rstrip("\n")
+    for name, version in old_core.items():
+        assert f'"{name}" = "=={version}"' in files[pixi.TOML_FILE]
+    # the move is real: the next version takes the new core
+    async with _as(app, ADMIN) as admin:
+        later = (await admin.post("/registry/environments/registry_env/versions", json={})).json()
+    for name, version in new_core.items():
+        assert f'"{name}" = "=={version}"' in later["spec"]["pixi_toml"]
+        assert later["spec"]["core"][name] == version
 
 
 @pytest.mark.asyncio
@@ -449,6 +493,21 @@ async def test_a_ready_composed_version_runs_its_entries_cases_and_reports_their
     refused = await report()
     assert refused["refused"] == [component]
     assert {e["entry"]: e["level"] for e in refused["entries"]}["pbsim-common"] == "tested"
+    from compose_api.environments import admission
+
+    standing = await admission.standing_for(database_service, version.environment, version.number)
+    assert standing is not None and component in standing.refused  # what a run's admission consults
+
+    # the same failure, accepted for its entry (accepted_findings): still on the record, marked; it refuses nothing
+    await database_service.get_environments_db().set_findings(
+        version.database_id,
+        [{"component": component, "check": "step-outputs-replace", "severity": "fail", "detail": "x",
+          "accepted": "gated"}],
+    )  # fmt: skip
+    accepted = await report()
+    assert accepted["refused"] == [] and accepted["findings"][0]["accepted"] == "gated"
+    standing = await admission.standing_for(database_service, version.environment, version.number)
+    assert standing is not None and component not in standing.refused  # admitted
 
     # run again: the cases are pending again, then a run that fails is an error
     async with _as(app, ADMIN) as admin:

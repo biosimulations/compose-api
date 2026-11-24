@@ -156,7 +156,7 @@ async def report(database_service: DatabaseService, version: EnvironmentVersionD
         ]
         entries.append(EntryCompliance(entry=entry, level=_level(cases), cases=cases))
     findings = list(version.findings or [])
-    refused = sorted({str(f["component"]) for f in findings if f.get("severity") == "fail"})
+    refused = sorted(compliance.refused(findings))
     return ComplianceReport(
         environment=version.environment, number=version.number, entries=entries, findings=findings, refused=refused
     )

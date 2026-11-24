@@ -124,6 +124,7 @@ finish() {
         wait "$SIM" || true
         manifest || true
     fi
+    if [ -n "${WORK:-}" ]; then rm -rf "$WORK" || true; fi  # the container's scratch space: nothing in it is kept
     exit "$code"
 }
 trap finish EXIT
@@ -132,6 +133,11 @@ emit span.start info "{\"name\":\"job\",\"attrs\":$JOB_ATTRS,\"start_ts\":\"$JOB
 emit job.start info "$JOB_ATTRS"
 announce_input || true
 announce_source || true
+
+# The container's /tmp, /var/tmp and $HOME, on the node's disk: under --compat they would be Apptainer's session tmpfs,
+# 64 MiB in its default configuration for a user who isn't root, which a simulator's working files outgrow (simulation
+# 12935). Its own directory, so two jobs on one node never share it; `finish` removes it.
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/@@JOB_NAME@@.XXXXXX")
 
 cat > "$EVENTS/pbg.env" <<'PBG_ENV'
 PBG_TRACEPARENT=00-@@TRACE_ID@@-@@JOB_SPAN@@-01
@@ -143,6 +149,7 @@ PBG_ENV
 echo "Simulation @@JOB_NAME@@ running."
 singularity run \
     --compat \
+    --workdir "$WORK" \
     --env-file "$EVENTS/pbg.env" \
     --bind "$EXPERIMENT":/experiment \
     @@CONTAINER@@ \

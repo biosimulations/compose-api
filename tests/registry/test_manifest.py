@@ -144,3 +144,52 @@ def test_an_edited_manifest_is_read_again(tmp_path: Path) -> None:
     assert load_manifest(path, catalog_path=None) is not load_manifest(path, catalog_path=None)  # each its own copy
     path.write_text(yaml.safe_dump({"entries": [entry, {**entry, "id": "b", "package": "b"}]}))
     assert [e.id for e in load_manifest(path, catalog_path=None).entries] == ["a", "b"]
+
+
+GATED = {
+    "component": "v2ecoli.processes.metabolism.Metabolism",
+    "check": "step-outputs-replace",
+    "reason": "gated by update_condition: fires once per scheduled solve, so its deltas count once",
+    "evidence": "tests/test_metabolism_gate.py",
+}
+
+
+GIT = {"install": {"git": "https://github.com/vivarium-collective/v2ecoli", "commit": "e" * 40}}
+
+
+def test_an_entry_accepts_a_finding_for_its_own_component_with_a_reason_and_evidence() -> None:
+    (accepted,) = entry("v2ecoli", ["v2ecoli"], accepted_findings=[GATED], **GIT).accepted_findings
+    assert (accepted.component, accepted.check) == (GATED["component"], GATED["check"])
+    with pytest.raises(ValidationError, match="not its own"):
+        entry("other", ["other"], accepted_findings=[GATED], **GIT)
+    for missing in ("reason", "evidence"):
+        with pytest.raises(ValidationError, match="needs a reason and its evidence"):
+            entry("v2ecoli", ["v2ecoli"], accepted_findings=[{**GATED, missing: "  "}], **GIT)
+    # its evidence is a path at a commit, so only an entry installed from git can name one
+    with pytest.raises(ValidationError, match="checked at a git commit"):
+        entry("v2ecoli", ["v2ecoli"], accepted_findings=[GATED])
+
+
+@pytest.mark.parametrize("check", ["module-imports", "solver-provided", "step-output-replace"])
+def test_only_a_step_whose_outputs_add_can_be_accepted(check: str) -> None:
+    """A class that does not import, or a missing solver, is never admitted; a misspelt check is an error, not an
+    acceptance of nothing."""
+    with pytest.raises(ValidationError, match="step-outputs-replace"):
+        entry("v2ecoli", ["v2ecoli"], accepted_findings=[{**GATED, "check": check}], **GIT)
+
+
+@pytest.mark.parametrize("evidence", ["./", ".", "tests/", "../tests/test_x.py", "/tests/test_x.py", "tests//x.py",
+                                      "./tests/test_x.py"])  # fmt: skip
+def test_evidence_is_a_files_path_in_the_repository(evidence: str) -> None:
+    with pytest.raises(ValidationError, match="is a file's path in its repository"):
+        entry("v2ecoli", ["v2ecoli"], accepted_findings=[{**GATED, "evidence": evidence}], **GIT)
+
+
+def test_a_nested_roots_class_is_its_own_entrys_to_accept() -> None:
+    """The longest module root holds a class (Manifest.entry_for_module): its parent root's entry cannot accept it."""
+    nested = {**GATED, "component": "v2ecoli.processes.metabolism.Metabolism"}
+    parent = entry("v2ecoli", ["v2ecoli"], accepted_findings=[nested], **GIT)
+    child = entry("metabolism", ["v2ecoli.processes.metabolism"])
+    with pytest.raises(ValidationError, match="which another entry's root holds"):
+        Manifest(entries=[parent, child])
+    Manifest(entries=[parent])  # alone, the class is the parent's

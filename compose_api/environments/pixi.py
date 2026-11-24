@@ -29,7 +29,7 @@ PYTHON = ("/bin/bash", "-c", f'source {SHELL_HOOK} && exec python "$@"', "python
 DEFAULT_PYTHON_VERSION = "3.12"
 # Development tooling that workspaces send to a branch of its own repository (`[tool.uv.sources]`). pixi follows those
 # sources for a package it installs from git, so the only candidate is the branch's tip, whose requirements can exceed
-# the core's pins (viva-superpowers 0.24.0 needs bigraph-schema>=1.8.2, the core has 1.8.1) and make the lock
+# the core's pins (viva-superpowers 0.24.0 needed bigraph-schema>=1.8.2 while the core had 1.8.1) and make the lock
 # unsatisfiable. The lock takes these from the package index instead, unless an entry installs one itself (pixi 0.68.1
 # has no switch to ignore sources).
 INDEX_ONLY = ("pbg-superpowers", "viva-superpowers", "vivarium-workbench")
@@ -93,6 +93,9 @@ class ComposedSpec:
                     "install": e.install.model_dump(exclude_defaults=True) if e.install else None,
                     "conda": e.conda,
                     **({"access_role": e.access_role} if e.access_role else {}),
+                    # its accepted findings: their evidence is checked at the entry's commit before the version is
+                    # locked (build_k8s.evidence_script), and only these are accepted in it (contents._store)
+                    **({"accepted": [a.model_dump() for a in e.accepted_findings]} if e.accepted_findings else {}),
                 }
                 for e in self.entries
             ],

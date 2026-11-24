@@ -1,6 +1,6 @@
 [project]
 name = "compose-api"
-version = "0.7.99"
+version = "0.7.101"
 description = "An API server for reproducible biological workflows and cosimulations."
 authors = [{ name = "Jim Schaff", email = "schaff@uchc.edu" }]
 requires-python = ">=3.13.2,<4.0"
@@ -62,8 +62,8 @@ dev = [
     "compose-api-client[auth,cli]",
     # The runner composed images run (environments/runner.py) is tested on the engine they install; the service
     # itself never imports process-bigraph.
-    "process-bigraph==1.9.1",
-    "bigraph-schema==1.8.1",
+    "process-bigraph==1.11.1",
+    "bigraph-schema==1.8.3",
 ]
 docs = [
     "mkdocs>=1.4.2,<2",

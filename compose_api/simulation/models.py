@@ -287,7 +287,8 @@ class EnvironmentVersionDetail(EnvironmentVersion):
     findings: list[dict[str, Any]] | None = Field(
         default=None,
         description="What the generic compliance checks found in its components: a component with a `fail` is"
-        " refused in this version (docs/plan-environment-composition.md, step 5)",
+        " refused in this version unless the version accepts it (`accepted`, its entry's reason;"
+        " docs/registry-onboarding.md, Accepted findings) (docs/plan-environment-composition.md, step 5)",
     )
     against: int | None = Field(default=None, description="The version `changes` compares it with, when asked")
     changes: list[PackageChange] | None = Field(
@@ -350,7 +351,9 @@ class ComplianceReport(BaseModel):
     number: int
     entries: list[EntryCompliance] = Field(default_factory=list)
     findings: list[dict[str, Any]] = Field(default_factory=list)
-    refused: list[str] = Field(default_factory=list, description="Components a generic check failed")
+    refused: list[str] = Field(
+        default_factory=list, description="Components a generic check failed, less those whose failure it accepts"
+    )
 
 
 class EnvironmentExport(BaseModel):
