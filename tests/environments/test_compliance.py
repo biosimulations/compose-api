@@ -139,6 +139,7 @@ def test_pbsim_commons_cases_are_complete() -> None:
         ("viva-fenics", "poisson-quadratic-mms"),
         ("vivarium-tyssue", "sheet-relaxation"),
         ("viva-pde-particle", "region-mean-closed-form"),
+        ("v2ecoli", "single-cell-growth"),
     ],
 )
 def test_onboarded_cases_load_and_their_files_exist(entry: str, case: str) -> None:
