@@ -1,0 +1,83 @@
+{
+  "state": {
+    "dry_mass_gain": 0.0,
+    "volume_gain": 0.0,
+    "length": 2.0,
+    "exchange": {},
+    "local": {},
+    "agent_id": "0",
+    "location": [
+      0.0,
+      0.0
+    ],
+    "angle": 0.0,
+    "agents": {},
+    "cell": {
+      "_type": "process",
+      "address": "local:v2ecoli.bridge.EcoliWCM",
+      "config": {
+        "seed": 0,
+        "emit_chromosome_state": false,
+        "cache_dir": "packaged"
+      },
+      "interval": 1.0,
+      "inputs": {
+        "local": [
+          "local"
+        ],
+        "agent_id": [
+          "agent_id"
+        ],
+        "location": [
+          "location"
+        ],
+        "angle": [
+          "angle"
+        ]
+      },
+      "outputs": {
+        "mass": [
+          "dry_mass_gain"
+        ],
+        "volume": [
+          "volume_gain"
+        ],
+        "length": [
+          "length"
+        ],
+        "exchange": [
+          "exchange"
+        ],
+        "agents": [
+          "agents"
+        ]
+      }
+    },
+    "emitter": {
+      "_type": "step",
+      "address": "local:process_bigraph.emitter.RAMEmitter",
+      "config": {
+        "emit": {
+          "global_time": "float",
+          "dry_mass_gain": "float",
+          "volume_gain": "float",
+          "length": "float"
+        }
+      },
+      "inputs": {
+        "global_time": [
+          "global_time"
+        ],
+        "dry_mass_gain": [
+          "dry_mass_gain"
+        ],
+        "volume_gain": [
+          "volume_gain"
+        ],
+        "length": [
+          "length"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+description: >-
+  One v2ecoli whole cell (EcoliWCM, the 55-process partitioned baseline embedded as one Process; seed 0, basal
+  condition, minimal medium). Its sim input is built at run time from the ParCa state the installed package ships
+  (cache_dir "packaged", no file a document names), and it runs 60 s at a 1 s interval. EcoliWCM returns increments
+  that float stores add: dry_mass_gain sums each tick's dry-mass increase (a tick that loses mass adds nothing, as
+  EcoliWCM clips it at zero), and length, seeded at EcoliWCM's starting 2.0 um, is the capsule length from the cell
+  volume. A cell that cannot be built fails the run, and a tick whose inner model fails returns zero increments, so
+  the positive gains are what show the model ran. The expected values are seed 0 in this entry's composed environment
+  (v2ecoli bdc1eee5 and f86adf05, process-bigraph 1.11.1, bigraph-schema 1.8.3, linux-64), run on 2026-11-24 through
+  compose-api's own lock, build and job-script line; every run, at both commits, wrote byte-identical results. The bands (5 % on the gains, 0.2 % on
+  length) leave room for floating-point drift when the environment's next version re-resolves its dependencies, and
+  still fail a cell that does not grow. They are not wide enough for another platform: on arm64 macOS the same seed
+  took a different stochastic path, 6 % apart at t = 30 s.
+document: document.pbg
+interval: 60
+expect:
+  - {kind: rows, emitter: emitter, min: 61}
+  - {kind: scalar, emitter: emitter, field: global_time, expected: 60.0}
+  - {kind: scalar, emitter: emitter, field: dry_mass_gain, row: 30, expected: 2.0051911292789555, rel: 0.05}
+  - {kind: scalar, emitter: emitter, field: dry_mass_gain, expected: 4.093320134707483, rel: 0.05}
+  - {kind: scalar, emitter: emitter, field: length, expected: 1.8122170568651454, rel: 0.002}
