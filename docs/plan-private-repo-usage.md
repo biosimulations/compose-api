@@ -264,8 +264,10 @@ user; privileged Apptainer 1.3.6), with scratch and work as volumes:
 
 **P4. v2ecoli readiness** (v2ecoli PRs that we open and merge, working with Eran; decision 4), from P0's real lock:
 - **process-bigraph and bigraph-schema** take releases, not `main`, unless compose-api overrides the core pins (#552,
-  question 4). Whether v2ecoli's composites behave the same on process-bigraph 1.9.1 is unproven: they are tested past
-  it.
+  question 4). v2ecoli's composites do not run on process-bigraph 1.9.1 (ecoli_baseline has a step cycle across
+  priorities, which 1.9.1 refuses), so compose-api's core moves to process-bigraph 1.11.1 with bigraph-schema 1.8.3
+  (#563). That satisfies what v2ecoli requires (process-bigraph >=1.11.0, bigraph-schema >=1.8.3) and matches its own
+  lock, where a uv override holds bigraph-schema at 1.8.3.
 - **The eight `main` sources** are pinned to commits or releases.
 - **Size:** torch/CUDA (through viva-torch) and vEcoli's `[dev]` tooling move out of the base dependencies, if a
   single-cell run doesn't need them.

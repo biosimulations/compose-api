@@ -42,6 +42,18 @@ Opened any other way, paste the template's text into the description.
   `environments/compliance_runs.py`). A module of the entry that does not import in the version's image refuses every class
   under it there (`module-imports`).
 - Moving the pin is another manifest pull request and release; a pin that moves never starts a build by itself (D7.7).
+- Every composed version installs the core that `environments.yaml` names under `composition.core` when the version is made:
+  process-bigraph 1.11.1 and bigraph-schema 1.8.3 (1.9.1 and 1.8.1 before). A version keeps the `pixi.toml` and the lock it
+  was made with, and its image installs that lock unchanged (`environments/service.py`, `environments/pixi.py`), so a new
+  core reaches only versions made after the release that carries it. Existing versions, mash-ups included, keep theirs, and
+  later runs of the same set still use them. process-bigraph 1.11.1 no longer requires scipy, sympy or matplotlib, as 1.9.1
+  did, so an entry that imports one must declare it.
+- vivarium-tyssue's mash-up keeps its version on 1.9.1, which runs as before. On the current core its `sheet-relaxation` case
+  fails while the composite is built: bigraph-schema 1.8.3 cannot merge a table (a `Frame`) with no update, which
+  bigraph-schema 1.8.4 fixes (bigraph-schema #209), and process-bigraph 1.11.1 requires bigraph-schema below 1.8.4. A
+  version made on this core that includes vivarium-tyssue therefore records it `failed` and refuses its classes. That
+  version stays so: once process-bigraph allows 1.8.4 and the core moves to it, an administrator makes a new version of that
+  environment, since a run makes only a mash-up's first version (D7.7).
 - A package that publishes its own image is registered by an administrator as a version of a named environment (D8.3), which
   needs its own line in `environments.yaml`.
 
@@ -130,9 +142,11 @@ Docker), and `make check` for the lint and type checks (`CLAUDE.md`).
   and any `setup.py`, hook or build script. A `pypi` pin is built too when the release has no wheel for the environment's Python,
   and for a `url` pin the reviewer asks how the wheel was built (the `smoldyn-vcell` entry names the workflow that built it).
 - **Import-time code.** process-bigraph builds its core with bigraph-schema's `allocate_core`, which imports the modules of every
-  installed distribution that requires `bigraph-schema` (bigraph-schema 1.8.1, `package/discover.py`: `is_process_library`,
-  `load_local_modules`). Import-time code in anything a wheel ships, and in every dependency that requires `bigraph-schema`, can
-  therefore run whether or not a document names it. That is why the template asks about packages outside `module_roots`.
+  installed distribution that requires `bigraph-schema` (bigraph-schema 1.8.3, `package/discover.py`: `is_process_library`,
+  `load_local_modules`). bigraph-schema caches that walk's index under `~/.cache/bigraph-schema`, but a run starts the image
+  with `--compat`, whose home is empty each time, so every run walks again. Import-time code in anything a wheel ships, and in
+  every dependency that requires `bigraph-schema`, can therefore run whether or not a document names it. That is why the
+  template asks about packages outside `module_roots`.
 - **Distribution name.** The generated `pixi.toml` keys the dependency by the name `install` derives (the repository's name for
   `git`), and two entries with one name are a composition problem. `[project].name` at the commit should be that name.
 - **Dependencies.** A composed environment installs the package's declared dependencies, so a development tool among them lands in

@@ -270,14 +270,15 @@ def test_entries_may_share_a_conda_requirement_they_ask_for_alike() -> None:
 
 def test_the_manifests_pde_entries_compose_together() -> None:
     """The mash-up of PDE, particle and ODE entries (mash-05956395cf) must stay composable: its next version is made
-    from the manifest as it is now (docs/plan-environment-composition.md, D7.7)."""
+    from the manifest as it is now (docs/plan-environment-composition.md, D7.7). viva-fenics too: every entry that
+    brings PETSc pins the same conda packages (dolfinx, yaml) the same way, so no set of them conflicts."""
     from compose_api.registry.environments import EnvironmentSpec, spec_problems
     from compose_api.registry.manifest import load_manifest
 
     manifest = load_manifest()
     requires = {e.id: e.requires for e in manifest.entries}
     entries: list[str] = []
-    pending = ["vcell-fenics", "viva-pde-particle"]
+    pending = ["vcell-fenics", "viva-pde-particle", "viva-fenics"]
     while pending:  # with what each requires, as a mash-up lists them
         entry_id = pending.pop()
         if entry_id not in entries:

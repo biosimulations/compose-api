@@ -111,6 +111,9 @@ entries:
       vtk: "*"
       pyvista: ">=0.49.0,<0.50"
       imageio: ">=2.38.0,<3"
+      # conda-forge's yaml 0.2.6 (2026-11-23) ships libyaml-0.so.1, not the libyaml-0.so.2 PETSc links, so PETSc does
+      # not load; drop this when conda-forge/yaml-feedstock#30 is fixed
+      yaml: "<0.2.6"
     # what its pixi.toml adds beyond its package metadata: Smoldyn, the VCell solver and geometry, results bundles
     requires:
       - smoldyn-vcell
@@ -469,6 +472,9 @@ entries:
       python-gmsh: "*"
       matplotlib: "*"
       python-dateutil: ">=2.8,<3"
+      # conda-forge's yaml 0.2.6 (2026-11-23) ships libyaml-0.so.1, not the libyaml-0.so.2 PETSc links, so PETSc does
+      # not load; drop this when conda-forge/yaml-feedstock#30 is fixed
+      yaml: "<0.2.6"
     module_roots:
       - viva_fenics
     level: tested
@@ -546,6 +552,13 @@ entries:
         python-libsbml is already a runtime dependency. (#36) All seven workspace meshes pass registry/uploads.py's
         HDF5 check at this commit; six were refused before. sheet-relaxation is unchanged; its result at this commit is
         the compliance run of the version made from it.
+      - >-
+        On the core of 2026-11-23 (process-bigraph 1.11.1, bigraph-schema 1.8.3) sheet-relaxation fails while the
+        composite is built: 1.11 drops EulerSolver's empty `cell_df` from the initial state, and bigraph-schema 1.8.3's
+        Frame merge then fails on an update of None. bigraph-schema 1.8.4 fixes it (bigraph-schema #209), and
+        process-bigraph 1.11.1 requires bigraph-schema below 1.8.4. The version on 1.9.1 keeps running; a version made
+        on this core records this entry `failed` there, and stays so: once the core can take 1.8.4, an administrator
+        makes a new version (a run makes only a mash-up's first, D7.7).
 
   # --- core: classes of the engine every composed environment installs (environments.yaml `composition.core`) -------
   # Provided by every composed version and mash-up without being listed or installed, and by the prebuilt images its
@@ -554,8 +567,8 @@ entries:
   - id: process-bigraph-emitters
     kind: core
     package: process-bigraph
-    source: https://pypi.org/project/process-bigraph/1.9.1/
-    version: "1.9.1"
+    source: https://pypi.org/project/process-bigraph/1.11.1/
+    version: "1.11.1"
     module_roots:
       - process_bigraph.emitter
     # the engine registers these under their class name too, so `local:RAMEmitter` (process-bigraph's own default)
@@ -576,6 +589,24 @@ entries:
         compliance case (pbsim-common's two, viva-basic-processes' one) records its outputs through it, in composed
         versions on 1.9.1. The short names `local:RAMEmitter`, `local:JSONEmitter` and `local:ConsoleEmitter`,
         which the engine registers itself, are accepted as these classes since 2026-10-29 (Jim: documents use them).
+      - >-
+        The core moves to process-bigraph 1.11.1 and bigraph-schema 1.8.3 (Alex, 2026-11-23: v2ecoli's
+        ecoli_baseline has a step cycle across priorities, which 1.9.1 refuses and 1.11 runs; 1.11.1 requires
+        bigraph-schema below 1.8.4). Checked on 2026-11-23 with compose-api's own lock and build Jobs (linux/amd64
+        under emulation), on the new core and on 1.9.1 and 1.8.1: registry_env and a mash-up of each other component
+        that has cases lock, build and read back their core. Their conda packages are the same on both cores; their
+        PyPI packages differ only in the core and in what 1.11.1 no longer requires (scipy, sympy and matplotlib, with
+        their dependencies, where nothing else needs them). vivarium-tyssue's set also takes viva-superpowers 0.30.0
+        instead of 0.23.0 (it needs bigraph-schema 1.8.2 or later), and with it viva-discovery-engine 0.7.5, typer,
+        shellingham and filelock; viva-discovery-engine requires bigraph-schema, so its modules are imported whenever
+        the core is built. Through the runner, 14 of the 16 cases pass on both cores with the same results, except
+        that 1.11.1 records the seeded store values in row 0 (t = 0), where 1.9.1 left them empty (viva-tellurium's
+        stimulus-through-port, viva-smoldyn's seeded-decay-2d). vivarium-tyssue's sheet-relaxation fails on 1.11.1
+        (that entry says why). viva-fenics' poisson-quadratic-mms fails on both cores on 2026-11-23, for a reason
+        outside the core: conda-forge's yaml 0.2.6 (2026-11-23) ships libyaml-0.so.1 instead of the libyaml-0.so.2
+        petsc 3.25.6 links, so viva_fenics does not import. With yaml held below 0.2.6, as the entries that bring PETSc now hold it, it
+        passes on both cores, with identical results.
+        Existing versions keep their images; each environment's next version is checked against its cases.
 
   # --- libraries: installed for the components above, with no process classes of their own ------------------------
   # Pinned to what registry_env@1 actually ran (read back from its image, 2026-10-25), not to the old library list,
@@ -626,6 +657,9 @@ entries:
       pyyaml: ">=6.0.3,<7"
       scikit-image: "*"
       pydantic: ">=2.10,<3"
+      # conda-forge's yaml 0.2.6 (2026-11-23) ships libyaml-0.so.1, not the libyaml-0.so.2 PETSc links, so PETSc does
+      # not load; drop this when conda-forge/yaml-feedstock#30 is fixed
+      yaml: "<0.2.6"
     requires:
       - zarr
       - pyvcell

@@ -24,8 +24,8 @@ composition:
   pixi_image: ghcr.io/prefix-dev/pixi@sha256:17e1043a38e45b12db5c5339815de0d8973886fd76c922d705d823e146fff4d8
   platform: linux-64
   core:
-    process-bigraph: "1.9.1"
-    bigraph-schema: "1.8.1"
+    process-bigraph: "1.11.1"
+    bigraph-schema: "1.8.3"
 
 environments:
   - name: registry_env
