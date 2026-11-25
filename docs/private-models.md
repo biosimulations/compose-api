@@ -35,7 +35,7 @@ the runs to compose-api for you. This page takes you from nothing to a finished 
   Google account.
 - If you signed in to compose-api before your access was set up, sign out and back in: your roles are read when you sign
   in.
-- Still missing? Ask Alex Patrie on Slack, and tell him the email the menu shows. (Slack, not a GitHub issue: anyone
+- Still missing? Ask Alex Patrie on Slack, and tell Alex the email the menu shows. (Slack, not a GitHub issue: anyone
   can read an issue.)
 
 ## 2. Install (once)
@@ -59,36 +59,6 @@ xcode-select --install
 ```
 
 If it says the tools are already installed, you're set. On Linux (Ubuntu), run `sudo apt install build-essential`.
-
-### Sign in to compose-api
-
-The workbench sends your runs to compose-api as you, so you sign in once from the terminal. Install the sign-in tool:
-
-```bash
-uv tool install "compose-api-client[cli]"
-```
-
-Then sign in:
-
-```bash
-compose-api auth login --provider google
-```
-
-Your browser opens Google's sign-in. Choose the same Google account as in step 1, then come back to the terminal. It
-prints a few lines, among them:
-
-```text
-Session: valid, until ...
-API: confirmed this identity just now
-```
-
-That means you're signed in. If a line says `Capabilities: none beyond a signed-in user`, that's normal: your v2ecoli
-access is the role you saw in step 1.
-
-If the terminal says `compose-api: command not found`, run `uv tool update-shell`, open a new terminal, and try again.
-
-The tool keeps your sign-in in your computer's password store (Keychain on macOS), so you won't need to do this again
-for a while. If the workbench later says you aren't signed in, run `compose-api auth login --provider google` again.
 
 ### v2ecoli and the workbench
 
@@ -122,7 +92,26 @@ Leave the terminal open: closing it stops the workbench. To stop it yourself, pr
 
 Next time, open a terminal, `cd v2ecoli`, and run the same `uv run vivarium-workbench serve ...` line.
 
-## 4. Run the single cell
+## 4. Sign in to compose-api (once)
+
+The workbench sends your runs to compose-api as you, so you sign in once.
+
+1. In the browser, add `#github` to the workbench's address and press Enter, for example
+   `http://127.0.0.1:8001/#github` (use your own port).
+2. Under **Account**, the **compose-api** row has a **Sign in** button. Click it.
+3. Your browser opens Google's sign-in. Choose the same Google account as in step 1, then come back to the workbench.
+4. The button now says **Signed in · production**.
+
+If the workbench runs on another computer than the browser you're using (over SSH, say), click **Use a code instead**.
+The workbench then shows a link and a code to enter on any device.
+
+You stay signed in: the sign-in is kept in your computer's password store (Keychain on macOS), so you won't need to do
+this again for a while. If the button says **Sign in** again later, click it again.
+
+**On Linux,** the sign-in is kept in the desktop's password service (GNOME Keyring or KWallet). If signing in stops with
+a message about the credential store or keyring, use a desktop session where one runs, or ask Alex.
+
+## 5. Run the single cell
 
 1. In the left column, click **Process**.
 2. In the **Registry** panel, type `single` in the search box, then click **ecoli_single_cell**: one cell growing. Its
