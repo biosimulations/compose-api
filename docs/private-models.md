@@ -185,8 +185,7 @@ uv run vivarium-workbench serve --backend-base-url https://compose.cam.uchc.edu
 ```
 
 It prints a few lines, ending with `Uvicorn running on http://127.0.0.1:<port>`. Open that address in your browser.
-(A line saying `pbg_oxidizeme` failed to install can be ignored: that module isn't used here.) Leave the terminal
-open: closing it stops the workbench.
+Leave the terminal open: closing it stops the workbench.
 
 ### Run the single cell
 
