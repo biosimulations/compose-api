@@ -341,8 +341,11 @@ def _emit_envelope(enabled: bool, category: str, message: str, code: int) -> int
 
 
 def _validation_lines(e: BadRequest) -> list[str]:
-    """What an invalid document got wrong, when the API says so in its own validation shape (`{"message",
-    "violations"}`, as the registry check answers): escaped and capped. Free-form server text is never shown."""
+    """What the API said was wrong with the request, escaped and capped: its own message (`api_message`: the string
+    `detail` most of its 400s answer, e.g. an unsupported file type), or an invalid document's message and violations
+    (`{"message", "violations"}`, as the registry check answers). Other text in an answer is never shown."""
+    if e.api_message is not None:
+        return [printable(e.api_message)]
     if not isinstance(e.detail, dict):
         return []
     lines = [str(e.detail["message"])] if isinstance(e.detail.get("message"), str) else []

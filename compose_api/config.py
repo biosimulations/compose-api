@@ -103,6 +103,10 @@ class Settings(BaseSettings):
     slurm_time_limit_minutes: Annotated[int, Field(gt=0)] = 30
     slurm_max_time_limit_minutes: Annotated[int, Field(gt=0)] = 30
     long_run_role: str = ""
+    # How often a run in a composed environment writes its results so far (environments/runner.py), so a run stopped at
+    # its time limit, cancelled, or killed for its memory keeps them; 0 writes nothing until the run finishes. Images
+    # with their own runner (prebuilt environments) ignore it.
+    checkpoint_seconds: Annotated[int, Field(ge=0)] = 0
 
     simulation_store_base_path: str = ""
     hpc_sim_config_file: str = "publish.json"

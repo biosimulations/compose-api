@@ -180,6 +180,25 @@ SED-ML runs included, gets `SLURM_TIME_LIMIT_MINUTES`. A job still running at it
 status is `timeout`. `GET /webapp/config` publishes both caps, and the web UI offers the longer one to a caller whose
 capabilities include `simulations:long-runs`.
 
+So a long run must simulate about 0.56 time units a second (1,000 every 30 minutes), and faster once its interval
+passes the 12-hour cap. A v2ecoli lineage follows one cell, at 5 to 6 cell-seconds a second, so even the longest run
+`LONG_RUN_ROLE` allows (86,400 s) ends in about 4 to 4.5 hours. A colony slows as its cells divide, and a long one can
+reach its limit.
+
+**What a stopped run keeps.** A run in a composed environment writes its results so far every `CHECKPOINT_SECONDS`
+(production: 300), and once more when it is stopped at its limit or cancelled, if that write finishes before SLURM
+kills it. A run killed outright (for its memory, say) or one that fails keeps the last of those writes, listed as
+long as its job outlives the run. They are its results file, kind `results`, one row per time its emitter recorded; the last
+row's `global_time`, when the emitter records it, shows how far the run got. Only a finished run has `results.zip`.
+Get them with `compose-api datasets list --sim <id> --kind results`, then `compose-api datasets get <id>`
+([CLI](cli.md#what-a-run-produced-datasets)).
+
+This needs an environment version made by compose-api 0.7.108 or later: a version runs the runner it was made with.
+Not kept: runs in prebuilt environments, which have their own runner; rows of emitters that do not keep them in memory
+(`RAMEmitter` does); and emitters added while the run runs. Each write rewrites every row so far, so a run that emits
+a large state pauses longer at each write as its results grow: emit only what you need, or less often (`subsample` on
+`RAMEmitter`). The workbench does not show a stopped run's results yet.
+
 ## Do not
 
 **Do not use the Resource Owner Password Credentials grant** (the password grant). Collecting a user's password in your client is not a supported way to call this API. Human callers sign in through the `compose-api` CLI or BioSim, on Auth0's own pages, and send the resulting access token. Services use client credentials.

@@ -21,6 +21,13 @@ And, after viva-pde-particle's runner, on an engine that has process-bigraph's e
 ``COMPOSE_RUNNER_TYPES`` names the type tables to register, ``module:attribute`` separated by commas (for example
 ``pbsim_common:standard_types``); the image sets it from its entries.
 
+``COMPOSE_CHECKPOINT_SECONDS``, above 0 (compose-api's job sets it from its ``checkpoint_seconds``), keeps what a
+stopped run had: every that many seconds, and once more on SIGTERM (a time limit, ``scancel``), the rows each emitter
+keeps in memory (RAMEmitter's ``history``) are written to the results file, which the finished run replaces with its
+whole results. The rows are copies the emitter never changes once appended (``tree_copy``), so a thread writes them
+while the run goes on, and a row is always whole. A run killed outright (SIGKILL, out of memory) keeps the last write.
+Unset or 0, nothing is written before the run finishes.
+
     python runner.py run experiment.omex -o output -n 10
 """
 
@@ -35,15 +42,19 @@ import json
 import os
 import re
 import shutil
+import signal
 import sys
 import tempfile
+import threading
 import zipfile
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Protocol
 
 TYPES_ENV = "COMPOSE_RUNNER_TYPES"
+CHECKPOINT_ENV = "COMPOSE_CHECKPOINT_SECONDS"
 COMPONENT = "compose_api.runner"
+EMITTER = "process_bigraph.emitter.Emitter"
 
 
 class _Emitter(Protocol):
@@ -54,6 +65,12 @@ class _Emitter(Protocol):
     def event(self, event: str, /, **fields: object) -> None: ...
 
     def flush(self) -> None: ...
+
+
+class _Composite(Protocol):
+    """What the checkpoints use of process-bigraph's ``Composite``."""
+
+    state: dict[str, Any]
 
 
 def _jsonable(value: object) -> object:
@@ -146,6 +163,73 @@ def _stamp() -> tuple[str, str]:
     return f"{date}[{now.tzinfo}#{time}]", f"{date}#{time}"
 
 
+def _key(path: object) -> str:
+    return "/".join(map(str, path)) if isinstance(path, tuple) else str(path)
+
+
+def _write_results(file: Path, results: dict[Any, Any]) -> None:
+    """The results as JSON, by emitter path; written beside the file and renamed over it, so the file is always one
+    whole write, the last."""
+    part = file.with_name(f".{file.name}.part")
+    part.write_text(json.dumps(_jsonable({_key(path): rows for path, rows in results.items()})))
+    os.replace(part, file)
+
+
+def _histories(composite: _Composite) -> dict[Any, list[Any]]:
+    """The list each emitter appends its rows to, by the path ``gather_emitter_results`` keys its results by: emitters
+    that keep their rows in memory (RAMEmitter's ``history``) and were in the document when the run started."""
+    from process_bigraph.emitter import find_instance_paths, get_path
+
+    state = composite.state
+    emitters = {path: get_path(state, path)["instance"] for path in find_instance_paths(state, EMITTER)}
+    return {path: e.history for path, e in emitters.items() if isinstance(getattr(e, "history", None), list)}
+
+
+@contextlib.contextmanager
+def _checkpoints(composite: _Composite, output: Path) -> Iterator[Path | None]:
+    """While the run runs, its rows so far written to its results file every ``COMPOSE_CHECKPOINT_SECONDS``, by a
+    thread, and on SIGTERM, after which the runner exits; the file (None when there is nothing to keep)."""
+    seconds = float(os.environ.get(CHECKPOINT_ENV) or 0)
+    histories = _histories(composite) if seconds > 0 else {}
+    if not histories:
+        yield None
+        return
+    file = output / f"results_{_stamp()[0]}.pber"
+    lock, stop = threading.Lock(), threading.Event()
+
+    def write() -> None:
+        with lock:
+            _write_results(file, {path: list(rows) for path, rows in histories.items()})
+
+    def every() -> None:
+        while not stop.wait(seconds):
+            try:
+                write()
+            except Exception as e:  # the run goes on: the next write tries again, and the last whole one stays
+                print(f"results so far not written: {e!r}", file=sys.stderr)
+
+    def terminated(signum: int, _frame: object) -> None:
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)  # a second one (scancel, then the limit) must not run this again
+        stop.set()
+        try:
+            write()  # after a write in progress on the thread, which holds the lock
+        finally:
+            os._exit(128 + signum)
+
+    previous = signal.signal(signal.SIGTERM, terminated)
+    # A process forked from the run (a multiprocessing worker, which leaving a Pool stops with SIGTERM) has none of
+    # this: it ends as it would have, and never writes the run's file from its own stale copy of the rows.
+    os.register_at_fork(after_in_child=lambda: signal.signal(signal.SIGTERM, previous))
+    thread = threading.Thread(target=every, name="checkpoints", daemon=True)
+    thread.start()
+    try:
+        yield file
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+        stop.set()
+        thread.join()
+
+
 def run(path: Path, output: Path, interval: float) -> Path | None:
     """Run the document for ``interval`` and write its results into ``output``; the results file (None when the
     document emits nothing)."""
@@ -158,13 +242,13 @@ def run(path: Path, output: Path, interval: float) -> Path | None:
         workdir = Path(tmp)
         document = load_document(path, workdir)
         composite = Composite(document, core=build_core())
-        composite.run(interval)
+        with _checkpoints(composite, output) as checkpoint_file:
+            composite.run(interval)
         results = gather_emitter_results(composite)
         results_stamp, state_stamp = _stamp()
         if results:
-            results_file = output / f"results_{results_stamp}.pber"
-            keyed = {"/".join(map(str, k)) if isinstance(k, tuple) else str(k): v for k, v in results.items()}
-            results_file.write_text(json.dumps(_jsonable(keyed)))
+            results_file = checkpoint_file or output / f"results_{results_stamp}.pber"
+            _write_results(results_file, results)
         with contextlib.suppress(Exception):  # the state is a convenience: a run never fails for want of it
             composite.save(filename=f"state_{state_stamp}.pbg", outdir=str(workdir))
         shutil.copytree(workdir, output, dirs_exist_ok=True)

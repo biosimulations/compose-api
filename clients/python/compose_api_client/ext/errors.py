@@ -117,6 +117,7 @@ class ApiError(CliError):
     """An unexpected response from compose-api: ``status_code`` and the decoded ``detail``."""
 
     category = "api_error"
+    api_message: str | None = None  # compose-api's own words (`api_message_of`): the only response text shown
 
     def __init__(
         self,
@@ -219,6 +220,17 @@ def detail_of(content: bytes) -> JsonValue:
     return body.get("detail", body) if isinstance(body, dict) else body
 
 
+def api_message_of(content: bytes) -> str | None:
+    """compose-api's own message in an error answer: the string ``detail`` of its JSON body, as FastAPI's
+    ``HTTPException`` answers. Any other text (a proxy's or an ingress's page) is never shown, so it is None."""
+    try:
+        body: JsonValue = json.loads(content)
+    except (ValueError, UnicodeDecodeError):
+        return None
+    detail = body.get("detail") if isinstance(body, dict) else None
+    return detail if isinstance(detail, str) else None
+
+
 def raise_for(response: Response[Any]) -> None:
     """Raise the typed error for a non-2xx response."""
     code = int(response.status_code)
@@ -230,7 +242,9 @@ def raise_for(response: Response[Any]) -> None:
     if code == 403:
         raise ForbiddenError(f"compose-api refused the request (HTTP 403): {detail}")
     if code in (400, 422):
-        raise BadRequest(code, detail)
+        error = BadRequest(code, detail)
+        error.api_message = api_message_of(response.content)
+        raise error
     if code == 404:
         raise NotFound(code, detail)
     if code == 429:

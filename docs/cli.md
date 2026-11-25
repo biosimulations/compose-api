@@ -195,6 +195,10 @@ $ compose-api datasets get <id> -O out/            # just that file, not the who
 A run's SLURM log is a dataset too (`job.out`, kind `log`): `compose-api datasets list --sim 4195 --kind log`, then
 `datasets get` on its id. A dataset is readable by whoever can read its simulation.
 
+A run stopped before it finished (`timeout`, cancelled, out of memory) has no `results.zip`, but a run in a composed
+environment keeps the results it had: `datasets list --sim 4195 --kind results` finds them
+([What a stopped run keeps](authentication.md#longer-runs)).
+
 ## Output and exit status
 
 Results go to stdout; progress, prompts and human error lines go to stderr. With `--json`, an error is also printed to
