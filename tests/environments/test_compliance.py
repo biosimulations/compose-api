@@ -140,6 +140,7 @@ def test_pbsim_commons_cases_are_complete() -> None:
         ("vivarium-tyssue", "sheet-relaxation"),
         ("viva-pde-particle", "region-mean-closed-form"),
         ("v2ecoli", "single-cell-growth"),
+        ("viva-biogears", "hemorrhage-10s"),
     ],
 )
 def test_onboarded_cases_load_and_their_files_exist(entry: str, case: str) -> None:
@@ -147,6 +148,33 @@ def test_onboarded_cases_load_and_their_files_exist(entry: str, case: str) -> No
     (found,) = [c for c in load_cases(entry) if c.name == case]
     assert found.entry == entry
     assert compliance.case_problems(found) == []
+
+
+BIOGEARS_RUN = Path(__file__).parents[1] / "fixtures" / "resources" / "viva-biogears-hemorrhage-10s.pber"
+
+
+@pytest.mark.parametrize(
+    ("field", "row", "value"),
+    [
+        ("time", -1, 9.0),
+        ("blood_volume_mL", 0, 5532.36226926419 * 1.001),
+        ("blood_volume_mL", -1, 5500.211823235651 * 1.001),
+        ("total_blood_volume_lost_mL", -1, 32.17458403916558 * 1.001),
+        ("total_blood_volume_lost_mL", -1, math.nan),
+        ("heart_rate_bpm", -1, 72.37198929517879 * 1.001),
+        ("mean_arterial_pressure_mmHg", -1, 95.79536313525229 * 1.001),
+    ],
+)
+def test_viva_biogears_case_holds_its_cluster_run_and_fails_a_change(field: str, row: int, value: float) -> None:
+    """The case's values are run 12958's (viva-biogears@1, byte-identical to 12959): its results pass. Each value moved
+    by 0.1 % (ten times the tolerance), or made NaN, fails, and so does a run one row short."""
+    (case,) = [c for c in load_cases("viva-biogears") if c.name == "hemorrhage-10s"]
+    results = compliance.results_of(BIOGEARS_RUN.read_text())
+    assert evaluate(case, results).passed
+    changed = json.loads(json.dumps(results))
+    changed["emitter"][row][field] = value
+    assert not evaluate(case, changed).passed
+    assert not evaluate(case, {"emitter": results["emitter"][:10]}).passed
 
 
 def _result(scale: float = 1.0) -> dict[str, object]:

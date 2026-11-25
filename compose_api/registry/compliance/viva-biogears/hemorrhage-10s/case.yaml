@@ -1,0 +1,22 @@
+description: >-
+  BioGears' standard male (StandardMale@0s.xml, in the image) bleeding from the right leg at 250 mL/min for 10 s, with
+  no infusion, recorded once a second through viva-biogears' BioGearsProcess. The document is in the plain
+  `local:<module>.<Class>` form. Its committed copy differs from the one that ran only by a final newline.
+  The expected values are those its prebuilt image (viva-biogears@1, digest e1ccb4e1..., built from 05c1ad6) gave on
+  the cluster through compose-api's job script on 2026-11-25 (runs 12958 and 12959, byte-identical results). A Docker run
+  of the same image on another platform gave the same digits.
+  Blood volume is checked at the first row and the last, so the case fails a run in which it doesn't fall. Blood lost is
+  checked only in the last row: BioGears reports it as NaN at t = 0.
+  The tolerance (1e-4, relative) is about 20 times pybiogears' only documented run-to-run noise (about 4.7e-6, with a
+  drug infused; viva-biogears #19), which this document doesn't exercise. It is far below any change in the bleed: 1e-4
+  of the blood volume is about 0.55 mL, against a 32 mL fall.
+document: document.pbg
+interval: 10
+expect:
+  - {kind: rows, emitter: emitter, min: 11}
+  - {kind: scalar, emitter: emitter, field: time, expected: 10.0}
+  - {kind: scalar, emitter: emitter, field: blood_volume_mL, row: 0, expected: 5532.36226926419, rel: 1.0e-4}
+  - {kind: scalar, emitter: emitter, field: blood_volume_mL, expected: 5500.211823235651, rel: 1.0e-4}
+  - {kind: scalar, emitter: emitter, field: total_blood_volume_lost_mL, expected: 32.17458403916558, rel: 1.0e-4}
+  - {kind: scalar, emitter: emitter, field: heart_rate_bpm, expected: 72.37198929517879, rel: 1.0e-4}
+  - {kind: scalar, emitter: emitter, field: mean_arterial_pressure_mmHg, expected: 95.79536313525229, rel: 1.0e-4}

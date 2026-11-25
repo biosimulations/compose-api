@@ -690,8 +690,15 @@ entries:
         registered here. In that image by digest, under Docker as a user who isn't root, with a read-only root and a
         64 MB /tmp, a 10 s biogears_hemorrhage document in the plain `local:<module>.<Class>` form ran: exit 0, 11 rows.
         (The `local:!` form its document generator wrote before viva-biogears #20 is refused, as for every entry.)
-        Pending, for the next release: the read-back of the registered version on the cluster, and a compliance case
-        run there through compose-api, with its run id.
+        The evidence from the cluster is the next item.
+      - >-
+        On the cluster, 2026-11-25: the version registered from that digest, viva-biogears@1, was read back at 11:02 EST.
+        It lists 16 components (BioGearsProcess, the two controllers, the modular processes, seven visualizations and
+        the core's emitters) and no findings. Its case, registry/compliance/viva-biogears/hemorrhage-10s, was run in it
+        twice through compose-api's job script: runs 12958 and 12959, whose results are byte-identical (.pber sha256
+        495e967a977d7cb805a851c86bed4e40303065e4aa13ad094da6d273892e38e3). Those results pass the case through
+        compliance.evaluate. That evaluation was done by hand, because a prebuilt version's cases aren't run
+        automatically.
 
   # --- libraries: installed for the components above, with no process classes of their own ------------------------
   # Pinned to what registry_env@1 actually ran (read back from its image, 2026-10-25), not to the old library list,
