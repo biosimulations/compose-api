@@ -126,15 +126,16 @@ Next time, open a terminal, `cd v2ecoli`, and run the same `uv run vivarium-work
 
 1. In the left column, click **Process**.
 2. In the **Registry** panel, type `single` in the search box, then click **ecoli_single_cell**: one cell growing. Its
-   card says **Runs: Cloud**: its runs go to compose-api.
+   card says **Runs: Cloud**: the workbench sends its runs to compose-api.
 3. Below the picture of the model, set **Duration** to `60` (seconds of the cell's life), then click **▶ Run**.
 4. After a minute or two it shows **✓ complete**. Under **Outputs**, **Results** lists what the run recorded (61 rows,
    one per simulated second), and **⬇ Download results** saves them.
 
 Your runs are private: only you can see them.
 
-For now, ecoli_single_cell is the one v2ecoli model that runs on compose-api. More will appear in the Registry with
-**Runs: Cloud** as compose-api learns to run them.
+For now, ecoli_single_cell is the only v2ecoli model compose-api runs. The others also say **Runs: Cloud**, but pressing
+**▶ Run** on them shows **Run failed — no results produced**. That's expected until compose-api can run them, which is
+coming. Use ecoli_single_cell.
 
 ### Limits
 
