@@ -131,9 +131,10 @@ For now, compose-api runs two v2ecoli models: ecoli_single_cell, and ecoli_linea
 
 ### Limits
 
-- Up to 1,000 s works for everyone. Longer runs need the `long-runs` role: ask Alex. Without it, the run fails with
-  compose-api's own message: "compose-api refused the run: Invalid interval time, it has to be between 0 and 1000; up
-  to 86400 with the long-runs role".
+- Up to 1,000 s works for everyone. Longer runs need the `long-runs` role. As it is set up, everyone on the v2ecoli
+  list gets that role when they first sign in, as they get `repo-v2ecoli`. If a run past 1,000 s fails with
+  compose-api's message "compose-api refused the run: Invalid interval time, it has to be between 0 and 1000; up to
+  86400 with the long-runs role", check that you signed in with the email you gave us (step 1), then tell Alex.
 - With ecoli_single_cell, keep runs to 2,400 s or less: the cell divides at about 2,500 s, and a single cell has nowhere
   to put its daughters, so the run ends with no results. To go past a division, use ecoli_lineage (step 6).
 
