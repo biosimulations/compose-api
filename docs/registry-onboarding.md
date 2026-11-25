@@ -214,7 +214,8 @@ are both required; only an entry installed from git can accept a finding, only f
 root's), and only `step-outputs-replace` (a class that does not import is never admitted). A composed version records
 the acceptances it was made with, and only those apply in it: a prebuilt or shared version accepts nothing. An
 acceptance therefore takes effect with a new version, which needs the entry's next commit (usually the one that adds
-the evidence test): a version of the same commit resolves to the same lock as the one before, and is not made. `evidence` is a test in the entry's own
+the evidence test): a version of the same commit resolves to the same lock as the one before, and is not made
+(unless compose-api's runner has changed since, which makes a new version). `evidence` is a test in the entry's own
 repository, showing why the check's concern does not apply. A reviewer reads it as they would any evidence for a
 level. When a version is made, its lock Job checks first that each evidence path is a file at the entry's pinned
 commit (a private repository's through its token), and one that is not fails the version, saying which.

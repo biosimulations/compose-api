@@ -194,6 +194,8 @@ Get them with `compose-api datasets list --sim <id> --kind results`, then `compo
 ([CLI](cli.md#what-a-run-produced-datasets)).
 
 This needs an environment version made by compose-api 0.7.108 or later: a version runs the runner it was made with.
+An older environment takes the new runner in a new version, which an administrator can make with the same date: a new
+runner makes a new version even of the same lock (0.7.109).
 Not kept: runs in prebuilt environments, which have their own runner; rows of emitters that do not keep them in memory
 (`RAMEmitter` does); and emitters added while the run runs. Each write rewrites every row so far, so a run that emits
 a large state pauses longer at each write as its results grow: emit only what you need, or less often (`subsample` on

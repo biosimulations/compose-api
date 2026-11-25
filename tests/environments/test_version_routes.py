@@ -325,6 +325,32 @@ async def test_a_version_that_resolves_to_an_existing_lock_says_which(
 
 
 @pytest.mark.asyncio
+async def test_a_new_runner_makes_a_new_version_of_the_same_lock(
+    app: FastAPI, builds: Builds, locks: Locks, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A version runs the runner it was made with, and the runner's sha256 is in its definition, so a new runner is a
+    new image and a new version, even of the same lock: how an environment takes up a new runner. The same lock with
+    the same runner is still the same version."""
+    from compose_api.environments import pixi
+
+    locks.same, locks.text = True, f"version: 7\n# {uuid.uuid4().hex}\n"  # this test's own lock
+    versions = "/registry/environments/registry_env/versions"
+    current = pixi.runner_source()
+    async with _as(app, ADMIN) as admin:
+        first = (await admin.post(versions, json={"resolved_at": "2026-10-20T00:00:00"})).json()["number"]
+        monkeypatch.setattr(pixi, "runner_source", lambda: current + "# a new runner\n")
+        second = (await admin.post(versions, json={"resolved_at": "2026-10-21T00:00:00"})).json()["number"]
+        third = (await admin.post(versions, json={"resolved_at": "2026-10-22T00:00:00"})).json()["number"]
+        made, renewed, again = [(await admin.get(f"{versions}/{n}")).json() for n in (first, second, third)]
+    assert made["lock_sha256"] == renewed["lock_sha256"] and renewed["state"] != "failed", renewed.get("failure")
+    assert renewed["spec"]["runner"].endswith("# a new runner\n")
+    assert renewed["simulator_id"] != made["simulator_id"]  # a new definition, so a new image
+    assert again["state"] == "failed"
+    assert f"same lock as registry_env@{second}, with the same runner" in again["failure"]
+    assert len(builds.started) == 2
+
+
+@pytest.mark.asyncio
 async def test_a_composed_environment_takes_a_date_not_libraries_or_an_image(
     app: FastAPI, builds: Builds, locks: Locks
 ) -> None:
