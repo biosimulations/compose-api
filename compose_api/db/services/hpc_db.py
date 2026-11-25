@@ -76,10 +76,10 @@ class HPCDatabaseService(ABC):
         exclude: frozenset[int] = frozenset(),
         requester_cap: int | None = None,
     ) -> list[Submission]:
-        """Lease up to ``limit`` due submissions to ``owner``, highest priority then oldest first. A row another worker
-        holds (a live lease, or locked by its claim right now) is skipped, never waited on, and so is an interactive
-        row not yet submitting whose requester already has ``requester_cap`` interactive runs active (anonymous runs:
-        one requester)."""
+        """Lease up to ``limit`` due submissions to ``owner``: those already submitting first, then highest priority
+        then oldest. A row another worker holds (a live lease, or locked by its claim right now) is skipped, never
+        waited on, and so is an interactive row not yet submitting whose requester already has ``requester_cap``
+        interactive runs active or held (anonymous runs: one requester)."""
 
     @abstractmethod
     async def renew_submission_lease(self, simulation_id: int, owner: str, lease_seconds: int) -> bool:
@@ -250,7 +250,14 @@ class HPCORMExecutor(HPCDatabaseService):
                 ORMSubmission.next_attempt_at <= now,
                 or_(ORMSubmission.lease_expires_at.is_(None), ORMSubmission.lease_expires_at < now),
             )
-            .order_by(ORMSubmission.priority.desc(), ORMSubmission.created_at, ORMSubmission.simulation_id)
+            # A row already submitting first: it takes no new place under any cap, and behind a backlog that select
+            # puts back it would never be claimed, holding its place for good.
+            .order_by(
+                (ORMSubmission.state == SubmissionState.SUBMITTING.value).desc(),
+                ORMSubmission.priority.desc(),
+                ORMSubmission.created_at,
+                ORMSubmission.simulation_id,
+            )
             .limit(limit)
             .with_for_update(skip_locked=True)
         )
@@ -340,33 +347,32 @@ class HPCORMExecutor(HPCDatabaseService):
     async def submission_load(self, exclude: frozenset[int] = frozenset()) -> "Load":
         from compose_api.simulation.scheduling import INTERACTIVE, Load
 
-        active = (
-            select(ORMSubmission.queue, ORMSubmission.requested_by, func.count())
-            .where(_active(ORMSubmission))
-            .group_by(ORMSubmission.queue, ORMSubmission.requested_by)
-        )
-        held = (
-            select(ORMSubmission.requested_by, func.count())
-            .where(
-                ORMSubmission.queue == INTERACTIVE,
-                _held(ORMSubmission),
-                ORMSubmission.simulation_id.not_in(exclude),
+        # One statement, so one snapshot: a held run that moves on to submitting while the load is read is counted
+        # once, as one or the other, never neither. The rows in `exclude` (the claim being decided, whose leases are
+        # fresh) are left out of what is held and what is preparing, or they would count themselves out.
+        active = _active(ORMSubmission)
+        not_excluded = ORMSubmission.simulation_id.not_in(exclude)
+        held = and_(_held(ORMSubmission), not_excluded)
+        preparing = and_(held, ORMSubmission.state == SubmissionState.PREPARING.value)
+        counts = (
+            select(
+                ORMSubmission.queue,
+                ORMSubmission.requested_by,
+                func.count().filter(active),
+                func.count().filter(held),
+                func.count().filter(preparing),
             )
-            .group_by(ORMSubmission.requested_by)
-        )
-        preparing = select(func.count()).where(
-            ORMSubmission.state == SubmissionState.PREPARING.value,
-            ORMSubmission.lease_expires_at > func.localtimestamp(),
+            .where(or_(active, held))
+            .group_by(ORMSubmission.queue, ORMSubmission.requested_by)
         )
         async with self.async_session_maker() as session:
             load = Load()
-            for queue, requester, count in (await session.execute(active)).all():
-                load.active[queue] += count
-                if queue == INTERACTIVE:
-                    load.active_by_requester[requester] += count
-            for requester, count in (await session.execute(held)).all():
-                load.active_by_requester[requester] += count
-            load.preparing = (await session.execute(preparing)).scalar_one()
+            for queue, requester, n_active, n_held, n_preparing in (await session.execute(counts)).all():
+                if n_active:
+                    load.active[queue] += n_active
+                if queue == INTERACTIVE and n_active + n_held:
+                    load.active_by_requester[requester] += n_active + n_held
+                load.preparing += n_preparing
             return load
 
     @override

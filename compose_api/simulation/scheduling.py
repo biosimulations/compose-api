@@ -14,7 +14,8 @@ The overall and queue caps count runs submitting or on SLURM, so the runs a work
 (``requested``, ``preparing``, at most ``submission_worker_concurrency`` per worker) can pass them briefly. One
 requester's cap counts those held runs too, so one worker never passes it; two workers claiming at the same moment can,
 by at most one claim each. A run already ``submitting`` (one whose sbatch waits to be retried, say) is counted, so no
-count holds it back, or a queue or requester whose submits all failed would never be resumed.
+count holds it back, and the claim takes it first, or a queue or requester whose submits all failed would never be
+resumed.
 """
 
 from collections import Counter

@@ -27,7 +27,7 @@ from compose_api.simulation.models import (
 )
 from compose_api.simulation.scheduling import Load, SubmissionPolicy
 from compose_api.simulation.submission_worker import SubmissionWorker
-from tests.simulation.test_submission_worker import FakeCluster, _queue, _worker
+from tests.simulation.test_submission_worker import FakeCluster, _queue, _set, _worker
 
 
 def _candidate(
@@ -216,6 +216,141 @@ async def test_a_signed_in_runs_requester_is_its_owner_when_not_given(
     hpc_db = database_service.get_hpc_db()
     requesters = [(await hpc_db.get_submission(sid)) for sid in (owned, anonymous)]
     assert [s.requested_by if s is not None else "missing" for s in requesters] == ["student-a", None]
+
+
+async def _hold(engine: AsyncEngine, simulation_id: int, owner: str = "another-worker") -> None:
+    """A run a worker holds on its way to sbatch: making its image ready, under a live lease."""
+    await _set(
+        engine, simulation_id,
+        f"state = 'preparing', lease_owner = '{owner}', lease_expires_at = localtimestamp + interval '5 minutes'",
+    )  # fmt: skip
+
+
+@pytest.mark.asyncio
+async def test_a_run_a_worker_holds_counts_toward_its_requesters_cap_in_the_claim(
+    database_service: DatabaseServiceSQL, async_postgres_engine: AsyncEngine, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion, staging_dir: Path,
+) -> None:  # fmt: skip
+    """Cap 1. A named requester and the anonymous one each have a run held (not yet submitting): neither gets another.
+    Another requester does, and so does an anonymous run already submitting, which is counted already."""
+    hpc_db = database_service.get_hpc_db()
+    held_anonymous = await _queue(database_service, simulation_request)
+    held_named = await _queue(database_service, simulation_request, requested_by="student-a")
+    for sid in (held_anonymous, held_named):
+        await _hold(async_postgres_engine, sid)
+    anonymous = await _queue(database_service, simulation_request)
+    named = await _queue(database_service, simulation_request, requested_by="student-a")
+    other = await _queue(database_service, simulation_request, requested_by="student-b")
+    resuming = await _queue(database_service, simulation_request)
+    await _set(async_postgres_engine, resuming, "state = 'submitting'")
+    claimed = await hpc_db.claim_submissions(owner="w", lease_seconds=120, limit=10, requester_cap=1)
+    assert sorted(c.simulation_id for c in claimed) == sorted([other, resuming])
+    assert anonymous not in {c.simulation_id for c in claimed} and named not in {c.simulation_id for c in claimed}
+
+
+class _CommitAfterFirstStatement:
+    """A session that lets another transaction commit right after its first statement: what a worker moving a run on
+    at that moment looks like to a reader at READ COMMITTED."""
+
+    def __init__(self, inner: Any, commit: Any) -> None:
+        self._inner, self._commit, self._statements = inner, commit, 0
+
+    async def __aenter__(self) -> "_CommitAfterFirstStatement":
+        await self._inner.__aenter__()
+        return self
+
+    async def __aexit__(self, *exc: Any) -> Any:
+        return await self._inner.__aexit__(*exc)
+
+    async def execute(self, statement: Any, *args: Any, **kwargs: Any) -> Any:
+        result = await self._inner.execute(statement, *args, **kwargs)
+        self._statements += 1
+        if self._statements == 1:
+            await self._commit()
+        return result
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("moves_on_mid_read", [False, True])
+async def test_a_held_run_counts_toward_its_requesters_cap_in_select_once(
+    database_service: DatabaseServiceSQL, async_postgres_engine: AsyncEngine, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion, staging_dir: Path, monkeypatch: pytest.MonkeyPatch, moves_on_mid_read: bool,
+) -> None:  # fmt: skip
+    """Cap 2. The requester's first run is held (preparing); the claim takes its next two. The load must count the
+    held run, so only one more goes; and counted once even when it moves on to submitting while the load is read,
+    which one statement (one snapshot) guarantees: read in two, it was in neither, and both went."""
+    hpc_db = database_service.get_hpc_db()
+    first, *rest = [await _queue(database_service, simulation_request, requested_by="student-a") for _ in range(3)]
+    await _hold(async_postgres_engine, first, owner="w")
+    claimed = await hpc_db.claim_submissions(
+        owner="w", lease_seconds=120, limit=2, exclude=frozenset({first}), requester_cap=2
+    )
+    assert sorted(c.simulation_id for c in claimed) == sorted(rest)
+
+    async def moves_on() -> None:
+        await _set(async_postgres_engine, first, "state = 'submitting'")
+
+    if moves_on_mid_read:
+        session_maker = hpc_db.async_session_maker  # type: ignore[attr-defined]
+        monkeypatch.setattr(
+            hpc_db, "async_session_maker", lambda: _CommitAfterFirstStatement(session_maker(), moves_on)
+        )
+    load = await hpc_db.submission_load(exclude=frozenset(c.simulation_id for c in claimed))
+    monkeypatch.undo()
+    policy = SubmissionPolicy(max_active=100, queue_share=0.5, max_preparing=100, max_active_per_requester=2)
+    go, _ = policy.select(claimed, load)
+    assert load.active_by_requester == Counter({"student-a": 1}) and len(go) == 1
+
+
+class _ImageNeverReady(FakeCluster):
+    """The image pull doesn't finish: runs stay `preparing` until the worker is closed (a restart)."""
+
+    async def download_container(self, remote_container_image: Any) -> None:
+        await asyncio.sleep(3600)
+
+
+@pytest.mark.asyncio
+async def test_runs_given_back_while_preparing_are_resumed_by_the_next_worker(
+    database_service: DatabaseServiceSQL, simulation_request: SimulationRequest, simulator: SimulatorVersion,
+    staging_dir: Path,
+) -> None:  # fmt: skip
+    """A restart while as many runs as max_preparing wait on their image: they are given back still `preparing`. The
+    next worker claims them, and their fresh leases must not count them out of max_preparing, or they wait forever."""
+    runs = [await _queue(database_service, simulation_request) for _ in range(8)]
+    hpc_db = database_service.get_hpc_db()
+    first = _worker(database_service, _ImageNeverReady(), owner="first")
+    assert sorted(await first.run_once()) == sorted(runs)
+
+    async def all_preparing() -> bool:
+        states = [await hpc_db.get_submission(sid) for sid in runs]
+        return all(s is not None and s.state is SubmissionState.PREPARING for s in states)
+
+    async with asyncio.timeout(10):
+        while not await all_preparing():
+            await asyncio.sleep(0.05)
+    await first.close()  # the restart gives them back
+    with override_settings(submission_defer_seconds=0):
+        await _worker(database_service, FakeCluster(), owner="second").drain()
+    assert [await hpc_db.get_hpcrun_by_ref(sid, JobType.SIMULATION) is not None for sid in runs] == [True] * 8
+
+
+@pytest.mark.asyncio
+async def test_a_submitting_run_behind_a_backlog_that_waits_is_still_claimed(
+    database_service: DatabaseServiceSQL, async_postgres_engine: AsyncEngine, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion, staging_dir: Path,
+) -> None:  # fmt: skip
+    """The overall cap is held by a suite run waiting to retry its sbatch, behind a claim's worth of interactive runs
+    that the cap puts back. Claimed after them, it never would be, and the cap would never free: it goes first."""
+    suite = await _queue(database_service, simulation_request, queue="suite:x", priority=-10)
+    await _set(
+        async_postgres_engine, suite,
+        "state = 'submitting', attempts = 1, next_attempt_at = localtimestamp - interval '1 second'",
+    )  # fmt: skip
+    for _ in range(2):
+        await _queue(database_service, simulation_request)
+    with override_settings(submission_max_active_jobs=1, submission_worker_concurrency=2, submission_defer_seconds=0):
+        await _worker(database_service, FakeCluster()).drain()
+    assert await database_service.get_hpc_db().get_hpcrun_by_ref(suite, JobType.SIMULATION) is not None
 
 
 @pytest.mark.asyncio
