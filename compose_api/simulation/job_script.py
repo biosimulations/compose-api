@@ -9,9 +9,10 @@ Besides running the simulator, the script makes the run observable (docs/plan-ob
   simulator runs in the background and is waited on, because bash runs a trap only once its foreground command returns:
   a simulator that outlives SIGTERM (a ``--compat`` container's PID 1 ignores it) would otherwise hold the trap until
   SLURM's SIGKILL, and the run would end with no ``job.end`` and no SLURM log dataset. On SIGTERM the end is recorded
-  at once, then the script stays in the job until the simulator exits or SLURM's SIGKILL ends both, so no simulator is
-  left running outside SLURM's process tracking; if the simulator exits, its files are announced again, so what it
-  wrote while shutting down is what the datasets describe.
+  at once, the script passes SIGTERM on to the simulator (a plain scancel may signal only this shell), then stays in
+  the job until the simulator exits or SLURM's SIGKILL ends both, so no simulator is left running outside SLURM's
+  process tracking; if the simulator exits, its files are announced again, so what it wrote while shutting down is
+  what the datasets describe.
 - **It announces the files the run left** (O5): after the run, success or failure, one ``artifact.written`` event per
   file under ``output/`` and for ``results.zip``, with its size and sha256. ``output/`` is kept.
 - **It hands the trace context to the simulator** through an env file: ``PBG_TRACEPARENT`` and friends. A simulator
@@ -119,10 +120,13 @@ finish() {
     else status=error; level=error; error="\"exit code $code\""; fi
     emit job.end "$level" "{\"exit_code\":$code,\"wall_s\":$elapsed}"
     emit span.end "$level" "{\"name\":\"job\",\"attrs\":$JOB_ATTRS,\"start_ts\":\"$JOB_START_TS\",\"end_ts\":\"$(now_ts)\",\"duration_s\":$elapsed,\"status\":\"$status\",\"error\":$error}"
-    # Stopped (a time limit, scancel) while the simulator still runs: SLURM sent it SIGTERM too. Stay in the job until it
-    # exits or SLURM's SIGKILL ends both, since leaving first would orphan it outside SLURM's process tracking. If it
-    # exits, announce its files again: what it wrote while shutting down replaces what the record above saw.
+    # Stopped (a time limit, scancel) while the simulator still runs. SLURM may have signalled only this shell (a plain
+    # scancel did in production: simulation 12966's runner never saw SIGTERM), so pass SIGTERM on; a second one does no
+    # harm. Then stay in the job until it exits or SLURM's SIGKILL ends both, since leaving first would orphan it outside
+    # SLURM's process tracking. If it exits, announce its files again: what it wrote while shutting down replaces what
+    # the record above saw.
     if simulator_running; then
+        kill -TERM "$SIM" 2>/dev/null || true
         wait "$SIM" || true
         manifest || true
     fi

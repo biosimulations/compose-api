@@ -3,6 +3,7 @@
 It is run here as the image runs it, as a script in a subprocess, on this environment's process-bigraph (the dev
 group's, the release composed environments install) and, when uv can fetch it, on that release with events written."""
 
+import asyncio
 import hashlib
 import importlib.metadata
 import json
@@ -408,6 +409,16 @@ def test_every_row_written_while_a_process_is_mid_update_is_whole(workdir: Path)
     _assert_whole(_rows(output), width=width)
 
 
+async def _running(slurm_service: SlurmService, job_id: int) -> None:
+    deadline = time.monotonic() + 300
+    while True:
+        jobs = await slurm_service.get_job_status_sacct(job_ids=[job_id])
+        if jobs and jobs[0].job_state.split()[0] == "RUNNING":
+            return
+        assert time.monotonic() < deadline, f"job {job_id} never ran: {jobs}"
+        await asyncio.sleep(2)
+
+
 # The runner in an image on the composed core, run the way every composed image runs it: bash execs python, so under
 # --compat (its own PID namespace, no init) the runner is the container's PID 1.
 IMAGE = """\
@@ -431,13 +442,22 @@ exec /bin/bash -c 'exec python /opt/compose-api/runner.py "$@"' runner "$@"
 
 @pytest.mark.slurm
 @pytest.mark.asyncio
-async def test_a_run_stopped_at_its_slurm_time_limit_keeps_its_rows_so_far(
-    slurm_backend: SlurmBackend, slurm_service: SlurmService
+@pytest.mark.parametrize("stop", ["time limit", "scancel", "batch shell only"])
+async def test_a_run_stopped_by_slurm_keeps_its_rows_so_far(
+    slurm_backend: SlurmBackend, slurm_service: SlurmService, stop: str
 ) -> None:
-    """The real job script and the runner in a --compat container, at a one-minute time limit, with writes an hour
-    apart: only SIGTERM can write the rows, so they show that it reaches the container's PID 1 and its handler, and,
-    whole, that the write finished before SLURM's SIGKILL, KillWait later. The job announces them like any output
-    file. The job runs as the backend's user (root on the test cluster)."""
+    """The real job script and the runner in a --compat container, stopped three ways.
+
+    - **At a one-minute time limit**, with writes an hour apart, so only SIGTERM can write the rows: they show that it
+      reaches the container's PID 1 and its handler, and, whole, that the write finished before SLURM's SIGKILL,
+      KillWait later.
+    - **Cancelled as compose-api cancels a run** (``SlurmService.cancel_job``, a plain ``scancel``), with a periodic
+      write before the stop. Here a plain scancel signals every process of the job.
+    - **With SIGTERM to the batch shell only** (``scancel --batch``), as production's plain scancel did (simulation
+      12966 kept only its periodic write): the job passes SIGTERM on, the run ends within seconds rather than at its
+      time limit, and the stop write is announced again over the periodic one the job's trap saw first.
+
+    The job announces the rows like any output file. It runs as the backend's user (root on the test cluster)."""
     if not slurm_backend.can_build_singularity:
         pytest.skip(f"the {slurm_backend.kind} backend cannot build singularity images")
     ssh = slurm_backend.ssh_service
@@ -451,7 +471,9 @@ async def test_a_run_stopped_at_its_slurm_time_limit_keeps_its_rows_so_far(
             correlation_id=f"simulation-{experiment_id}", experiment_dir=str(experiment), container=str(image),
             file_suffix="pbg", output_dir="/experiment/output", end_time=10000.0,
             log_file=str(get_slurm_sim_log_file(experiment_id)), is_batch=True,
-            partition=slurm_backend.partition, qos=slurm_backend.qos, time_limit_minutes=1, checkpoint_seconds=3600,
+            partition=slurm_backend.partition, qos=slurm_backend.qos,
+            time_limit_minutes={"time limit": 1, "scancel": 10, "batch shell only": 4}[stop],
+            checkpoint_seconds=3600 if stop == "time limit" else 20,
         )
     )  # fmt: skip
     await ssh.run_command(f"mkdir -p {shlex.quote(str(files))}")
@@ -478,7 +500,21 @@ async def test_a_run_stopped_at_its_slurm_time_limit_keeps_its_rows_so_far(
         )
         assert code == 0, err
         job_id = int(out.strip().split(";")[0])
-        assert (await _ended(slurm_service, job_id)).startswith("TIMEOUT")
+        if stop != "time limit":
+            await _running(slurm_service, job_id)
+            await asyncio.sleep(32)  # past the first periodic write (20 s into the run), before the second
+            signalled = time.monotonic()
+            if stop == "scancel":
+                await slurm_service.cancel_job(job_id)
+            else:
+                code, _, err = await ssh.run_command(f"scancel --batch --signal=TERM {job_id}")
+                assert code == 0, err
+        state = await _ended(slurm_service, job_id)
+        assert state.startswith(
+            {"time limit": "TIMEOUT", "scancel": "CANCELLED", "batch shell only": "FAILED"}[stop]
+        ), state
+        if stop == "batch shell only":  # ended by the runner's own exit, not by the time limit four minutes in
+            assert time.monotonic() - signalled < 90
 
         output = shlex.quote(str(experiment / "output"))
         _, names, _ = await ssh.run_command(f"ls -A {output}")
@@ -486,7 +522,7 @@ async def test_a_run_stopped_at_its_slurm_time_limit_keeps_its_rows_so_far(
         assert not [n for n in names.split() if n.endswith(".part")]
         _, text, _ = await ssh.run_command(f"cat {output}/{shlex.quote(name)}")
         rows = json.loads(text)["emitter"]
-        assert len(rows) >= 10, len(rows)  # about two a second for most of a minute
+        assert len(rows) >= 10, len(rows)  # about two a second, for most of a minute or about 20 s
         _assert_whole(rows, width=3)
         assert rows[-1]["global_time"] < 10000
 
@@ -494,9 +530,14 @@ async def test_a_run_stopped_at_its_slurm_time_limit_keeps_its_rows_so_far(
         events = [json.loads(line) for line in log.splitlines() if line.strip()]
         (end,) = [e for e in events if e["event"] == "job.end"]
         assert end["payload"]["exit_code"] == 143
-        written = [e for e in events if e["event"] == "artifact.written"]
-        *_, announced = [e for e in written if e["payload"]["uri"] == f"output/{name}"]  # both manifests may see it
-        assert announced["payload"]["sha256"] == hashlib.sha256(text.encode()).hexdigest()
+        announced = [
+            e["payload"] for e in events if e["event"] == "artifact.written" and e["payload"]["uri"] == f"output/{name}"
+        ]
+        # the last announcement is the file as the run left it, so its dataset describes the stop write
+        assert announced[-1]["sha256"] == hashlib.sha256(text.encode()).hexdigest()
+        assert announced[-1]["bytes"] == len(text.encode())
+        if stop == "batch shell only":  # as in production: the job's first look saw the periodic write, then the stop
+            assert len(announced) >= 2 and announced[0]["sha256"] != announced[-1]["sha256"], announced
         _, left, _ = await ssh.run_command(f"ls -A {shlex.quote(str(experiment))}")
         assert "results.zip" not in left.split()  # results.zip still means a finished run
     finally:

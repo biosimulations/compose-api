@@ -242,9 +242,10 @@ def test_the_container_scratch_space_is_on_disk_and_removed_when_the_job_ends(tm
     assert list(node_tmp.iterdir()) == []
 
 
-def _stopped(tmp_path: Path, fake_mode: str) -> tuple[subprocess.Popen[bytes], Path]:
-    """The job with the fake simulator in ``fake_mode``, stopped as SLURM stops a job at its time limit: SIGTERM to
-    every process of the job once the simulator has written its output."""
+def _stopped(tmp_path: Path, fake_mode: str, only_the_shell: bool = False) -> tuple[subprocess.Popen[bytes], Path]:
+    """The job with the fake simulator in ``fake_mode``, stopped once the simulator has written its output: SIGTERM to
+    every process of the job, as SLURM stops a job at its time limit, or ``only_the_shell``, as a plain scancel did in
+    production (simulation 12966)."""
     script, env, experiment = _job(tmp_path, 0, staged_input=False)
     env[fake_mode] = "1"
     job = subprocess.Popen(  # noqa: S603
@@ -259,7 +260,10 @@ def _stopped(tmp_path: Path, fake_mode: str) -> tuple[subprocess.Popen[bytes], P
         while not (experiment / "output" / "out.txt").exists():
             assert time.monotonic() < deadline, "the fake simulator never started"
             time.sleep(0.05)
-        os.killpg(job.pid, signal.SIGTERM)
+        if only_the_shell:
+            os.kill(job.pid, signal.SIGTERM)
+        else:
+            os.killpg(job.pid, signal.SIGTERM)
     except BaseException:
         _kill(job)
         raise
@@ -328,6 +332,19 @@ def test_files_a_simulator_finishes_writing_after_sigterm_are_what_the_datasets_
     for record in artifact_records(events):
         rows[record.path] = merge(rows.get(record.path), record)
     assert rows["output/out.txt"].sha256 == hashlib.sha256(out.read_bytes()).hexdigest()
+
+
+def test_a_cancel_that_signals_only_the_job_shell_reaches_the_simulator(tmp_path: Path) -> None:
+    """Regression: production's plain scancel signalled only the batch shell, so the runner never saw SIGTERM and wrote
+    no final results (simulation 12966 kept only its periodic write). The job passes SIGTERM on to the simulator, whose
+    shutdown handler writes its final output, and the job exits on its own instead of waiting for SLURM's SIGKILL."""
+    job, experiment = _stopped(tmp_path, "FAKE_FLUSH_ON_TERM", only_the_shell=True)
+    try:
+        code = job.wait(timeout=60)
+    finally:
+        _kill(job)
+    assert code == 143
+    assert (experiment / "output" / "out.txt").read_text() == "flushed\n"
 
 
 @pytest.mark.parametrize("skew", [0.001, 0.003, 0.005, 0.01])
