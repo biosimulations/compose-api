@@ -139,6 +139,17 @@ def test_the_viva_pde_particle_entry_is_runnable_only_in_its_own_image() -> None
     assert entry.bundles == ["viva-pde-particle"]
 
 
+def test_the_viva_biogears_entry_is_runnable_only_in_its_own_image() -> None:
+    """BioGears is built from source, so viva-biogears has no install: only its prebuilt image provides it, and that
+    image's read-back describes its roots and the core emitters it bundles, nothing else it happens to install."""
+    entry = next(e for e in load_manifest().entries if e.id == "viva-biogears")
+    assert entry.level == CurationLevel.TESTED and entry.evidence and entry.install is None
+    assert entry.bundles == ["viva-biogears"] and entry.module_roots == ["viva_biogears"]
+    spec = next(s for s in load_environments().environments if s.name == "viva-biogears")
+    assert spec.kind == "prebuilt" and spec.python == ["/opt/venv/bin/python"] and not spec.entries
+    assert module_roots("viva-biogears") == ["process_bigraph.emitter", "viva_biogears"]
+
+
 def test_a_read_back_manifest_names_each_components_registry_entry() -> None:
     manifest = annotated(PDE_MANIFEST)
     entries = {c.module: c.registry_entry for c in manifest.components}

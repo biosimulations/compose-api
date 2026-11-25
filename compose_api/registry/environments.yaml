@@ -48,3 +48,10 @@ environments:
     kind: prebuilt
     # the pixi env must be activated (conda activation scripts: dolfinx, PETSc), as docker/compose-entrypoint.sh does
     python: [/bin/bash, -c, 'source /app/docker/shell-hook.sh && exec python "$@"', python]
+
+  - name: viva-biogears
+    kind: prebuilt
+    # BioGears 8.2.0 is built from source, which a composed environment can't do: viva-biogears' own image
+    # (docker/compose.Dockerfile). Its Python is a plain venv, nothing to activate; the read-back Job starts the image
+    # with its own command, not the image's ENTRYPOINT (compose-api's runner)
+    python: [/opt/venv/bin/python]

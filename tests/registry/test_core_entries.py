@@ -41,6 +41,8 @@ def test_a_composed_version_admits_the_fully_qualified_emitters() -> None:
 
 def test_a_prebuilt_image_admits_them_when_it_bundles_the_core() -> None:
     assert _reason(RAM, environment="viva-pde-particle") is None
+    assert _reason(RAM, environment="viva-biogears") is None
+    assert _reason("local:viva_biogears.processes.biogears.BioGearsProcess", environment="viva-biogears") is None
     reason = _reason(RAM, environment="registry_env")  # no composed standing: registry_env@1, built the old way
     assert reason is not None and "provided by composed versions" in reason
     old = Standing(label="registry_env@1")  # a version that is not composed has no members
