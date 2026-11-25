@@ -7,8 +7,14 @@ one requester's interactive runs, and the number of runs making an image ready a
 
 A requester at its cap is also left out of the claim (``claim_submissions(requester_cap=...)``). Putting its rows back
 would not be enough: they come due again, still the oldest, before anyone else's rows are reached, so one person's
-backlog would starve everyone queued after it. ``select`` still applies the cap, as the guard between two workers that
-claim at once.
+backlog would starve everyone queued after it. ``select`` applies the cap within one claim, whose rows the claim's own
+count doesn't see.
+
+The overall and queue caps count runs submitting or on SLURM, so the runs a worker holds on their way to sbatch
+(``requested``, ``preparing``, at most ``submission_worker_concurrency`` per worker) can pass them briefly. One
+requester's cap counts those held runs too, so one worker never passes it; two workers claiming at the same moment can,
+by at most one claim each. A run already ``submitting`` (one whose sbatch waits to be retried, say) is counted, so no
+count holds it back, or a queue or requester whose submits all failed would never be resumed.
 """
 
 from collections import Counter
@@ -23,7 +29,8 @@ INTERACTIVE = "interactive"
 @dataclass
 class Load:
     """What the queue has on the cluster now: active runs per queue (submitting, or on SLURM and unfinished), the
-    interactive ones per requester (None: anonymous), and runs whose image is being made ready."""
+    interactive ones per requester (None: anonymous) with those a worker holds on their way to sbatch, and runs whose
+    image is being made ready."""
 
     active: Counter[str] = field(default_factory=Counter)
     preparing: int = 0
@@ -62,16 +69,20 @@ class SubmissionPolicy:
         for c in candidates:
             needs_image = c.state in (SubmissionState.REQUESTED, SubmissionState.PREPARING)
             interactive = c.queue == INTERACTIVE
+            counted = c.state is SubmissionState.SUBMITTING  # already in the load: resuming it adds nothing
             if (
-                sum(active.values()) >= self.max_active
-                or active[c.queue] >= self.queue_cap(c.queue)
-                or (interactive and cap is not None and by_requester[c.requested_by] >= cap)
-                or (needs_image and preparing >= self.max_preparing)
-            ):
+                not counted
+                and (
+                    sum(active.values()) >= self.max_active
+                    or active[c.queue] >= self.queue_cap(c.queue)
+                    or (interactive and cap is not None and by_requester[c.requested_by] >= cap)
+                )
+            ) or (needs_image and preparing >= self.max_preparing):
                 wait.append(c)
                 continue
             go.append(c)
-            active[c.queue] += 1
-            by_requester[c.requested_by] += interactive
+            if not counted:
+                active[c.queue] += 1
+                by_requester[c.requested_by] += interactive
             preparing += needs_image
         return go, wait

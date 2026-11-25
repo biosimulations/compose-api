@@ -78,10 +78,13 @@ async def run_simulation(
     ownership: Ownership | None = None,
 ) -> SimulationExperiment:
     """Record a run and queue it for the submission worker; its ids. ``queue`` and ``priority`` place it in line
-    (docs/plan-durable-submission.md, Q3); ``requested_by`` is the caller's subject, kept for fair scheduling.
+    (docs/plan-durable-submission.md, Q3); ``requested_by`` is the caller's subject, kept for fair scheduling, and is
+    the owner's when not given, so every signed-in path (SED-ML, curated) counts toward its caller's cap.
     ``ownership`` is the signed-in submitter's subject and the run's visibility, stored on the simulation, the one
     record of who owns a run (docs/plan-favorites-and-studies.md, F1, F3). None: no owner and public (anonymous, or a
     run the service starts)."""
+    if requested_by is None and ownership is not None:
+        requested_by = ownership.owner_sub
     # the environment version it runs in (docs/plan-environment-versions.md): the one it names, or the default
     version, simulator_version = await version_for(
         database_service,

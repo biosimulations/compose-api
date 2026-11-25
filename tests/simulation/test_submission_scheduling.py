@@ -8,15 +8,17 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import text, update
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from compose_api.config import override_settings
 from compose_api.db.database_service import DatabaseServiceSQL
+from compose_api.db.tables.hpc_tables import JobStatusDB, ORMHpcRun
 from compose_api.sedml import suite_runs, suites
 from compose_api.sedml.suites import Suite
 from compose_api.simulation.models import (
     JobType,
+    Ownership,
     SimulationFileType,
     SimulationRequest,
     SimulatorVersion,
@@ -72,6 +74,15 @@ def test_the_policy_caps_one_requesters_interactive_runs_and_counts_anonymous_ru
     assert _ids(go) == [1, 3, 4, 5, 7] and _ids(wait) == [2, 6]
 
 
+def test_a_run_already_submitting_is_not_held_back_by_the_counts_it_is_in() -> None:
+    policy = SubmissionPolicy(max_active=2, queue_share=0.5, max_preparing=8, max_active_per_requester=1)
+    load = Load(active=Counter({"interactive": 2}), active_by_requester=Counter({"a": 2}))
+    resuming = [_candidate(n, state=SubmissionState.SUBMITTING, requested_by="a") for n in (1, 2)]
+    go, wait = policy.select([*resuming, _candidate(3, requested_by="b")], load)
+    # the two put the counts at their caps themselves: they resume, and aren't counted again; a new run still waits
+    assert _ids(go) == [1, 2] and _ids(wait) == [3]
+
+
 @pytest.fixture
 def staging_dir(tmp_path: Path) -> Iterator[Path]:
     with override_settings(submission_staging_dir=str(tmp_path / "staging")):
@@ -100,6 +111,7 @@ async def test_a_suite_queue_is_held_to_its_share_and_interactive_runs_go_first(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("cap", [1, 3])
 @pytest.mark.parametrize(
     ("backlog_by", "later_by"),
     [("student-a", ["student-b", None]), (None, ["student-b", "student-c"])],
@@ -107,37 +119,103 @@ async def test_a_suite_queue_is_held_to_its_share_and_interactive_runs_go_first(
 )
 async def test_a_requester_at_its_cap_does_not_starve_the_runs_queued_after_it(
     database_service: DatabaseServiceSQL, simulation_request: SimulationRequest, simulator: SimulatorVersion,
-    staging_dir: Path, backlog_by: str | None, later_by: list[str | None],
+    staging_dir: Path, backlog_by: str | None, later_by: list[str | None], cap: int,
 ) -> None:  # fmt: skip
     """One requester's backlog, queued first, must not hold back everyone queued after it.
 
     A claim takes the oldest due rows. If a requester at its cap were only put back, its rows would come due again,
     still the oldest, and fill every claim: here a 0 s deferral and a claim of two stand in for production's 10 s
     deferral and a backlog of more than two claims' worth. Without the claim leaving the capped requester out, only
-    the backlog's first run is submitted. Anonymous runs are one requester, both as the backlog and queued after one.
+    the backlog's first run is submitted. With a cap of 3 the backlog also reaches cap - 1 with more due rows than a
+    claim takes: two are claimed, one goes, one is put back, and the next claim still reaches the runs queued after it.
+    Anonymous runs are one requester, both as the backlog and queued after one.
     """
-    backlog = [await _queue(database_service, simulation_request, requested_by=backlog_by) for _ in range(3)]
+    backlog = [await _queue(database_service, simulation_request, requested_by=backlog_by) for _ in range(cap + 2)]
     later = [await _queue(database_service, simulation_request, requested_by=by) for by in later_by]
     suite = await _queue(database_service, simulation_request, queue="suite:x", requested_by=backlog_by)
     cluster = FakeCluster()
     with override_settings(
-        submission_max_active_per_requester=1, submission_worker_concurrency=2, submission_defer_seconds=0
+        submission_max_active_per_requester=cap, submission_worker_concurrency=2, submission_defer_seconds=0
     ):
         worker = _worker(database_service, cluster)
         await worker.drain()
-        assert await worker.run_once() == []  # nothing more goes: every interactive requester left is at its cap
+        assert await worker.run_once() == []  # nothing more goes: the backlog's requester is at its cap
     hpc_db = database_service.get_hpc_db()
     submitted = {
         sid for sid in [*backlog, *later, suite] if await hpc_db.get_hpcrun_by_ref(sid, JobType.SIMULATION) is not None
     }
-    # the backlog's first run, each run queued after it, and the suite's run, which the per-requester cap doesn't cover
-    assert submitted == {backlog[0], *later, suite}
-    for sid in backlog[1:]:
+    # the backlog's first `cap` runs, each run queued after it, and the suite's run, which the per-requester cap
+    # doesn't cover
+    assert submitted == {*backlog[:cap], *later, suite}
+    for sid in backlog[cap:]:
         waiting = await hpc_db.get_submission(sid)
         assert waiting is not None and waiting.state is SubmissionState.REQUESTED and waiting.attempts == 0
     load = await hpc_db.submission_load()
-    assert load.active_by_requester == Counter([backlog_by, *later_by])
-    assert load.active == Counter({"interactive": 3, "suite:x": 1})
+    assert load.active_by_requester == Counter([backlog_by] * cap + later_by)
+    assert load.active == Counter({"interactive": cap + len(later_by), "suite:x": 1})
+
+
+@pytest.mark.asyncio
+async def test_runs_waiting_to_retry_their_submit_are_resumed_at_the_cap(
+    database_service: DatabaseServiceSQL, async_postgres_engine: AsyncEngine, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion, staging_dir: Path,
+) -> None:  # fmt: skip
+    """An SSH outage at sbatch: a requester's runs wait to retry in `submitting`, and they alone fill its cap.
+
+    They are counted, so they must not count themselves out: once the backoff has passed they are resumed, while the
+    requester's next run still waits for a place. Holding them back by their own count would leave them, and that
+    requester, stuck for good: nothing else retries or fails a row nobody claims.
+    """
+    runs = [await _queue(database_service, simulation_request, requested_by="student-a") for _ in range(3)]
+    cluster = FakeCluster()
+    cluster.fail_submits = 2
+    hpc_db = database_service.get_hpc_db()
+    with override_settings(submission_max_active_per_requester=2, submission_worker_concurrency=2):
+        worker = _worker(database_service, cluster)
+        await worker.drain()
+        for sid in runs[:2]:
+            waiting = await hpc_db.get_submission(sid)
+            assert waiting is not None and waiting.state is SubmissionState.SUBMITTING and waiting.attempts == 1
+        async with async_postgres_engine.begin() as conn:  # the backoff passes
+            await conn.execute(text("UPDATE submission SET next_attempt_at = localtimestamp - interval '1 second'"))
+        await worker.drain()
+    submitted = [await hpc_db.get_hpcrun_by_ref(sid, JobType.SIMULATION) is not None for sid in runs]
+    assert submitted == [True, True, False]
+    third = await hpc_db.get_submission(runs[2])
+    assert third is not None and third.state is SubmissionState.REQUESTED
+
+
+@pytest.mark.asyncio
+async def test_a_requesters_finished_run_frees_its_place(
+    database_service: DatabaseServiceSQL, async_postgres_engine: AsyncEngine, simulation_request: SimulationRequest,
+    simulator: SimulatorVersion, staging_dir: Path,
+) -> None:  # fmt: skip
+    first, second = [await _queue(database_service, simulation_request, requested_by="student-a") for _ in range(2)]
+    hpc_db = database_service.get_hpc_db()
+    with override_settings(submission_max_active_per_requester=1, submission_defer_seconds=0):
+        worker = _worker(database_service, FakeCluster())
+        await worker.drain()
+        assert await hpc_db.get_hpcrun_by_ref(second, JobType.SIMULATION) is None  # its requester is at the cap
+        async with async_postgres_engine.begin() as conn:  # the first run's job ends (the job monitor's part)
+            await conn.execute(
+                update(ORMHpcRun).where(ORMHpcRun.simulation_id == first).values(status=JobStatusDB.COMPLETED)
+            )
+        await worker.drain()
+    assert await hpc_db.get_hpcrun_by_ref(second, JobType.SIMULATION) is not None
+
+
+@pytest.mark.asyncio
+async def test_a_signed_in_runs_requester_is_its_owner_when_not_given(
+    database_service: DatabaseServiceSQL, simulation_request: SimulationRequest, simulator: SimulatorVersion,
+    staging_dir: Path,
+) -> None:  # fmt: skip
+    """/sedml/run, /sources and /curated pass the run's owner but not `requested_by`: it is who the run counts against,
+    not the anonymous allowance."""
+    owned = await _queue(database_service, simulation_request, ownership=Ownership(owner_sub="student-a"))
+    anonymous = await _queue(database_service, simulation_request)
+    hpc_db = database_service.get_hpc_db()
+    requesters = [(await hpc_db.get_submission(sid)) for sid in (owned, anonymous)]
+    assert [s.requested_by if s is not None else "missing" for s in requesters] == ["student-a", None]
 
 
 @pytest.mark.asyncio

@@ -139,12 +139,29 @@ Everything in stage 1 is lost when the process stops: the task, the uploaded fil
   | `submission_max_preparing` | concurrent image fetches and builds | 8 |
   | `submission_queue_share` | the fraction of the active cap one non-interactive queue may use | 0.5, so interactive runs are never starved |
 
-- **A requester at its cap is left out of the claim, not only put back** (`claim_submissions(requester_cap=...)`, which
-  counts the requester's active interactive runs in the claim statement itself). A put-back row comes due again after
-  `submission_defer_seconds`, still the oldest. A backlog more than two claims deep (the worker polls every 5 s, a
-  put-back waits 10 s) would then fill every claim, and nobody queued after it would be reached. `select` still applies
-  the cap, as the guard between two workers claiming at once. `tests/simulation/test_submission_scheduling.py`
-  (`test_a_requester_at_its_cap_does_not_starve_the_runs_queued_after_it`) fails without the claim-side exclusion.
+- **A requester at its cap is left out of the claim, not only put back** (`claim_submissions(requester_cap=...)`).
+  - **Why:** a put-back row comes due again after `submission_defer_seconds`, still the oldest. A backlog more than two
+    claims deep (the worker polls every 5 s, a put-back waits 10 s) would then fill every claim, and nobody queued after
+    it would be reached.
+  - **How:** the requesters at their cap are worked out once per claim, by grouping their interactive runs, not per due
+    row. A per-row count scanned every submission ever submitted, once per row: 755 ms per claim with 20,000 past rows,
+    against 30–44 ms now.
+  - **What a requester's count includes:** its runs submitting or on SLURM, plus those a worker holds on their way to
+    sbatch (`requested` or `preparing` under a live lease). Without the held runs, one worker passes the cap: each pass
+    takes more of the requester's rows while the earlier ones are still being prepared.
+  - **Within one claim:** `select` applies the cap, whose rows the claim's own count doesn't see. The load it reads
+    leaves out the claim's own rows (`submission_load(exclude=...)`), which hold leases by then.
+  - **How exact:** with one worker, the cap is exact. Two workers claiming at the same moment can pass it, by at most
+    one claim each.
+  - **The test:** `tests/simulation/test_submission_scheduling.py`
+    (`test_a_requester_at_its_cap_does_not_starve_the_runs_queued_after_it`) fails without the claim-side exclusion,
+    and its cap-3 cases also fail without counting held runs.
+- **The overall and queue caps count only runs submitting or on SLURM.** The runs a worker holds (at most
+  `submission_worker_concurrency`) can therefore pass them briefly, as before.
+- **A run already `submitting` is never held back by a count it is in.** Its sbatch may be waiting to be retried, during
+  an SSH outage say. Otherwise a queue, the whole service, or a requester whose submits all failed would count itself
+  out and never be resumed: nothing else retries or fails a row nobody claims. The test for that:
+  `test_runs_waiting_to_retry_their_submit_are_resumed_at_the_cap`.
 
 - **The effect:** a 600-run suite drains at a steady rate behind interactive work, instead of 600 `sbatch` calls in a
   burst.

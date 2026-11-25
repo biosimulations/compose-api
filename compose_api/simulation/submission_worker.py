@@ -156,7 +156,9 @@ class SubmissionWorker:
         )
         if not claimed:
             return []
-        go, wait = policy.select(claimed, await hpc_db.submission_load())
+        # the load apart from this claim's own rows, which now hold leases
+        load = await hpc_db.submission_load(exclude=frozenset(c.simulation_id for c in claimed))
+        go, wait = policy.select(claimed, load)
         for submission in wait:
             await hpc_db.defer_submission(submission.simulation_id, self.owner, settings.submission_defer_seconds)
         for submission in go:

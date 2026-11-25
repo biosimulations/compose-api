@@ -159,8 +159,10 @@ class Settings(BaseSettings):
     # an image ready at once. A run over a cap waits submission_defer_seconds and is looked at again. The vcell
     # partition (5 nodes x 128 CPUs, 2026-10-22) is shared with VCell itself, and its QOS sets no job limit, so these
     # caps are what keep a large suite, or one person's many runs, polite. A requester is the signed-in subject
-    # (`requested_by`); every anonymous run counts as one requester. Unset, the per-requester cap is
-    # submission_max_active_jobs: no cap beyond the overall one.
+    # (`requested_by`); every anonymous run counts as one requester. Unset, there is no per-requester cap, only the
+    # overall one. A requester's count includes the runs a worker holds on their way to sbatch; the overall and queue
+    # caps count only runs submitting or on SLURM, so those held runs (at most submission_worker_concurrency per
+    # worker) can pass them briefly.
     submission_max_active_jobs: int = 100
     submission_max_active_per_requester: Annotated[int, Field(gt=0)] | None = None
     submission_queue_share: float = 0.5

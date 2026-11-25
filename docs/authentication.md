@@ -170,8 +170,9 @@ A run simulates up to `interval_time`, its end time in the document's own time u
 `MAX_INTERVAL_TIME` (1,000). A caller holding `LONG_RUN_ROLE` may ask for up to `MAX_LONG_RUN_INTERVAL_TIME`; while
 that role is unset, any signed-in caller may. The second cap equals the first unless the deployment raises it. Long
 runs sit behind a role because the cluster has no fair-share scheduler, so anyone's long runs could fill it. The
-service also caps one caller's runs on SLURM at once, `SUBMISSION_MAX_ACTIVE_PER_REQUESTER` (production: 20); the
-rest wait in its queue (docs/plan-durable-submission.md, Q3).
+service also caps how many of one caller's runs are on SLURM, or on their way there, at once:
+`SUBMISSION_MAX_ACTIVE_PER_REQUESTER` (production: 20). The rest wait in its queue (docs/plan-durable-submission.md,
+Q3). Every anonymous run counts toward one shared allowance.
 
 A run past `MAX_INTERVAL_TIME` gets a SLURM time limit scaled by its interval, `SLURM_TIME_LIMIT_MINUTES` (30) for each
 `MAX_INTERVAL_TIME` of it, up to `SLURM_MAX_TIME_LIMIT_MINUTES`. Every other run, the service's own compliance and
