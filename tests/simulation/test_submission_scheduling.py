@@ -28,12 +28,15 @@ from compose_api.simulation.submission_worker import SubmissionWorker
 from tests.simulation.test_submission_worker import FakeCluster, _queue, _worker
 
 
-def _candidate(n: int, queue: str = "interactive", state: SubmissionState = SubmissionState.REQUESTED) -> Submission:
+def _candidate(
+    n: int, queue: str = "interactive", state: SubmissionState = SubmissionState.REQUESTED,
+    requested_by: str | None = None,
+) -> Submission:  # fmt: skip
     return Submission(
         simulation_id=n, experiment_id=f"e{n}", simulator_id=1, state=state, queue=queue, priority=0,
         request=SimulationRequest(request_file_path=Path("x"), simulation_file_type=SimulationFileType.OMEX,
                                   is_batch=False),
-        staged_on_store=False, created_at=datetime.datetime.now(),
+        staged_on_store=False, created_at=datetime.datetime.now(), requested_by=requested_by,
     )  # fmt: skip
 
 
@@ -56,6 +59,17 @@ def test_the_policy_caps_image_preparation_not_submission() -> None:
         [_candidate(1), _candidate(2), _candidate(3, state=SubmissionState.SUBMITTING)], Load(preparing=0)
     )
     assert _ids(go) == [1, 3] and _ids(wait) == [2]
+
+
+def test_the_policy_caps_one_requesters_interactive_runs_and_counts_anonymous_runs_as_one() -> None:
+    policy = SubmissionPolicy(max_active=100, queue_share=0.5, max_preparing=100, max_active_per_requester=2)
+    candidates = [
+        _candidate(1, requested_by="a"), _candidate(2, requested_by="a"), _candidate(3, requested_by="b"),
+        _candidate(4), _candidate(5), _candidate(6), _candidate(7, "suite:x", requested_by="a"),
+    ]  # fmt: skip
+    go, wait = policy.select(candidates, Load(active_by_requester=Counter({"a": 1})))
+    # a had one running: one more goes. Anonymous runs share one allowance. A suite's runs aren't counted per requester.
+    assert _ids(go) == [1, 3, 4, 5, 7] and _ids(wait) == [2, 6]
 
 
 @pytest.fixture
@@ -83,6 +97,47 @@ async def test_a_suite_queue_is_held_to_its_share_and_interactive_runs_go_first(
     assert waiting is not None and waiting.state is SubmissionState.REQUESTED and waiting.attempts == 0
     load = await hpc_db.submission_load()
     assert load.active == Counter({"interactive": 1, "suite:x": 1})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("backlog_by", "later_by"),
+    [("student-a", ["student-b", None]), (None, ["student-b", "student-c"])],
+    ids=["a-signed-in-backlog", "an-anonymous-backlog"],
+)
+async def test_a_requester_at_its_cap_does_not_starve_the_runs_queued_after_it(
+    database_service: DatabaseServiceSQL, simulation_request: SimulationRequest, simulator: SimulatorVersion,
+    staging_dir: Path, backlog_by: str | None, later_by: list[str | None],
+) -> None:  # fmt: skip
+    """One requester's backlog, queued first, must not hold back everyone queued after it.
+
+    A claim takes the oldest due rows. If a requester at its cap were only put back, its rows would come due again,
+    still the oldest, and fill every claim: here a 0 s deferral and a claim of two stand in for production's 10 s
+    deferral and a backlog of more than two claims' worth. Without the claim leaving the capped requester out, only
+    the backlog's first run is submitted. Anonymous runs are one requester, both as the backlog and queued after one.
+    """
+    backlog = [await _queue(database_service, simulation_request, requested_by=backlog_by) for _ in range(3)]
+    later = [await _queue(database_service, simulation_request, requested_by=by) for by in later_by]
+    suite = await _queue(database_service, simulation_request, queue="suite:x", requested_by=backlog_by)
+    cluster = FakeCluster()
+    with override_settings(
+        submission_max_active_per_requester=1, submission_worker_concurrency=2, submission_defer_seconds=0
+    ):
+        worker = _worker(database_service, cluster)
+        await worker.drain()
+        assert await worker.run_once() == []  # nothing more goes: every interactive requester left is at its cap
+    hpc_db = database_service.get_hpc_db()
+    submitted = {
+        sid for sid in [*backlog, *later, suite] if await hpc_db.get_hpcrun_by_ref(sid, JobType.SIMULATION) is not None
+    }
+    # the backlog's first run, each run queued after it, and the suite's run, which the per-requester cap doesn't cover
+    assert submitted == {backlog[0], *later, suite}
+    for sid in backlog[1:]:
+        waiting = await hpc_db.get_submission(sid)
+        assert waiting is not None and waiting.state is SubmissionState.REQUESTED and waiting.attempts == 0
+    load = await hpc_db.submission_load()
+    assert load.active_by_requester == Counter([backlog_by, *later_by])
+    assert load.active == Counter({"interactive": 3, "suite:x": 1})
 
 
 @pytest.mark.asyncio

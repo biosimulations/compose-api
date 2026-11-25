@@ -155,10 +155,14 @@ class Settings(BaseSettings):
     submission_poll_seconds: float = 5.0
     submission_staging_dir: str = os.path.join(tempfile.gettempdir(), "compose-api-staging")
     # The worker's caps (compose_api/simulation/scheduling.py): runs on SLURM (or about to be) at once, the share of
-    # that one non-interactive queue (a suite run) may take, and runs making an image ready at once. A run over a cap
-    # waits submission_defer_seconds and is looked at again. The vcell partition (5 nodes x 128 CPUs, 2026-10-22) is
-    # shared with VCell itself, and its QOS sets no job limit, so this cap is what keeps a large suite polite.
+    # that one non-interactive queue (a suite run) may take, one requester's interactive runs at once, and runs making
+    # an image ready at once. A run over a cap waits submission_defer_seconds and is looked at again. The vcell
+    # partition (5 nodes x 128 CPUs, 2026-10-22) is shared with VCell itself, and its QOS sets no job limit, so these
+    # caps are what keep a large suite, or one person's many runs, polite. A requester is the signed-in subject
+    # (`requested_by`); every anonymous run counts as one requester. Unset, the per-requester cap is
+    # submission_max_active_jobs: no cap beyond the overall one.
     submission_max_active_jobs: int = 100
+    submission_max_active_per_requester: Annotated[int, Field(gt=0)] | None = None
     submission_queue_share: float = 0.5
     submission_max_preparing: int = 8
     submission_defer_seconds: int = 10

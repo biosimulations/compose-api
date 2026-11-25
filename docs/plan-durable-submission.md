@@ -128,15 +128,23 @@ Everything in stage 1 is lost when the process stops: the task, the uploaded fil
 - **A policy object chooses which claimed rows to dispatch:** `SubmissionPolicy.select(candidates, active)` in
   `simulation/scheduling.py`.
   - The first policy is priority, then age, under caps.
-  - Round-robin across queues, or fair share per requester, can replace it later without a schema change: the
-    `queue`, `priority` and `requested_by` columns exist from Q1.
+  - Round-robin across queues can replace it later without a schema change: the `queue`, `priority` and
+    `requested_by` columns exist from Q1.
 - **Caps, counted from the database:**
 
   | Setting | Caps | Default |
   |---|---|---|
   | `submission_max_active_jobs` | simulation runs on SLURM that have not finished | 100 (open question 1) |
+  | `submission_max_active_per_requester` | one requester's interactive runs on SLURM that have not finished (open question 3) | unset: only the overall cap; production 20 |
   | `submission_max_preparing` | concurrent image fetches and builds | 8 |
   | `submission_queue_share` | the fraction of the active cap one non-interactive queue may use | 0.5, so interactive runs are never starved |
+
+- **A requester at its cap is left out of the claim, not only put back** (`claim_submissions(requester_cap=...)`, which
+  counts the requester's active interactive runs in the claim statement itself). A put-back row comes due again after
+  `submission_defer_seconds`, still the oldest. A backlog more than two claims deep (the worker polls every 5 s, a
+  put-back waits 10 s) would then fill every claim, and nobody queued after it would be reached. `select` still applies
+  the cap, as the guard between two workers claiming at once. `tests/simulation/test_submission_scheduling.py`
+  (`test_a_requester_at_its_cap_does_not_starve_the_runs_queued_after_it`) fails without the claim-side exclusion.
 
 - **The effect:** a 600-run suite drains at a steady rate behind interactive work, instead of 600 `sbatch` calls in a
   burst.
@@ -235,5 +243,9 @@ The 2026-10-11 draft predates environment-builds phases 1–4. Against `main`:
      under `prod/staging/` works.
 2. **Replicas.** The production overlay runs one API replica; the base sets three. The worker is written for several,
    and step 2's claim test runs two workers against one database.
-3. **Fairness per requester:** owners are not stamped yet (observability step 5). `requested_by` keeps the subject for
-   when a fair-share policy needs it.
+3. ~~**Fairness per requester**~~ *Answered 2026-11-25, before students get the `long-runs` role:*
+   - A requester is `requested_by`, the signed-in subject; every anonymous run counts as one requester.
+   - `submission_max_active_per_requester` caps one requester's interactive runs on SLURM at once. Production sets 20
+     of the 100, the same as the NF-κB distance study's own `--max-active`, so at least five people run at once.
+   - It applies to the interactive queue only: a suite's runs already have their share, and the cap is not raised by
+     any role.

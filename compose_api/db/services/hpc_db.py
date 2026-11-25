@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, override
 
 from sqlalchemy import ColumnElement, Result, and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import InstrumentedAttribute
+from sqlalchemy.orm import InstrumentedAttribute, aliased
 
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.db.tables.hpc_tables import (
@@ -69,10 +69,16 @@ class HPCDatabaseService(ABC):
 
     @abstractmethod
     async def claim_submissions(
-        self, owner: str, lease_seconds: int, limit: int, exclude: frozenset[int] = frozenset()
+        self,
+        owner: str,
+        lease_seconds: int,
+        limit: int,
+        exclude: frozenset[int] = frozenset(),
+        requester_cap: int | None = None,
     ) -> list[Submission]:
         """Lease up to ``limit`` due submissions to ``owner``, highest priority then oldest first. A row another worker
-        holds (a live lease, or locked by its claim right now) is skipped, never waited on."""
+        holds (a live lease, or locked by its claim right now) is skipped, never waited on, and so is an interactive
+        row whose requester already has ``requester_cap`` interactive runs active (anonymous runs: one requester)."""
 
     @abstractmethod
     async def renew_submission_lease(self, simulation_id: int, owner: str, lease_seconds: int) -> bool:
@@ -224,8 +230,15 @@ class HPCORMExecutor(HPCDatabaseService):
 
     @override
     async def claim_submissions(
-        self, owner: str, lease_seconds: int, limit: int, exclude: frozenset[int] = frozenset()
+        self,
+        owner: str,
+        lease_seconds: int,
+        limit: int,
+        exclude: frozenset[int] = frozenset(),
+        requester_cap: int | None = None,
     ) -> list[Submission]:
+        from compose_api.simulation.scheduling import INTERACTIVE
+
         now = func.localtimestamp()
         due = (
             select(ORMSubmission.simulation_id)
@@ -240,6 +253,20 @@ class HPCORMExecutor(HPCDatabaseService):
         )
         if exclude:
             due = due.where(ORMSubmission.simulation_id.not_in(exclude))
+        if requester_cap is not None:
+            # The requester's active interactive runs, counted in the claim itself. IS NOT DISTINCT FROM, because
+            # anonymous runs (requested_by NULL) are one requester and `=` never matches NULL.
+            other = aliased(ORMSubmission)
+            requester_active = (
+                select(func.count())
+                .where(
+                    other.queue == INTERACTIVE,
+                    other.requested_by.is_not_distinct_from(ORMSubmission.requested_by),
+                    _active(other),
+                )
+                .scalar_subquery()
+            )
+            due = due.where(or_(ORMSubmission.queue != INTERACTIVE, requester_active < requester_cap))
         async with self.async_session_maker() as session, session.begin():
             ids = list((await session.execute(due)).scalars().all())
             if not ids:
@@ -289,26 +316,12 @@ class HPCORMExecutor(HPCDatabaseService):
 
     @override
     async def submission_load(self) -> "Load":
-        from compose_api.simulation.scheduling import Load
+        from compose_api.simulation.scheduling import INTERACTIVE, Load
 
-        unfinished = (
-            select(ORMHpcRun.id)
-            .where(
-                ORMHpcRun.simulation_id == ORMSubmission.simulation_id,
-                ORMHpcRun.job_type == JobTypeDB.SIMULATION,
-                ORMHpcRun.status.not_in(TERMINAL_JOB_STATUSES),
-            )
-            .exists()
-        )
         active = (
-            select(ORMSubmission.queue, func.count())
-            .where(
-                or_(
-                    ORMSubmission.state == SubmissionState.SUBMITTING.value,
-                    and_(ORMSubmission.state == SubmissionState.SUBMITTED.value, unfinished),
-                )
-            )
-            .group_by(ORMSubmission.queue)
+            select(ORMSubmission.queue, ORMSubmission.requested_by, func.count())
+            .where(_active(ORMSubmission))
+            .group_by(ORMSubmission.queue, ORMSubmission.requested_by)
         )
         preparing = select(func.count()).where(
             ORMSubmission.state == SubmissionState.PREPARING.value,
@@ -316,8 +329,10 @@ class HPCORMExecutor(HPCDatabaseService):
         )
         async with self.async_session_maker() as session:
             load = Load()
-            for queue, count in (await session.execute(active)).all():
-                load.active[queue] = count
+            for queue, requester, count in (await session.execute(active)).all():
+                load.active[queue] += count
+                if queue == INTERACTIVE:
+                    load.active_by_requester[requester] += count
             load.preparing = (await session.execute(preparing)).scalar_one()
             return load
 
@@ -627,6 +642,24 @@ def _new_hpcrun(
 def _seconds_from_now(seconds: int) -> ColumnElement[datetime.datetime]:
     # localtimestamp, as created_at and the heartbeat are: TIMESTAMP WITHOUT TIME ZONE in the session's zone
     return func.localtimestamp() + func.make_interval(0, 0, 0, 0, 0, 0, seconds)
+
+
+def _active(submission: type[ORMSubmission]) -> ColumnElement[bool]:
+    """A submission on SLURM, or about to be: being submitted, or submitted with its simulation job unfinished. The
+    load and the claim's per-requester cap count the same thing (``submission`` may be an alias)."""
+    unfinished = (
+        select(ORMHpcRun.id)
+        .where(
+            ORMHpcRun.simulation_id == submission.simulation_id,
+            ORMHpcRun.job_type == JobTypeDB.SIMULATION,
+            ORMHpcRun.status.not_in(TERMINAL_JOB_STATUSES),
+        )
+        .exists()
+    )
+    return or_(
+        submission.state == SubmissionState.SUBMITTING.value,
+        and_(submission.state == SubmissionState.SUBMITTED.value, unfinished),
+    )
 
 
 def _submission(row: ORMSubmission, experiment_id: str, simulator_id: int) -> Submission:
