@@ -169,6 +169,11 @@ run, and download each run's results.
 
 If a run is cancelled or stops before the end, nothing from it is kept yet: run it again.
 
+**If the workbench marks a long run failed** with a message ending "(the run was sent: it is compose-NNNNN on
+compose-api, which may finish it all the same)", the workbench lost touch with the run, but compose-api may still finish
+it. The workbench can't load that run's results afterwards: they stay on compose-api under that run number. Tell Alex
+the number, and he can get them for you.
+
 ## Help
 
 - Questions, or something didn't work: ask Alex Patrie on Slack, or open an issue at
