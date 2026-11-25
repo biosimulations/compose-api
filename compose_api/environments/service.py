@@ -146,14 +146,16 @@ async def resolve_composed(
         await environments_db.set_failure(version.database_id, f"locking failed: {type(e).__name__}: {e}")
         return None
     lock = pixi.PixiLock(text)
-    # a version is its lock: a later date that resolves to the same lock is the same version (its workspace differs
-    # only in its date, so its definition would not show it)
-    same = await environments_db.find_by_lock(version.environment, lock.sha256)
+    # a version is its lock and its runner: a later date that resolves to the same lock, with the same runner, is the
+    # same version (its workspace differs only in its date, so its definition would not show it). A new runner is a new
+    # image (its sha256 is in the definition), so a new version: how a version takes up a new runner.
+    runner = str(recorded.get("runner") or pixi.runner_source())
+    same = await environments_db.find_by_lock(version.environment, lock.sha256, runner)
     if same is not None and same.database_id != version.database_id:
-        await environments_db.set_failure(version.database_id, f"it resolves to the same lock as {same.label}")
+        failure = f"it resolves to the same lock as {same.label}, with the same runner"
+        await environments_db.set_failure(version.database_id, failure)
         return None
     types = list(recorded.get("types", []))
-    runner = str(recorded.get("runner") or pixi.runner_source())
     definition = pixi.definition_of(recorded["pixi_toml"], types, lock, recorded["pixi_image"], runner)
     simulator = await builds.simulator_for(database_service.get_simulator_db(), definition)
     repeated = await environments_db.set_resolved(version.database_id, simulator.database_id, lock.text, lock.sha256)

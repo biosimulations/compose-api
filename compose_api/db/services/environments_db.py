@@ -160,8 +160,8 @@ class EnvironmentsDatabaseService(ABC):
     async def get_by_number(self, environment: str, number: int) -> EnvironmentVersionDetail | None: ...
 
     @abstractmethod
-    async def find_by_lock(self, environment: str, lock_sha256: str) -> EnvironmentVersion | None:
-        """A version of the environment with this lock that has not failed."""
+    async def find_by_lock(self, environment: str, lock_sha256: str, runner: str) -> EnvironmentVersion | None:
+        """A version of the environment with this lock, made with this runner, that has not failed."""
 
     @abstractmethod
     async def get_default(self, environment: str) -> EnvironmentVersion | None: ...
@@ -457,11 +457,13 @@ class EnvironmentsORMExecutor(EnvironmentsDatabaseService):
             return version.to_environment_version_detail() if version is not None else None
 
     @override
-    async def find_by_lock(self, environment: str, lock_sha256: str) -> EnvironmentVersion | None:
+    async def find_by_lock(self, environment: str, lock_sha256: str, runner: str) -> EnvironmentVersion | None:
         async with self.async_session_maker() as session:
-            # a failed version is no version: the same lock may be made again (its build retried)
+            # a failed version is no version: the same lock may be made again (its build retried); a version that
+            # recorded no runner never matches one that did
             query = self._named(environment).where(
                 ORMEnvironmentVersion.lock_sha256 == lock_sha256,
+                ORMEnvironmentVersion.spec["runner"].astext == runner,
                 ORMEnvironmentVersion.state != VersionState.FAILED.value,
             )
             version = (await session.execute(query.limit(1))).unique().scalar_one_or_none()
