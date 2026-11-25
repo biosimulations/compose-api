@@ -43,10 +43,12 @@ if [ -n "${FAKE_RECORD_WORKDIR:-}" ]; then  # where the container's /tmp would b
   else echo "- none" > "$HOST/workdir.txt"; fi
 fi
 if [ -n "${FAKE_PIDFILE:-}" ]; then echo $$ > "$HOST/sim.pid"; fi
+echo "${COMPOSE_CHECKPOINT_SECONDS-unset}" > "$HOST/checkpoint.txt"  # what the runner was told
 TRACE=$(echo "$PBG_TRACEPARENT" | cut -d- -f2); PARENT=$(echo "$PBG_TRACEPARENT" | cut -d- -f3)
 SINK="${PBG_EVENT_SINKS#file:}"; SINK="$HOST${SINK#/experiment}"
 printf '{"v":1,"ts":"2026-10-07T12:00:01.000Z","seq":1,"source":"node-42","component":"process_bigraph","event":"run.start","level":"info","trace_id":"%s","span_id":null,"parent_span_id":"%s","baggage":{"simulation_id":"%s"},"payload":{}}\n' "$TRACE" "$PARENT" "$PBG_TRACE_BAGGAGE" >> "$SINK"
 echo result > "$HOST/output/out.txt"
+if [ -n "${FAKE_PART:-}" ]; then echo '{"emitter": [' > "$HOST/output/.results_x.pber.part"; fi  # a write cut short
 if [ -n "${FAKE_BUNDLE:-}" ]; then  # a zarr store: a directory of chunk files, announced as one dataset
   mkdir -p "$HOST/output/run.fenics/u"; echo '{}' > "$HOST/output/run.fenics/.zattrs"; printf 'abcd' > "$HOST/output/run.fenics/u/0.0"
   chmod 600 "$HOST/output/run.fenics/.zattrs"  # as a mkstemp file renamed into place
@@ -61,7 +63,9 @@ exit "${FAKE_EXIT:-0}"
 INPUT = b"PK\x03\x04 a COMBINE archive"
 
 
-def _job(tmp_path: Path, exit_code: int, staged_input: bool = True) -> tuple[str, dict[str, str], Path]:
+def _job(
+    tmp_path: Path, exit_code: int, staged_input: bool = True, checkpoint_seconds: int = 0
+) -> tuple[str, dict[str, str], Path]:
     """The script, its environment (the fake singularity first on PATH) and the experiment directory."""
     if shutil.which("zip") is None:
         pytest.skip("zip is not installed")
@@ -91,6 +95,7 @@ def _job(tmp_path: Path, exit_code: int, staged_input: bool = True) -> tuple[str
             partition="p",
             qos="q",
             time_limit_minutes=30,
+            checkpoint_seconds=checkpoint_seconds,
         )
     )
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "SLURM_JOB_ID": "4242", "FAKE_EXIT": str(exit_code)}
@@ -155,6 +160,27 @@ def test_a_successful_job_records_its_span_and_passes_the_trace_on(tmp_path: Pat
     assert engine[0].parent_span_id == job_span_id(CORRELATION)
     assert engine[0].baggage == {"simulation_id": "simulation_id=7,experiment_id=x"}  # the fake echoes it raw
     assert (experiment / "results.zip").exists()
+
+
+@pytest.mark.parametrize("seconds", [0, 300])
+def test_the_container_is_told_how_often_to_write_its_results_so_far(tmp_path: Path, seconds: int) -> None:
+    """``checkpoint_seconds`` reaches compose-api's runner through the env file; 0 tells it to write only at the end."""
+    script, env, experiment = _job(tmp_path, 0, checkpoint_seconds=seconds)
+    result = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True, check=False)  # noqa: S603, S607
+    assert result.returncode == 0, result.stderr
+    assert (experiment / "checkpoint.txt").read_text().strip() == str(seconds)
+
+
+def test_a_results_file_still_being_written_is_not_a_dataset(tmp_path: Path) -> None:
+    """compose-api's runner writes its results beside the file (`.<name>.part`) and renames it over: a part file the
+    manifest sees, mid-write or left by a kill, is never announced."""
+    script, env, experiment = _job(tmp_path, 0)
+    env["FAKE_PART"] = "1"
+    result = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True, check=False)  # noqa: S603, S607
+    assert result.returncode == 0, result.stderr
+    assert (experiment / "output" / ".results_x.pber.part").exists()
+    uris = {e.payload["uri"] for e in _read(experiment / "events" / "job.jsonl") if e.event == "artifact.written"}
+    assert uris == {"x.omex", "output/out.txt", "results.zip", "job.out"}
 
 
 def test_a_zarr_store_is_announced_as_one_dataset(tmp_path: Path) -> None:

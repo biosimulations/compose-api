@@ -136,6 +136,7 @@ class SimulationServiceHpc(SimulationService):
                     qos=settings.batch_slurm_qos if simulation.sim_request.is_batch else settings.slurm_qos,
                     time_limit_minutes=simulation.sim_request.time_limit_minutes or settings.slurm_time_limit_minutes,
                     node_list=settings.slurm_node_list,
+                    checkpoint_seconds=settings.checkpoint_seconds,
                 )
             )
             with open(local_submit_file, "w") as f:

@@ -17,7 +17,8 @@ Besides running the simulator, the script makes the run observable (docs/plan-ob
 - **It hands the trace context to the simulator** through an env file: ``PBG_TRACEPARENT`` and friends. A simulator
   built on process-bigraph >= 1.8.5 writes its events to ``events/engine-{source}.jsonl``: one file per engine
   process with releases that expand ``{source}`` (process-bigraph#229), one literally named file with older ones; the
-  ingester reads every ``*.jsonl``. Any other simulator ignores the variables.
+  ingester reads every ``*.jsonl``. Any other simulator ignores the variables. The same file sets
+  ``COMPOSE_CHECKPOINT_SECONDS``, how often compose-api's runner writes the results so far (0: only when finished).
 - **Its SLURM log is a dataset** (``job.out`` in the experiment directory, kind ``log``), announced without a size or
   checksum because SLURM keeps writing it after the trap.
 
@@ -69,7 +70,8 @@ dir_bytes() {  # GNU du -sb on the cluster; du -sk elsewhere (macOS), to the nea
 }
 manifest() {  # one artifact.written per file the run left: what it wrote under output/, and the results archive
     # A zarr store (a *.fenics results bundle or a *.zarr) is ONE dataset, read file by file through
-    # /datasets/{id}/files/ (docs/plan-viewers.md F1): announced with its total size and no checksum.
+    # /datasets/{id}/files/ (docs/plan-viewers.md F1): announced with its total size and no checksum. A hidden *.part is
+    # a file still being written (compose-api's runner renames it over its results file), so it is not one.
     local f size sum
     # The API serves these files as another user: a producer's restrictive mode (e.g. a 0600 mkstemp file renamed into
     # place) must not hide one, or the file route fails mid-response (simulation 4570).
@@ -83,7 +85,7 @@ manifest() {  # one artifact.written per file the run left: what it wrote under 
         sum=$(sha256_of "$EXPERIMENT/$f")
         emit artifact.written info "{\"uri\":\"$(json_escape "$f")\",\"bytes\":$size,\"sha256\":\"$sum\"}"
     done < <(cd "$EXPERIMENT" && {
-        find output \( -type d \( -name '*.fenics' -o -name '*.zarr' \) -prune -print \) -o -type f -print 2>/dev/null
+        find output \( -type d \( -name '*.fenics' -o -name '*.zarr' \) -prune -print \) -o -type f ! -name '.*.part' -print 2>/dev/null
         [ -f results.zip ] && echo results.zip
     } | LC_ALL=C sort)
     # SLURM keeps appending to the log after this trap, so it is announced without a size or checksum.
@@ -144,6 +146,7 @@ PBG_TRACEPARENT=00-@@TRACE_ID@@-@@JOB_SPAN@@-01
 PBG_TRACE_BAGGAGE=simulation_id=@@SIMULATION_ID@@,experiment_id=@@EXPERIMENT_ID@@
 PBG_EVENT_TAGS=backend=slurm
 PBG_EVENT_SINKS=file:/experiment/events/engine-{source}.jsonl
+COMPOSE_CHECKPOINT_SECONDS=@@CHECKPOINT_SECONDS@@
 PBG_ENV
 
 echo "Simulation @@JOB_NAME@@ running."
@@ -189,6 +192,7 @@ class SimulationJob:
     qos: str
     time_limit_minutes: int
     node_list: str = ""
+    checkpoint_seconds: int = 0
 
 
 def simulation_job_script(job: SimulationJob) -> str:
@@ -212,6 +216,7 @@ def simulation_job_script(job: SimulationJob) -> str:
         "END_TIME": str(job.end_time),
         "END_TIME_JSON": str(job.end_time) if math.isfinite(job.end_time) else "null",  # JSON has no inf or nan
         "BATCH": "true" if job.is_batch else "false",
+        "CHECKPOINT_SECONDS": str(job.checkpoint_seconds),
     }
     script = _TEMPLATE
     for key, value in values.items():

@@ -15,6 +15,7 @@ import pytest
 
 from compose_api.common.hpc.slurm_service import SlurmService
 from compose_api.common.ssh.ssh_service import SSHService
+from compose_api.config import override_settings
 from compose_api.simulation.hpc_utils import get_slurm_job_name, get_slurm_sim_experiment_dir, get_slurm_sim_log_file
 from compose_api.simulation.job_script import SimulationJob, simulation_job_script
 from compose_api.simulation.models import Simulation, SimulationRequest, SimulatorVersion
@@ -135,6 +136,30 @@ async def test_a_runs_time_limit_is_its_slurm_jobs_own(
             await ssh.run_command(f"scancel {job_id}")
             experiment = get_slurm_sim_experiment_dir(get_slurm_job_name(experiment_id))
             await ssh.run_command(f"rm -rf {shlex.quote(str(experiment))}")
+
+
+@pytest.mark.slurm
+@pytest.mark.asyncio
+async def test_the_checkpoint_setting_reaches_the_script_slurm_runs(
+    slurm_backend: SlurmBackend, simulation_request: SimulationRequest, simulator: SimulatorVersion
+) -> None:
+    """``checkpoint_seconds`` is in the env file the job hands the container, in the script SLURM holds: under
+    --compat (--cleanenv) the runner learns it nowhere else."""
+    ssh = slurm_backend.ssh_service
+    experiment_id = f"checkpoint-{uuid.uuid4().hex[:8]}"
+    simulation = Simulation(database_id=1, sim_request=simulation_request, simulator_version=simulator)
+    with override_settings(checkpoint_seconds=123):
+        job_id = await SimulationServiceHpc().submit_simulation_job(
+            simulation, experiment_id, f"simulation-{experiment_id}"
+        )
+    try:
+        code, script, err = await ssh.run_command(f"scontrol write batch_script {job_id} -")
+        assert code == 0, err
+        assert "COMPOSE_CHECKPOINT_SECONDS=123" in script.splitlines()
+    finally:
+        await ssh.run_command(f"scancel {job_id}")
+        experiment = get_slurm_sim_experiment_dir(get_slurm_job_name(experiment_id))
+        await ssh.run_command(f"rm -rf {shlex.quote(str(experiment))}")
 
 
 async def _time_limit(ssh: SSHService, job_id: int) -> str:
