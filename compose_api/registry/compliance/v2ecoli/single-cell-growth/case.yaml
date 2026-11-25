@@ -7,7 +7,9 @@ description: >-
   volume. A cell that cannot be built fails the run, and a tick whose inner model fails returns zero increments, so
   the positive gains are what show the model ran. The expected values are seed 0 in this entry's composed environment
   (v2ecoli bdc1eee5 and f86adf05, process-bigraph 1.11.1, bigraph-schema 1.8.3, linux-64), run on 2026-11-24 through
-  compose-api's own lock, build and job-script line; every run, at both commits, wrote byte-identical results. The bands (5 % on the gains, 0.2 % on
+  compose-api's own lock, build and job-script line; every run, at both commits, wrote byte-identical results. At
+  8cd3f128 (EcoliWCM's `lineage` option, default 'all') they are identical too: mash-f3ae3f0e91@2's compliance run
+  12953 (2026-11-25). The bands (5 % on the gains, 0.2 % on
   length) leave room for floating-point drift when the environment's next version re-resolves its dependencies, and
   still fail a cell that does not grow. They are not wide enough for another platform: on arm64 macOS the same seed
   took a different stochastic path, 6 % apart at t = 30 s.

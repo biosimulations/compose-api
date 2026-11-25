@@ -578,9 +578,11 @@ entries:
       - JSONEmitter
       - ConsoleEmitter
     level: tested
-    # viva-pde-particle's image installs process-bigraph 1.9.1 (its read-back, 2026-10-26)
+    # viva-pde-particle's image installs process-bigraph 1.9.1 (its read-back, 2026-10-26); viva-biogears' 1.11.1 (its
+    # image's core-version check, viva-biogears compose-image run 45624154496)
     bundles:
       - viva-pde-particle
+      - viva-biogears
     evidence:
       - >-
         Added at tested on 2026-10-27 (composition 7c-1, D7c.2: documents name process-bigraph's emitters fully
@@ -661,6 +663,35 @@ entries:
         default, both daughters continue, as before) or 'first' (daughter 0 only, which inherits it), so a long run
         follows one lineage at the cost of one cell instead of a colony that doubles each generation. Its requirements
         are f86adf05's (bigraph-schema>=1.8.3), so the core is unchanged.
+
+  - id: viva-biogears
+    package: viva-biogears
+    # Runnable only in its own prebuilt image: BioGears 8.2.0 (through pybiogears) is built from source, which a
+    # composed environment can't do, so there is no `install`, and a document can't mix its classes with another
+    # entry's (docs/plan-environment-composition.md, D7.2). The image is registered by digest as a version of
+    # environments.yaml's viva-biogears; this commit is the one it was built from.
+    source: https://github.com/vivarium-collective/viva-biogears/tree/05c1ad6fd072dd5ff344343ffd7497b9b48dde48
+    commit: 05c1ad6fd072dd5ff344343ffd7497b9b48dde48
+    module_roots:
+      - viva_biogears
+    level: tested
+    bundles:
+      - viva-biogears
+    evidence:
+      - >-
+        Added at tested on 2026-11-25. As for viva-pde-particle, the level rests on its image's own CI and nothing
+        else yet. It is the level a prebuilt image needs for its classes to be admitted, so the runs below can be made.
+        viva-biogears' compose-image workflow (run 45624154496, on #18's merge 05c1ad6) built
+        ghcr.io/vivarium-collective/viva-biogears-compose. It checked that the vendored runner is compose-api's release
+        file and that the image has the core's process-bigraph, ran the job command in Docker as a user who isn't root,
+        and ran this service's job command under `apptainer run --compat` as a user who isn't root (its
+        .github/workflows/compose-image.yml). Only then did it push the image as
+        sha256:e1ccb4e1be2a99de84565d1a3ee4b0cc3f4f58005c8d739ddb4f71fd50e13f2c (tag sha-05c1ad6), the digest
+        registered here. In that image by digest, under Docker as a user who isn't root, with a read-only root and a
+        64 MB /tmp, a 10 s biogears_hemorrhage document in the plain `local:<module>.<Class>` form ran: exit 0, 11 rows.
+        (The `local:!` form its document generator wrote before viva-biogears #20 is refused, as for every entry.)
+        Pending, for the next release: the read-back of the registered version on the cluster, and a compliance case
+        run there through compose-api, with its run id.
 
   # --- libraries: installed for the components above, with no process classes of their own ------------------------
   # Pinned to what registry_env@1 actually ran (read back from its image, 2026-10-25), not to the old library list,
