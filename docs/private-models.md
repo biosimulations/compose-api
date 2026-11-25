@@ -125,18 +125,49 @@ a message about the credential store or keyring, use a desktop session where one
 
 Your runs are private: only you can see them.
 
-For now, ecoli_single_cell is the only v2ecoli model compose-api runs. The others also say **Runs: Cloud**, but pressing
-**▶ Run** on them shows **Run failed — no results produced**. That's expected until compose-api can run them, which is
-coming. Use ecoli_single_cell.
+For now, compose-api runs two v2ecoli models: ecoli_single_cell, and ecoli_lineage for many generations
+([step 6](#6-many-generations-ecoli_lineage)). The others also say **Runs: Cloud**, but pressing **▶ Run** on them shows
+**Run failed — no results produced**. That's expected until compose-api can run them, which is coming.
 
 ### Limits
 
-- Up to 1,000 s works for everyone. Longer runs need the `long-runs` role (ask Alex); without it, compose-api refuses the
-  run before it starts.
-- Keep runs to 2,400 s or less for now: the cell divides at about 2,500 s, and a run that reaches the division
-  currently ends with no results.
+- Up to 1,000 s works for everyone. Longer runs need the `long-runs` role: ask Alex. Without it, the run fails with
+  compose-api's own message: "compose-api refused the run: Invalid interval time, it has to be between 0 and 1000; up
+  to 86400 with the long-runs role".
+- With ecoli_single_cell, keep runs to 2,400 s or less: the cell divides at about 2,500 s, and a single cell has nowhere
+  to put its daughters, so the run ends with no results. To go past a division, use ecoli_lineage (step 6).
 
 If a run fails or is refused, note the message the workbench shows and tell Alex (see [Help](#help)).
+
+## 6. Many generations: ecoli_lineage
+
+ecoli_lineage follows one cell through its generations: at each division one daughter carries on, so a run of many
+generations costs one cell at a time, not a colony that doubles each generation.
+
+1. In the left column, click **Process**. In the **Registry** panel, type `lineage` in the search box, then click
+   **ecoli_lineage**.
+2. Set **Duration** to the seconds of cell life you want, then click **▶ Run**. A generation is about 2,500 to 2,900 s
+   of cell life: for three generations (two divisions), set about `7700`. Runs past 1,000 s need the `long-runs` role
+   (see Limits above).
+3. Wait for **✓ complete**, then **⬇ Download results**.
+
+What we measured on one run (seed 0, 25 Nov), as a guide rather than a promise: divisions at 2,527 s and 5,431 s, about
+6 s of cell life per second of waiting, so 7,700 s took about 23 minutes. The longest run compose-api takes is
+86,400 s of cell life, roughly 30 generations and about 4 hours.
+
+**What the results hold:** one row per simulated second. Each row lists the cells alive then (one, in a lineage) by
+their id, with:
+
+- **id:** the generation is the number of `_` in it minus one: `a_0` is the first cell, `a_0_0` its daughter,
+  `a_0_0_0` the next. The time a new id first appears is that division's time.
+- **mass:** the cell's dry mass, in femtograms. A daughter starts at half her mother's last value.
+- **length:** the cell's length, in micrometres.
+- **volume:** the volume gained since that cell's birth, not its total volume.
+
+**Several seeds:** run once per seed. Before **▶ Run**, set the card's **seed** field to a different number for each
+run, and download each run's results.
+
+If a run is cancelled or stops before the end, nothing from it is kept yet: run it again.
 
 ## Help
 
