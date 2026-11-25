@@ -385,24 +385,27 @@ def test_a_rejected_requests_own_message_is_shown_escaped_and_capped(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Most 400s answer a string `detail` (an unsupported file type, a bad parameter): shown on its own line, with
-    control characters escaped, so a server's text cannot drive the terminal, and cut to `printable`'s limit."""
-    detail = ""
+    control characters escaped, so a server's text cannot drive the terminal, and cut to `printable`'s limit. Text that
+    isn't the API's own JSON answer (a proxy's or an ingress's page) is never shown."""
+    answer = httpx.Response(400)
 
     def make(settings: Settings) -> ComposeSession:
-        respond = httpx.MockTransport(lambda r: httpx.Response(400, json={"detail": detail}))
-        return ComposeSession(settings.url, transport=respond)
+        return ComposeSession(settings.url, transport=httpx.MockTransport(lambda r: answer))
 
     monkeypatch.setattr(cli_module, "make_session", make)
     doc = tmp_path / "x.omex"
     doc.write_bytes(_zip({"manifest.xml": b"<omexManifest/>"}))
-    detail = "Unsupported file type: x.sedml"
+    answer = httpx.Response(400, json={"detail": "Unsupported file type: x.sedml"})
     r = invoke("run", str(doc))
     assert r.exit_code == 1 and "  - Unsupported file type: x.sedml" in r.stderr.splitlines()
-    detail = "bad\x1b[2J\x07" + "y" * 1000
+    answer = httpx.Response(400, json={"detail": "bad\x1b[2J\x07" + "y" * 1000})
     r = invoke("run", str(doc))
     (line,) = [line for line in r.stderr.splitlines() if line.startswith("  - bad")]
     assert "\x1b" not in r.stderr and "\x07" not in r.stderr
     assert line.startswith("  - bad\\x1b[2J\\x07y") and line.endswith("…") and len(line) == len("  - ") + 500
+    answer = httpx.Response(400, text="<html>an ingress page</html>")
+    r = invoke("run", str(doc))
+    assert r.exit_code == 1 and "ingress" not in r.stderr and "  - " not in r.stderr
 
 
 def test_unreachable_service_exits_5(monkeypatch: pytest.MonkeyPatch) -> None:

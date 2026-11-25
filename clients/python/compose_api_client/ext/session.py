@@ -131,6 +131,7 @@ from compose_api_client.ext.errors import (
     NetworkError,
     ProtocolError,
     UncertainOutcomeError,
+    api_message_of,
     detail_of,
     raise_for,
 )
@@ -279,6 +280,7 @@ def _raise_for(response: Response[Any], op: Operation) -> None:
     )
     if isinstance(error, ApiError):
         error.detail = detail_of(response.content)
+        error.api_message = api_message_of(response.content)
     raise error
 
 
