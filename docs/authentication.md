@@ -186,11 +186,11 @@ passes the 12-hour cap. A v2ecoli lineage follows one cell, at 5 to 6 cell-secon
 reach its limit.
 
 **What a stopped run keeps.** A run in a composed environment writes its results so far every `CHECKPOINT_SECONDS`
-(production: 300), and once more when it is stopped at its limit or cancelled, if that write finishes before SLURM
-kills it. A run killed outright (for its memory, say) or one that fails keeps the last of those writes, listed as
-long as its job outlives the run. They are its results file, kind `results`, one row per time its emitter recorded; the last
-row's `global_time`, when the emitter records it, shows how far the run got. Only a finished run has `results.zip`.
-Get them with `compose-api datasets list --sim <id> --kind results`, then `compose-api datasets get <id>`
+(production: 300). A run stopped before it finishes (at its time limit, cancelled, killed for its memory), or one that
+fails, keeps the last of those writes, at most 5 minutes old, listed as long as its job outlives the run. They are its
+results file, kind `results`, one row per time its emitter recorded; the last row's `global_time`, when the emitter
+records it, shows how far the run got. Only a finished run has `results.zip`. Get them with
+`compose-api datasets list --sim <id> --kind results`, then `compose-api datasets get <id>`
 ([CLI](cli.md#what-a-run-produced-datasets)).
 
 This needs an environment version made by compose-api 0.7.108 or later: a version runs the runner it was made with.
