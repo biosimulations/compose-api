@@ -4,8 +4,8 @@ compose-api runs simulations for you on UConn Health's computing cluster: you se
 you download the results. Some models on it are private. v2ecoli, Eran Agmon's lab's whole-cell model of *E. coli*, is
 one of them: only people who have been given access can see it or run it.
 
-If you were told you have access to v2ecoli, this page gets you set up in about ten minutes, and its last section runs
-v2ecoli.
+If you were told you have access to v2ecoli, this page gets you set up in about ten minutes. Then you run v2ecoli from
+the terminal (section 5) or from the workbench, a web page on your own computer (section 6).
 
 ## What you need
 
@@ -150,6 +150,55 @@ If the run is refused with a message that names v2ecoli, check that you have the
 Only the whole-cell model in the example runs on compose-api for now. You can change the numbers in the document (for
 example `seed`, which sends the cell down a different random path), but not the names or file paths in it: a run that
 points at other code or files is refused or fails.
+
+## 6. Running v2ecoli from the workbench
+
+The workbench is a web page that runs on your own computer. It shows v2ecoli's models and sends the one compose-api runs
+there for you: the same run as section 5, started from your browser instead of the terminal.
+
+It needs a little more than section 5:
+
+- **macOS or Linux.** v2ecoli compiles parts of itself when it installs, which Windows can't do here. On Windows, use
+  section 5.
+- **A C compiler.** On macOS, run `xcode-select --install` once (if it says the tools are already installed, you're
+  set). On Linux, install `build-essential`.
+- **The GitHub CLI**, to download v2ecoli's code, which is private to its users. Install it from
+  <https://cli.github.com>, then run `gh auth login` once and sign in with your GitHub account.
+- **The sign-in from step 3.** The workbench uses it, so your runs are yours and private, as in section 5.
+
+### Install v2ecoli
+
+```bash
+gh repo clone vivarium-collective/v2ecoli
+cd v2ecoli
+uv sync --extra report
+```
+
+The last line installs v2ecoli, the workbench and everything they need; the first time, it can take several minutes.
+
+### Start the workbench
+
+In the `v2ecoli` folder:
+
+```bash
+uv run vivarium-workbench serve --backend-base-url https://compose.cam.uchc.edu
+```
+
+It prints a few lines, ending with `Uvicorn running on http://127.0.0.1:<port>`. Open that address in your browser.
+(A line saying `pbg_oxidizeme` failed to install can be ignored: that module isn't used here.) Leave the terminal
+open: closing it stops the workbench.
+
+### Run the single cell
+
+1. In the left column, click **Process**.
+2. In the **Registry** panel, type `single` in the search box, then click **ecoli_single_cell**. Its card says
+   **Runs: Cloud**: its runs go to compose-api.
+3. Below the picture of the model, set **Duration** to `60` (seconds of the cell's life), then click **▶ Run**.
+4. After a minute or two it shows **✓ complete**. Under **Outputs**, **Results** lists what the run recorded (61 rows,
+   one per simulated second), and **⬇ Download results** saves them. The run is also in
+   `compose-api simulations list --mine`, private like every run of yours.
+
+The limits in section 5 apply here too. To stop the workbench, press Ctrl+C in its terminal.
 
 ## Help
 
