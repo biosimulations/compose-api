@@ -381,6 +381,30 @@ def test_errors_have_messages_and_exit_codes(monkeypatch: pytest.MonkeyPatch, tm
     assert invoke("run", str(tmp_path / "missing.omex")).exit_code == 2  # typer validates the path
 
 
+def test_a_rejected_requests_own_message_is_shown_escaped_and_capped(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Most 400s answer a string `detail` (an unsupported file type, a bad parameter): shown on its own line, with
+    control characters escaped, so a server's text cannot drive the terminal, and cut to `printable`'s limit."""
+    detail = ""
+
+    def make(settings: Settings) -> ComposeSession:
+        respond = httpx.MockTransport(lambda r: httpx.Response(400, json={"detail": detail}))
+        return ComposeSession(settings.url, transport=respond)
+
+    monkeypatch.setattr(cli_module, "make_session", make)
+    doc = tmp_path / "x.omex"
+    doc.write_bytes(_zip({"manifest.xml": b"<omexManifest/>"}))
+    detail = "Unsupported file type: x.sedml"
+    r = invoke("run", str(doc))
+    assert r.exit_code == 1 and "  - Unsupported file type: x.sedml" in r.stderr.splitlines()
+    detail = "bad\x1b[2J\x07" + "y" * 1000
+    r = invoke("run", str(doc))
+    (line,) = [line for line in r.stderr.splitlines() if line.startswith("  - bad")]
+    assert "\x1b" not in r.stderr and "\x07" not in r.stderr
+    assert line.startswith("  - bad\\x1b[2J\\x07y") and line.endswith("…") and len(line) == len("  - ") + 500
+
+
 def test_unreachable_service_exits_5(monkeypatch: pytest.MonkeyPatch) -> None:
     def refuse(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("connection refused", request=request)
