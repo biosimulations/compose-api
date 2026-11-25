@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, override
 
 from sqlalchemy import ColumnElement, Result, and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import InstrumentedAttribute
+from sqlalchemy.orm import InstrumentedAttribute, aliased
 
 from compose_api.common.hpc.models import SlurmJob
 from compose_api.db.tables.hpc_tables import (
@@ -69,10 +69,17 @@ class HPCDatabaseService(ABC):
 
     @abstractmethod
     async def claim_submissions(
-        self, owner: str, lease_seconds: int, limit: int, exclude: frozenset[int] = frozenset()
+        self,
+        owner: str,
+        lease_seconds: int,
+        limit: int,
+        exclude: frozenset[int] = frozenset(),
+        requester_cap: int | None = None,
     ) -> list[Submission]:
-        """Lease up to ``limit`` due submissions to ``owner``, highest priority then oldest first. A row another worker
-        holds (a live lease, or locked by its claim right now) is skipped, never waited on."""
+        """Lease up to ``limit`` due submissions to ``owner``: those already submitting first, then highest priority
+        then oldest. A row another worker holds (a live lease, or locked by its claim right now) is skipped, never
+        waited on, and so is an interactive row not yet submitting whose requester already has ``requester_cap``
+        interactive runs active or held (anonymous runs: one requester)."""
 
     @abstractmethod
     async def renew_submission_lease(self, simulation_id: int, owner: str, lease_seconds: int) -> bool:
@@ -91,8 +98,10 @@ class HPCDatabaseService(ABC):
         """Put a claimed row back, due again in ``delay_seconds``, without counting an attempt (it is over a cap)."""
 
     @abstractmethod
-    async def submission_load(self) -> "Load":
-        """Active runs per queue (submitting, or on SLURM and unfinished), and runs making an image ready."""
+    async def submission_load(self, exclude: frozenset[int] = frozenset()) -> "Load":
+        """Active runs per queue (submitting, or on SLURM and unfinished), the interactive ones per requester with the
+        runs a worker holds as well (but not those in ``exclude``: the claim being decided), and runs making an image
+        ready."""
 
     @abstractmethod
     async def release_submission(self, simulation_id: int, owner: str) -> None:
@@ -224,8 +233,15 @@ class HPCORMExecutor(HPCDatabaseService):
 
     @override
     async def claim_submissions(
-        self, owner: str, lease_seconds: int, limit: int, exclude: frozenset[int] = frozenset()
+        self,
+        owner: str,
+        lease_seconds: int,
+        limit: int,
+        exclude: frozenset[int] = frozenset(),
+        requester_cap: int | None = None,
     ) -> list[Submission]:
+        from compose_api.simulation.scheduling import INTERACTIVE
+
         now = func.localtimestamp()
         due = (
             select(ORMSubmission.simulation_id)
@@ -234,12 +250,52 @@ class HPCORMExecutor(HPCDatabaseService):
                 ORMSubmission.next_attempt_at <= now,
                 or_(ORMSubmission.lease_expires_at.is_(None), ORMSubmission.lease_expires_at < now),
             )
-            .order_by(ORMSubmission.priority.desc(), ORMSubmission.created_at, ORMSubmission.simulation_id)
+            # A row already submitting first: it takes no new place under any cap, and behind a backlog that select
+            # puts back it would never be claimed, holding its place for good.
+            .order_by(
+                (ORMSubmission.state == SubmissionState.SUBMITTING.value).desc(),
+                ORMSubmission.priority.desc(),
+                ORMSubmission.created_at,
+                ORMSubmission.simulation_id,
+            )
             .limit(limit)
             .with_for_update(skip_locked=True)
         )
         if exclude:
             due = due.where(ORMSubmission.simulation_id.not_in(exclude))
+        if requester_cap is not None:
+            # The requesters at their cap, worked out once for the claim (not per due row: every submission ever
+            # submitted is scanned), counting their runs on SLURM and those a worker holds (_held). A row already
+            # submitting is counted among them, so it is never held back by that count, or a requester whose submits
+            # wait to retry would never be resumed. Anonymous runs (requested_by NULL) are one requester; NOT IN is
+            # only ever applied to named ones, since NULL NOT IN (...) is not true.
+            other = aliased(ORMSubmission)
+            at_cap = (
+                select(other.requested_by)
+                .where(other.queue == INTERACTIVE, or_(_active(other), _held(other)))
+                .group_by(other.requested_by)
+                .having(func.count() >= requester_cap)
+                .subquery()
+            )
+            under_cap = or_(
+                and_(
+                    ORMSubmission.requested_by.is_not(None),
+                    ORMSubmission.requested_by.not_in(
+                        select(at_cap.c.requested_by).where(at_cap.c.requested_by.is_not(None))
+                    ),
+                ),
+                and_(
+                    ORMSubmission.requested_by.is_(None),
+                    ~select(at_cap.c.requested_by).where(at_cap.c.requested_by.is_(None)).exists(),
+                ),
+            )
+            due = due.where(
+                or_(
+                    ORMSubmission.queue != INTERACTIVE,
+                    ORMSubmission.state == SubmissionState.SUBMITTING.value,
+                    under_cap,
+                )
+            )
         async with self.async_session_maker() as session, session.begin():
             ids = list((await session.execute(due)).scalars().all())
             if not ids:
@@ -288,37 +344,35 @@ class HPCORMExecutor(HPCDatabaseService):
         )
 
     @override
-    async def submission_load(self) -> "Load":
-        from compose_api.simulation.scheduling import Load
+    async def submission_load(self, exclude: frozenset[int] = frozenset()) -> "Load":
+        from compose_api.simulation.scheduling import INTERACTIVE, Load
 
-        unfinished = (
-            select(ORMHpcRun.id)
-            .where(
-                ORMHpcRun.simulation_id == ORMSubmission.simulation_id,
-                ORMHpcRun.job_type == JobTypeDB.SIMULATION,
-                ORMHpcRun.status.not_in(TERMINAL_JOB_STATUSES),
+        # One statement, so one snapshot: a held run that moves on to submitting while the load is read is counted
+        # once, as one or the other, never neither. The rows in `exclude` (the claim being decided, whose leases are
+        # fresh) are left out of what is held and what is preparing, or they would count themselves out.
+        active = _active(ORMSubmission)
+        not_excluded = ORMSubmission.simulation_id.not_in(exclude)
+        held = and_(_held(ORMSubmission), not_excluded)
+        preparing = and_(held, ORMSubmission.state == SubmissionState.PREPARING.value)
+        counts = (
+            select(
+                ORMSubmission.queue,
+                ORMSubmission.requested_by,
+                func.count().filter(active),
+                func.count().filter(held),
+                func.count().filter(preparing),
             )
-            .exists()
-        )
-        active = (
-            select(ORMSubmission.queue, func.count())
-            .where(
-                or_(
-                    ORMSubmission.state == SubmissionState.SUBMITTING.value,
-                    and_(ORMSubmission.state == SubmissionState.SUBMITTED.value, unfinished),
-                )
-            )
-            .group_by(ORMSubmission.queue)
-        )
-        preparing = select(func.count()).where(
-            ORMSubmission.state == SubmissionState.PREPARING.value,
-            ORMSubmission.lease_expires_at > func.localtimestamp(),
+            .where(or_(active, held))
+            .group_by(ORMSubmission.queue, ORMSubmission.requested_by)
         )
         async with self.async_session_maker() as session:
             load = Load()
-            for queue, count in (await session.execute(active)).all():
-                load.active[queue] = count
-            load.preparing = (await session.execute(preparing)).scalar_one()
+            for queue, requester, n_active, n_held, n_preparing in (await session.execute(counts)).all():
+                if n_active:
+                    load.active[queue] += n_active
+                if queue == INTERACTIVE and n_active + n_held:
+                    load.active_by_requester[requester] += n_active + n_held
+                load.preparing += n_preparing
             return load
 
     @override
@@ -627,6 +681,34 @@ def _new_hpcrun(
 def _seconds_from_now(seconds: int) -> ColumnElement[datetime.datetime]:
     # localtimestamp, as created_at and the heartbeat are: TIMESTAMP WITHOUT TIME ZONE in the session's zone
     return func.localtimestamp() + func.make_interval(0, 0, 0, 0, 0, 0, seconds)
+
+
+def _active(submission: type[ORMSubmission]) -> ColumnElement[bool]:
+    """A submission on SLURM, or about to be: being submitted, or submitted with its simulation job unfinished. The
+    load and the claim's per-requester cap count the same thing (``submission`` may be an alias)."""
+    unfinished = (
+        select(ORMHpcRun.id)
+        .where(
+            ORMHpcRun.simulation_id == submission.simulation_id,
+            ORMHpcRun.job_type == JobTypeDB.SIMULATION,
+            ORMHpcRun.status.not_in(TERMINAL_JOB_STATUSES),
+        )
+        .exists()
+    )
+    return or_(
+        submission.state == SubmissionState.SUBMITTING.value,
+        and_(submission.state == SubmissionState.SUBMITTED.value, unfinished),
+    )
+
+
+def _held(submission: type[ORMSubmission]) -> ColumnElement[bool]:
+    """A submission a worker holds, not yet submitting: claimed (``requested``) or making its image ready
+    (``preparing``), under a live lease. A put-back or retried row has none. One requester's cap counts these too, so a
+    worker can't pass it while runs it took earlier are still on their way to sbatch."""
+    return and_(
+        submission.state.in_([SubmissionState.REQUESTED.value, SubmissionState.PREPARING.value]),
+        submission.lease_expires_at > func.localtimestamp(),
+    )
 
 
 def _submission(row: ORMSubmission, experiment_id: str, simulator_id: int) -> Submission:

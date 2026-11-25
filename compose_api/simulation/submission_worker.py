@@ -145,15 +145,20 @@ class SubmissionWorker:
         if free <= 0:
             return []
         hpc_db = self.database_service.get_hpc_db()
+        policy = SubmissionPolicy.from_settings()
         claimed = await hpc_db.claim_submissions(
             owner=self.owner,
             lease_seconds=settings.submission_lease_seconds,
             limit=free,
             exclude=frozenset(self._working),
+            # left out of the claim, not put back: a capped requester's backlog would otherwise fill every claim
+            requester_cap=policy.max_active_per_requester,
         )
         if not claimed:
             return []
-        go, wait = SubmissionPolicy.from_settings().select(claimed, await hpc_db.submission_load())
+        # the load apart from this claim's own rows, which now hold leases
+        load = await hpc_db.submission_load(exclude=frozenset(c.simulation_id for c in claimed))
+        go, wait = policy.select(claimed, load)
         for submission in wait:
             await hpc_db.defer_submission(submission.simulation_id, self.owner, settings.submission_defer_seconds)
         for submission in go:
