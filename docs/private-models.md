@@ -96,17 +96,20 @@ Next time, open a terminal, `cd v2ecoli`, and run the same `uv run vivarium-work
 
 The workbench sends your runs to compose-api as you, so you sign in once.
 
-1. In the browser, add `#github` to the workbench's address and press Enter, for example
-   `http://127.0.0.1:8001/#github` (use your own port).
-2. Under **Account**, the **compose-api** row has a **Sign in** button. Click it.
+1. In the left column, click **Process**, then click a model in the **Registry** panel (for example
+   **ecoli_single_cell**).
+2. Beside its **Runs: Cloud** label, click **Sign in**.
 3. Your browser opens Google's sign-in. Choose the same Google account as in step 1, then come back to the workbench.
-4. The button now says **Signed in · production**.
+   A panel in the bottom-right corner says what is happening (click it to close it).
+4. When you're signed in, **Sign in** disappears from beside **Runs: Cloud**.
 
-If the workbench runs on another computer than the browser you're using (over SSH, say), click **Use a code instead**.
-The workbench then shows a link and a code to enter on any device.
+If the workbench runs on another computer than the browser you're using (over SSH, say), sign in with a code instead:
+add `#github` to the workbench's address (for example `http://127.0.0.1:8001/#github`, with your own port), and under
+**Account**, in the **compose-api** row, click **Use a code instead**. The panel in the corner then shows a link and a
+code to enter on any device.
 
 You stay signed in: the sign-in is kept in your computer's password store (Keychain on macOS), so you won't need to do
-this again for a while. If the button says **Sign in** again later, click it again.
+this again for a while. If **Sign in** appears beside **Runs: Cloud** again later, click it again.
 
 **On Linux,** the sign-in is kept in the desktop's password service (GNOME Keyring or KWallet). If signing in stops with
 a message about the credential store or keyring, use a desktop session where one runs, or ask Alex.
