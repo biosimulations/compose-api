@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://biosimulations.github.io/compose-api/</loc>
+         <lastmod>2026-11-25</lastmod>
+    </url>
+    <url>
+         <loc>https://biosimulations.github.io/compose-api/authentication/</loc>
+         <lastmod>2026-11-25</lastmod>
+    </url>
+    <url>
+         <loc>https://biosimulations.github.io/compose-api/cli/</loc>
+         <lastmod>2026-11-25</lastmod>
+    </url>
+    <url>
+         <loc>https://biosimulations.github.io/compose-api/modules/</loc>
+         <lastmod>2026-11-25</lastmod>
+    </url>
+    <url>
+         <loc>https://biosimulations.github.io/compose-api/private-models/</loc>
+         <lastmod>2026-11-25</lastmod>
+    </url>
+    <url>
+         <loc>https://biosimulations.github.io/compose-api/registry-onboarding/</loc>
+         <lastmod>2026-11-25</lastmod>
+    </url>
+    <url>
+         <loc>https://biosimulations.github.io/compose-api/webapp/</loc>
+         <lastmod>2026-11-25</lastmod>
+    </url>
+</urlset>
