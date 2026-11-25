@@ -611,15 +611,15 @@ entries:
   - id: v2ecoli
     package: v2ecoli
     # A private repository (docs/plan-private-repo-usage.md, P5): only callers holding repo-v2ecoli see or use it, or
-    # anything made of it. Pinned to #972 (a serialized `method` value imports its module only on the owner's
-    # opt-in), on main after #970 (the Metabolism evidence test), #971 (EcoliWCM builds its sim input from the
-    # packaged ParCa state, and loads the files a document names only on the owner's opt-in) and #942 (every git
-    # source pinned to a commit).
-    source: https://github.com/vivarium-collective/v2ecoli/tree/f86adf0565cab1713c92d6fc88bd6a639260befe
-    commit: f86adf0565cab1713c92d6fc88bd6a639260befe
+    # anything made of it. Pinned to tag compose-api-pin-lineage-1: f86adf05 (#972, a serialized `method` value imports
+    # its module only on the owner's opt-in, on main after #970, #971 and #942) plus EcoliWCM's `lineage` option
+    # (branch compose-api-pin/lineage-on-f86adf05), so a run can follow one lineage through the generations. It stays
+    # off v2ecoli's main, which needs bigraph-schema 1.8.4 where compose-api's core has 1.8.3.
+    source: https://github.com/vivarium-collective/v2ecoli/tree/8cd3f12819787791733ed84680dd62e8dde41d5e
+    commit: 8cd3f12819787791733ed84680dd62e8dde41d5e
     install:
       git: https://github.com/vivarium-collective/v2ecoli
-      commit: f86adf0565cab1713c92d6fc88bd6a639260befe
+      commit: 8cd3f12819787791733ed84680dd62e8dde41d5e
     access_role: repo-v2ecoli
     # v2ecoli publishes no wheel: its sdist compiles three Cython extensions (wholecell.utils: _build_sequences,
     # _fastsums, mc_complexation) with plain `gcc`, which the pixi image does not have
@@ -655,6 +655,12 @@ entries:
         resolves to. Through 1.1.2.post3, vEcoli's runscripts/analysis.py read the command line when imported, and
         bigraph-schema's discovery imports it, so the runner's `-n <end time>` ended every run at start. A version
         resolved before that release locks 1.1.2.post3 and cannot run v2ecoli.
+      - >-
+        Moved on 2026-11-25 to 8cd3f128 (tag compose-api-pin-lineage-1): f86adf05 plus two commits that change only
+        v2ecoli/bridge.py (+14/-3) and add tests/test_lineage_first.py. EcoliWCM gains `lineage`: 'all' (the
+        default, both daughters continue, as before) or 'first' (daughter 0 only, which inherits it), so a long run
+        follows one lineage at the cost of one cell instead of a colony that doubles each generation. Its requirements
+        are f86adf05's (bigraph-schema>=1.8.3), so the core is unchanged.
 
   # --- libraries: installed for the components above, with no process classes of their own ------------------------
   # Pinned to what registry_env@1 actually ran (read back from its image, 2026-10-25), not to the old library list,
