@@ -47,6 +47,7 @@ from tests.fixtures.slurm_fixtures_backend import (  # noqa: F401
     _container_cluster,
     cluster_credentials_present,
     docker_available,
+    selected_slurm_backend,
     slurm_backend,
 )
 
@@ -71,7 +72,7 @@ def pytest_generate_tests(metafunc: "pytest.Metafunc") -> None:
     One test body, one parameter, so the two backends cannot drift. A test left with no
     backend is skipped with a reason that says what to do, never silently passed.
     """
-    if "slurm_backend" not in metafunc.fixturenames:
+    if "selected_slurm_backend" not in metafunc.fixturenames:
         return
     chosen: list[str] = list(metafunc.config.getoption("--slurm-backend"))
     if not chosen:
@@ -86,4 +87,4 @@ def pytest_generate_tests(metafunc: "pytest.Metafunc") -> None:
         reason = "no SLURM backend selected: start Docker, or pass --slurm-backend"
 
     params: list[object] = list(chosen) or [pytest.param(None, marks=pytest.mark.skip(reason=reason), id="unavailable")]
-    metafunc.parametrize("slurm_backend", params, indirect=True, scope="session")
+    metafunc.parametrize("selected_slurm_backend", params, indirect=True, scope="session")

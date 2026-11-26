@@ -9,7 +9,7 @@ from compose_api_client.ext import DEFAULT_URL, ComposeSession
 @pytest.mark.slurm
 @pytest.mark.cluster_only
 def test_production_answers_health_and_lists_simulators(request: pytest.FixtureRequest) -> None:
-    # The conftest gates cluster_only through the slurm_backend fixture, which this test does not need (no SSH).
+    # The conftest gates cluster_only through the selected_slurm_backend fixture, which this test doesn't need (no SSH).
     if "cluster" not in request.config.getoption("--slurm-backend"):
         pytest.skip("needs the deployed service: rerun with --slurm-backend cluster")
     with ComposeSession(DEFAULT_URL, timeout=30) as s:

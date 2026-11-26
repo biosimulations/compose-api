@@ -13,22 +13,22 @@ from compose_api.dependencies import get_data_service, set_data_service
 from compose_api.simulation.data_service import DataService
 from compose_api.simulation.models import SimulationFileType, SimulationRequest
 from tests.fixtures.mocks import TestDataService
-from tests.fixtures.slurm_fixtures_backend import SlurmBackend
+from tests.fixtures.slurm_fixtures_backend import SelectedBackend, SlurmBackend
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def ssh_service(slurm_backend: SlurmBackend) -> AsyncGenerator[SSHService]:
     """A descriptor for whichever backend is selected.
 
-    Depending on `slurm_backend` is what guarantees its settings override is already in
-    force; the descriptor is otherwise built from whatever settings happen to be current.
+    Depending on `slurm_backend` is what guarantees its settings override is in force, for
+    this test and anything it reaches; the descriptor is built from the current settings.
     """
     ssh_service = get_ssh_service()
     yield ssh_service
     await ssh_service.close()
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def slurm_service(ssh_service: SSHService) -> AsyncGenerator[SlurmService]:
     # saved_ssh_service = get_ssh_service()
     slurm_service = SlurmService(ssh_service=ssh_service)
@@ -38,11 +38,12 @@ async def slurm_service(ssh_service: SSHService) -> AsyncGenerator[SlurmService]
 
 
 @pytest.fixture(scope="session")
-def slurm_template_hello_TEMPLATE(slurm_backend: SlurmBackend) -> str:
-    partition = slurm_backend.partition
+def slurm_template_hello_TEMPLATE(selected_slurm_backend: SelectedBackend) -> str:
+    backend = selected_slurm_backend.backend
+    partition = backend.partition
     # the container cluster has no QOS configured; omit the directive rather than
     # emitting an empty one, which sbatch rejects
-    qos_directive = f"#SBATCH --qos={slurm_backend.qos}" if slurm_backend.qos else ""
+    qos_directive = f"#SBATCH --qos={backend.qos}" if backend.qos else ""
     template = dedent(f"""\
         #!/bin/bash
         #SBATCH --job-name=my_test_job        # Job name

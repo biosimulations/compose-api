@@ -16,6 +16,10 @@ consumers reach for SSH independently (``SimulationServiceHpc``, ``DataService``
 ``SlurmService`` inside ``JobMonitor``). Injecting into two and forgetting the third would
 leave the third talking to the real cluster. Overriding settings reaches all of them,
 including ones added later.
+
+The cluster is brought up once per session, but the override is in force only for a test
+that takes ``slurm_backend``. A test that doesn't runs on its own settings, even after a
+SLURM test, and may override the same fields (``simulation_store_base_path``) itself.
 """
 
 import asyncio
@@ -23,10 +27,11 @@ import os
 import subprocess
 import time
 import uuid
-from collections.abc import Iterator
-from dataclasses import dataclass
+from collections.abc import Iterator, Mapping
+from contextlib import AbstractContextManager
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import asyncssh
 import pytest
@@ -63,6 +68,18 @@ class SlurmBackend:
     def ssh_service(self) -> SSHService:
         """A descriptor built from the settings currently in force."""
         return get_ssh_service()
+
+
+@dataclass(frozen=True)
+class SelectedBackend:
+    """The backend chosen for the session, and the settings that point the service at it."""
+
+    backend: SlurmBackend
+    settings: Mapping[str, Any] = field(default_factory=dict)
+
+    def in_force(self) -> AbstractContextManager[Settings]:
+        """Those settings, for as long as the block lasts."""
+        return override_settings(**self.settings)
 
 
 @dataclass(frozen=True)
@@ -210,37 +227,27 @@ def _provision_remote_tree(env: dict[str, str]) -> None:
 
 
 @pytest.fixture(scope="session")
-def slurm_backend(request: pytest.FixtureRequest) -> Iterator[SlurmBackend]:
-    """Yield the selected backend, with settings pointed at it for the whole session."""
+def selected_slurm_backend(request: pytest.FixtureRequest) -> SelectedBackend:
+    """The backend ``--slurm-backend`` selects for the session; the container cluster is brought up once."""
     kind: str = request.param
     if kind == "cluster":
         if not cluster_credentials_present():
             pytest.skip("slurm_submit_key_path is unset or missing; cannot reach the real cluster")
         settings: Settings = get_settings()
-        yield SlurmBackend(
-            kind="cluster",
-            partition=settings.slurm_partition,
-            qos=settings.slurm_qos,
-            remote_base=Path(settings.simulation_store_base_path),
-            can_build_singularity=True,
+        return SelectedBackend(
+            SlurmBackend(
+                kind="cluster",
+                partition=settings.slurm_partition,
+                qos=settings.slurm_qos,
+                remote_base=Path(settings.simulation_store_base_path),
+                can_build_singularity=True,
+            )
         )
-        return
 
     details: _ContainerCluster = request.getfixturevalue("_container_cluster")
     remote_base = Path("/data/compose-api")
-    with override_settings(
-        slurm_submit_host="127.0.0.1",
-        slurm_submit_port=details.port,
-        slurm_submit_user=CONTAINER_USER,
-        slurm_submit_key_path=str(details.key_path),
-        slurm_submit_known_hosts=None,
-        slurm_partition=CONTAINER_PARTITION,
-        slurm_qos=CONTAINER_QOS,
-        slurm_build_node=CONTAINER_BUILD_NODE,
-        simulation_store_base_path=str(remote_base),
-    ):
-        _provision_remote_tree(env=details.env)
-        yield SlurmBackend(
+    selected = SelectedBackend(
+        SlurmBackend(
             kind="container",
             partition=CONTAINER_PARTITION,
             qos=CONTAINER_QOS,
@@ -250,4 +257,26 @@ def slurm_backend(request: pytest.FixtureRequest) -> Iterator[SlurmBackend]:
             # and runs the result from inside a SLURM job. What it does not have is the
             # real simulator images, which is why those tests stay cluster_only.
             can_build_singularity=True,
-        )
+        ),
+        settings={
+            "slurm_submit_host": "127.0.0.1",
+            "slurm_submit_port": details.port,
+            "slurm_submit_user": CONTAINER_USER,
+            "slurm_submit_key_path": str(details.key_path),
+            "slurm_submit_known_hosts": None,
+            "slurm_partition": CONTAINER_PARTITION,
+            "slurm_qos": CONTAINER_QOS,
+            "slurm_build_node": CONTAINER_BUILD_NODE,
+            "simulation_store_base_path": str(remote_base),
+        },
+    )
+    with selected.in_force():
+        _provision_remote_tree(env=details.env)
+    return selected
+
+
+@pytest.fixture
+def slurm_backend(selected_slurm_backend: SelectedBackend) -> Iterator[SlurmBackend]:
+    """The selected backend, with settings pointed at it for this test only."""
+    with selected_slurm_backend.in_force():
+        yield selected_slurm_backend.backend
