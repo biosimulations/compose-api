@@ -168,7 +168,12 @@ their id, with:
 **Several seeds:** run once per seed. Before **▶ Run**, set the card's **seed** field to a different number for each
 run, and download each run's results.
 
-If a run is cancelled or stops before the end, nothing from it is kept yet: run it again.
+**If a run stops before the end:** compose-api saves a run's results every 5 minutes, and once more when you cancel
+it, so a cancelled run keeps everything up to the cancel. A run that is killed outright keeps its last 5-minute save if
+it got one: a run killed in its first 5 minutes keeps nothing. A run that reaches its time limit keeps its last 5-minute
+save, and may also get the save made when it stops. The workbench loads what was kept when the run stops: the card
+shows a cancelled run as cancelled, and its results are under **Runs**, **⬇ Raw data**. Runs started before 14:20 EST
+on 25 November 2026 keep nothing when they stop; runs started since then save as above.
 
 **If the workbench marks a long run failed** with a message ending "(the run was sent: it is compose-NNNNN on
 compose-api, which may finish it all the same)", the workbench lost touch with the run, but compose-api may still finish
