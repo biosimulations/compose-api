@@ -198,9 +198,10 @@ This needs an environment version made by compose-api 0.7.108 or later: a versio
 An older environment takes the new runner in a new version, which an administrator can make with the same date: a new
 runner makes a new version even of the same lock (0.7.109).
 Not kept: runs in prebuilt environments, which have their own runner; rows of emitters that do not keep them in memory
-(`RAMEmitter` does); and emitters added while the run runs. Each write rewrites every row so far, so a run that emits
-a large state pauses longer at each write as its results grow: emit only what you need, or less often (`subsample` on
-`RAMEmitter`). The workbench does not show a stopped run's results yet.
+(`RAMEmitter` does); and emitters added while the run runs. Nor are the files in the directory the run's archive is
+unpacked into, or its final state: those are copied out only when it completes. Each write rewrites every row so far,
+so a run that emits a large state pauses longer at each write as its results grow: emit only what you need, or less
+often (`subsample` on `RAMEmitter`). The workbench does not show a stopped run's results yet.
 
 ## Do not
 
